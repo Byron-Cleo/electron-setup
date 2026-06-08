@@ -1,0 +1,68 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.eraeva.pos-billing-system",
+  "productName": "Eraeva POS Billing System",
+  "copyright": "Copyright © 2026 Eraeva",
+  "directories": {
+    "buildResources": "resources",
+    "output": "release"
+  },
+  "files": [
+    "dist-electron/**/*",
+    "dist-react/**/*"
+  ],
+  "extraMetadata": {
+    "main": "dist-electron/main.js"
+  },
+  "mac": {
+    "target": [
+      { "target": "dmg", "arch": ["x64", "arm64"] },
+      { "target": "zip", "arch": ["x64", "arm64"] }
+    ],
+    "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
+    "category": "public.app-category.business",
+    "identity": null,
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false
+  },
+  "dmg": {
+    "title": "${productName} ${version}",
+    "contents": [
+      { "x": 130, "y": 220, "type": "file" },
+      { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+    ],
+    "window": {
+      "width": 540,
+      "height": 380
+    }
+  },
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] },
+      { "target": "portable", "arch": ["x64"] }
+    ],
+    "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "${productName}"
+  },
+  "linux": {
+    "target": [
+      { "target": "AppImage", "arch": ["x64"] },
+      { "target": "deb", "arch": ["x64"] },
+      { "target": "rpm", "arch": ["x64"] }
+    ],
+    "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
+    "category": "Office",
+    "maintainer": "Eraeva",
+    "description": "POS Billing System for Eraeva Delivery"
+  },
+  "compression": "maximum",
+  "removePackageScripts": true
+}
