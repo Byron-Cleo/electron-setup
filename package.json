@@ -9,6 +9,7 @@
     "dev:react:network": "vite --host",
     "dev:electron": "tsc --project src/electron/tsconfig.json && concurrently -k -n \"tsc,app\" \"tsc --project src/electron/tsconfig.json --watch --preserveWatchOutput\" \"nodemon --watch dist-electron -e js --exec cross-env NODE_ENV=development electron .\"",
     "dev": "concurrently -k -n \"react,electron\" \"npm run dev:react\" \"npm run dev:electron\"",
+    "dev:backend": "npm run dev --prefix backend",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -19,12 +20,14 @@
     "build:all": "tsc -b && vite build && electron-builder --mac --win --linux --config electron-builder.json"
   },
   "dependencies": {
+    "os-utils": "^0.0.14",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.3",
+    "@types/os-utils": "^0.0.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

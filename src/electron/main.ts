@@ -3,6 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { isDev } from "./utils.ts";
 const { app, BrowserWindow } = pkg;
+import { pollResources } from "./resourceManager.ts";
+import { getPreloadPath } from "./pathResolver.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +27,7 @@ app.whenReady().then(() => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: getPreloadPath(),
     },
   });
 
@@ -38,6 +41,8 @@ app.whenReady().then(() => {
     win.show();
     win.focus();
   });
+
+  pollResources();
 });
 
 app.on("window-all-closed", () => {
@@ -52,6 +57,7 @@ app.on("activate", () => {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        preload: getPreloadPath(),
       },
     });
     if (isDev()) {

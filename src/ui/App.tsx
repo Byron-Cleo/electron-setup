@@ -7,6 +7,9 @@ import './App.css'
 function App() {
   const [count, setCount] = useState(0)
 
+  //@ts-expect-error
+  window.electron.getStaticData() 
+
   return (
     <>
       <section id="center">
