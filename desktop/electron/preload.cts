@@ -12,4 +12,12 @@ electron.contextBridge.exposeInMainWorld("electron", {
       electron.ipcRenderer.invoke("meal-type:update", id, data),
     delete: (id: string) => electron.ipcRenderer.invoke("meal-type:delete", id),
   },
+  menu: {
+    getAll: () => electron.ipcRenderer.invoke("menu:get-all"),
+    getById: (id: string) => electron.ipcRenderer.invoke("menu:get-by-id", id),
+    create: (data: any) => electron.ipcRenderer.invoke("menu:create", data),
+    update: (id: string, data: any) =>
+      electron.ipcRenderer.invoke("menu:update", id, data),
+    delete: (id: string) => electron.ipcRenderer.invoke("menu:delete", id),
+  },
 });

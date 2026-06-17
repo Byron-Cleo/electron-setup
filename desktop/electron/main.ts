@@ -5,7 +5,7 @@ import { isDev } from "./utils.ts";
 const { app, BrowserWindow } = pkg;
 import { pollResources } from "./resourceManager.ts";
 import { getPreloadPath } from "./pathResolver.ts";
-import { registerMealTypeHandlers } from "./ipc-handlers.ts";
+import { registerMealTypeHandlers, registerMenuHandlers } from "./ipc-handlers.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +21,7 @@ try {
 
 app.whenReady().then(() => {
   registerMealTypeHandlers();
+  registerMenuHandlers();
   const win = new BrowserWindow({
     width: 800,
     height: 600,

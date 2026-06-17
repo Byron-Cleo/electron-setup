@@ -2,54 +2,39 @@ import { ipcMain } from "electron";
 
 const API_BASE = "http://localhost:3001/api";
 
+async function apiFetch(path: string, options?: RequestInit) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 export function registerMealTypeHandlers() {
-  ipcMain.handle("meal-type:get-all", async () => {
-    const res = await fetch(`${API_BASE}/meal-types`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  });
-
-  ipcMain.handle("meal-type:get-by-id", async (_event, id: string) => {
-    const res = await fetch(`${API_BASE}/meal-types/${id}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  });
-
-  ipcMain.handle(
-    "meal-type:create",
-    async (_event, data: { name: string; sortOrder?: number }) => {
-      const res = await fetch(`${API_BASE}/meal-types`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    }
+  ipcMain.handle("meal-type:get-all", async () => apiFetch("/meal-types"));
+  ipcMain.handle("meal-type:get-by-id", async (_event, id: string) => apiFetch(`/meal-types/${id}`));
+  ipcMain.handle("meal-type:create", async (_event, data) =>
+    apiFetch("/meal-types", { method: "POST", body: JSON.stringify(data) })
   );
-
-  ipcMain.handle(
-    "meal-type:update",
-    async (
-      _event,
-      id: string,
-      data: { name?: string; sortOrder?: number }
-    ) => {
-      const res = await fetch(`${API_BASE}/meal-types/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    }
+  ipcMain.handle("meal-type:update", async (_event, id: string, data) =>
+    apiFetch(`/meal-types/${id}`, { method: "PUT", body: JSON.stringify(data) })
   );
+  ipcMain.handle("meal-type:delete", async (_event, id: string) =>
+    apiFetch(`/meal-types/${id}`, { method: "DELETE" })
+  );
+}
 
-  ipcMain.handle("meal-type:delete", async (_event, id: string) => {
-    const res = await fetch(`${API_BASE}/meal-types/${id}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  });
+export function registerMenuHandlers() {
+  ipcMain.handle("menu:get-all", async () => apiFetch("/menu"));
+  ipcMain.handle("menu:get-by-id", async (_event, id: string) => apiFetch(`/menu/${id}`));
+  ipcMain.handle("menu:create", async (_event, data) =>
+    apiFetch("/menu", { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("menu:update", async (_event, id: string, data) =>
+    apiFetch(`/menu/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("menu:delete", async (_event, id: string) =>
+    apiFetch(`/menu/${id}`, { method: "DELETE" })
+  );
 }
