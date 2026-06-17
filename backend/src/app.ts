@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import mealTypesRouter from "./routes/mealTypes.ts";
+import menuRouter from "./routes/menu.ts";
 
 const app = express();
 
@@ -12,5 +13,6 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/meal-types", mealTypesRouter);
+app.use("/api/menu", menuRouter);
 
 export default app;
