@@ -14,7 +14,7 @@ function App() {
     setView(view);
   }
 
-  function switchTab(t: Tab) {
+  function switchTab(t: Tab) {/models
     setTab(t);
     setView("list");
   }
