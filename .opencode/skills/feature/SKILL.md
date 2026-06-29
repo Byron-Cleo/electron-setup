@@ -44,12 +44,13 @@ Detailed instructions for each action live in `actions/<action>.md`.
 ## Workflow Steps
 
 1. **Read** — Read @context/ai-interaction.md and @context/current-feature.md first
-2. **Start** — When user says "start" or "implement", follow detailed instructions in `actions/start.md`
-3. **Implement** — Implement the documented feature per the spec
-4. **Test** — When user says "test" or "verify", follow detailed instructions in `actions/test.md`
-5. **Iterate** — Review code quality; when user says "review", follow detailed instructions in `actions/review.md`
-6. **Explain** — When user says "explain" or "what changed", follow detailed instructions in `actions/explain.md`
-7. **Complete** — When user says "complete this" or similar, follow detailed instructions in `actions/complete.md`
+2. **Load** — When user says "load feature" with a spec name or inline description, follow detailed instructions in `actions/load.md` to populate `@context/current-feature.md`
+3. **Start** — When user says "start" or "implement", follow detailed instructions in `actions/start.md`
+4. **Implement** — Implement the documented feature per the spec
+5. **Test** — When user says "test" or "verify", follow detailed instructions in `actions/test.md`
+6. **Iterate** — Review code quality; when user says "review", follow detailed instructions in `actions/review.md`
+7. **Explain** — When user says "explain" or "what changed", follow detailed instructions in `actions/explain.md`
+8. **Complete** — When user says "complete this" or similar, follow detailed instructions in `actions/complete.md`
 
 ## Keywords That Trigger This Skill
 

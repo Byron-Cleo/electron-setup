@@ -1,35 +1,14 @@
-# Current Feature: PIN-Based Staff Login with Role-Based Access
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Staff authenticate using a 4-digit PIN instead of email/password
-- PIN is hashed with bcrypt before storage
-- A `pin` field is added to the User model (nullable — only staff have it)
-- An `isActive` boolean field is added to soft-disable ex-employees
-- A `platform` field captures how the user logged in (`"desktop"` for PIN)
-- Four staff roles: `admin`, `waiter`, `store`, `kitchen`
-- Role-based post-login redirect:
-  - `admin` → Dashboard
-  - `waiter` → Menu / POS
-  - `store` → Inventory
-  - `kitchen` → Kitchen Orders
-- Admin users can generate PINs for new staff and deactivate existing ones
-- Zustand store for global `currentUser` state
-- React Router for role-based navigation and route guarding
+
 
 ## Notes
-
-- `password` field on User stays for future customer email login — not removed
-- PIN login sets `platform: "desktop"` to distinguish staff from future web/mobile customers
-- `role` field already exists on User with default `"user"` — will change to `"staff"` default
-- The generated Prisma client is at `backend/db/generated/prisma/` — rerun `prisma generate` after schema changes
-- Zustand is preferred over Redux: ~1KB, no Provider wrapper, simple store
-- React Router v7 (latest, compatible with React 19)
-- bcryptjs for PIN hashing (pure JS, no native deps)
 
 ## History
 
