@@ -6,11 +6,5 @@
       "path": "context",
       "description": "Use for project overview, coding standards, AI interaction guidelines, current feature tracking, and all project documentation"
     }
-  },
-  "command": {
-    "feature": {
-      "description": "Manage current feature workflow - load, start, review, test, explain, complete",
-      "prompt": ".opencode/commands/feature.md"
-    }
   }
 }

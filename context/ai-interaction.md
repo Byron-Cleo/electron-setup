@@ -24,7 +24,7 @@ The file @context/current-feature.md MUST contain ONLY these sections in order:
 | `## Notes` | Constraints, decisions, implementation details |
 | `## History` | Completed features with date heading format below |
 
-History entries follow this format:
+History entries follow this format and must be ordered **newest first** (most recent feature at the top):
 ```
 ### YYYY-MM-DD — Feature Title
 - Description of what was implemented
