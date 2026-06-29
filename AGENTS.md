@@ -1,4 +1,26 @@
-# Eraeva POS Billing System — AGENTS.md
+# Eraeva POS Billing System 
+
+A desktop application for restaurant management system
+
+## AGENTS.md
+
+This file provides guidance to opencode (BigPickle/opencode) when working with code in this repository.
+
+## Context7 MCP — Documentation Lookup
+
+Use Context7 MCP to fetch current documentation whenever the user asks about a library, framework, SDK, API, CLI tool, or cloud service -- even well-known ones like React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot. This includes API syntax, configuration, version migration, library-specific debugging, setup instructions, and CLI tool usage. Use even when you think you know the answer -- your training data may not reflect recent changes. Prefer this over web search for library docs.
+
+Do not use for: refactoring, writing scripts from scratch, debugging business logic, code review, or general programming concepts.
+
+
+## Context Files
+
+Read the following to get the full context of the project.
+
+- @context/project-overview.md
+- @context/coding-standards.md
+- @context/ai-interaction.md
+- @context/current-feature.md
 
 ## Architecture
 

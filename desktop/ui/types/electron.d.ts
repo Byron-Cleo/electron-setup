@@ -36,6 +36,25 @@ interface MenuCreateData {
 
 type MenuUpdateData = Partial<MenuCreateData>;
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: string | null;
+  image: string | null;
+  role: "admin" | "waiter" | "store" | "kitchen";
+  isActive: boolean;
+  platform: string | null;
+  address: unknown;
+  paymentMethod: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface LoginResponse {
+  user: User;
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: any) => void) => void;
   getStaticData: () => void;
@@ -52,6 +71,10 @@ interface ElectronAPI {
     create: (data: MenuCreateData) => Promise<MenuItem>;
     update: (id: string, data: MenuUpdateData) => Promise<MenuItem>;
     delete: (id: string) => Promise<{ message: string }>;
+  };
+  auth: {
+    login: (pin: string) => Promise<LoginResponse>;
+    logout: () => Promise<{ message: string }>;
   };
 }
 

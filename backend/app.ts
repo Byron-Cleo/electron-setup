@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import mealTypesRouter from "./routes/mealTypes";
 import menuRouter from "./routes/menu";
+import authRouter from "./routes/auth.ts";
 
 const app = express();
 
@@ -14,5 +15,6 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/meal-types", mealTypesRouter);
 app.use("/api/menu", menuRouter);
+app.use("/api/auth", authRouter);
 
 export default app;

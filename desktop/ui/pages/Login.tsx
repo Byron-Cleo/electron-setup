@@ -9,6 +9,7 @@ import {
   CarouselItem,
   type CarouselApi,
 } from "@/components/ui/carousel";
+import { useAuthStore } from "@/stores/auth";
 
 const carouselImages = [
   "/images/sample-meals/beef-fry-rice.png",
@@ -81,20 +82,34 @@ function ImageCarousel() {
 function Login() {
   const [pin, setPin] = useState("");
   const navigate = useNavigate();
+  const { login, loading, error, clearError } = useAuthStore();
 
   const handleKeyPress = (num: string) => {
+    if (loading) return;
     if (pin.length < 4) {
       setPin((prev) => prev + num);
     }
+    if (error) clearError();
   };
 
   const handleClear = () => {
+    if (loading) return;
     setPin((prev) => prev.slice(0, -1));
+    if (error) clearError();
   };
 
-  const handleSubmit = () => {
-    if (pin.length === 4) {
-      navigate("/landing");
+  const handleSubmit = async () => {
+    if (pin.length !== 4 || loading) return;
+    await login(pin);
+    const user = useAuthStore.getState().user;
+    if (user) {
+      const paths: Record<string, string> = {
+        admin: "/admin",
+        waiter: "/waiter",
+        store: "/store",
+        kitchen: "/kitchen",
+      };
+      navigate(paths[user.role] || "/");
     }
   };
 
@@ -181,13 +196,17 @@ function Login() {
                 <button
                   onClick={handleSubmit}
                   className={`h-[80px] aspect-square rounded-xl flex items-center justify-center transition-all cursor-pointer ${
-                    pin.length === 4
+                    pin.length === 4 && !loading
                       ? "bg-brand-gold text-brand-ebony hover:bg-brand-gold/80 shadow-lg shadow-brand-gold/20"
                       : "bg-brand-gold/80 text-brand-ebony/80 cursor-not-allowed"
                   }`}
-                  disabled={pin.length !== 4}
+                  disabled={pin.length !== 4 || loading}
                 >
-                  <ArrowRight className="w-10 h-10 stroke-[2.5]" />
+                  {loading ? (
+                    <div className="w-6 h-6 border-2 border-brand-ebony/40 border-t-brand-ebony rounded-full animate-spin" />
+                  ) : (
+                    <ArrowRight className="w-10 h-10 stroke-[2.5]" />
+                  )}
                 </button>
               </div>
 
@@ -195,6 +214,10 @@ function Login() {
                 <Info className="w-3.5 h-3.5 text-brand-ebony/50" />
                 <span>Forgot your PIN? Contact Manager</span>
               </div>
+
+              {error && (
+                <p className="text-brand-red text-sm text-center mt-2">{error}</p>
+              )}
             </div>
           </div>
         </div>

@@ -38,3 +38,12 @@ export function registerMenuHandlers() {
     apiFetch(`/menu/${id}`, { method: "DELETE" })
   );
 }
+
+export function registerAuthHandlers() {
+  ipcMain.handle("auth:login", async (_event, pin: string) =>
+    apiFetch("/auth/login", { method: "POST", body: JSON.stringify({ pin }) })
+  );
+  ipcMain.handle("auth:logout", async () =>
+    apiFetch("/auth/logout", { method: "POST" })
+  );
+}

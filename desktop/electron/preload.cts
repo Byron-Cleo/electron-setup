@@ -20,4 +20,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
       electron.ipcRenderer.invoke("menu:update", id, data),
     delete: (id: string) => electron.ipcRenderer.invoke("menu:delete", id),
   },
+  auth: {
+    login: (pin: string) => electron.ipcRenderer.invoke("auth:login", pin),
+    logout: () => electron.ipcRenderer.invoke("auth:logout"),
+  },
 });
