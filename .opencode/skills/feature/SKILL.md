@@ -34,7 +34,7 @@ Detailed instructions for each action live in `actions/<action>.md`.
 
 | Action | Description |
 |--------|-------------|
-| **load** | Load a feature spec or inline description into @context/current-feature.md |
+| **load** | Save a chat description to `context/features/<name>.md`, or load one into `@context/current-feature.md` |
 | **start** | Begin implementation, create branch `feature/[name]` |
 | **review** | Check goals met, code quality |
 | **test** | Write and run unit tests |
@@ -44,7 +44,7 @@ Detailed instructions for each action live in `actions/<action>.md`.
 ## Workflow Steps
 
 1. **Read** — Read @context/ai-interaction.md and @context/current-feature.md first
-2. **Load** — When user says "load feature" with a spec name or inline description, follow detailed instructions in `actions/load.md` to populate `@context/current-feature.md`
+2. **Load** — When user describes a feature in chat, save it as `context/features/<name>.md`. When user says "load feature <name>" or "/feature load <name>", follow detailed instructions in `actions/load.md` to populate `@context/current-feature.md`
 3. **Start** — When user says "start" or "implement", follow detailed instructions in `actions/start.md`
 4. **Implement** — Implement the documented feature per the spec
 5. **Test** — When user says "test" or "verify", follow detailed instructions in `actions/test.md`
@@ -54,7 +54,7 @@ Detailed instructions for each action live in `actions/<action>.md`.
 
 ## Keywords That Trigger This Skill
 
-- "load" / "load the spec"
+- "load feature" / "load the spec" / "/feature load"
 - "start" / "start implementation" / "let's start"
 - "implement" / "begin coding"
 - "test" / "verify"
