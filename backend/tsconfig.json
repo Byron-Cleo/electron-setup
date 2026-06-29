@@ -4,7 +4,7 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,6 +14,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["index.ts", "app.ts", "db.ts", "routes/**/*.ts", "generated/**/*.ts", "db/sample-data.ts", "db/seed.ts"],
+  "exclude": ["node_modules", "dist", "prisma"]
 }

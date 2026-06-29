@@ -97,8 +97,8 @@ No React Router — view switching via `useState<Tab>` and `useState<view>` in `
 ### Backend
 
 - Express routes use `export default router`
-- Prisma client singleton in `backend/src/db.ts`
-- Route files in `backend/src/routes/`
+- Prisma client singleton in `backend/db/db.ts`
+- Route files in `backend/routes/`
 - Prisma schema in `backend/prisma/schema.prisma`
 
 ## Commands

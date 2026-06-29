@@ -3,7 +3,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { isDev } from "./utils.ts";
 const { app, BrowserWindow } = pkg;
-import { pollResources } from "./resourceManager.ts";
 import { getPreloadPath } from "./pathResolver.ts";
 import { registerMealTypeHandlers, registerMenuHandlers } from "./ipc-handlers.ts";
 
@@ -23,10 +22,7 @@ app.whenReady().then(() => {
   registerMealTypeHandlers();
   registerMenuHandlers();
   const win = new BrowserWindow({
-    width: 800,
-    height: 600,
     show: false,
-    center: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -41,11 +37,11 @@ app.whenReady().then(() => {
   }
 
   win.once("ready-to-show", () => {
+    win.maximize();
     win.show();
     win.focus();
   });
 
-  pollResources();
 });
 
 app.on("window-all-closed", () => {
@@ -55,14 +51,13 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     const win = new BrowserWindow({
-      width: 800,
-      height: 600,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         preload: getPreloadPath(),
       },
     });
+    win.maximize();
     if (isDev()) {
       win.loadURL("http://localhost:5123");
     } else {

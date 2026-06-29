@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  output   = "../db/generated/prisma"
 }
 
 datasource db {
@@ -40,33 +40,26 @@ model Cart {
   User          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model MealType {
-  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name         MealPeriod     @unique
-  sortOrder    Int            @default(0)
-  MenuMealType MenuMealType[]
-}
-
 model Menu {
-  id                                                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                                                    String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                                                  String
-  slug                                                  String             @unique(map: "product_slug_idx")
+  slug                                                  String                @unique(map: "product_slug_idx")
   category                                              String
   images                                                String[]
   brand                                                 String
   description                                           String
   stock                                                 Int
-  price                                                 Decimal            @default(0) @db.Decimal(12, 2)
-  rating                                                Decimal            @default(0) @db.Decimal(3, 2)
-  numReviews                                            Int                @default(0)
-  isFeatured                                            Boolean            @default(false)
+  price                                                 Decimal               @default(0) @db.Decimal(12, 2)
+  rating                                                Decimal               @default(0) @db.Decimal(3, 2)
+  numReviews                                            Int                   @default(0)
+  isFeatured                                            Boolean               @default(false)
   banner                                                String?
-  createdAt                                             DateTime           @default(now()) @db.Timestamp(6)
-  accompanyId                                           String?            @db.Uuid
-  vegetableId                                           String?            @db.Uuid
-  MenuAccompaniment_Menu_accompanyIdToMenuAccompaniment MenuAccompaniment? @relation("Menu_accompanyIdToMenuAccompaniment", fields: [accompanyId], references: [id])
-  MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment? @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
-  MenuMealType                                          MenuMealType[]
+  createdAt                                             DateTime              @default(now()) @db.Timestamp(6)
+  starchId                                              String?               @db.Uuid
+  vegetableId                                           String?               @db.Uuid
+  MenuAccompaniment_Menu_starchIdToMenuAccompaniment    MenuAccompaniment?    @relation("Menu_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
+  MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment?    @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
+  MenuServiceTimeType                                   MenuServiceTimeType[]
   OrderItem                                             OrderItem[]
   Review                                                Review[]
 }
@@ -80,17 +73,8 @@ model MenuAccompaniment {
   image                                    String?
   createdAt                                DateTime @default(now()) @db.Timestamp(6)
   isDefault                                Boolean  @default(false)
-  Menu_Menu_accompanyIdToMenuAccompaniment Menu[]   @relation("Menu_accompanyIdToMenuAccompaniment")
+  Menu_Menu_starchIdToMenuAccompaniment    Menu[]   @relation("Menu_starchIdToMenuAccompaniment")
   Menu_Menu_vegetableIdToMenuAccompaniment Menu[]   @relation("Menu_vegetableIdToMenuAccompaniment")
-}
-
-model MenuMealType {
-  menuId     String   @db.Uuid
-  mealTypeId String   @db.Uuid
-  MealType   MealType @relation(fields: [mealTypeId], references: [id], onDelete: Cascade)
-  Menu       Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
-
-  @@id([menuId, mealTypeId])
 }
 
 model Order {
@@ -175,7 +159,23 @@ model VerificationToken {
   @@id([identifier, token])
 }
 
-enum MealPeriod {
+model MenuServiceTime {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                ServiceTime           @unique
+  sortOrder           Int                   @default(0)
+  MenuServiceTimeType MenuServiceTimeType[]
+}
+
+model MenuServiceTimeType {
+  menuId          String          @db.Uuid
+  mealTypeId      String          @db.Uuid
+  MenuServiceTime MenuServiceTime @relation(fields: [mealTypeId], references: [id], onDelete: Cascade)
+  Menu            Menu            @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@id([menuId, mealTypeId])
+}
+
+enum ServiceTime {
   BREAKFAST
   LUNCH
   DINNER
