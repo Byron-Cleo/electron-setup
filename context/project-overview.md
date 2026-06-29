@@ -34,10 +34,10 @@ Restaurants and food service businesses need a reliable, offline-capable point-o
 ### A) Menu Management
 
 - Full CRUD for menu items with name, slug, category, brand, description, price, stock, images
-- Categorize menu items by meal period (Breakfast, Lunch, Dinner, Dessert, Beverage) via MealType
+- Categorize menu items by meal period (Breakfast, Lunch, Dinner, Dessert, Beverage) via MenuServiceTime
 - Filter and browse menus by category, price, rating
 - **Meal customization**: each menu item has configurable accompaniments:
-  - **Starch options**: linked via `accompanyId` relation
+  - **Starch options**: linked via `starchId` relation
   - **Vegetable options**: linked via `vegetableId` relation
   - Accompaniments configurable with name, category, price, image
 - Featured products toggle for promotional display
@@ -45,7 +45,7 @@ Restaurants and food service businesses need a reliable, offline-capable point-o
 ### B) Meal Type System
 
 - Manage meal periods as a distinct entity with sort ordering
-- Each menu item can belong to multiple meal types via the `MenuMealType` junction table
+- Each menu item can belong to multiple meal types via the `MenuServiceTimeType` junction table
 - Flexible categorization enables breakfast/lunch/dinner/beverage/dessert menus
 
 ### C) Order Processing
@@ -92,7 +92,7 @@ Restaurants and food service businesses need a reliable, offline-capable point-o
 
 ## 🗄️ Data Model (Prisma Schema)
 
-> 11 models + 1 enum — schema in `backend/prisma/schema.prisma`
+> 12 models + 1 enum — schema in `backend/prisma/schema.prisma`
 
 ```prisma
 model Account {
@@ -107,8 +107,8 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime
+  createdAt         DateTime @default(now()) @db.Timestamp(3)
+  updatedAt         DateTime @db.Timestamp(3)
   User              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@id([provider, providerAccountId])
 }
@@ -124,7 +124,7 @@ model User {
   address       Json?     @db.Json
   paymentMethod String?
   createdAt     DateTime  @default(now()) @db.Timestamp(6)
-  updatedAt     DateTime
+  updatedAt     DateTime  @db.Timestamp(3)
   Account       Account[]
   Cart          Cart[]
   Order         Order[]
@@ -137,35 +137,35 @@ model Session {
   userId       String   @db.Uuid
   expires      DateTime @db.Timestamp(6)
   createdAt    DateTime @default(now()) @db.Timestamp(6)
-  updatedAt    DateTime
+  updatedAt    DateTime @db.Timestamp(3)
   User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
   identifier String
   token      String
-  expires    DateTime
+  expires    DateTime @db.Timestamp(3)
   @@id([identifier, token])
 }
 
-model MealType {
-  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name         MealPeriod     @unique
-  sortOrder    Int            @default(0)
-  MenuMealType MenuMealType[]
+model MenuServiceTime {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 ServiceTime           @unique
+  sortOrder            Int                   @default(0)
+  MenuServiceTimeType  MenuServiceTimeType[]
 }
 
 model MenuAccompaniment {
-  id                                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name                                     String
-  category                                 String
-  description                              String?
-  price                                    Decimal? @db.Decimal(12, 2)
-  image                                    String?
-  createdAt                                DateTime @default(now()) @db.Timestamp(6)
-  isDefault                                Boolean  @default(false)
-  Menu_Menu_accompanyIdToMenuAccompaniment Menu[]   @relation("Menu_accompanyIdToMenuAccompaniment")
-  Menu_Menu_vegetableIdToMenuAccompaniment Menu[]   @relation("Menu_vegetableIdToMenuAccompaniment")
+  id                                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                                      String
+  category                                  String
+  description                               String?
+  price                                     Decimal? @db.Decimal(12, 2)
+  image                                     String?
+  createdAt                                 DateTime @default(now()) @db.Timestamp(6)
+  isDefault                                 Boolean  @default(false)
+  Menu_Menu_starchIdToMenuAccompaniment     Menu[]   @relation("Menu_starchIdToMenuAccompaniment")
+  Menu_Menu_vegetableIdToMenuAccompaniment  Menu[]   @relation("Menu_vegetableIdToMenuAccompaniment")
 }
 
 model Menu {
@@ -183,20 +183,20 @@ model Menu {
   isFeatured                                            Boolean            @default(false)
   banner                                                String?
   createdAt                                             DateTime           @default(now()) @db.Timestamp(6)
-  accompanyId                                           String?            @db.Uuid
+  starchId                                              String?            @db.Uuid
   vegetableId                                           String?            @db.Uuid
-  MenuAccompaniment_Menu_accompanyIdToMenuAccompaniment MenuAccompaniment? @relation("Menu_accompanyIdToMenuAccompaniment", fields: [accompanyId], references: [id])
-  MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment? @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
-  MenuMealType                                          MenuMealType[]
+  MenuAccompaniment_Menu_starchIdToMenuAccompaniment    MenuAccompaniment? @relation("Menu_starchIdToMenuAccompaniment", fields: [starchId], references: [id], onDelete: SetNull)
+  MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment? @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id], onDelete: SetNull)
+  MenuServiceTimeType                                   MenuServiceTimeType[]
   OrderItem                                             OrderItem[]
   Review                                                Review[]
 }
 
-model MenuMealType {
-  menuId     String   @db.Uuid
-  mealTypeId String   @db.Uuid
-  MealType   MealType @relation(fields: [mealTypeId], references: [id], onDelete: Cascade)
-  Menu       Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+model MenuServiceTimeType {
+  menuId        String          @db.Uuid
+  mealTypeId    String          @db.Uuid
+  MenuServiceTime MenuServiceTime @relation(fields: [mealTypeId], references: [id], onDelete: Cascade)
+  Menu          Menu            @relation(fields: [menuId], references: [id], onDelete: Cascade)
   @@id([menuId, mealTypeId])
 }
 
@@ -210,7 +210,7 @@ model Cart {
   shippingPrice Decimal  @db.Decimal(12, 2)
   taxPrice      Decimal  @db.Decimal(12, 2)
   createdAt     DateTime @default(now()) @db.Timestamp(6)
-  updatedAt     DateTime
+  updatedAt     DateTime @db.Timestamp(3)
   User          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -259,7 +259,7 @@ model Review {
   User               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-enum MealPeriod {
+enum ServiceTime {
   BREAKFAST
   LUNCH
   DINNER
@@ -437,7 +437,7 @@ flowchart TD
 | **Electron + Express split** | Separation of concerns: Electron handles desktop lifecycle + IPC, Express handles business logic + DB |
 | **IPC proxy pattern** | React runs in renderer process (no Node.js); IPC provides a secure bridge via contextBridge |
 | **`Menu` model name** (not `Product`) | Domain-specific naming for restaurant/POS context |
-| **Explicit `MenuMealType` join table** | Allows adding extra fields later (e.g., meal-specific price) |
+| **Explicit `MenuServiceTimeType` join table** | Allows adding extra fields later (e.g., meal-specific price) |
 | **Two FK relations to `MenuAccompaniment`** | Each menu item can have a default starch + default vegetable accompaniment |
 | **`@prisma/adapter-pg`** | Prisma 7 driver adapter pattern for PostgreSQL connection pooling |
 | **`gen_random_uuid()`** | Database-level UUID generation via `pgcrypto` extension |
