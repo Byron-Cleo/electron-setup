@@ -4,6 +4,12 @@ import Dashboard from "./pages/Dashboard"
 import WaiterPOS from "./pages/WaiterPOS"
 import Store from "./pages/Store"
 import Kitchen from "./pages/Kitchen"
+import AdminLayout from "./components/admin/AdminLayout"
+import AdminUsers from "./pages/admin/Users"
+import AdminMenu from "./pages/admin/Menu"
+import AdminKitchen from "./pages/admin/Kitchen"
+import AdminStore from "./pages/admin/Store"
+import AdminCashier from "./pages/admin/Cashier"
 import ProtectedRoute from "./components/ProtectedRoute"
 
 function App() {
@@ -12,13 +18,20 @@ function App() {
       <Routes>
         <Route index element={<Login />} />
         <Route
-          path="/admin/*"
+          path="/admin"
           element={
             <ProtectedRoute role="admin">
-              <Dashboard />
+              <AdminLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="menu" element={<AdminMenu />} />
+          <Route path="kitchen" element={<AdminKitchen />} />
+          <Route path="store" element={<AdminStore />} />
+          <Route path="cashier" element={<AdminCashier />} />
+        </Route>
         <Route
           path="/waiter/*"
           element={

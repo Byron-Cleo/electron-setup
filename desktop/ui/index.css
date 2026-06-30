@@ -138,6 +138,7 @@ h2 {
 }
 
 h1 {
+  color: var(--color-brand-maroon);
   font-size: 56px;
   letter-spacing: -1.68px;
   margin: 32px 0;
@@ -186,6 +187,19 @@ code {
   --color-brand-green: #4c7f1f;
   --color-brand-light: #F7F7F7;
   --color-brand-tan: #E5D2B6;
+
+  --color-admin-header: #F5F9FF;
+  --color-admin-header-text: #562215;
+  --color-admin-sidebar: #FFFFFF;
+  --color-admin-sidebar-text: #666666;
+  --color-admin-sidebar-hover: #F5F9FF;
+  --color-admin-accent: #0087D4;
+  --color-admin-accent-text: #FFFFFF;
+  --color-admin-content: #FAFBFE;
+  --color-admin-card: #FFFFFF;
+  --color-admin-card-border: #E5E5E5;
+  --color-admin-muted: #999999;
+  --color-admin-chart: #0087D4;
 
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
