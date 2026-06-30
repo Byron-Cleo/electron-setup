@@ -1,19 +1,19 @@
 ---
 name: qwen-codegen
-description: Four-model pipeline — gemma3:4b for vision, deepseek-coder:6.7b for frontend, qwen2.5-coder:7b for backend, big-pickle for planning/review. Triggers on: /feature start, generate code, write code, create component.
+description: Four-model pipeline — qwen2.5vl:3b for vision, deepseek-coder:6.7b for frontend, qwen2.5-coder:7b for backend, big-pickle for planning/review. Triggers on: /feature start, generate code, write code, create component.
 ---
 
 # Multi-Model Code Generation Workflow
 
-Four-model pipeline: **[gemma3:4b sees?]** → **big-pickle plans** → **deepseek-coder:6.7b codes frontend** + **qwen2.5-coder:7b codes backend** → **big-pickle reviews & applies**.
+Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **deepseek-coder:6.7b codes frontend** + **qwen2.5-coder:7b codes backend** → **big-pickle reviews & applies**.
 
-> **Vision is optional.** If a screenshot exists → gemma enriches the prompt with design data. If not → frontend still generates, using only existing codebase context. Both frontend and backend models **always run**.
+> **Vision is optional.** If a screenshot exists → qwen2.5vl:3b enriches the prompt with design data. If not → frontend still generates, using only existing codebase context. Both frontend and backend models **always run**.
 
 ## Models
 
 | Role | Model | Purpose |
 |------|-------|---------|
-| Vision | `gemma3:4b` (3.3 GB) | Analyzes screenshots in `@context/screenshots/` — extracts colors, layout, components |
+| Vision | `qwen2.5vl:3b` | Analyzes screenshots in `@context/screenshots/` — extracts colors, layout, components |
 | Planner & Reviewer | big-pickle (opencode) | Requirements analysis, spec writing, file reading, code review, tsc/lint |
 | Frontend Coder | `deepseek-coder:6.7b` (3.8 GB) | Generates React/Tailwind/shadcn components and pages |
 | Backend Coder | `qwen2.5-coder:7b` (4.7 GB) | Generates Express routes, Prisma queries, API handlers |
@@ -27,7 +27,7 @@ Four-model pipeline: **[gemma3:4b sees?]** → **big-pickle plans** → **deepse
 
 ## Workflow Steps
 
-### Phase 0: Vision (gemma3:4b) — OPTIONAL
+### Phase 0: Vision (qwen2.5vl:3b) — OPTIONAL
 **Only runs if a screenshot is provided.** Not a blocker — codegen always runs regardless.
 
 1. User provides screenshot or references one in `@context/screenshots/`

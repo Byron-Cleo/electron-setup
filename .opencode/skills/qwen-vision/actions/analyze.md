@@ -1,13 +1,13 @@
 # Analyze Action
 
-Triggered by: "analyze screenshot", "gemma analyze <filename>"
+Triggered by: "analyze screenshot", "qwen analyze <filename>"
 
 ## Flow
 
 ### Step 1: Read the screenshot
 Screenshots are in `@context/screenshots/<filename>.png`
 
-### Step 2: Send to gemma3:4b via Ollama API
+### Step 2: Send to qwen2.5vl:3b via Ollama API
 ```bash
 IMAGE_PATH="context/screenshots/<filename>.png"
 B64=$(base64 -i "$IMAGE_PATH")
@@ -15,7 +15,7 @@ B64=$(base64 -i "$IMAGE_PATH")
 python3 -c "
 import json
 payload = {
-    'model': 'gemma3:4b',
+    'model': 'qwen2.5vl:3b',
     'prompt': 'Analyze this UI screenshot. Extract:
 1. Color palette (hex codes for all distinct colors):
    - Header background and text
@@ -35,17 +35,17 @@ Return as a structured analysis.',
     'images': ['$B64'],
     'stream': False
 }
-with open(\"/tmp/gemma_vision_payload.json\",\"w\") as f:
+with open(\"/tmp/vision_payload.json\",\"w\") as f:
     json.dump(payload, f)
 "
 curl -s -X POST http://localhost:11434/api/generate \
-  -d @/tmp/gemma_vision_payload.json \
-  -o /tmp/gemma_vision_output.json \
+  -d @/tmp/vision_payload.json \
+  -o /tmp/vision_output.json \
   --max-time 300
 
 python3 -c "
 import json
-d = json.load(open('/tmp/gemma_vision_output.json'))
+d = json.load(open('/tmp/vision_output.json'))
 analysis = d.get('response', 'ERROR')
 print(analysis)
 # Save for reference

@@ -4,7 +4,7 @@ Triggered by: `/feature start`, "generate code", "implement"
 
 ## Flow
 
-### Step 0: Vision (gemma3:4b) — if screenshot provided
+### Step 0: Vision (qwen2.5vl:3b) — if screenshot provided
 If user referenced a screenshot or one exists in `@context/screenshots/` for the feature:
 1. Follow `qwen-vision/actions/analyze.md` to send the image to qwen2.5vl:3b
 2. Save analysis to `context/screenshots/<filename>-analysis.md`
@@ -39,56 +39,17 @@ ollama run qwen2.5-coder:7b "<backend prompt>" > /tmp/qwen_output.txt
 4. Fix any errors
 5. Report what was generated and by which model
 
-### Frontend Prompt Template
+### Prompt Templates
 
-```
-You are deepseek-coder generating frontend code for Eraeva POS Billing System.
-Generate ONLY the code. No explanations.
+Prompt templates are stored at `context/prompts/<platform>/default.md`.
 
-Tech stack: React 19, TypeScript 6, Tailwind CSS v4, lucide-react icons,
-shadcn/ui primitives (Button, Card, CardHeader, CardTitle, CardContent, CardDescription, Input, Form, Select, etc.), react-router-dom, zustand
+For **frontend** generation:
+1. Read `@context/prompts/frontend/default.md`
+2. Fill placeholders: `{file_path}`, `{requirements}`, `{reference_patterns}`
+3. If vision data exists, append design reference section
+4. Send to deepseek-coder:6.7b
 
-Conventions:
-- **MANDATORY: Use shadcn/ui primitives for ALL UI elements** — no raw `<div>` containers, no hand-styled buttons, no manual card patterns. Import from `@/components/ui/` (e.g., `Card`, `Button`, `Input`)
-- Named exports for utilities, default exports for page components
-- Function declarations for components
-- Tailwind classes only (no CSS modules)
-- cn() from @/lib/utils for conditional classes
-- No semicolons
-- .ts extension in relative imports
-- Path alias @/ → desktop/ui/
-
-Design reference (from screenshot analysis):
-[Vision findings: colors, layout, components]
-
-File: [path]
-
-Requirements:
-1. ...
-2. ...
-
-Existing patterns to follow:
-- [reference similar component]
-```
-
-### Backend Prompt Template
-
-```
-You are qwen2.5-coder generating backend code for Eraeva POS Billing System.
-Generate ONLY the code. No explanations.
-
-Tech stack: Express 4, TypeScript 6, Prisma 7, ESM modules, bcrypt-ts-edge
-
-Conventions:
-- Export default router
-- Async route handlers with try/catch
-- Prisma client from ../db.js or ../../db/db.js
-- .ts extension in relative imports
-- Error responses: { error: "message" }
-
-File: [path]
-
-Requirements:
-1. ...
-2. ...
-```
+For **backend** generation:
+1. Read `@context/prompts/backend/default.md`
+2. Fill placeholders: `{file_path}`, `{requirements}`, `{reference_patterns}`
+3. Send to qwen2.5-coder:7b

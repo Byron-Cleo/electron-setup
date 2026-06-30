@@ -5,7 +5,7 @@ description: Analyzes screenshots in @context/screenshots/ using qwen2.5vl:3b vi
 
 # Vision Analysis
 
-Uses `qwen2.5vl:3b` (local Ollama vision-language model) to analyze UI screenshots (gemma3:4b does not support vision inputs).
+Uses `qwen2.5vl:3b` (local Ollama vision-language model) to analyze UI screenshots.
 
 ## Source
 
@@ -14,13 +14,13 @@ Screenshots are stored in `@context/screenshots/`.
 ## Pipeline Position
 
 ```
-Screenshot → gemma3:4b → design spec → deepseek-coder:6.7b → frontend code
+Screenshot → qwen2.5vl:3b → design spec → deepseek-coder:6.7b → frontend code
               (vision)                  (frontend gen)
                                        → qwen2.5-coder:7b  → backend code
                                                               (backend gen)
 ```
 
-> **Note:** gemma3:4b only does vision analysis. **It does NOT generate code.** All frontend code generation is handled by `deepseek-coder:6.7b`. All backend code generation is handled by `qwen2.5-coder:7b`.
+> **Note:** qwen2.5vl:3b only does vision analysis. **It does NOT generate code.** All frontend code generation is handled by `deepseek-coder:6.7b`. All backend code generation is handled by `qwen2.5-coder:7b`.
 
 ## Actions
 
@@ -28,7 +28,7 @@ Screenshot → gemma3:4b → design spec → deepseek-coder:6.7b → frontend co
 |--------|-------------|
 | **analyze** | Send a screenshot to qwen2.5vl:3b, extract colors/layout/components, save analysis |
 
-## What Gemma Extracts
+## What qwen2.5vl Extracts
 
 | Aspect | Output |
 |--------|--------|
@@ -43,6 +43,6 @@ Screenshot → gemma3:4b → design spec → deepseek-coder:6.7b → frontend co
 ## Keywords That Trigger This Skill
 
 - "analyze screenshot" / "analyze image"
-- "gemma analyze" / "gemma vision" / "gemma see"
+- "qwen vision" / "qwen analyze"
 - "what's in the screenshot" / "extract from screenshot"
 - "vision" / "screenshot"

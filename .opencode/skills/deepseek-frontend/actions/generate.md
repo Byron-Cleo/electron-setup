@@ -11,43 +11,13 @@ Triggered by: "write frontend", "create component", "build UI", "style page"
 
 ## Prompt Template
 
-Send this prompt verbatim to deepseek-coder:6.7b via Ollama API:
-
-```
-You are deepseek-coder:6.7b generating frontend code for Eraeva POS Billing System.
-Return ONLY valid code — no explanations, no markdown.
-
-Tech Stack:
-- React 19, TypeScript 6, Tailwind CSS v4, lucide-react icons
-- shadcn/ui primitives (Card, CardHeader, CardTitle, CardContent, CardDescription, Button, Input, Form, Label, Select)
-- react-router-dom (NavLink, Outlet, useNavigate)
-- zustand for state
-- cn() from @/lib/utils for conditional class merging
-
-MANDATORY RULES:
-1. Import ALL UI from @/components/ui/ — NO raw <div> containers for structural elements
-2. Use brand token colors from @theme inline in index.css — NO hardcoded hex colors
-3. Function declarations (function X()) for components
-4. Default exports for page-level components
-5. Named exports for utilities
-6. .ts extension in relative imports (./foo.ts)
-7. No semicolons
-8. Path alias @/ resolves to desktop/ui/
-9. Loading, error, and empty states for any data-fetching components
-10. data-slot attributes for shadcn styling hooks
-
-Design Reference:
-[Colors, layout, component details from spec or vision analysis]
-
-File: [path]
-
-Requirements:
-1. [specific requirement]
-2. [specific requirement]
-
-Existing patterns to follow:
-- [reference file path and key pattern]
-```
+1. Read the base prompt from `@context/prompts/frontend/default.md`
+2. Fill in the placeholders:
+   - `{file_path}` → the target file path in `desktop/ui/`
+   - `{requirements}` → specific requirements from the current feature spec
+   - `{reference_patterns}` → paths to existing similar components as reference
+3. If vision analysis exists, append design reference (colors, layout) from the analysis file
+4. Send the completed prompt to deepseek-coder:6.7b via Ollama API
 
 ## Apply Output
 
