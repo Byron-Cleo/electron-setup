@@ -34,7 +34,7 @@ Detailed instructions for each action live in `actions/<action>.md`.
 
 | Action | Description |
 |--------|-------------|
-| **load** | Save a chat description to `context/features/<name>.md`, or load one into `@context/current-feature.md` |
+| **load** | Save a chat description to `context/features/frontend/<name>.md` or `context/features/backend/<name>.md` based on whether the feature involves UI/screens (frontend) or API/DB logic (backend), or load one into `@context/current-feature.md` |
 | **start** | Begin implementation, create branch `feature/[name]` |
 | **review** | Check goals met, code quality |
 | **test** | Write and run unit tests |

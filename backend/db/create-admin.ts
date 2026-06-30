@@ -10,7 +10,7 @@ async function main() {
   const prisma = new PrismaClient({ adapter });
 
   const staff = [
-    { name: "Admin User", email: "admin@eraeva.com", role: "admin", pin: "1234" },
+    { name: "Byron Ochara", email: "admin@eraeva.com", role: "admin", pin: "1234" },
     { name: "Waiter Jane", email: "waiter@eraeva.com", role: "waiter", pin: "1111" },
     { name: "Store Keeper", email: "store@eraeva.com", role: "store", pin: "2222" },
     { name: "Chef Bob", email: "kitchen@eraeva.com", role: "kitchen", pin: "3333" },

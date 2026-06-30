@@ -122,8 +122,8 @@ function Login() {
           alt="Eraeva Logo"
           className="w-40 h-40 object-contain rounded-2xl drop-shadow-[0_4px_20px_rgba(181,103,37,0.3)] mb-[30px]"
         />
-        <p className="text-brand-maroon text-[60px] font-bold mb-4 tracking-wide uppercase">
-          Staff Login
+        <p className="text-brand-maroon text-[60px] font-bold my-8 tracking-wide uppercase">
+          Eraeva Catering Services
         </p>
       </div>
 
@@ -139,7 +139,7 @@ function Login() {
           <div className="relative w-full aspect-[4/3] bg-brand-tan rounded-2xl border border-brand-tan/80">
             <div className="absolute inset-0 p-4 flex flex-col overflow-hidden">
               <div className="text-[36px] font-semibold text-brand-green text-center">
-                Enter PIN
+                Enter LOGIN PIN
               </div>
 
               {/* PIN Indicators */}
