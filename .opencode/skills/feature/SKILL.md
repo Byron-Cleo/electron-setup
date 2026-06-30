@@ -46,7 +46,11 @@ Detailed instructions for each action live in `actions/<action>.md`.
 1. **Read** — Read @context/ai-interaction.md and @context/current-feature.md first
 2. **Load** — When user describes a feature in chat, save it as `context/features/<name>.md`. When user says "load feature <name>" or "/feature load <name>", follow detailed instructions in `actions/load.md` to populate `@context/current-feature.md`
 3. **Start** — When user says "start" or "implement", follow detailed instructions in `actions/start.md`
-4. **Implement** — Implement the documented feature per the spec
+4. **Implement** — Use the defined model pipeline:
+   - **Vision**: `qwen2.5vl:3b` (vision analysis, OPTIONAL — only if screenshot provided)
+   - **Frontend**: `deepseek-coder:6.7b` generates ALL React/TSX/Tailwind/shadcn components in `desktop/ui/`
+   - **Backend**: `qwen2.5-coder:7b` generates Express/Prisma logic in `backend/`
+   - **Review**: big-pickle reviews, applies, and runs `tsc --noEmit` + `npm run lint`
 5. **Test** — When user says "test" or "verify", follow detailed instructions in `actions/test.md`
 6. **Iterate** — Review code quality; when user says "review", follow detailed instructions in `actions/review.md`
 7. **Explain** — When user says "explain" or "what changed", follow detailed instructions in `actions/explain.md`

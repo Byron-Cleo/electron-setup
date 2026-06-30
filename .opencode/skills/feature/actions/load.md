@@ -18,6 +18,9 @@ When user says `feature load <file-name>`:
    - Update `# Current Feature` heading with the feature title
    - Set `## Status` to **In Progress**
    - Fill `## Goals` from the spec
-   - Fill `## Notes` with any implementation details, constraints, key decisions
+   - Fill `## Notes` with any implementation details, constraints, key decisions, and note the model pipeline:
+     - **Vision (optional)**: `qwen2.5vl:3b` for screenshot analysis
+     - **Frontend**: `deepseek-coder:6.7b` for all UI components (shadcn/ui mandatory)
+     - **Backend**: `qwen2.5-coder:7b` for Express/Prisma
    - Leave `## History` intact
 3. Confirm to user that spec is loaded and ready to start

@@ -88,6 +88,7 @@ No React Router — view switching via `useState<Tab>` and `useState<view>` in `
 
 ### Components
 
+- **MANDATORY: Use shadcn/ui primitives for ALL UI elements** — no raw `<div>` containers for cards, buttons, forms, or layout shells. Import from `@/components/ui/` (`Card`, `Button`, `Input`, `Select`, `Form`, `Label`, etc.)
 - Feature directories under `desktop/ui/components/<feature>/`
 - shadcn primitives in `desktop/ui/components/ui/`
 - UI primitives use `cn()` from `@/lib/utils` (clsx + tailwind-merge)
