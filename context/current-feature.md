@@ -1,6 +1,6 @@
 # Current Feature: Waiter Landing UI — Order Taking & Receipt
 
-## Type
+## Platform
 
 frontend
 

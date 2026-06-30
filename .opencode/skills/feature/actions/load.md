@@ -18,14 +18,14 @@ When user says `feature load <name>`:
 
 1. Search both `context/features/frontend/` and `context/features/backend/` for `<name>.md`
 2. Read the matching file
-3. Determine `## Type` based on which folder the file was found in:
-   - `frontend/` folder → `## Type` = `frontend`
-   - `backend/` folder → `## Type` = `backend`
+3. Determine `## Platform` based on which folder the file was found in:
+   - `frontend/` folder → `## Platform` = `frontend`
+   - `backend/` folder → `## Platform` = `backend`
 4. Populate `context/current-feature.md`:
    - Update `# Current Feature` heading with the feature title
-   - Set `## Type` based on folder (see step 3)
+   - Set `## Platform` based on folder (see step 3)
    - Set `## Status` to **In Progress**
    - Fill `## Goals` from the spec
    - Fill `## Notes` with any implementation details, constraints, key decisions
    - Leave `## History` intact
-5. Confirm to user that spec is loaded and ready to start. The correct model will be auto-selected based on Type when implementation begins.
+5. Confirm to user that spec is loaded and ready to start. The correct model will be auto-selected based on Platform when implementation begins.
