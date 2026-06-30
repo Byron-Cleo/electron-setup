@@ -25,9 +25,10 @@ The `current-feature.md` file MUST contain ONLY these sections:
 
 History format (newest at top):
 ```
-### YYYY-MM-DD — Feature Title
+### <platform> - YYYY-MM-DD — Feature Title
 - Description of what was implemented
 ```
+`<platform>` must match the `## Platform` value from the feature being completed (e.g., `frontend` or `backend`).
 
 ## Actions
 

@@ -20,7 +20,7 @@ In Progress
 
 ## History
 
-### 2026-06-30 — Admin Dashboard — Layout Design & Navigation Shell
+### frontend - 2026-06-30 — Admin Dashboard — Layout Design & Navigation Shell
 - Created AdminLayout with sidebar, header, main content area, and footer
 - Set up nested routes under /admin/* (Dashboard, Store, Kitchen, Menu, Cashier, Users)
 - Built Dashboard page with stat cards (Orders, Revenue, Tables Served, Avg Prep Time) and SVG sales overview chart
@@ -31,9 +31,7 @@ In Progress
 - Deleted unused screenshots
 - Committed and merged to main
 
-## History
-
-### 2026-06-29 — PIN-Based Staff Login with Role-Based Access
+### backend - 2026-06-29 — PIN-Based Staff Login with Role-Based Access
 - Added pin, isActive, platform fields to User model (Prisma schema + migration)
 - Created backend auth route (POST /login with bcrypt compare, POST /logout)
 - Added auth IPC handlers and exposed via preload.cts
@@ -46,5 +44,5 @@ In Progress
 - Seeded test users (admin:1234, waiter:1111, store:2222, kitchen:3333)
 - Saved detailed spec to context/features/login-phase-1-spec.md
 
-### 2026-06-29 — Initial configuration and login implementation
+### backend - 2026-06-29 — Initial configuration and login implementation
 - Commit: initial configuration and login implementation

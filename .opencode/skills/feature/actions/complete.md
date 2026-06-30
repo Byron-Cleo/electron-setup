@@ -18,7 +18,7 @@
 ### 5. Reset current-feature.md
 - Set status back to "Not Started"
 - Clear Goals and Notes sections
-- Append history entry for completed feature
+- Append history entry for completed feature in format: `### <platform> - YYYY-MM-DD — Feature Title` (platform from `## Platform` field)
 
 ## CRITICAL — Do NOT skip any step
 Every step must be executed. Do not stop after commit.
