@@ -18,13 +18,14 @@ When user says `feature load <name>`:
 
 1. Search both `context/features/frontend/` and `context/features/backend/` for `<name>.md`
 2. Read the matching file
-3. Populate `context/current-feature.md`:
+3. Determine `## Type` based on which folder the file was found in:
+   - `frontend/` folder → `## Type` = `frontend`
+   - `backend/` folder → `## Type` = `backend`
+4. Populate `context/current-feature.md`:
    - Update `# Current Feature` heading with the feature title
+   - Set `## Type` based on folder (see step 3)
    - Set `## Status` to **In Progress**
    - Fill `## Goals` from the spec
-   - Fill `## Notes` with any implementation details, constraints, key decisions, and note the model pipeline:
-     - **Vision (optional)**: `qwen2.5vl:3b` for screenshot analysis
-     - **Frontend**: `deepseek-coder:6.7b` for all UI components (shadcn/ui mandatory) — used when feature is from `frontend/` folder
-     - **Backend**: `qwen2.5-coder:7b` for Express/Prisma — used when feature is from `backend/` folder
+   - Fill `## Notes` with any implementation details, constraints, key decisions
    - Leave `## History` intact
-4. Confirm to user that spec is loaded and ready to start
+5. Confirm to user that spec is loaded and ready to start. The correct model will be auto-selected based on Type when implementation begins.

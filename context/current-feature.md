@@ -1,5 +1,9 @@
 # Current Feature: Waiter Landing UI — Order Taking & Receipt
 
+## Type
+
+frontend
+
 ## Status
 
 In Progress
@@ -13,9 +17,6 @@ In Progress
 - Backend already has `MealPeriod` enum: BREAKFAST, LUNCH, DINNER, DESSERT, BEVERAGE
 - This phase is ONLY about displaying the meal period options on the UI
 - Remaining phases (listing foods, ordering, receipt) will be handled separately
-- **Vision (optional)**: `qwen2.5vl:3b` for screenshot analysis
-- **Frontend**: `deepseek-coder:6.7b` for all UI components (shadcn/ui mandatory)
-- **Backend**: `qwen2.5-coder:7b` for Express/Prisma
 
 ## History
 

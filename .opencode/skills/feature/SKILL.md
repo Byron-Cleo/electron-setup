@@ -17,6 +17,7 @@ The `current-feature.md` file MUST contain ONLY these sections:
 
 | Section | Purpose |
 |---------|---------|
+| `## Type` | `frontend` or `backend` — determines which model to use for generation |
 | `## Status` | Not Started / In Progress / Complete |
 | `## Goals` | Bullet points of what success looks like |
 | `## Notes` | Constraints, decisions, implementation details |
@@ -46,10 +47,10 @@ Detailed instructions for each action live in `actions/<action>.md`.
 1. **Read** — Read @context/ai-interaction.md and @context/current-feature.md first
 2. **Load** — When user describes a feature in chat, save it as `context/features/<name>.md`. When user says "load feature <name>" or "/feature load <name>", follow detailed instructions in `actions/load.md` to populate `@context/current-feature.md`
 3. **Start** — When user says "start" or "implement", follow detailed instructions in `actions/start.md`
-4. **Implement** — Use the defined model pipeline:
-   - **Vision**: `qwen2.5vl:3b` (vision analysis, OPTIONAL — only if screenshot provided)
-   - **Frontend**: `deepseek-coder:6.7b` generates ALL React/TSX/Tailwind/shadcn components in `desktop/ui/`
-   - **Backend**: `qwen2.5-coder:7b` generates Express/Prisma logic in `backend/`
+4. **Implement** — Check `## Type` in `current-feature.md` and use the correct model:
+   - **If Type is `frontend`** → load `deepseek-frontend` skill and use `deepseek-coder:6.7b` for ALL React/TSX/Tailwind/shadcn components in `desktop/ui/`
+   - **If Type is `backend`** → load `qwen-codegen` skill and use `qwen2.5-coder:7b` for Express/Prisma logic in `backend/`
+   - **Vision** (optional): `qwen2.5vl:3b` only if screenshot provided
    - **Review**: big-pickle reviews, applies, and runs `tsc --noEmit` + `npm run lint`
 5. **Test** — When user says "test" or "verify", follow detailed instructions in `actions/test.md`
 6. **Iterate** — Review code quality; when user says "review", follow detailed instructions in `actions/review.md`
