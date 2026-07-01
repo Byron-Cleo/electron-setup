@@ -1,4 +1,4 @@
-# Current Feature: Waiter Landing UI — Order Taking & Receipt
+# Current Feature: Waiter POS — Meal Period Time Slots
 
 ## Platform
 
@@ -6,19 +6,30 @@ frontend
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Display MealPeriod options on the Waiter POS page: BREAKFAST, LUNCH, DINNER, DESSERT, BEVERAGE
+- Automatically determine active meal period(s) based on current time
+- Visually highlight active meal period(s) and disable inactive ones
+- Dessert and Beverage always active ("Always Available")
+- Prevent navigation/ordering from inactive periods
+- Display serving hours or "Closed" state on inactive cards
 
 ## Notes
 
-- Backend already has `MealPeriod` enum: BREAKFAST, LUNCH, DINNER, DESSERT, BEVERAGE
-- This phase is ONLY about displaying the meal period options on the UI
-- Remaining phases (listing foods, ordering, receipt) will be handled separately
+- Spec saved to context/features/frontend/waiter-meal-period-time-slots.md
+- Time logic is entirely client-side
+- BREAKFAST: 06:00–11:59 | LUNCH: 12:00–17:59 | DINNER: 18:00–05:59 | DESSERT, BEVERAGE: always
+- DINNER spans midnight — edge case handled
+- Use existing WaiterPOS meal period card layout
+- Phase 1 of the waiter time-slot feature (UI states only)
 
 ## History
+
+### frontend - 2026-06-30 — Waiter Landing UI — Meal Period Cards Display
+- Displayed MealPeriod options (BREAKFAST, LUNCH, DINNER, DESSERT, BEVERAGE) as card grid
+- Removed test orange background from WaiterPOS
 
 ### frontend - 2026-06-30 — Admin Dashboard — Layout Design & Navigation Shell
 - Created AdminLayout with sidebar, header, main content area, and footer
