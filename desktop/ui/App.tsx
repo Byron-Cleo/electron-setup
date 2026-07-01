@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
 import WaiterPOS from "./pages/waiterPos/WaiterPOS"
+import WaiterLayout from "./pages/waiterPos/WaiterLayout"
+import WaiterMenu from "./pages/waiterPos/WaiterMenu"
 import Store from "./pages/Store"
 import Kitchen from "./pages/Kitchen"
 import AdminLayout from "./components/admin/AdminLayout"
@@ -33,13 +35,16 @@ function App() {
           <Route path="cashier" element={<AdminCashier />} />
         </Route>
         <Route
-          path="/waiter/*"
+          path="/waiter"
           element={
             <ProtectedRoute role="waiter">
-              <WaiterPOS />
+              <WaiterLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<WaiterPOS />} />
+          <Route path="menu/:mealPeriod" element={<WaiterMenu />} />
+        </Route>
         <Route
           path="/store/*"
           element={

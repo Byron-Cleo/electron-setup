@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Sunrise, Sun, Moon, CakeSlice, CupSoda } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { WaiterHeader } from "./WaiterHeader"
-import { WaiterDateTime } from "./WaiterDateTime"
 import { cn } from "@/lib/utils"
 
 type MealPeriod = {
@@ -51,6 +50,7 @@ function getActiveMealPeriods(hour: number, periods: MealPeriod[]): EnrichedPeri
 }
 
 export function WaiterPOS() {
+  const navigate = useNavigate()
   const [hour, setHour] = useState(new Date().getHours())
 
   useEffect(() => {
@@ -66,6 +66,7 @@ export function WaiterPOS() {
     return (
       <Card
         key={period}
+        onClick={() => isActive && navigate(`/waiter/menu/${period}`)}
         className={cn(
           "relative w-48 transition-all",
           isActive
@@ -104,34 +105,22 @@ export function WaiterPOS() {
   }
 
   return (
-    <div className="h-screen bg-brand-light flex flex-col">
-      <div className="w-full mx-auto max-w-[1400px] flex-1 flex flex-col">
-        <WaiterHeader />
+    <div className="space-y-8">
+      <section>
+        <h2 className="text-sm font-bold text-brand-green uppercase tracking-wider mb-4">Now Serving</h2>
+        <div className="flex flex-wrap justify-center gap-4">
+          {activePeriods.map(renderCard)}
+        </div>
+      </section>
 
-        <main className="flex-1 p-6 overflow-y-auto">
-          <div className="flex justify-center mb-6">
-            <WaiterDateTime />
+      {closedPeriods.length > 0 && (
+        <section>
+          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Closed</h2>
+          <div className="flex flex-wrap justify-center gap-4">
+            {closedPeriods.map(renderCard)}
           </div>
-
-          <div className="space-y-8">
-            <section>
-              <h2 className="text-sm font-bold text-brand-green uppercase tracking-wider mb-4">Now Serving</h2>
-              <div className="flex flex-wrap justify-center gap-4">
-                {activePeriods.map(renderCard)}
-              </div>
-            </section>
-
-            {closedPeriods.length > 0 && (
-              <section>
-                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Closed</h2>
-                <div className="flex flex-wrap justify-center gap-4">
-                  {closedPeriods.map(renderCard)}
-                </div>
-              </section>
-            )}
-          </div>
-        </main>
-      </div>
+        </section>
+      )}
     </div>
   )
 }
