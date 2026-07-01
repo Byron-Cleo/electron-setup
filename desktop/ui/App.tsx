@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
-import WaiterPOS from "./pages/WaiterPOS"
+import WaiterPOS from "./pages/waiterPos/WaiterPOS"
 import Store from "./pages/Store"
 import Kitchen from "./pages/Kitchen"
 import AdminLayout from "./components/admin/AdminLayout"

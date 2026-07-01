@@ -1,6 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "instructions": ["AGENTS.md", ".opencode/skills/feature/SKILL.md"],
+  "instructions": [
+    "AGENTS.md",
+    ".opencode/skills/feature/SKILL.md",
+    ".opencode/skills/deepseek-frontend/SKILL.md",
+    ".opencode/skills/qwen-codegen/SKILL.md",
+    ".opencode/skills/qwen-vision/SKILL.md"
+  ],
   "skills": {
     "paths": [".opencode/skills"]
   },
