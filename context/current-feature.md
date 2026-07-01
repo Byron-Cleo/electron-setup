@@ -2,34 +2,26 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Replace the current flat card grid in WaiterMenu with a 4-column master-detail + order summary layout
-- **Column 1 (Categories):** List all unique `Menu.category` values (Beef, Chicken, Fish, etc.) derived from fetched menu items
-- **Column 2 (Items):** When a category is selected, show all `Menu.name` values belonging to that category
-- **Column 3 (Detail):** When a menu name is selected, display a detailed report including accompaniments (starch via `starchId → MenuAccompaniment.name`, vegetable via `vegetableId → MenuAccompaniment.name`)
-- **Column 4 (Order Summary):** Persistent right-side panel showing added items with name, quantity controls, line total, grand total, and Place Order button. Shows "No Food Ordered Yet" when empty.
-- Three fixed-width columns (Categories 220px, Detail 320px, Order Summary 280px) and one flex column (Items flex-1) summing to 100% container width
-- Keep existing meal period header, back button, loading/error/empty states
-- Update backend Prisma query to include starch and vegetable relations so accompaniment names are returned
+
 
 ## Notes
 
-- Route remains `/waiter/menu/:mealPeriod` — no route changes
-- Backend: update `GET /api/menu` Prisma query to `include: { starch: { select: { name: true, price: true } }, vegetable: { select: { name: true, price: true } } }`
-- IPC handler and electron.d.ts may need updating if MenuItem type requires new fields
-- Use Tailwind `grid-cols-[220px_1fr_320px_280px]` for the 4-column layout
-- Use shadcn primitives: Card, Button, Badge
-- Loading state shows spinner, error shows banner, empty shows "No items available"
-- Order summary is persistent across category/item browsing
-
 ## History
+
+### frontend - 2026-07-01 — Waiter Menu — 3-Column Layout with Expandable Categories
+- Refactored from 4-column to 3-column layout
+- Merged categories and items into a single expandable column
+- Category click toggles items shown below the category name (collapsible)
+- Detail column now uses flex-1 to fill remaining space
+- Updated feature workflow to call models directly (deepseek-coder:latest / qwen2.5-coder:7b)
 
 ### frontend - 2026-07-01 — Waiter Menu — 4-Column Layout with Order Summary
 - Refactored WaiterMenu.tsx from flat card grid to 4-column master-detail layout
