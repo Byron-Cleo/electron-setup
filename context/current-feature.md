@@ -1,36 +1,27 @@
 # Current Feature
 
 ## Platform
-backend
+Not Specified
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Refactor database schema to enable meal filtering by serving time (LUNCH, DINNER, BREAKFAST, DESSERT, BEVERAGE)
-- Create MenuMealType table to establish many-to-many relationship between Menu and ServiceTime
-- Modify seed data to establish actual meal-time relationships based on restaurant logic
-- Implement API endpoint GET /api/menus?mealType=<time> to pull all meals available for specific serving times
-- Ensure data integrity and proper database constraints for the new relationship
-- Add tests to verify the meal-time filtering functionality
-- Generate database migrations for schema changes
+
 
 ## Notes
 
-- Based on frontend requirement: Waiter selects serving time (e.g., LUNCH) and needs to see all meals available for that time AND have stock > 0
-- Current schema has MenuServiceTimeType connecting Menu → MenuServiceTime → ServiceTime, but needs more direct relationship for filtering
-- Goal is to have direct menu-to-meal-time relationship that can be filtered efficiently
-- Need to maintain backward compatibility with any existing API consumers
-- Seed data should reflect real restaurant logic (some meals served at both LUNCH & DINNER, others only one)
-- Will need to update both schema and type definitions
-- Will need to seed the new relationship properly
-- API endpoint should handle mealType parameter (one of: BREAKFAST, LUNCH, DINNER, DESSERT, BEVERAGE)
-- Stock filtering is a business logic concern - handled in backend application layer
-- Design should allow easy future scaling (add more meal periods if needed)
-
 ## History
+
+### backend - 2026-07-01 — Waiter POS — Menu Filtering by Meal Period
+- Refactored schema: replaced MenuServiceTime/MenuServiceTimeType with direct MenuMealType model
+- Created Prisma migration add_menu_meal_type with seed data updated for new model
+- Implemented GET /api/menus?mealType=<time> endpoint with stock > 0 filtering
+- Updated MealType route to return fixed ServiceTime enum values (no longer CRUD-manageable)
+- Added mealTypes field to MenuItem type and getByMealType to ElectronAPI/IPC/preload
+- Fixed seeded user roles (staff → waiter/store/kitchen) and re-enabled user seeding with PINs
 
 ### frontend - 2026-07-01 — Waiter POS — Meal Period Time Slots
 - Implemented time-slot logic (BREAKFAST 6-11, LUNCH 12-17, DINNER 18-5 overnight, DESSERT/BEVERAGE always)
