@@ -52,6 +52,7 @@ Detailed instructions for each action live in `actions/<action>.md`.
    - **If Platform is `frontend`** → load `gemma-frontend` skill and use `gemma3:4b` for ALL React/TSX/Tailwind/shadcn components in `desktop/ui/`
    - **If Platform is `backend`** → load `qwen-codegen` skill and use `qwen2.5-coder:7b` for Express/Prisma logic in `backend/`
    - **Vision** (optional): `qwen2.5vl:3b` only if screenshot provided
+   - **Cleanup**: After each model finishes generating output, immediately run `ollama stop <model>` to kill the process — do NOT leave it running in the background
    - **Review**: big-pickle reviews, applies, and runs `tsc --noEmit` + `npm run lint`
 5. **Test** — When user says "test" or "verify", follow detailed instructions in `actions/test.md`
 6. **Iterate** — Review code quality; when user says "review", follow detailed instructions in `actions/review.md`

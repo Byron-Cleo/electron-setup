@@ -37,6 +37,8 @@ Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **gem
 
 > **No screenshot?** Skip this phase. Frontend model generates code based on existing codebase conventions and the spec alone. The vision phase enriches the prompt — it never blocks it.
 
+> **Process Cleanup:** After every `ollama run` command completes (vision, frontend, or backend), the ollama process MUST be stopped/killed immediately to prevent it from lingering in the background. Use `ollama stop <model>` after the output is captured.
+
 ### Phase 1: Plan (big-pickle)
 1. Read `@context/ai-interaction.md` and `@context/current-feature.md`
 2. Read all relevant existing files to understand conventions
@@ -54,7 +56,7 @@ Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **gem
 ### Phase 2: Generate Frontend (gemma3:4b) — ALWAYS RUNS
 
 ```bash
-ollama run gemma3:4b "<frontend prompt>" > /tmp/gemma_output.txt
+ollama run gemma3:4b "<frontend prompt>" > /tmp/gemma_output.txt && ollama stop gemma3:4b
 ```
 
 Frontend prompt includes:
@@ -69,7 +71,7 @@ Frontend prompt includes:
 
 ### Phase 3: Generate Backend (qwen2.5-coder:7b) — ALWAYS RUNS
 ```bash
-ollama run qwen2.5-coder:7b "<backend prompt>" > /tmp/qwen_output.txt
+ollama run qwen2.5-coder:7b "<backend prompt>" > /tmp/qwen_output.txt && ollama stop qwen2.5-coder:7b
 ```
 
 Backend prompt includes:
