@@ -19,6 +19,7 @@ The file @context/current-feature.md MUST contain ONLY these sections in order:
 
 | Section | Purpose |
 |---------|---------|
+| `## Platform` | `frontend` or `backend` — determines codegen model; defaults to `Not Specified` |
 | `## Status` | Not Started / In Progress / Complete |
 | `## Goals` | Bullet points of what success looks like |
 | `## Notes` | Constraints, decisions, implementation details |
