@@ -1,38 +1,28 @@
-# Current Feature: Waiter POS — Meal Period Time Slots
+# Current Feature
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Automatically determine active meal period(s) based on current time
-- Visually highlight active meal period(s) and disable inactive ones
-- Dessert and Beverage always active ("Always Available")
-- Prevent navigation/ordering from inactive periods
-- Display serving hours or "Closed" state on inactive cards
-- Create a WaiterDateTime component showing day strip (Mon–Sun) with current day highlighted
-- Display current time updating every second (HH:MM:SS)
-- Display current date in format "Monday, 1 July, 2026"
-- Show "Logged in at (time)" label with the login timestamp
+
 
 ## Notes
 
-- Spec saved to context/features/frontend/waiter-meal-period-time-slots.md
-- Time logic is entirely client-side
-- BREAKFAST: 06:00–11:59 | LUNCH: 12:00–17:59 | DINNER: 18:00–05:59 | DESSERT, BEVERAGE: always
-- DINNER spans midnight — edge case handled
-- Use existing WaiterPOS meal period card layout
-- WaiterDateTime component in desktop/ui/pages/waiterPos/WaiterDateTime.tsx
-- Day strip: highlight current day with brand-green, others gray/inactive
-- Time updates every 1 second via setInterval
-- Logged in time captured once on mount
-
 ## History
+
+### frontend - 2026-07-01 — Waiter POS — Meal Period Time Slots
+- Implemented time-slot logic (BREAKFAST 6-11, LUNCH 12-17, DINNER 18-5 overnight, DESSERT/BEVERAGE always)
+- Split meal period cards into "Now Serving" (active + always available) and "Closed" sections
+- Created WaiterDateTime component with day strip (Mon–Sun), live clock, date, and login timestamp
+- Centered header layout, side-by-side day strip and timestamp display
+- Replaced deepseek-coder:6.7b with gemma3:4b as the frontend codegen model
+- Ran tsc --noEmit and lint — clean
 
 ### frontend - 2026-06-30 — Waiter Landing UI — Meal Period Cards Display
 - Displayed MealPeriod options (BREAKFAST, LUNCH, DINNER, DESSERT, BEVERAGE) as card grid
