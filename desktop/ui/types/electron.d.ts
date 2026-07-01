@@ -19,9 +19,11 @@ interface MenuItem {
   isFeatured: boolean;
   banner: string | null;
   createdAt: string;
-  accompanyId: string | null;
+  starchId: string | null;
   vegetableId: string | null;
   mealTypes: string[];
+  starch: { name: string; price: number } | null;
+  vegetable: { name: string; price: number } | null;
 }
 
 interface MenuCreateData {

@@ -21,13 +21,24 @@ router.get("/", async (req, res) => {
 
   const items = await prisma.menu.findMany({
     where,
-    include: { MenuMealType: { select: { mealType: true } } },
+    include: {
+      MenuMealType: { select: { mealType: true } },
+      MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
+      MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
-  const result = items.map(({ MenuMealType, ...menu }) => ({
+  const result = items.map(({
+    MenuMealType,
+    MenuAccompaniment_Menu_starchIdToMenuAccompaniment: starchRel,
+    MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: vegetableRel,
+    ...menu
+  }) => ({
     ...menu,
     mealTypes: MenuMealType.map((mt) => mt.mealType),
+    starch: starchRel,
+    vegetable: vegetableRel,
   }));
 
   res.json(result);

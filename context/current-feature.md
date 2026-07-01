@@ -2,17 +2,46 @@
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
+- Replace the current flat card grid in WaiterMenu with a 4-column master-detail + order summary layout
+- **Column 1 (Categories):** List all unique `Menu.category` values (Beef, Chicken, Fish, etc.) derived from fetched menu items
+- **Column 2 (Items):** When a category is selected, show all `Menu.name` values belonging to that category
+- **Column 3 (Detail):** When a menu name is selected, display a detailed report including accompaniments (starch via `starchId → MenuAccompaniment.name`, vegetable via `vegetableId → MenuAccompaniment.name`)
+- **Column 4 (Order Summary):** Persistent right-side panel showing added items with name, quantity controls, line total, grand total, and Place Order button. Shows "No Food Ordered Yet" when empty.
+- Three fixed-width columns (Categories 220px, Detail 320px, Order Summary 280px) and one flex column (Items flex-1) summing to 100% container width
+- Keep existing meal period header, back button, loading/error/empty states
+- Update backend Prisma query to include starch and vegetable relations so accompaniment names are returned
+
 ## Notes
 
+- Route remains `/waiter/menu/:mealPeriod` — no route changes
+- Backend: update `GET /api/menu` Prisma query to `include: { starch: { select: { name: true, price: true } }, vegetable: { select: { name: true, price: true } } }`
+- IPC handler and electron.d.ts may need updating if MenuItem type requires new fields
+- Use Tailwind `grid-cols-[220px_1fr_320px_280px]` for the 4-column layout
+- Use shadcn primitives: Card, Button, Badge
+- Loading state shows spinner, error shows banner, empty shows "No items available"
+- Order summary is persistent across category/item browsing
+
 ## History
+
+### frontend - 2026-07-01 — Waiter Menu — 4-Column Layout with Order Summary
+- Refactored WaiterMenu.tsx from flat card grid to 4-column master-detail layout
+- Column 1: Categories list (220px, auto-selects first)
+- Column 2: Items filtered by selected category (flex-1)
+- Column 3: Detail panel with image, accompaniments, Add to Order (320px)
+- Column 4: Order Summary with quantity controls, totals, Place Order (280px)
+- Fixed type mismatch: accompanyId → starchId in electron.d.ts
+- Added starch/vegetable accompaniment objects to MenuItem type
+- Updated backend Prisma query to include MenuAccompaniment relations
+- Loading/error/empty states preserved
+- Build and lint clean
 
 ### frontend - 2026-07-01 — Waiter Menu — Fetch by Meal Period
 - Created WaiterLayout as shared POS shell with Outlet
