@@ -1,11 +1,36 @@
 import { Router } from "express";
 import prisma from "../db/db";
+import { ServiceTime } from "../db/generated/prisma/client";
 
 const router = Router();
 
-router.get("/", async (_req, res) => {
-  const items = await prisma.menu.findMany({ orderBy: { createdAt: "desc" } });
-  res.json(items);
+const VALID_MEAL_TYPES = Object.values(ServiceTime) as string[];
+
+router.get("/", async (req, res) => {
+  const { mealType } = req.query;
+
+  const where: Record<string, unknown> = {};
+  if (mealType) {
+    if (!VALID_MEAL_TYPES.includes(mealType as string)) {
+      res.status(400).json({ error: `Invalid mealType: ${mealType}. Must be one of: ${VALID_MEAL_TYPES.join(", ")}` });
+      return;
+    }
+    where.stock = { gt: 0 };
+    where.MenuMealType = { some: { mealType: mealType as string } };
+  }
+
+  const items = await prisma.menu.findMany({
+    where,
+    include: { MenuMealType: { select: { mealType: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const result = items.map(({ MenuMealType, ...menu }) => ({
+    ...menu,
+    mealTypes: MenuMealType.map((mt) => mt.mealType),
+  }));
+
+  res.json(result);
 });
 
 router.get("/:id", async (req, res) => {

@@ -21,6 +21,7 @@ interface MenuItem {
   createdAt: string;
   accompanyId: string | null;
   vegetableId: string | null;
+  mealTypes: string[];
 }
 
 interface MenuCreateData {
@@ -68,6 +69,7 @@ interface ElectronAPI {
   menu: {
     getAll: () => Promise<MenuItem[]>;
     getById: (id: string) => Promise<MenuItem>;
+    getByMealType: (mealType: string) => Promise<MenuItem[]>;
     create: (data: MenuCreateData) => Promise<MenuItem>;
     update: (id: string, data: MenuUpdateData) => Promise<MenuItem>;
     delete: (id: string) => Promise<{ message: string }>;
