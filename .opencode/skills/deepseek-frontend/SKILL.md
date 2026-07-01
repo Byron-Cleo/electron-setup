@@ -1,17 +1,17 @@
 ---
-name: qwen-frontend
-description: Frontend code generation using qwen2.5-coder:7b for React/TSX/Tailwind/shadcn components. Triggers on: write frontend, create component, build UI, style page.
+name: deepseek-frontend
+description: Frontend code generation using deepseek-coder:latest for React/TSX/Tailwind/shadcn components. Triggers on: write frontend, create component, build UI, style page.
 ---
 
-# Qwen Frontend Code Generation
+# DeepSeek Frontend Code Generation
 
-Uses `qwen2.5-coder:7b` to generate ALL frontend UI components. This is the **only** model used for React/TSX/Tailwind work.
+Uses `deepseek-coder:latest` (1.3B) to generate ALL frontend UI components. This is the **only** model used for React/TSX/Tailwind work.
 
-## Why Qwen for Frontend
+## Why DeepSeek for Frontend
 
-- Strong at TypeScript (6.2B params) — excellent code generation quality
-- Deep React and Tailwind pattern knowledge
-- Consistent output structure across both frontend and backend tasks
+- Lightweight (1.3B params, 776 MB) — fast inference on local hardware
+- Strong at structured TypeScript/React/Tailwind code generation
+- Proven quality from earlier project phases
 
 ## Requirements Enforced
 
@@ -28,7 +28,7 @@ The model is called via Ollama API (non-streaming) at `http://localhost:11434/ap
 
 ```bash
 curl -s http://localhost:11434/api/generate -d '{
-  "model": "qwen2.5-coder:7b",
+  "model": "deepseek-coder:latest",
   "prompt": "...",
   "stream": false
 }' | python3 -c "import sys,json; print(json.load(sys.stdin)['response'])"
@@ -38,7 +38,7 @@ curl -s http://localhost:11434/api/generate -d '{
 
 | Action | Description |
 |--------|-------------|
-| **generate** | Generate frontend component(s) for a given spec — always uses qwen2.5-coder:7b |
+| **generate** | Generate frontend component(s) for a given spec — always uses deepseek-coder:latest |
 
 ## Keywords That Trigger This Skill
 
@@ -46,4 +46,4 @@ curl -s http://localhost:11434/api/generate -d '{
 - "create component" / "build UI"
 - "write frontend" / "make component"
 - "style page" / "shadcn component"
-- "qwen code" / "qwen frontend"
+- "deepseek code" / "deepseek frontend"

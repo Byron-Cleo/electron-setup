@@ -5,7 +5,7 @@ frontend
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
@@ -44,7 +44,7 @@ Not Started
 - Split meal period cards into "Now Serving" (active + always available) and "Closed" sections
 - Created WaiterDateTime component with day strip (Mon–Sun), live clock, date, and login timestamp
 - Centered header layout, side-by-side day strip and timestamp display
-- Replaced deepseek-coder:6.7b with gemma3:4b, then unified on qwen2.5-coder:7b for both frontend and backend codegen
+- Replaced deepseek-coder:6.7b with gemma3:4b, then unified on qwen2.5-coder:7b, then back to deepseek-coder:latest (1.3B) for frontend + qwen2.5-coder:7b for backend
 - Ran tsc --noEmit and lint — clean
 
 ### frontend - 2026-06-30 — Waiter Landing UI — Meal Period Cards Display

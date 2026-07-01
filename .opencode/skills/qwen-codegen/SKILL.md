@@ -1,11 +1,11 @@
 ---
 name: qwen-codegen
-description: Three-model pipeline — qwen2.5vl:3b for vision, qwen2.5-coder:7b for both frontend and backend, big-pickle for planning/review. Triggers on: /feature start, generate code, write code, create component.
+description: Three-model pipeline — qwen2.5vl:3b for vision, deepseek-coder:latest for frontend, qwen2.5-coder:7b for backend, big-pickle for planning/review. Triggers on: /feature start, generate code, write code, create component.
 ---
 
 # Multi-Model Code Generation Workflow
 
-Three-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **qwen2.5-coder:7b codes both frontend & backend** → **big-pickle reviews & applies**.
+Three-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **deepseek-coder:latest codes frontend** + **qwen2.5-coder:7b codes backend** → **big-pickle reviews & applies**.
 
 > **Vision is optional.** If a screenshot exists → qwen2.5vl:3b enriches the prompt with design data. If not → frontend still generates, using only existing codebase context. Both frontend and backend models **always run**.
 
@@ -15,14 +15,16 @@ Three-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **qw
 |------|-------|---------|
 | Vision | `qwen2.5vl:3b` | Analyzes screenshots in `@context/screenshots/` — extracts colors, layout, components |
 | Planner & Reviewer | big-pickle (opencode) | Requirements analysis, spec writing, file reading, code review, tsc/lint |
-| Frontend & Backend Coder | `qwen2.5-coder:7b` (4.7 GB) | Generates both frontend React/Tailwind/shadcn components and backend Express/Prisma logic |
+| Frontend Coder | `deepseek-coder:latest` (776 MB) | Generates React/Tailwind/shadcn components — lightweight, fast inference |
+| Backend Coder | `qwen2.5-coder:7b` (4.7 GB) | Generates Express routes, Prisma queries, API handlers |
 
 
-### Why Unified Model
+### Why This Split
 
 | Layer | Model | Why |
 |-------|-------|-----|
-| Frontend & Backend | `qwen2.5-coder:7b` (4.7 GB) | Strong at both TypeScript/React/Tailwind and Express/Prisma — unified pipeline, one model for all code generation |
+| Frontend (React/TSX/Tailwind) | `deepseek-coder:latest` (776 MB) | Lightweight (1B params), fast inference, strong at structured code gen |
+| Backend (Express/Prisma) | `qwen2.5-coder:7b` (4.7 GB) | Strong at TypeScript logic, API routing, database schema patterns |
 
 ## Workflow Steps
 
@@ -44,7 +46,7 @@ Three-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **qw
 3. Analyze requirements
 4. If vision data exists, incorporate it; otherwise rely on existing project patterns
 5. Split work into frontend and backend tasks
-6. Write two separate detailed prompts — one for frontend, one for backend (both use qwen2.5-coder:7b)
+6. Write two separate detailed prompts — one for frontend (deepseek-coder:latest), one for backend (qwen2.5-coder:7b)
 
 ### Source of Design Truth
 
@@ -52,10 +54,10 @@ Three-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **qw
 |----------|---------------------|---------------------|
 | **Screenshot provided** | Vision colors + layout + existing code patterns | Existing code patterns + spec |
 | **No screenshot** | Existing code patterns + spec + project conventions | Existing code patterns + spec |
-### Phase 2: Generate Frontend (qwen2.5-coder:7b) — ALWAYS RUNS
+### Phase 2: Generate Frontend (deepseek-coder:latest) — ALWAYS RUNS
 
 ```bash
-ollama run qwen2.5-coder:7b "<frontend prompt>" > /tmp/qwen_frontend_output.txt && ollama stop qwen2.5-coder:7b
+ollama run deepseek-coder:latest "<frontend prompt>" > /tmp/deepseek_frontend_output.txt && ollama stop deepseek-coder:latest
 ```
 
 Frontend prompt includes:
@@ -91,7 +93,7 @@ Backend prompt includes:
 
 | Action | Description |
 |--------|-------------|
-| **generate** | Vision analysis → plan → run qwen (frontend) + qwen (backend) → apply → verify |
+| **generate** | Vision analysis → plan → run deepseek (frontend) + qwen (backend) → apply → verify |
 
 ## Keywords That Trigger This Skill
 
