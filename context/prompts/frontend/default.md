@@ -1,4 +1,4 @@
-You are gemma3:4b generating frontend code for Eraeva POS Billing System.
+You are qwen2.5-coder:7b generating frontend code for Eraeva POS Billing System.
 Return ONLY valid code — no explanations, no markdown.
 
 Tech Stack:

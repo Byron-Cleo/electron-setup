@@ -17,7 +17,7 @@ Triggered by: "write frontend", "create component", "build UI", "style page"
    - `{requirements}` → specific requirements from the current feature spec
    - `{reference_patterns}` → paths to existing similar components as reference
 3. If vision analysis exists, append design reference (colors, layout) from the analysis file
-4. Send the completed prompt to gemma3:4b via Ollama API
+4. Send the completed prompt to qwen2.5-coder:7b via Ollama API
 
 ## Apply Output
 
@@ -25,4 +25,4 @@ Triggered by: "write frontend", "create component", "build UI", "style page"
 2. Write/modify files using Edit tool
 3. Run `npx tsc --noEmit --project tsconfig.app.json`
 4. Run `npm run lint`
-5. Fix any errors — return to gemma if needed
+5. Fix any errors — return to qwen if needed

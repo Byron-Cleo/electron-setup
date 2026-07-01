@@ -1,11 +1,11 @@
 ---
 name: qwen-codegen
-description: Four-model pipeline — qwen2.5vl:3b for vision, gemma3:4b for frontend, qwen2.5-coder:7b for backend, big-pickle for planning/review. Triggers on: /feature start, generate code, write code, create component.
+description: Three-model pipeline — qwen2.5vl:3b for vision, qwen2.5-coder:7b for both frontend and backend, big-pickle for planning/review. Triggers on: /feature start, generate code, write code, create component.
 ---
 
 # Multi-Model Code Generation Workflow
 
-Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **gemma3:4b codes frontend** + **qwen2.5-coder:7b codes backend** → **big-pickle reviews & applies**.
+Three-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **qwen2.5-coder:7b codes both frontend & backend** → **big-pickle reviews & applies**.
 
 > **Vision is optional.** If a screenshot exists → qwen2.5vl:3b enriches the prompt with design data. If not → frontend still generates, using only existing codebase context. Both frontend and backend models **always run**.
 
@@ -15,15 +15,14 @@ Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **gem
 |------|-------|---------|
 | Vision | `qwen2.5vl:3b` | Analyzes screenshots in `@context/screenshots/` — extracts colors, layout, components |
 | Planner & Reviewer | big-pickle (opencode) | Requirements analysis, spec writing, file reading, code review, tsc/lint |
-| Frontend Coder | `gemma3:4b` | Generates React/Tailwind/shadcn components and pages |
-| Backend Coder | `qwen2.5-coder:7b` (4.7 GB) | Generates Express routes, Prisma queries, API handlers |
+| Frontend & Backend Coder | `qwen2.5-coder:7b` (4.7 GB) | Generates both frontend React/Tailwind/shadcn components and backend Express/Prisma logic |
 
-### Why This Split
+
+### Why Unified Model
 
 | Layer | Model | Why |
 |-------|-------|-----|
-| Frontend (React/TSX/Tailwind) | `gemma3:4b` | Lightweight (4B params), good instruction following for structured code |
-| Backend (Express/Prisma) | `qwen2.5-coder:7b` | Strong at TypeScript logic, API routing, database schema patterns |
+| Frontend & Backend | `qwen2.5-coder:7b` (4.7 GB) | Strong at both TypeScript/React/Tailwind and Express/Prisma — unified pipeline, one model for all code generation |
 
 ## Workflow Steps
 
@@ -45,7 +44,7 @@ Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **gem
 3. Analyze requirements
 4. If vision data exists, incorporate it; otherwise rely on existing project patterns
 5. Split work into frontend and backend tasks
-6. Write two separate detailed prompts — one for gemma (frontend), one for qwen (backend)
+6. Write two separate detailed prompts — one for frontend, one for backend (both use qwen2.5-coder:7b)
 
 ### Source of Design Truth
 
@@ -53,10 +52,10 @@ Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **gem
 |----------|---------------------|---------------------|
 | **Screenshot provided** | Vision colors + layout + existing code patterns | Existing code patterns + spec |
 | **No screenshot** | Existing code patterns + spec + project conventions | Existing code patterns + spec |
-### Phase 2: Generate Frontend (gemma3:4b) — ALWAYS RUNS
+### Phase 2: Generate Frontend (qwen2.5-coder:7b) — ALWAYS RUNS
 
 ```bash
-ollama run gemma3:4b "<frontend prompt>" > /tmp/gemma_output.txt && ollama stop gemma3:4b
+ollama run qwen2.5-coder:7b "<frontend prompt>" > /tmp/qwen_frontend_output.txt && ollama stop qwen2.5-coder:7b
 ```
 
 Frontend prompt includes:
@@ -92,7 +91,7 @@ Backend prompt includes:
 
 | Action | Description |
 |--------|-------------|
-| **generate** | Vision analysis → plan → run gemma (frontend) + qwen (backend) → apply → verify |
+| **generate** | Vision analysis → plan → run qwen (frontend) + qwen (backend) → apply → verify |
 
 ## Keywords That Trigger This Skill
 
@@ -100,4 +99,4 @@ Backend prompt includes:
 - "generate code" / "write code"
 - "create component" / "implement"
 - "frontend generate" / "backend generate"
-- "gemma code" / "qwen code"
+- "qwen code"
