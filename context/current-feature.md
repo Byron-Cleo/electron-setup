@@ -6,7 +6,7 @@ frontend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
@@ -15,6 +15,10 @@ Not Started
 - Dessert and Beverage always active ("Always Available")
 - Prevent navigation/ordering from inactive periods
 - Display serving hours or "Closed" state on inactive cards
+- Create a WaiterDateTime component showing day strip (Mon–Sun) with current day highlighted
+- Display current time updating every second (HH:MM:SS)
+- Display current date in format "Monday, 1 July, 2026"
+- Show "Logged in at (time)" label with the login timestamp
 
 ## Notes
 
@@ -23,7 +27,10 @@ Not Started
 - BREAKFAST: 06:00–11:59 | LUNCH: 12:00–17:59 | DINNER: 18:00–05:59 | DESSERT, BEVERAGE: always
 - DINNER spans midnight — edge case handled
 - Use existing WaiterPOS meal period card layout
-- Phase 1 of the waiter time-slot feature (UI states only)
+- WaiterDateTime component in desktop/ui/pages/waiterPos/WaiterDateTime.tsx
+- Day strip: highlight current day with brand-green, others gray/inactive
+- Time updates every 1 second via setInterval
+- Logged in time captured once on mount
 
 ## History
 
