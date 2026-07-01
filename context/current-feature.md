@@ -1,35 +1,27 @@
 # Current Feature
 
 ## Platform
-frontend
+
+Not Specified
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- When a waiter clicks an active meal period card (BREAKFAST, LUNCH, DINNER, DESSERT, BEVERAGE), navigate to a menu page showing all menu items for that period
-- Fetch menus from the backend using GET /api/menu?mealType=<selectedPeriod> via window.electron.menu.getByMealType(mealType)
-- Display all menu items (name, price, stock, images, accompaniments) for the selected service time
-- The WaiterPOS parent layout design (header, navigation, branding) is kept consistent across all pages — only the content area and route change
-- Route changes to reflect the selected meal period (e.g., /waiter/menu/LUNCH) while maintaining the same design shell
-- Show the selected meal period name prominently in the menu page (e.g., "LUNCH MENU")
-- Handle loading, empty, and error states during fetch
-
 ## Notes
 
-- Backend GET /api/menu?mealType=<time> already implemented and tested
-- window.electron.menu.getByMealType(mealType) already exposed in preload + IPC
-- MenuItem type already includes mealTypes: string[] field
-- Stock > 0 filtering is handled by backend — frontend only displays what it receives
-- Meal period time-slot logic (active vs closed) already implemented in previous feature
-- Only active meal periods should be clickable — closed periods remain disabled
-- Use React Router nested routes under /waiter so the layout shell is preserved while content changes
-- The design is the same for all periods — only the food listing and route differentiate the experience
-- Nested route: /waiter/menu/:mealPeriod with Outlet in WaiterPOS layout
-
 ## History
+
+### frontend - 2026-07-01 — Waiter Menu — Fetch by Meal Period
+- Created WaiterLayout as shared POS shell with Outlet
+- Created WaiterMenu component that fetches menu items by :mealPeriod route param
+- WaiterPOS cards navigate to /waiter/menu/:mealPeriod on click
+- Nested /waiter routes in App.tsx (index + menu/:mealPeriod)
+- Added window.electron fallback in WaiterMenu (fixes blank screen in browser dev mode)
+- Loading, error, empty, and success states handled
+- Build and lint clean
 
 ### backend - 2026-07-01 — Waiter POS — Menu Filtering by Meal Period
 - Refactored schema: replaced MenuServiceTime/MenuServiceTimeType with direct MenuMealType model
