@@ -1,53 +1,42 @@
 import { Router } from "express";
-import prisma from "../db/db";
+import { ServiceTime } from "../db/generated/prisma/client";
 
 const router = Router();
 
+const MEAL_TYPE_ORDER: Record<string, number> = {
+  BREAKFAST: 1,
+  LUNCH: 2,
+  DINNER: 3,
+  DESSERT: 4,
+  BEVERAGE: 5,
+};
+
 router.get("/", async (_req, res) => {
-  const types = await prisma.menuServiceTime.findMany({ orderBy: { sortOrder: "asc" } });
+  const types = Object.values(ServiceTime).map((name) => ({
+    id: name,
+    name,
+    sortOrder: MEAL_TYPE_ORDER[name] ?? 99,
+  }));
   res.json(types);
 });
 
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
-  const type = await prisma.menuServiceTime.findUnique({ where: { id } });
-  if (!type) return res.status(404).json({ error: "Not found" });
-  res.json(type);
+  const names = Object.values(ServiceTime) as string[];
+  if (!names.includes(id)) return res.status(404).json({ error: "Not found" });
+  res.json({ id, name: id, sortOrder: MEAL_TYPE_ORDER[id] ?? 99 });
 });
 
-router.post("/", async (req, res) => {
-  const { name, sortOrder } = req.body;
-  if (!name) return res.status(400).json({ error: "name is required" });
-  const type = await prisma.menuServiceTime.create({
-    data: { name, sortOrder: sortOrder ?? 0 },
-  });
-  res.status(201).json(type);
+router.post("/", async (_req, res) => {
+  res.status(405).json({ error: "Meal types are fixed enums and cannot be created" });
 });
 
-router.put("/:id", async (req, res) => {
-  const { id } = req.params;
-  const { name, sortOrder } = req.body;
-  try {
-    const type = await prisma.menuServiceTime.update({
-      where: { id },
-      data: { ...(name !== undefined && { name }), ...(sortOrder !== undefined && { sortOrder }) },
-    });
-    res.json(type);
-  } catch (e: any) {
-    if (e.code === "P2025") return res.status(404).json({ error: "Not found" });
-    throw e;
-  }
+router.put("/:id", async (_req, res) => {
+  res.status(405).json({ error: "Meal types are fixed enums and cannot be updated" });
 });
 
-router.delete("/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    await prisma.menuServiceTime.delete({ where: { id } });
-    res.json({ message: "Deleted", id });
-  } catch (e: any) {
-    if (e.code === "P2025") return res.status(404).json({ error: "Not found" });
-    throw e;
-  }
+router.delete("/:id", async (_req, res) => {
+  res.status(405).json({ error: "Meal types are fixed enums and cannot be deleted" });
 });
 
 export default router;

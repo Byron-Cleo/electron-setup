@@ -15,10 +15,9 @@ async function main() {
   await prisma.order.deleteMany();
   await prisma.review.deleteMany();
   await prisma.cart.deleteMany();
-  await prisma.menuServiceTimeType.deleteMany();
+  await prisma.menuMealType.deleteMany();
   await prisma.menu.deleteMany();
   await prisma.menuAccompaniment.deleteMany();
-  await prisma.menuServiceTime.deleteMany();
   await prisma.account.deleteMany();
   await prisma.session.deleteMany();
   await prisma.verificationToken.deleteMany();
@@ -31,19 +30,13 @@ async function main() {
   });
   console.log("Seeded accompaniments");
 
-  // 2. MenuServiceTime rows — MenuServiceTimeType.mealTypeId points here.
-  await prisma.menuServiceTime.createMany({ data: sampleData.mealTypes });
-  console.log("Seeded meal types");
-
-  // 3. Menus — references starchId/vegetableId (already in DB above).
+  // 2. Menus — references starchId/vegetableId (already in DB above).
   await prisma.menu.createMany({ data: sampleData.menus });
   console.log("Seeded menus");
 
-  // 4. Join table last — both menuId and mealTypeId must already exist.
-  await prisma.menuServiceTimeType.createMany({
-    data: sampleData.menuMealTypes,
-  });
-  console.log("Seeded menu meal types");
+  // 3. MenuMealType last — menuId must already exist.
+  await prisma.menuMealType.createMany({ data: sampleData.menuMealTypes });
+  console.log("Seeded menu meal type assignments");
 
   // 5. Users — omitted for now (will be handled separately).
   console.log("Database seeded successfully");

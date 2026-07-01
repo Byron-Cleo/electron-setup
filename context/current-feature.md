@@ -1,18 +1,34 @@
 # Current Feature
 
 ## Platform
-
-Not Specified
+backend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-
+- Refactor database schema to enable meal filtering by serving time (LUNCH, DINNER, BREAKFAST, DESSERT, BEVERAGE)
+- Create MenuMealType table to establish many-to-many relationship between Menu and ServiceTime
+- Modify seed data to establish actual meal-time relationships based on restaurant logic
+- Implement API endpoint GET /api/menus?mealType=<time> to pull all meals available for specific serving times
+- Ensure data integrity and proper database constraints for the new relationship
+- Add tests to verify the meal-time filtering functionality
+- Generate database migrations for schema changes
 
 ## Notes
+
+- Based on frontend requirement: Waiter selects serving time (e.g., LUNCH) and needs to see all meals available for that time AND have stock > 0
+- Current schema has MenuServiceTimeType connecting Menu → MenuServiceTime → ServiceTime, but needs more direct relationship for filtering
+- Goal is to have direct menu-to-meal-time relationship that can be filtered efficiently
+- Need to maintain backward compatibility with any existing API consumers
+- Seed data should reflect real restaurant logic (some meals served at both LUNCH & DINNER, others only one)
+- Will need to update both schema and type definitions
+- Will need to seed the new relationship properly
+- API endpoint should handle mealType parameter (one of: BREAKFAST, LUNCH, DINNER, DESSERT, BEVERAGE)
+- Stock filtering is a business logic concern - handled in backend application layer
+- Design should allow easy future scaling (add more meal periods if needed)
 
 ## History
 

@@ -16,9 +16,7 @@ const ID = {
   cabbage: "e5f6a702-b8c9-4d0e-1f2a-3b4c5d6e7f8a",
   kundeSpinach: "f6a7b803-c9d0-4e1f-2a3b-4c5d6e7f8a9b",
   managu: "a7b8c904-d0e1-4f2a-3b4c-5d6e7f8a9b0c",
-  // MenuServiceTime rows
-  lunchType: "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a",
-  dinnerType: "e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b",
+
 } as const;
 
 const sampleData = {
@@ -122,14 +120,6 @@ const sampleData = {
     },
   ],
 
-  // ── MenuServiceTime ────────────────────────────────────────────────────────
-  // One row per ServiceTime enum value currently in use.
-  // sortOrder drives the left-to-right tab order rendered on the UI.
-  mealTypes: [
-    { id: ID.lunchType, name: ServiceTime.LUNCH, sortOrder: 1 },
-    { id: ID.dinnerType, name: ServiceTime.DINNER, sortOrder: 2 },
-  ],
-
   // ── Menu ──────────────────────────────────────────────────────────────────
   // starchId → the default starch served with this dish (Ugali).
   // Chapati is also seeded above as an option the customer can swap to.
@@ -184,14 +174,14 @@ const sampleData = {
     },
   ],
 
-  // ── MenuServiceTimeType (join table) ───────────────────────────────────────
+  // ── MenuMealType (direct Menu → ServiceTime) ───────────────────────────────
   // Beef Fry is served at both Lunch and Dinner.
-  // These rows must be inserted after both Menu and MenuServiceTime rows exist.
+  // These rows must be inserted after Menu rows exist.
   menuMealTypes: [
-    { menuId: ID.beefFry, mealTypeId: ID.lunchType },
-    { menuId: ID.beefFry, mealTypeId: ID.dinnerType },
-    { menuId: ID.chickenFry, mealTypeId: ID.lunchType },
-    { menuId: ID.chickenFry, mealTypeId: ID.dinnerType },
+    { menuId: ID.beefFry, mealType: ServiceTime.LUNCH },
+    { menuId: ID.beefFry, mealType: ServiceTime.DINNER },
+    { menuId: ID.chickenFry, mealType: ServiceTime.LUNCH },
+    { menuId: ID.chickenFry, mealType: ServiceTime.DINNER },
   ],
 };
 

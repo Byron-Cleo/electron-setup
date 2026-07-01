@@ -59,7 +59,7 @@ model Menu {
   vegetableId                                           String?               @db.Uuid
   MenuAccompaniment_Menu_starchIdToMenuAccompaniment    MenuAccompaniment?    @relation("Menu_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
   MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment?    @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
-  MenuServiceTimeType                                   MenuServiceTimeType[]
+  MenuMealType                                          MenuMealType[]
   OrderItem                                             OrderItem[]
   Review                                                Review[]
 }
@@ -162,20 +162,12 @@ model VerificationToken {
   @@id([identifier, token])
 }
 
-model MenuServiceTime {
-  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name                ServiceTime           @unique
-  sortOrder           Int                   @default(0)
-  MenuServiceTimeType MenuServiceTimeType[]
-}
+model MenuMealType {
+  menuId   String      @db.Uuid
+  mealType ServiceTime
+  Menu     Menu        @relation(fields: [menuId], references: [id], onDelete: Cascade)
 
-model MenuServiceTimeType {
-  menuId          String          @db.Uuid
-  mealTypeId      String          @db.Uuid
-  MenuServiceTime MenuServiceTime @relation(fields: [mealTypeId], references: [id], onDelete: Cascade)
-  Menu            Menu            @relation(fields: [menuId], references: [id], onDelete: Cascade)
-
-  @@id([menuId, mealTypeId])
+  @@id([menuId, mealType])
 }
 
 enum ServiceTime {
