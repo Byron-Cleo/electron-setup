@@ -20,9 +20,9 @@ If user referenced a screenshot or one exists in `@context/screenshots/` for the
    - **Backend files** → `backend/` (routes, db, schema)
 6. Write two separate prompts
 
-### Step 2: Generate Frontend (deepseek-coder:6.7b)
+### Step 2: Generate Frontend (gemma3:4b)
 ```bash
-ollama run deepseek-coder:6.7b "<frontend prompt>" > /tmp/deepseek_output.txt
+ollama run gemma3:4b "<frontend prompt>" > /tmp/gemma_output.txt
 ```
 
 If output is truncated, retry per-file.
@@ -47,7 +47,7 @@ For **frontend** generation:
 1. Read `@context/prompts/frontend/default.md`
 2. Fill placeholders: `{file_path}`, `{requirements}`, `{reference_patterns}`
 3. If vision data exists, append design reference section
-4. Send to deepseek-coder:6.7b
+4. Send to gemma3:4b
 
 For **backend** generation:
 1. Read `@context/prompts/backend/default.md`

@@ -49,7 +49,7 @@ Detailed instructions for each action live in `actions/<action>.md`.
 2. **Load** — When user describes a feature in chat, save it as `context/features/<name>.md`. When user says "load feature <name>" or "/feature load <name>", follow detailed instructions in `actions/load.md` to populate `@context/current-feature.md`
 3. **Start** — When user says "start" or "implement", follow detailed instructions in `actions/start.md`
 4. **Implement** — Check `## Platform` in `current-feature.md` and use the correct model:
-   - **If Platform is `frontend`** → load `deepseek-frontend` skill and use `deepseek-coder:6.7b` for ALL React/TSX/Tailwind/shadcn components in `desktop/ui/`
+   - **If Platform is `frontend`** → load `gemma-frontend` skill and use `gemma3:4b` for ALL React/TSX/Tailwind/shadcn components in `desktop/ui/`
    - **If Platform is `backend`** → load `qwen-codegen` skill and use `qwen2.5-coder:7b` for Express/Prisma logic in `backend/`
    - **Vision** (optional): `qwen2.5vl:3b` only if screenshot provided
    - **Review**: big-pickle reviews, applies, and runs `tsc --noEmit` + `npm run lint`

@@ -1,18 +1,17 @@
 ---
-name: deepseek-frontend
-description: Frontend code generation using deepseek-coder:6.7b for React/TSX/Tailwind/shadcn components. Triggers on: write frontend, create component, build UI, style page.
+name: gemma-frontend
+description: Frontend code generation using gemma3:4b for React/TSX/Tailwind/shadcn components. Triggers on: write frontend, create component, build UI, style page.
 ---
 
-# DeepSeek Frontend Code Generation
+# Gemma Frontend Code Generation
 
-Uses `deepseek-coder:6.7b` (3.8 GB) to generate ALL frontend UI components. This is the **only** model used for React/TSX/Tailwind work.
+Uses `gemma3:4b` to generate ALL frontend UI components. This is the **only** model used for React/TSX/Tailwind work.
 
-## Why DeepSeek for Frontend
+## Why Gemma for Frontend
 
-- Cleaner JSX/TSX output than alternatives
-- Better Tailwind class generation
-- Strong shadcn/ui pattern matching
-- Trained on more web/UI code
+- Lightweight (4B params) — fast inference on local hardware
+- Strong instruction following for structured code generation
+- Good TypeScript and React pattern knowledge
 
 ## Requirements Enforced
 
@@ -29,7 +28,7 @@ The model is called via Ollama API (non-streaming) at `http://localhost:11434/ap
 
 ```bash
 curl -s http://localhost:11434/api/generate -d '{
-  "model": "deepseek-coder:6.7b",
+  "model": "gemma3:4b",
   "prompt": "...",
   "stream": false
 }' | python3 -c "import sys,json; print(json.load(sys.stdin)['response'])"
@@ -39,7 +38,7 @@ curl -s http://localhost:11434/api/generate -d '{
 
 | Action | Description |
 |--------|-------------|
-| **generate** | Generate frontend component(s) for a given spec — always uses deepseek-coder:6.7b |
+| **generate** | Generate frontend component(s) for a given spec — always uses gemma3:4b |
 
 ## Keywords That Trigger This Skill
 
@@ -47,4 +46,4 @@ curl -s http://localhost:11434/api/generate -d '{
 - "create component" / "build UI"
 - "write frontend" / "make component"
 - "style page" / "shadcn component"
-- "deepseek code" / "deepseek"
+- "gemma code" / "gemma frontend"

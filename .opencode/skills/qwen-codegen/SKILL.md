@@ -1,11 +1,11 @@
 ---
 name: qwen-codegen
-description: Four-model pipeline — qwen2.5vl:3b for vision, deepseek-coder:6.7b for frontend, qwen2.5-coder:7b for backend, big-pickle for planning/review. Triggers on: /feature start, generate code, write code, create component.
+description: Four-model pipeline — qwen2.5vl:3b for vision, gemma3:4b for frontend, qwen2.5-coder:7b for backend, big-pickle for planning/review. Triggers on: /feature start, generate code, write code, create component.
 ---
 
 # Multi-Model Code Generation Workflow
 
-Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **deepseek-coder:6.7b codes frontend** + **qwen2.5-coder:7b codes backend** → **big-pickle reviews & applies**.
+Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **gemma3:4b codes frontend** + **qwen2.5-coder:7b codes backend** → **big-pickle reviews & applies**.
 
 > **Vision is optional.** If a screenshot exists → qwen2.5vl:3b enriches the prompt with design data. If not → frontend still generates, using only existing codebase context. Both frontend and backend models **always run**.
 
@@ -15,14 +15,14 @@ Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **dee
 |------|-------|---------|
 | Vision | `qwen2.5vl:3b` | Analyzes screenshots in `@context/screenshots/` — extracts colors, layout, components |
 | Planner & Reviewer | big-pickle (opencode) | Requirements analysis, spec writing, file reading, code review, tsc/lint |
-| Frontend Coder | `deepseek-coder:6.7b` (3.8 GB) | Generates React/Tailwind/shadcn components and pages |
+| Frontend Coder | `gemma3:4b` | Generates React/Tailwind/shadcn components and pages |
 | Backend Coder | `qwen2.5-coder:7b` (4.7 GB) | Generates Express routes, Prisma queries, API handlers |
 
 ### Why This Split
 
 | Layer | Model | Why |
 |-------|-------|-----|
-| Frontend (React/TSX/Tailwind) | `deepseek-coder:6.7b` | Trained on more web/UI code, cleaner JSX output, better Tailwind class generation |
+| Frontend (React/TSX/Tailwind) | `gemma3:4b` | Lightweight (4B params), good instruction following for structured code |
 | Backend (Express/Prisma) | `qwen2.5-coder:7b` | Strong at TypeScript logic, API routing, database schema patterns |
 
 ## Workflow Steps
@@ -43,7 +43,7 @@ Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **dee
 3. Analyze requirements
 4. If vision data exists, incorporate it; otherwise rely on existing project patterns
 5. Split work into frontend and backend tasks
-6. Write two separate detailed prompts — one for deepseek (frontend), one for qwen (backend)
+6. Write two separate detailed prompts — one for gemma (frontend), one for qwen (backend)
 
 ### Source of Design Truth
 
@@ -51,10 +51,10 @@ Four-model pipeline: **[qwen2.5vl:3b sees?]** → **big-pickle plans** → **dee
 |----------|---------------------|---------------------|
 | **Screenshot provided** | Vision colors + layout + existing code patterns | Existing code patterns + spec |
 | **No screenshot** | Existing code patterns + spec + project conventions | Existing code patterns + spec |
+### Phase 2: Generate Frontend (gemma3:4b) — ALWAYS RUNS
 
-### Phase 2: Generate Frontend (deepseek-coder:6.7b) — ALWAYS RUNS
 ```bash
-ollama run deepseek-coder:6.7b "<frontend prompt>" > /tmp/deepseek_output.txt
+ollama run gemma3:4b "<frontend prompt>" > /tmp/gemma_output.txt
 ```
 
 Frontend prompt includes:
@@ -90,7 +90,7 @@ Backend prompt includes:
 
 | Action | Description |
 |--------|-------------|
-| **generate** | Vision analysis → plan → run deepseek (frontend) + qwen (backend) → apply → verify |
+| **generate** | Vision analysis → plan → run gemma (frontend) + qwen (backend) → apply → verify |
 
 ## Keywords That Trigger This Skill
 
@@ -98,4 +98,4 @@ Backend prompt includes:
 - "generate code" / "write code"
 - "create component" / "implement"
 - "frontend generate" / "backend generate"
-- "deepseek code" / "qwen code"
+- "gemma code" / "qwen code"

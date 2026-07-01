@@ -14,13 +14,13 @@ Screenshots are stored in `@context/screenshots/`.
 ## Pipeline Position
 
 ```
-Screenshot → qwen2.5vl:3b → design spec → deepseek-coder:6.7b → frontend code
+Screenshot → qwen2.5vl:3b → design spec → gemma3:4b → frontend code
               (vision)                  (frontend gen)
                                        → qwen2.5-coder:7b  → backend code
                                                               (backend gen)
 ```
 
-> **Note:** qwen2.5vl:3b only does vision analysis. **It does NOT generate code.** All frontend code generation is handled by `deepseek-coder:6.7b`. All backend code generation is handled by `qwen2.5-coder:7b`.
+> **Note:** qwen2.5vl:3b only does vision analysis. **It does NOT generate code.** All frontend code generation is handled by `gemma3:4b`. All backend code generation is handled by `qwen2.5-coder:7b`.
 
 ## Actions
 
