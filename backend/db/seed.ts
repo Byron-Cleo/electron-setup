@@ -38,7 +38,10 @@ async function main() {
   await prisma.menuMealType.createMany({ data: sampleData.menuMealTypes });
   console.log("Seeded menu meal type assignments");
 
-  // 5. Users — omitted for now (will be handled separately).
+  // 4. Users — PIN-based staff for login testing.
+  await prisma.user.createMany({ data: sampleData.users });
+  console.log("Seeded users");
+
   console.log("Database seeded successfully");
 
   await pool.end();
