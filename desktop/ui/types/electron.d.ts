@@ -1,3 +1,11 @@
+interface Accompaniment {
+  id: string
+  name: string
+  category: string
+  price: number | null
+  image: string | null
+}
+
 interface MealType {
   id: string;
   name: string;

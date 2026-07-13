@@ -10,6 +10,7 @@
     "dev:electron": "tsc --project desktop/electron/tsconfig.json && concurrently -k -n \"tsc,app\" \"tsc --project desktop/electron/tsconfig.json --watch --preserveWatchOutput\" \"nodemon --watch dist-electron -e js --exec cross-env NODE_ENV=development electron .\"",
     "dev": "concurrently -k -n \"react,electron\" \"npm run dev:react\" \"npm run dev:electron\"",
     "dev:backend": "npm run dev --prefix backend",
+    "dev:all": "concurrently -k -n \"backend,react,electron\" \"npm run dev:backend\" \"npm run dev:react\" \"npm run dev:electron\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
