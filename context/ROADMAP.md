@@ -58,22 +58,31 @@ _(none yet)_
 
 ## Branch Naming Convention
 
+**MANDATORY**: All feature branches MUST follow this format:
+
 ```
-feature/<layer>/<task>
+feature/<layer>/<task-kebab-case>
 ```
 
-| Layer | Example |
-|-------|---------|
-| waiter | `feature/waiter/place-order` |
-| store | `feature/store/add-ingredients` |
-| kitchen | `feature/kitchen/order-queue` |
-| sales | `feature/sales/receipt-generation` |
-| cashier | `feature/cashier/daily-reconciliation` |
+| Layer | Example | Description |
+|-------|---------|-------------|
+| waiter | `feature/waiter/place-order` | Waiter POS UI/API |
+| store | `feature/store/add-ingredients` | Store/Procurement |
+| kitchen | `feature/kitchen/order-queue` | Kitchen display |
+| sales | `feature/sales/receipt-generation` | Receipt generation |
+| cashier | `feature/cashier/daily-reconciliation` | Cashier/Finance |
+| admin | `feature/admin/dashboard` | Admin dashboard |
+
+**Rules:**
+- Always `feature/` prefix
+- Layer must match one from the table above
+- Task name in kebab-case (e.g., `col2-detail-panel-redesign`)
+- Never use `feature/waiter-landing-ui` — always `feature/waiter/landing-ui`
 
 ## Workflow
 
 1. Check this file → see what's next
-2. Create branch: `feature/<layer>/<task>`
+2. Create branch: `feature/<layer>/<task>` (follow naming convention!)
 3. Update `context/current-feature.md` with detailed spec
 4. Implement
 5. Merge to `main`, delete branch
