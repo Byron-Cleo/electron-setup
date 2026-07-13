@@ -96,7 +96,7 @@ const sampleData = {
     {
       id: ID.ugali,
       name: "Ugali",
-      category: "starch",
+      category: "STARCH",
       description: "Kenyan staple made from maize flour — firm and filling",
       price: null,
       image: "/images/sample-meals/ugali.png",
@@ -104,7 +104,7 @@ const sampleData = {
     {
       id: ID.chapati,
       name: "Chapati",
-      category: "starch",
+      category: "STARCH",
       description: "Soft, layered flatbread — a popular Kenyan accompaniment",
       price: null,
       image: "/images/sample-meals/chapati.png",
@@ -112,7 +112,7 @@ const sampleData = {
     {
       id: ID.rice,
       name: "Rice",
-      category: "starch",
+      category: "STARCH",
       description: "Fluffy steamed white rice — light and versatile",
       price: null,
       image: "/images/sample-meals/rice.png",
@@ -121,7 +121,7 @@ const sampleData = {
     {
       id: ID.sukumaWiki,
       name: "Sukuma Wiki",
-      category: "vegetable",
+      category: "VEGETABLE",
       description:
         "Finely shredded kale sautéed with onions — a Kenyan classic",
       price: null,
@@ -131,7 +131,7 @@ const sampleData = {
     {
       id: ID.cabbage,
       name: "Cabbage",
-      category: "vegetable",
+      category: "VEGETABLE",
       description:
         "Lightly stir-fried shredded cabbage with tomatoes and spices",
       price: null,
@@ -141,7 +141,7 @@ const sampleData = {
     {
       id: ID.kundeSpinach,
       name: "Kunde Spinach",
-      category: "vegetable",
+      category: "VEGETABLE",
       description: "Tender cowpea leaves cooked with garlic and spices",
       price: "50.00",
       isDefault: false,
@@ -150,7 +150,7 @@ const sampleData = {
     {
       id: ID.managu,
       name: "Managu",
-      category: "vegetable",
+      category: "VEGETABLE",
       description:
         "African nightshade — a nutritious and flavourful traditional green",
       price: "50.00",
@@ -596,6 +596,29 @@ const sampleData = {
     { menuId: ID.rice, mealType: ServiceTime.BREAKFAST },
     { menuId: ID.rice, mealType: ServiceTime.LUNCH },
     { menuId: ID.rice, mealType: ServiceTime.DINNER },
+  ],
+
+  // ── Item Categories ─────────────────────────────────────────────────────────
+  itemCategories: [
+    { name: "Proteins", description: "Fish, chicken, beef, eggs" },
+    { name: "Spices & Seasonings", description: "Sugar, salt, pepper, herbs" },
+    { name: "Oils & Fats", description: "Cooking oil, butter, margarine" },
+    { name: "Produce", description: "Vegetables, fruits" },
+    { name: "Beverages", description: "Water, juice, soft drinks" },
+    { name: "Grains & Starches", description: "Rice, flour, bread, pasta" },
+    { name: "Packaging", description: "Containers, wraps, bags" },
+    { name: "Cleaning", description: "Detergents, sanitizers" },
+  ],
+
+  // ── Items ───────────────────────────────────────────────────────────────────
+  items: [
+    { name: "Fish (Tilapia)", unit: "PCS", categoryName: "Proteins", currentStock: 50 },
+    { name: "Chicken", unit: "PCS", categoryName: "Proteins", currentStock: 40 },
+    { name: "Sugar", unit: "KG", categoryName: "Spices & Seasonings", currentStock: 100 },
+    { name: "Salt", unit: "KG", categoryName: "Spices & Seasonings", currentStock: 80 },
+    { name: "Cooking Oil", unit: "L", categoryName: "Oils & Fats", currentStock: 60 },
+    { name: "Rice", unit: "KG", categoryName: "Grains & Starches", currentStock: 200 },
+    { name: "Onion", unit: "KG", categoryName: "Produce", currentStock: 30 },
   ],
 };
 

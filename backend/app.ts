@@ -4,6 +4,8 @@ import mealTypesRouter from "./routes/mealTypes";
 import menuRouter from "./routes/menu";
 import accompanimentsRouter from "./routes/accompaniments";
 import authRouter from "./routes/auth.ts";
+import itemCategoriesRouter from "./routes/itemCategories";
+import itemsRouter from "./routes/items";
 
 const app = express();
 
@@ -18,5 +20,7 @@ app.use("/api/meal-types", mealTypesRouter);
 app.use("/api/menu", menuRouter);
 app.use("/api/accompaniments", accompanimentsRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/item-categories", itemCategoriesRouter);
+app.use("/api/items", itemsRouter);
 
 export default app;
