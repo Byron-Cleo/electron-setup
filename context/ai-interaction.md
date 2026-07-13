@@ -42,7 +42,7 @@ History entries follow this format and must be ordered **newest first** (most re
 7. **Merge** — Merge to main
 8. **Delete Branch** — Ask to confirm before delete branch after merge
 9. **Review** — Review AI-generated code periodically and on demand
-10. **Complete** — Update @context/current-feature.md Status to Complete and add History entry
+10. **Complete** — Update @context/current-feature.md Status to Complete, add History entry, then reset Goals/Notes/Platform for next feature
 
 Do NOT commit without permission and until the build passes. If build fails, fix the issues first.
 
