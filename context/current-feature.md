@@ -2,7 +2,7 @@
 
 ## Platform
 
-Not Specified
+backend
 
 ## Status
 
@@ -10,9 +10,22 @@ Not Started
 
 ## Goals
 
-
+- Add `ItemCategory` model to Prisma schema with migration
+- Add `Item` model to Prisma schema with `ItemUnit` enum
+- Create CRUD routes for `/api/item-categories`
+- Create CRUD routes for `/api/items`
+- Register routes in Express app
+- Seed default categories (Proteins, Spices, Oils/Fats, Produce, Beverages, Packaging, Cleaning)
+- Seed sample items (fish, chicken, sugar, salt, cooking oil, etc.)
 
 ## Notes
+
+- Phase 1 of procurement system — foundation only
+- Soft-delete for items (isActive flag, no hard delete)
+- Slug auto-generated from name if not provided
+- Decimal(12,2) for currentStock and reorderLevel
+- Future phases add StockMovement, DepartmentRequest, Supplier, Purchase models
+- Spec file: `context/features/backend/procurement-phase-1-items.md`
 
 ## History
 
