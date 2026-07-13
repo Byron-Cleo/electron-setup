@@ -52,7 +52,11 @@
 
 ## ✅ Completed
 
-_(none yet)_
+### 2026-07-13 — Procurement Phase 1 — ItemCategory & Item Models
+- Added ItemUnit enum, ItemCategory model, Item model to Prisma schema
+- Created CRUD routes for /api/item-categories and /api/items
+- Seeded 8 default categories and 7 sample items
+- Branch: feature/store/procurement-phase-1-items (deleted)
 
 ---
 
