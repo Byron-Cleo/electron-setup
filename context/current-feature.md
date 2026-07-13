@@ -1,38 +1,53 @@
-# Col 2 — Detail Panel Redesign
+# Current Feature
 
 ## Platform
 
-frontend
 
 ## Status
 
-In Progress
+Pending
 
 ## Goals
 
-- Redesign the center detail column (Column 2) in WaiterMenu.tsx using `context/screenshots/col2.png` as a design template/reference
-- The screenshot is a visual guide for layout inspiration only — only features listed in Goals and Notes should be implemented
-- Column 2 splits into two sub-columns:
-  - **Left**: Main food image (images[0]) + thumbnail strip below (images[1..n])
-  - **Right**: Food name + "Served With" section with selectable starch and vegetable options
-- **Starch**: 3 selectable options available for any food (Chapati, Rice, Ugali) — fetched from accompaniments API
-- **Vegetables**: Free (Cabbage, Sukuma Wiki) and Premium (others with extra charge like +KSh 50)
-- **Food summary bar** at top (orange/maroon strip): shows selected food name, price, total — acts as order indicator within the detail panel
-- Remove: description, reviews/rating, old starch/vegetable text labels
-- Waiter selects accompaniments when building the order
-- Match the exact visual design from the screenshot as a template
 
 ## Notes
 
-- Workflow: deepseek-coder:latest for frontend implementation → review & apply
-- Accompaniments fetched from GET /api/menu-accompaniments (backend completed via qwen2.5-coder:7b)
-- MenuItem.images[]: images[0] = main image, images[1..n] = thumbnails
-- Frontend: fetch accompaniments on mount, display starch options as selectable pills, vegetable options with Free/Premium badges
-- Use shadcn/ui primitives (Card, Button)
-- Use Tailwind classes with brand tokens
-- After model runs, stop it immediately with `ollama stop <model>`
+
+## Pending
+
+### frontend — 2026-07-13 — Col 2 — Detail Panel Redesign
+
+- **Branch**: `feature/waiter/col2-detail-panel-redesign`
+- **Status**: Deferred — procurement flow needs to be built first to properly support starch/vegetable extras and stock tracking
+- **Goals**:
+  - Redesign the center detail column (Column 2) in WaiterMenu.tsx using `context/screenshots/col2.png` as a design template/reference
+  - The screenshot is a visual guide for layout inspiration only — only features listed in Goals and Notes should be implemented
+  - Column 2 splits into two sub-columns:
+    - **Left**: Main food image (images[0]) + thumbnail strip below (images[1..n])
+    - **Right**: Food name + "Served With" section with selectable starch and vegetable options
+  - **Starch**: 3 selectable options available for any food (Chapati, Rice, Ugali) — fetched from accompaniments API
+  - **Vegetables**: Free (Cabbage, Sukuma Wiki) and Premium (others with extra charge like +KSh 50)
+  - **Food summary bar** at top (orange/maroon strip): shows selected food name, price, total — acts as order indicator within the detail panel
+  - Remove: description, reviews/rating, old starch/vegetable text labels
+  - Waiter selects accompaniments when building the order
+  - Match the exact visual design from the screenshot as a template
+- **Notes**:
+  - Workflow: deepseek-coder:latest for frontend implementation → review & apply
+  - Accompaniments fetched from GET /api/menu-accompaniments (backend completed via qwen2.5-coder:7b)
+  - MenuItem.images[]: images[0] = main image, images[1..n] = thumbnails
+  - Frontend: fetch accompaniments on mount, display starch options as selectable pills, vegetable options with Free/Premium badges
+  - Use shadcn/ui primitives (Card, Button)
+  - Use Tailwind classes with brand tokens
+  - After model runs, stop it immediately with `ollama stop <model>`
+  - **Deferred because**: starch/vegetable extras and standalone ordering require procurement/inventory system to track stock and pricing properly
 
 ## History
+
+### backend - 2026-07-13 — AccompanimentType Enum for MenuAccompaniment
+- Created `AccompanimentType` enum (STARCH, VEGETABLE) to replace freeform `category` String
+- Migrated existing lowercase data (vegetable/starch) to uppercase enum values
+- Added `mealType` to Order, `starchId`/`vegetableId` to OrderItem with FK constraints
+- MenuAccompaniment.category now enforced at DB level — only STARCH or VEGETABLE allowed
 
 ### backend - 2026-07-01 — Menu Accompaniments API Endpoint
 - Created GET /api/menu-accompaniments route via qwen2.5-coder:7b
