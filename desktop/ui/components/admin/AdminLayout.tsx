@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
-import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut } from "lucide-react"
+import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const navItems = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true },
+  { label: "Manager", path: "/admin/manager", icon: Settings },
   { label: "Store/Procurement", path: "/admin/store", icon: Warehouse },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat },
   { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed },

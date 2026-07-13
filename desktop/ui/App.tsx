@@ -12,6 +12,7 @@ import AdminMenu from "./pages/admin/Menu"
 import AdminKitchen from "./pages/admin/Kitchen"
 import AdminStore from "./pages/admin/Store"
 import AdminCashier from "./pages/admin/Cashier"
+import AdminManager from "./pages/admin/Manager"
 import ProtectedRoute from "./components/ProtectedRoute"
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="manager" element={<AdminManager />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="menu" element={<AdminMenu />} />
           <Route path="kitchen" element={<AdminKitchen />} />
