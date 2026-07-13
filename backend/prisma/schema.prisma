@@ -67,7 +67,7 @@ model Menu {
 model MenuAccompaniment {
   id                                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                                     String
-  category                                 String
+  category                                 AccompanimentType
   description                              String?
   price                                    Decimal? @db.Decimal(12, 2)
   image                                    String?
@@ -183,4 +183,9 @@ enum ServiceTime {
   DINNER
   DESSERT
   BEVERAGE
+}
+
+enum AccompanimentType {
+  STARCH
+  VEGETABLE
 }

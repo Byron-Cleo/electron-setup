@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, AlertCircle, Package, Plus, Minus, X, Star } from "
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
+
 import { cn } from "@/lib/utils"
 
 const API_BASE = "http://localhost:3001/api"
@@ -34,6 +35,9 @@ export function WaiterMenu() {
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
   const [orderItems, setOrderItems] = useState<OrderLineItem[]>([])
+  const [accompaniments, setAccompaniments] = useState<Accompaniment[]>([])
+  const [selectedStarch, setSelectedStarch] = useState<Accompaniment | null>(null)
+  const [selectedVegetable, setSelectedVegetable] = useState<Accompaniment | null>(null)
 
   useEffect(() => {
     if (!mealPeriod) return
@@ -66,6 +70,20 @@ export function WaiterMenu() {
       setSelectedItem(null)
     }
   }, [mealPeriod])
+
+  useEffect(() => {
+    fetch(`${API_BASE}/accompaniments`)
+      .then((res) => res.json())
+      .then((data) => {
+        setAccompaniments(data)
+        const starches = data.filter((a: Accompaniment) => a.category === "starch")
+        if (starches.length > 0) setSelectedStarch(starches[0])
+        const vegs = data.filter((a: Accompaniment) => a.category === "vegetable")
+        const freeVeg = vegs.find((v: Accompaniment) => v.isDefault)
+        if (freeVeg) setSelectedVegetable(freeVeg)
+      })
+      .catch(() => {})
+  }, [])
 
   const categories = useMemo(() => {
     return [...new Set(items.map((i) => i.category))]
@@ -158,17 +176,17 @@ export function WaiterMenu() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
+    <div className="h-full flex flex-col">
+      <div className="flex items-center gap-4 shrink-0 pb-4">
         <Button variant="ghost" size="icon" onClick={() => navigate("/waiter")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h2 className="text-xl font-bold text-brand-ebony">{mealPeriod} Menu</h2>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex gap-4 flex-1 min-h-0">
         {/* Column 1 — Categories with expandable items */}
-        <div className="w-[240px] shrink-0 space-y-1">
+        <div className="w-[240px] shrink-0 space-y-1 overflow-y-auto">
           {categories.map((cat) => (
             <div key={cat}>
               <div
@@ -237,66 +255,128 @@ export function WaiterMenu() {
         </div>
 
         {/* Column 2 — Detail */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-y-auto">
           {selectedItem ? (
-            <Card>
-              <div className="aspect-[4/3] overflow-hidden rounded-t-lg bg-gray-100">
-                {selectedItem.images[0] ? (
-                  <img
-                    src={selectedItem.images[0]}
-                    alt={selectedItem.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center text-gray-300">
-                    <Package size={48} />
-                  </div>
-                )}
-              </div>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-brand-ebony">
-                    {selectedItem.name}
-                  </h3>
-                  <span
-                    className={cn(
-                      "text-xs font-semibold px-2 py-0.5 rounded-full shrink-0",
-                      stockBadgeClass(selectedItem.stock),
-                    )}
-                  >
-                    {selectedItem.stock}
-                  </span>
+            <div className="grid grid-cols-[1fr_3fr] gap-4">
+              {/* Left — Image (1/4) */}
+              <div className="space-y-2">
+                <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
+                  {selectedItem.images[0] ? (
+                    <img
+                      src={selectedItem.images[0]}
+                      alt={selectedItem.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <Package size={48} className="text-gray-300" />
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm text-brand-ebony/60">
-                  {selectedItem.description}
-                </p>
-                <p className="text-lg font-bold text-brand-maroon">
-                  {formatPrice(selectedItem.price)}
-                </p>
-                <div className="text-sm space-y-1 text-brand-ebony/70">
-                  <p>
-                    <span className="font-medium">Starch:</span>{" "}
-                    {selectedItem.starch?.name ?? selectedItem.starchId ?? "N/A"}
-                  </p>
-                  <p>
-                    <span className="font-medium">Vegetable:</span>{" "}
-                    {selectedItem.vegetable?.name ?? selectedItem.vegetableId ?? "N/A"}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                    <span>
-                      {selectedItem.rating} ({selectedItem.numReviews})
+                {selectedItem.images.slice(1, 4).map((image, index) => (
+                  <div key={index} className="aspect-square overflow-hidden rounded-lg bg-gray-100">
+                    <img
+                      src={image}
+                      alt={`${selectedItem.name} ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Right — Details (3/4) */}
+              <div className="space-y-3">
+                {/* Name, Price, Stock, Description */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-lg font-bold text-brand-ebony">{selectedItem.name}</h3>
+                    <p className="text-sm text-brand-ebony/60 leading-relaxed mt-0.5">
+                      {selectedItem.description}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-lg font-bold text-brand-maroon">{formatPrice(selectedItem.price)}</p>
+                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", stockBadgeClass(selectedItem.stock))}>
+                      {selectedItem.stock > 0 ? "In Stock" : "Out of Stock"}
                     </span>
                   </div>
                 </div>
+
+                {/* Served With — Starch */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-ebony/50 mb-2">
+                    Served With
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {accompaniments
+                      .filter((a) => a.category === "starch")
+                      .map((starch) => (
+                        <button
+                          key={starch.id}
+                          onClick={() => setSelectedStarch(starch)}
+                          className={cn(
+                            "rounded-lg border px-3 py-1.5 text-sm cursor-pointer transition-colors",
+                            selectedStarch?.id === starch.id
+                              ? "bg-brand-maroon/10 border-brand-maroon text-brand-maroon font-medium"
+                              : "border-gray-200 hover:bg-gray-50 text-brand-ebony/80",
+                          )}
+                        >
+                          {starch.name}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Vegetable Options */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-ebony/50 mb-2">
+                    Vegetable Options
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {accompaniments
+                      .filter((a) => a.category === "vegetable")
+                      .map((veg) => (
+                        <button
+                          key={veg.id}
+                          onClick={() => setSelectedVegetable(veg)}
+                          className={cn(
+                            "rounded-lg border px-3 py-1.5 text-sm cursor-pointer transition-colors",
+                            selectedVegetable?.id === veg.id
+                              ? "bg-brand-maroon/10 border-brand-maroon"
+                              : "border-gray-200 hover:bg-gray-50",
+                          )}
+                        >
+                          <span>{veg.name}</span>
+                          {veg.price === null && (
+                            <span className="ml-1.5 bg-green-100 text-green-700 rounded-full px-1.5 text-[10px] font-semibold">
+                              Free
+                            </span>
+                          )}
+                          {veg.price !== null && veg.price > 0 && (
+                            <span className="ml-1.5 text-brand-maroon text-xs font-semibold">
+                              Extra +{formatPrice(veg.price)}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Rating & Add to Cart */}
+                <div className="flex items-center gap-1.5 text-sm text-brand-ebony/60">
+                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                  <span className="font-medium text-brand-ebony">{selectedItem.rating}</span>
+                  <span>({selectedItem.numReviews})</span>
+                </div>
+
                 <Button
-                  className="w-full"
+                  className="w-full bg-brand-maroon hover:bg-brand-maroon/90 text-white"
                   onClick={() => addToOrder(selectedItem)}
                 >
-                  Add to Order
+                  Add to Cart
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full py-20 text-brand-ebony/40">
               <Package size={48} />
@@ -306,9 +386,9 @@ export function WaiterMenu() {
         </div>
 
         {/* Column 3 — Order Summary */}
-        <div className="w-[280px] shrink-0">
-          <Card>
-            <CardHeader className="pb-3">
+        <div className="w-[280px] shrink-0 flex flex-col">
+          <Card className="flex-1 flex flex-col min-h-0">
+            <CardHeader className="pb-3 shrink-0">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-brand-ebony">Current Order</h3>
                 {orderItems.length > 0 && (
@@ -318,7 +398,7 @@ export function WaiterMenu() {
                 )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 flex-1 overflow-y-auto">
               {orderItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-brand-ebony/40">
                   <Package size={36} />
@@ -372,7 +452,7 @@ export function WaiterMenu() {
               )}
             </CardContent>
             {orderItems.length > 0 && (
-              <CardFooter className="flex-col gap-3 pt-3">
+              <CardFooter className="flex-col gap-3 pt-3 shrink-0">
                 <div className="w-full border-t border-gray-200" />
                 <div className="flex items-center justify-between w-full">
                   <span className="font-semibold text-brand-ebony">Total:</span>
