@@ -48,7 +48,7 @@ Do NOT commit without permission and until the build passes. If build fails, fix
 
 ## Branching
 
-We will create a new branch for every feature/fix. Name branch **feature/[feature]** or **fix[fix]**, etc. Ask to delete the branch once merged.
+We will create a new branch for every feature/fix. Name branch **feature/<layer>/<task>** (e.g., `feature/waiter/place-order`, `feature/store/add-ingredients`). See `context/ROADMAP.md` for full convention. Ask to delete the branch once merged.
 
 ## Commits
 

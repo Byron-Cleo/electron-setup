@@ -71,6 +71,29 @@ No React Router — view switching via `useState<Tab>` and `useState<view>` in `
 
 ## Conventions
 
+### Branch Naming (MANDATORY)
+
+All feature branches MUST follow this format:
+
+```
+feature/<layer>/<task-kebab-case>
+```
+
+| Layer | Example |
+|-------|---------|
+| waiter | `feature/waiter/place-order` |
+| store | `feature/store/add-ingredients` |
+| kitchen | `feature/kitchen/order-queue` |
+| sales | `feature/sales/receipt-generation` |
+| cashier | `feature/cashier/daily-reconciliation` |
+| admin | `feature/admin/dashboard` |
+
+**Rules:**
+- Always `feature/` prefix
+- Layer must match one from the table above
+- Task name in kebab-case (e.g., `col2-detail-panel-redesign`)
+- Never use `feature/waiter-landing-ui` — always `feature/waiter/landing-ui`
+
 ### General
 
 - **TypeScript strict**: `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch` enabled
