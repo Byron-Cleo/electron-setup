@@ -1,20 +1,45 @@
-# Current Feature
+# Col 2 — Detail Panel Redesign
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-
+- Redesign the center detail column (Column 2) in WaiterMenu.tsx using `context/screenshots/col2.png` as a design template/reference
+- The screenshot is a visual guide for layout inspiration only — only features listed in Goals and Notes should be implemented
+- Column 2 splits into two sub-columns:
+  - **Left**: Main food image (images[0]) + thumbnail strip below (images[1..n])
+  - **Right**: Food name + "Served With" section with selectable starch and vegetable options
+- **Starch**: 3 selectable options available for any food (Chapati, Rice, Ugali) — fetched from accompaniments API
+- **Vegetables**: Free (Cabbage, Sukuma Wiki) and Premium (others with extra charge like +KSh 50)
+- **Food summary bar** at top (orange/maroon strip): shows selected food name, price, total — acts as order indicator within the detail panel
+- Remove: description, reviews/rating, old starch/vegetable text labels
+- Waiter selects accompaniments when building the order
+- Match the exact visual design from the screenshot as a template
 
 ## Notes
 
+- Workflow: deepseek-coder:latest for frontend implementation → review & apply
+- Accompaniments fetched from GET /api/menu-accompaniments (backend completed via qwen2.5-coder:7b)
+- MenuItem.images[]: images[0] = main image, images[1..n] = thumbnails
+- Frontend: fetch accompaniments on mount, display starch options as selectable pills, vegetable options with Free/Premium badges
+- Use shadcn/ui primitives (Card, Button)
+- Use Tailwind classes with brand tokens
+- After model runs, stop it immediately with `ollama stop <model>`
+
 ## History
+
+### backend - 2026-07-01 — Menu Accompaniments API Endpoint
+- Created GET /api/menu-accompaniments route via qwen2.5-coder:7b
+- Returns all MenuAccompaniment records ordered by category then name
+- Registered route in backend/app.ts
+- Sample data already has 3 starches (Ugali, Chapati, Rice), free veg (Sukuma Wiki, Cabbage), premium veg (Kunde Spinach +50, Managu +50)
+- Backend compiles clean
 
 ### frontend - 2026-07-01 — Waiter Menu — 3-Column Layout with Expandable Categories
 - Refactored from 4-column to 3-column layout
