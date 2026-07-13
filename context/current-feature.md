@@ -2,16 +2,17 @@
 
 ## Platform
 
+Not Specified
 
 ## Status
 
-Pending
+Not Started
 
 ## Goals
 
 
-## Notes
 
+## Notes
 
 ## Pending
 
@@ -42,19 +43,6 @@ Pending
   - **Deferred because**: starch/vegetable extras and standalone ordering require procurement/inventory system to track stock and pricing properly
 
 ## History
-
-### backend - 2026-07-13 — AccompanimentType Enum for MenuAccompaniment
-- Created `AccompanimentType` enum (STARCH, VEGETABLE) to replace freeform `category` String
-- Migrated existing lowercase data (vegetable/starch) to uppercase enum values
-- Added `mealType` to Order, `starchId`/`vegetableId` to OrderItem with FK constraints
-- MenuAccompaniment.category now enforced at DB level — only STARCH or VEGETABLE allowed
-
-### backend - 2026-07-01 — Menu Accompaniments API Endpoint
-- Created GET /api/menu-accompaniments route via qwen2.5-coder:7b
-- Returns all MenuAccompaniment records ordered by category then name
-- Registered route in backend/app.ts
-- Sample data already has 3 starches (Ugali, Chapati, Rice), free veg (Sukuma Wiki, Cabbage), premium veg (Kunde Spinach +50, Managu +50)
-- Backend compiles clean
 
 ### frontend - 2026-07-01 — Waiter Menu — 3-Column Layout with Expandable Categories
 - Refactored from 4-column to 3-column layout
