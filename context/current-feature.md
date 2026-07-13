@@ -1,18 +1,32 @@
-# Current Feature
+# Procurement Phase 1 — ItemCategory & Item Models
 
 ## Platform
 
-Not Specified
+backend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-
+- Add `ItemCategory` model to Prisma schema with migration
+- Add `Item` model to Prisma schema with `ItemUnit` enum
+- Create CRUD routes for `/api/item-categories`
+- Create CRUD routes for `/api/items`
+- Register routes in Express app
+- Seed default categories (Proteins, Spices, Oils/Fats, Produce, Beverages, Packaging, Cleaning)
+- Seed sample items (fish, chicken, sugar, salt, cooking oil, etc.)
 
 ## Notes
+
+- **Soft-delete for items**: `DELETE` sets `isActive = false` to preserve historical stock movement data
+- **Slug auto-generation**: If slug not provided, generate from name (e.g. "Cooking Oil" → "cooking-oil")
+- **No hard deletes on items**: Items with existing stock movements must not be permanently deleted
+- **Decimal(12,2)** for `currentStock` and `reorderLevel` — consistent with existing monetary fields
+- **UUID primary keys** via `gen_random_uuid()` — consistent with existing schema
+- **Category delete**: Should check if items exist before deleting (prevent orphaned items)
+- Future relations (`StockMovement`, `DepartmentRequestItem`, `PurchaseItem`) will be added in later phases
 
 ## History
 

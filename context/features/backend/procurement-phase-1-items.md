@@ -143,8 +143,8 @@ Validation:
 
 | Name | Unit | Category |
 |---|---|---|
-| Fish (Tilapia) | KG | Proteins |
-| Chicken | KG | Proteins |
+| Fish (Tilapia) | PCS | Proteins |
+| Chicken | PCS | Proteins |
 | Sugar | KG | Spices & Seasonings |
 | Salt | KG | Spices & Seasonings |
 | Cooking Oil | L | Oils & Fats |
