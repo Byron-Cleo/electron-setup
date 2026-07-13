@@ -598,8 +598,8 @@ const sampleData = {
     { menuId: ID.rice, mealType: ServiceTime.DINNER },
   ],
 
-  // ── Item Categories ─────────────────────────────────────────────────────────
-  itemCategories: [
+  // ── Stock Supply Categories ─────────────────────────────────────────────────
+  stockSupplyCategories: [
     { name: "Proteins", description: "Fish, chicken, beef, eggs" },
     { name: "Spices & Seasonings", description: "Sugar, salt, pepper, herbs" },
     { name: "Oils & Fats", description: "Cooking oil, butter, margarine" },
@@ -610,8 +610,8 @@ const sampleData = {
     { name: "Cleaning", description: "Detergents, sanitizers" },
   ],
 
-  // ── Items ───────────────────────────────────────────────────────────────────
-  items: [
+  // ── Stock Supplies ─────────────────────────────────────────────────────────
+  stockSupplies: [
     { name: "Fish (Tilapia)", unit: "PCS", categoryName: "Proteins", currentStock: 50 },
     { name: "Chicken", unit: "PCS", categoryName: "Proteins", currentStock: 40 },
     { name: "Sugar", unit: "KG", categoryName: "Spices & Seasonings", currentStock: 100 },

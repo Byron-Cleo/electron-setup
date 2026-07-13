@@ -48,3 +48,31 @@ export function registerAuthHandlers() {
     apiFetch("/auth/logout", { method: "POST" })
   );
 }
+
+export function registerStockSupplyCategoryHandlers() {
+  ipcMain.handle("stock-supply-category:get-all", async () => apiFetch("/stock-supply-categories"));
+  ipcMain.handle("stock-supply-category:get-by-id", async (_event, id: string) => apiFetch(`/stock-supply-categories/${id}`));
+  ipcMain.handle("stock-supply-category:create", async (_event, data) =>
+    apiFetch("/stock-supply-categories", { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("stock-supply-category:update", async (_event, id: string, data) =>
+    apiFetch(`/stock-supply-categories/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("stock-supply-category:delete", async (_event, id: string) =>
+    apiFetch(`/stock-supply-categories/${id}`, { method: "DELETE" })
+  );
+}
+
+export function registerStockSupplyHandlers() {
+  ipcMain.handle("stock-supply:get-all", async () => apiFetch("/stock-supplies"));
+  ipcMain.handle("stock-supply:get-by-id", async (_event, id: string) => apiFetch(`/stock-supplies/${id}`));
+  ipcMain.handle("stock-supply:create", async (_event, data) =>
+    apiFetch("/stock-supplies", { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("stock-supply:update", async (_event, id: string, data) =>
+    apiFetch(`/stock-supplies/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("stock-supply:delete", async (_event, id: string) =>
+    apiFetch(`/stock-supplies/${id}`, { method: "DELETE" })
+  );
+}

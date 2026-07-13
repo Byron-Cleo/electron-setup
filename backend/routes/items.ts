@@ -6,9 +6,9 @@ const router = Router();
 
 const VALID_UNITS = Object.values(ItemUnit) as string[];
 
-// GET /api/items - List all items
+// GET /api/stock-supplies - List all items
 router.get("/", async (_req, res) => {
-  const items = await prisma.item.findMany({
+  const items = await prisma.stockSupply.findMany({
     where: { isActive: true },
     include: { category: { select: { id: true, name: true } } },
     orderBy: { name: "asc" },
@@ -16,10 +16,10 @@ router.get("/", async (_req, res) => {
   res.json(items);
 });
 
-// GET /api/items/:id - Get single item
+// GET /api/stock-supplies/:id - Get single item
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
-  const item = await prisma.item.findUnique({
+  const item = await prisma.stockSupply.findUnique({
     where: { id },
     include: { category: true },
   });
@@ -27,7 +27,7 @@ router.get("/:id", async (req, res) => {
   res.json(item);
 });
 
-// POST /api/items - Create item
+// POST /api/stock-supplies - Create item
 router.post("/", async (req, res) => {
   const { name, slug, description, unit, categoryId, currentStock, reorderLevel } = req.body;
   
@@ -40,13 +40,13 @@ router.post("/", async (req, res) => {
   }
   
   // Verify category exists
-  const category = await prisma.itemCategory.findUnique({ where: { id: categoryId } });
+  const category = await prisma.stockSupplyCategory.findUnique({ where: { id: categoryId } });
   if (!category) return res.status(400).json({ error: "Category not found" });
   
   const generatedSlug = slug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   
   try {
-    const item = await prisma.item.create({
+    const item = await prisma.stockSupply.create({
       data: {
         name,
         slug: generatedSlug,
@@ -65,7 +65,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT /api/items/:id - Update item
+// PUT /api/stock-supplies/:id - Update item
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { name, slug, description, unit, categoryId, currentStock, reorderLevel, isActive } = req.body;
@@ -75,12 +75,12 @@ router.put("/:id", async (req, res) => {
   }
   
   if (categoryId) {
-    const category = await prisma.itemCategory.findUnique({ where: { id: categoryId } });
+    const category = await prisma.stockSupplyCategory.findUnique({ where: { id: categoryId } });
     if (!category) return res.status(400).json({ error: "Category not found" });
   }
   
   try {
-    const item = await prisma.item.update({
+    const item = await prisma.stockSupply.update({
       where: { id },
       data: {
         ...(name !== undefined && { name }),
@@ -102,11 +102,11 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/items/:id - Soft delete (set isActive = false)
+// DELETE /api/stock-supplies/:id - Soft delete (set isActive = false)
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    const item = await prisma.item.update({
+    const item = await prisma.stockSupply.update({
       where: { id },
       data: { isActive: false },
     });

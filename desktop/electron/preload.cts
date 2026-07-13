@@ -25,4 +25,21 @@ electron.contextBridge.exposeInMainWorld("electron", {
     login: (pin: string) => electron.ipcRenderer.invoke("auth:login", pin),
     logout: () => electron.ipcRenderer.invoke("auth:logout"),
   },
+  stockSupplyCategory: {
+    getAll: () => electron.ipcRenderer.invoke("stock-supply-category:get-all"),
+    getById: (id: string) => electron.ipcRenderer.invoke("stock-supply-category:get-by-id", id),
+    create: (data: { name: string; description?: string }) =>
+      electron.ipcRenderer.invoke("stock-supply-category:create", data),
+    update: (id: string, data: { name?: string; description?: string }) =>
+      electron.ipcRenderer.invoke("stock-supply-category:update", id, data),
+    delete: (id: string) => electron.ipcRenderer.invoke("stock-supply-category:delete", id),
+  },
+  stockSupply: {
+    getAll: () => electron.ipcRenderer.invoke("stock-supply:get-all"),
+    getById: (id: string) => electron.ipcRenderer.invoke("stock-supply:get-by-id", id),
+    create: (data: any) => electron.ipcRenderer.invoke("stock-supply:create", data),
+    update: (id: string, data: any) =>
+      electron.ipcRenderer.invoke("stock-supply:update", id, data),
+    delete: (id: string) => electron.ipcRenderer.invoke("stock-supply:delete", id),
+  },
 });
