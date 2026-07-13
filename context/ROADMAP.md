@@ -21,7 +21,7 @@
 
 ### 2. Store (Procurement)
 
-- [ ] Raw ingredients model (name, category, unit, cost)
+- [x] Raw ingredients model (name, category, unit, cost)
 - [ ] Procurement录入 — record incoming stock
 - [ ] Stock levels with low-stock alerts
 - [ ] Supplier management

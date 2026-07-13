@@ -6,7 +6,7 @@ backend
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
@@ -57,6 +57,17 @@ In Progress
   - **Deferred because**: starch/vegetable extras and standalone ordering require procurement/inventory system to track stock and pricing properly
 
 ## History
+
+### backend - 2026-07-13 — Procurement Phase 1 — ItemCategory & Item Models
+- Added ItemUnit enum (KG, G, L, ML, PCS) to Prisma schema
+- Added ItemCategory model with name (unique), description
+- Added Item model with slug, unit, categoryId, currentStock, reorderLevel, isActive
+- Created CRUD routes for /api/item-categories (GET, POST, PUT, DELETE)
+- Created CRUD routes for /api/items (GET, POST, PUT, DELETE with soft-delete)
+- Registered routes in Express app
+- Seeded 8 default categories and 7 sample items
+- Fixed AccompanimentType enum values to uppercase (STARCH, VEGETABLE)
+- Branch: feature/store/procurement-phase-1-items
 
 ### frontend - 2026-07-01 — Waiter Menu — 3-Column Layout with Expandable Categories
 - Refactored from 4-column to 3-column layout
