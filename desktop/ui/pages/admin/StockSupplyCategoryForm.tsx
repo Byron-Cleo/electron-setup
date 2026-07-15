@@ -16,6 +16,11 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form"
+import {
+  getStockSupplyCategoryById,
+  createStockSupplyCategory,
+  updateStockSupplyCategory,
+} from "@/lib/api"
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -36,8 +41,7 @@ export default function StockSupplyCategoryForm() {
 
   useEffect(() => {
     if (!id) return
-    window.electron.stockSupplyCategory
-      .getById(id)
+    getStockSupplyCategoryById(id)
       .then((cat) => {
         form.reset({ name: cat.name, description: cat.description ?? "" })
       })
@@ -48,9 +52,9 @@ export default function StockSupplyCategoryForm() {
     form.clearErrors("root")
     try {
       if (isEdit && id) {
-        await window.electron.stockSupplyCategory.update(id, values)
+        await updateStockSupplyCategory(id, values)
       } else {
-        await window.electron.stockSupplyCategory.create(values)
+        await createStockSupplyCategory(values)
       }
       navigate("/admin/manager/stock-supply-categories")
     } catch (e: any) {

@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Plus, Pencil, Trash2, ArrowLeft } from "lucide-react"
+import { getStockSupplyCategories, deleteStockSupplyCategory } from "@/lib/api"
 
 export default function StockSupplyCategories() {
   const navigate = useNavigate()
@@ -26,7 +27,7 @@ export default function StockSupplyCategories() {
     setLoading(true)
     setError("")
     try {
-      const data = await window.electron.stockSupplyCategory.getAll()
+      const data = await getStockSupplyCategories()
       setCategories(data)
     } catch (e: any) {
       setError(e.message)
@@ -44,7 +45,7 @@ export default function StockSupplyCategories() {
     setDeleting(true)
     setDeleteError("")
     try {
-      await window.electron.stockSupplyCategory.delete(deleteTarget.id)
+      await deleteStockSupplyCategory(deleteTarget.id)
       setDeleteTarget(null)
       await fetchAll()
     } catch (e: any) {

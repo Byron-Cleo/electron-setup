@@ -140,6 +140,16 @@ feature/<layer>/<task-kebab-case>
 - IPC handlers in `ipc-handlers.ts` proxy to Express via `fetch()`
 - API base: `http://localhost:3001/api` (hardcoded in `ipc-handlers.ts`)
 
+### Frontend API Convention (MANDATORY)
+
+- **All API calls go through `@/lib/api.ts`** — components never call `window.electron.*` or `fetch()` directly
+- `lib/api.ts` contains:
+  - `apiFetch()` — base fetch helper with error handling
+  - Per-resource functions (e.g., `getStockSupplies()`, `createStockSupply()`) that check `window.electron` first, then fall back to direct `fetch()`
+- This ensures identical behavior in both Electron and browser dev mode
+- Component files contain **only rendering logic** — import API functions from `@/lib/api`
+- When adding a new resource, add its API functions to `lib/api.ts` following the existing pattern
+
 ### Backend
 
 - Express routes use `export default router`
