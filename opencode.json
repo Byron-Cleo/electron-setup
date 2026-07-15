@@ -3,8 +3,8 @@
   "instructions": [
     "AGENTS.md",
     ".opencode/skills/feature/SKILL.md",
-    ".opencode/skills/gemma-frontend/SKILL.md",
-    ".opencode/skills/qwen-codegen/SKILL.md",
+    ".opencode/skills/deepseek-frontend/SKILL.md",
+    ".opencode/skills/qwen-backend/SKILL.md",
     ".opencode/skills/qwen-vision/SKILL.md"
   ],
   "skills": {

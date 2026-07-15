@@ -26,3 +26,10 @@ Triggered by: "write frontend", "create component", "build UI", "style page"
 3. Run `npx tsc --noEmit --project tsconfig.app.json`
 4. Run `npm run lint`
 5. Fix any errors — return to deepseek if needed
+
+## Fallback Rule
+
+If the model output is bad (incomplete, incorrect, or unusable):
+1. **Do NOT silently rewrite the code yourself**
+2. Report the specific issues to the user
+3. Ask for the user's decision on how to proceed (re-prompt the model, manual implementation, or adjust the spec)

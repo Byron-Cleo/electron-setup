@@ -40,6 +40,13 @@ curl -s http://localhost:11434/api/generate -d '{
 |--------|-------------|
 | **generate** | Generate frontend component(s) for a given spec — always uses deepseek-coder:latest |
 
+## Fallback Rule
+
+If the model output is bad (incomplete, incorrect, or unusable):
+1. **Do NOT silently rewrite the code yourself**
+2. Report the specific issues to the user
+3. Ask for the user's decision on how to proceed (re-prompt the model, manual implementation, or adjust the spec)
+
 ## Keywords That Trigger This Skill
 
 - "frontend code" / "frontend generate"
