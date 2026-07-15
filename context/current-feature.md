@@ -1,36 +1,20 @@
-# Current Feature — Procurement Phase 1 — StockSupplyCategory CRUD (Frontend)
+# Current Feature
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Update Manager page with two thumbnail cards (Stock Supply Categories, Stock Supplies)
-- Create StockSupplyCategory list page with data table
-- Implement create/edit form for StockSupplyCategory
-- Add delete confirmation dialog
-- Wire up IPC handlers and preload methods for StockSupplyCategory
-- Add TypeScript types for StockSupplyCategory
+
 
 ## Notes
 
-- Navigation: `/admin/manager` → `/admin/manager/stock-supply-categories` → `/admin/manager/stock-supply-categories/:id` or `/new`
-- Manager page shows two clickable thumbnail cards (Package icon for categories, Tag icon for supplies)
-- Table: columns #, Name, Supplies Count, Actions (Edit + Delete)
-- Client-side search filter by name
-- Delete dialog: confirm before hard delete, warn if category has supplies
-- Form: react-hook-form + zodResolver, Name (required, unique) + Description (optional textarea)
-- shadcn/ui primitives: Card, Button, Input, Textarea, Label, Dialog
-- Dialog component must be added via `npx shadcn@latest add dialog`
-- No global state — each page fetches its own data (consistent with existing patterns)
-- Hard delete for categories (no soft-delete), but backend checks if supplies exist first
-- IPC pattern follows `registerMealTypeHandlers()` in ipc-handlers.ts
-- Types: `StockSupplyCategory`, `StockSupplyCategoryCreateData`, `StockSupplyCategoryUpdateData`
+
 
 ## Pending
 
@@ -61,6 +45,17 @@ In Progress
   - **Deferred because**: starch/vegetable extras and standalone ordering require procurement/inventory system to track stock and pricing properly
 
 ## History
+
+### frontend - 2026-07-14 — Procurement Phase 1 — StockSupplyCategory CRUD
+- StockSupplyCategories list page with search, edit, delete actions
+- StockSupplyCategoryForm page (create/edit) with react-hook-form + zod validation
+- IPC handlers and preload methods wired for StockSupplyCategory
+- Backend routes: remove StockSupply count include for simpler queries
+- UI polish: green (save/add), red (delete/cancel) button colors
+- Delete modal: centered title, red accent, highlighted category name
+- db:sync script for prisma generate + db push
+- Seed 8 categories and 7 stock supplies
+- Branch: feature/store/procurement-phase-1-stock-supply-categories
 
 ### backend - 2026-07-13 — Procurement Phase 1 — ItemCategory & Item Models
 - Added ItemUnit enum (KG, G, L, ML, PCS) to Prisma schema
