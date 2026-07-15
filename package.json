@@ -11,6 +11,7 @@
     "dev": "concurrently -k -n \"react,electron\" \"npm run dev:react\" \"npm run dev:electron\"",
     "dev:backend": "npm run dev --prefix backend",
     "dev:all": "concurrently -k -n \"backend,react,electron\" \"npm run dev:backend\" \"npm run dev:react\" \"npm run dev:electron\"",
+    "db:sync": "npm run db:generate --prefix backend && npm run db:push --prefix backend",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

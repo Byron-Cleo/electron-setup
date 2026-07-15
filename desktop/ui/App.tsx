@@ -13,6 +13,8 @@ import AdminKitchen from "./pages/admin/Kitchen"
 import AdminStore from "./pages/admin/Store"
 import AdminCashier from "./pages/admin/Cashier"
 import AdminManager from "./pages/admin/Manager"
+import StockSupplyCategories from "./pages/admin/StockSupplyCategories"
+import StockSupplyCategoryForm from "./pages/admin/StockSupplyCategoryForm"
 import ProtectedRoute from "./components/ProtectedRoute"
 
 function App() {
@@ -30,6 +32,10 @@ function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="manager" element={<AdminManager />} />
+          <Route path="manager/stock-supply-categories" element={<StockSupplyCategories />} />
+          <Route path="manager/stock-supply-categories/new" element={<StockSupplyCategoryForm />} />
+          <Route path="manager/stock-supply-categories/:id" element={<StockSupplyCategoryForm />} />
+          <Route path="manager/stock-supplies" element={<div className="text-admin-header-text">Stock Supplies — Coming Soon</div>} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="menu" element={<AdminMenu />} />
           <Route path="kitchen" element={<AdminKitchen />} />

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "../db/generated/prisma/client";
 import prisma from "../db/db";
 
 const router = Router();
@@ -6,7 +7,6 @@ const router = Router();
 // GET /api/stock-supply-categories - List all categories
 router.get("/", async (_req, res) => {
   const categories = await prisma.stockSupplyCategory.findMany({
-    include: { _count: { select: { StockSupply: true } } },
     orderBy: { name: "asc" },
   });
   res.json(categories);
@@ -17,7 +17,6 @@ router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const category = await prisma.stockSupplyCategory.findUnique({
     where: { id },
-    include: { StockSupply: { where: { isActive: true } } },
   });
   if (!category) return res.status(404).json({ error: "Category not found" });
   res.json(category);
@@ -33,8 +32,10 @@ router.post("/", async (req, res) => {
       data: { name, description },
     });
     res.status(201).json(category);
-  } catch (e: any) {
-    if (e.code === "P2002") return res.status(409).json({ error: "Category name already exists" });
+  } catch (e: unknown) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return res.status(409).json({ error: "Category name already exists" });
+    }
     throw e;
   }
 });
@@ -52,9 +53,11 @@ router.put("/:id", async (req, res) => {
       },
     });
     res.json(category);
-  } catch (e: any) {
-    if (e.code === "P2025") return res.status(404).json({ error: "Category not found" });
-    if (e.code === "P2002") return res.status(409).json({ error: "Category name already exists" });
+  } catch (e: unknown) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === "P2025") return res.status(404).json({ error: "Category not found" });
+      if (e.code === "P2002") return res.status(409).json({ error: "Category name already exists" });
+    }
     throw e;
   }
 });
@@ -70,8 +73,10 @@ router.delete("/:id", async (req, res) => {
     }
     await prisma.stockSupplyCategory.delete({ where: { id } });
     res.json({ message: "Deleted", id });
-  } catch (e: any) {
-    if (e.code === "P2025") return res.status(404).json({ error: "Category not found" });
+  } catch (e: unknown) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+      return res.status(404).json({ error: "Category not found" });
+    }
     throw e;
   }
 });

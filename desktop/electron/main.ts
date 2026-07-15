@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import { isDev } from "./utils.ts";
 const { app, BrowserWindow } = pkg;
 import { getPreloadPath } from "./pathResolver.ts";
-import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers } from "./ipc-handlers.ts";
+import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers, registerStockSupplyCategoryHandlers, registerStockSupplyHandlers } from "./ipc-handlers.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +22,8 @@ app.whenReady().then(() => {
   registerMealTypeHandlers();
   registerMenuHandlers();
   registerAuthHandlers();
+  registerStockSupplyCategoryHandlers();
+  registerStockSupplyHandlers();
   const win = new BrowserWindow({
     show: false,
     webPreferences: {
