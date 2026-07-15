@@ -1,18 +1,36 @@
-# Current Feature
+# Current Feature — Procurement Phase 1 — StockSupplyCategory CRUD (Frontend)
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-
+- Update Manager page with two thumbnail cards (Stock Supply Categories, Stock Supplies)
+- Create StockSupplyCategory list page with data table
+- Implement create/edit form for StockSupplyCategory
+- Add delete confirmation dialog
+- Wire up IPC handlers and preload methods for StockSupplyCategory
+- Add TypeScript types for StockSupplyCategory
 
 ## Notes
+
+- Navigation: `/admin/manager` → `/admin/manager/stock-supply-categories` → `/admin/manager/stock-supply-categories/:id` or `/new`
+- Manager page shows two clickable thumbnail cards (Package icon for categories, Tag icon for supplies)
+- Table: columns #, Name, Supplies Count, Actions (Edit + Delete)
+- Client-side search filter by name
+- Delete dialog: confirm before hard delete, warn if category has supplies
+- Form: react-hook-form + zodResolver, Name (required, unique) + Description (optional textarea)
+- shadcn/ui primitives: Card, Button, Input, Textarea, Label, Dialog
+- Dialog component must be added via `npx shadcn@latest add dialog`
+- No global state — each page fetches its own data (consistent with existing patterns)
+- Hard delete for categories (no soft-delete), but backend checks if supplies exist first
+- IPC pattern follows `registerMealTypeHandlers()` in ipc-handlers.ts
+- Types: `StockSupplyCategory`, `StockSupplyCategoryCreateData`, `StockSupplyCategoryUpdateData`
 
 ## Pending
 
