@@ -22,7 +22,7 @@ function Manager() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-admin-header-text mb-6">Manager</h1>
+      <h1 className="text-2xl font-bold text-admin-header-text mb-6">Settings</h1>
       <div className="flex gap-6">
         {cards.map((card) => (
           <Card
