@@ -1,28 +1,30 @@
-# Current Feature — Stock Management Phase 5: Electron IPC
+# Current Feature
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Add IPC methods for all new backend routes
-- Register IPC handlers in ipc-handlers.ts
-- Expose methods via preload.cts
-- Add TypeScript declarations in electron.d.ts
+
 
 ## Notes
 
-- Follow existing IPC patterns (contextBridge + ipcMain.handle)
-- Proxy to Express routes via fetch()
-- New namespaces: department, cookingRecord, kitchen
-- Add getLowStockCount to existing stockSupply namespace
+
 
 ## History
+
+### frontend - 2026-07-16 — Stock Management Phase 5: Electron IPC
+- Added department, cookingRecord, kitchen namespaces to ElectronAPI
+- Added getLowStockCount and getKitchenInventory to stockSupply namespace
+- Registered 4 new IPC handler functions in main.ts
+- Exposed all new methods via preload.cts contextBridge
+- Updated lib/api.ts with window.electron fallback for all new endpoints
+- Branch: feature/frontend/stock-management-phase-5-electron-ipc (merged to main)
 
 ### frontend - 2026-07-16 — Stock Management Phase 4: Store + Kitchen UI
 - Store dashboard: added card descriptions and low stock badge
