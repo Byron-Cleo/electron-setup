@@ -1,28 +1,30 @@
-# Stock Management System — Phase 2: Frontend Types + API Layer
+# Current Feature
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Add TypeScript types for all new models (Department, StockFulfillment, CookingRecord, etc.)
-- Update existing types (StockRequestStatus, StockSupply, StockRequest)
-- Add API functions for all new endpoints
-- Update existing API functions for modified endpoints
+- 
 
 ## Notes
 
-- Types go in desktop/ui/types/electron.d.ts
-- API functions go in desktop/ui/lib/api.ts
-- Follow existing patterns in both files
-- Full implementation plan in @context/project-plan/stock-management-system.md
+- 
 
 ## History
+
+### frontend - 2026-07-16 — Stock Management Phase 2: Frontend Types + API Layer
+- Updated StockRequestStatus: APPROVED → COMPLETED
+- Added new types: Department, StockFulfillment, CookingRecord, KitchenInventory, etc.
+- Updated StockSupply with platesPerUnit, menuId, departments
+- Updated FulfillStockRequestData with fulfilledById and notes
+- Added API functions: departments CRUD, cooking records, kitchen inventory, low stock, kitchen config
+- Added department filter to getStockSupplies
 
 ### backend - 2026-07-16 — Stock Management Phase 1: Schema + Backend Routes
 - Updated Prisma schema: new models (Department, StockFulfillment, CookingRecord), new fields on StockSupply (platesPerUnit, menuId), renamed APPROVED → COMPLETED
