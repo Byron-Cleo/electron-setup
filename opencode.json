@@ -15,5 +15,15 @@
       "path": "context",
       "description": "Use for project overview, coding standards, AI interaction guidelines, current feature tracking, and all project documentation"
     }
+  },
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp"],
+      "enabled": true,
+      "env": {
+        "BROWSER": "chromium"
+      }
+    }
   }
 }

@@ -26,3 +26,6 @@ dist-ssr
 *.sw?
 package-lock.json
 release
+
+# Playwright MCP session artifacts
+.playwright-mcp/
