@@ -5,7 +5,7 @@ import { Heading } from "@/components/ui/heading"
 import { getStockRequests } from "@/lib/api"
 import { FulfillRequest } from "./FulfillRequest"
 
-type TabStatus = "ALL" | "PENDING" | "PARTIAL" | "APPROVED"
+type TabStatus = "ALL" | "PENDING" | "PARTIAL" | "COMPLETED"
 
 interface Props {
   onRequestFulfilled: () => void
@@ -14,7 +14,7 @@ interface Props {
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   PENDING: { label: "Pending", className: "bg-yellow-100 text-yellow-800" },
   PARTIAL: { label: "Partial", className: "bg-orange-100 text-orange-800" },
-  APPROVED: { label: "Approved", className: "bg-green-100 text-green-800" },
+  COMPLETED: { label: "Completed", className: "bg-green-100 text-green-800" },
 }
 
 export function StockRequestsList({ onRequestFulfilled }: Props) {
@@ -49,7 +49,7 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
     ALL: requests.length,
     PENDING: requests.filter((r) => r.status === "PENDING").length,
     PARTIAL: requests.filter((r) => r.status === "PARTIAL").length,
-    APPROVED: requests.filter((r) => r.status === "APPROVED").length,
+    COMPLETED: requests.filter((r) => r.status === "COMPLETED").length,
   }
 
   function handleFulfilled() {
@@ -74,7 +74,7 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-admin-card-border">
-        {(["ALL", "PENDING", "PARTIAL", "APPROVED"] as TabStatus[]).map((tab) => (
+        {(["ALL", "PENDING", "PARTIAL", "COMPLETED"] as TabStatus[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -146,7 +146,7 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
                       })}
                     </div>
                   </div>
-                  {request.status !== "APPROVED" && (
+                  {request.status !== "COMPLETED" && (
                     <Button
                       size="sm"
                       onClick={() => setFulfillingRequest(request)}

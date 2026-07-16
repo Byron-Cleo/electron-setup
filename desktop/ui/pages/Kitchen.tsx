@@ -24,7 +24,7 @@ type KitchenTab = "stock" | "history"
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   PENDING: { label: "Pending", className: "bg-yellow-100 text-yellow-800" },
   PARTIAL: { label: "Partial", className: "bg-orange-100 text-orange-800" },
-  APPROVED: { label: "Approved", className: "bg-green-100 text-green-800" },
+  COMPLETED: { label: "Completed", className: "bg-green-100 text-green-800" },
 }
 
 function Kitchen() {
