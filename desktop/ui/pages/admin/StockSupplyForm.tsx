@@ -29,6 +29,7 @@ import {
   createStockSupply,
   updateStockSupply,
   getStockSupplyCategories,
+  getDepartments,
   formatSupplyDescription,
 } from "@/lib/api"
 
@@ -56,6 +57,8 @@ export default function StockSupplyForm() {
   const { id } = useParams<{ id: string }>()
   const isEdit = Boolean(id)
   const [categories, setCategories] = useState<StockSupplyCategory[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -70,8 +73,11 @@ export default function StockSupplyForm() {
   })
 
   useEffect(() => {
-    getStockSupplyCategories()
-      .then(setCategories)
+    Promise.all([getStockSupplyCategories(), getDepartments()])
+      .then(([cats, depts]) => {
+        setCategories(cats)
+        setDepartments(depts)
+      })
       .catch((e) => form.setError("root", { message: e.message }))
   }, [form])
 
@@ -252,6 +258,41 @@ export default function StockSupplyForm() {
                   )}
                 />
               </div>
+
+              {departments.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium text-admin-header-text">Access Departments</label>
+                  <p className="text-xs text-admin-header-text/50 mb-2">Which departments can order this item?</p>
+                  <div className="flex flex-wrap gap-3">
+                    {departments.map((dept) => (
+                      <label
+                        key={dept.id}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-colors ${
+                          selectedDepts.has(dept.id)
+                            ? "bg-admin-accent/10 border-admin-accent text-admin-header-text"
+                            : "border-admin-card-border text-admin-header-text/60 hover:bg-admin-content/50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="rounded border-admin-card-border"
+                          checked={selectedDepts.has(dept.id)}
+                          onChange={(e) => {
+                            const next = new Set(selectedDepts)
+                            if (e.target.checked) {
+                              next.add(dept.id)
+                            } else {
+                              next.delete(dept.id)
+                            }
+                            setSelectedDepts(next)
+                          }}
+                        />
+                        {dept.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button
