@@ -1,32 +1,29 @@
-# Current Feature — Stock Management Phase 4: Store + Kitchen UI
+# Current Feature
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Update Store dashboard with descriptions and low stock badge
-- Update StockRequestsList to display fulfillment trail
-- Update FulfillRequest form with notes and validation
-- Add kitchen inventory display to Kitchen page
-- Add cooking record functionality to Kitchen page
+
 
 ## Notes
 
-- Store dashboard thumbnails must include description text
-- Fulfillment trail shows each delivery event with timestamp and quantity
-- Kitchen inventory is derived: Total Received − Total Cooked
-- Cooking records include quantity and notes
-- All components must use shadcn/ui primitives
-- Validation: cannot deliver more than available store stock or requested quantity
-- Validation: cannot cook more than available kitchen stock
-
 ## History
+
+### frontend - 2026-07-16 — Stock Management Phase 4: Store + Kitchen UI
+- Store dashboard: added card descriptions and low stock badge
+- StockRequestsList: added expandable fulfillment trail display
+- FulfillRequest: added notes field and stock validation
+- Kitchen: added Cooked Food view with inventory and cooking history tabs
+- Kitchen: added cooking dialog with quantity, plates calculation, notes
+- Kitchen: added cooking history table with date/time, items, plates, notes
+- Branch: feature/frontend/stock-management-phase-4-store-kitchen-ui (merged to main)
 
 ### frontend - 2026-07-16 — Stock Management Phase 3: Admin UI (Settings Page)
 - Created DepartmentManager component for department CRUD
