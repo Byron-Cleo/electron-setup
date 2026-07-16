@@ -57,7 +57,7 @@ export default function StockSupplyCategoryForm() {
       } else {
         await createStockSupplyCategory(values)
       }
-      navigate("/admin/manager/stock-supply-categories")
+      navigate("/admin/settings/stock-supply-categories")
     } catch (e: any) {
       form.setError("root", { message: e.message })
     }
@@ -70,7 +70,7 @@ export default function StockSupplyCategoryForm() {
       </Heading>
 
       <div className="mb-4">
-        <Button onClick={() => navigate("/admin/manager/stock-supply-categories")} className="px-6 py-6">
+        <Button onClick={() => navigate("/admin/settings/stock-supply-categories")} className="px-6 py-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
@@ -117,7 +117,7 @@ export default function StockSupplyCategoryForm() {
               <div className="flex justify-end gap-2 pt-2">
                 <Button
                   type="button"
-                  onClick={() => navigate("/admin/manager/stock-supply-categories")}
+                  onClick={() => navigate("/admin/settings/stock-supply-categories")}
                   disabled={form.formState.isSubmitting}
                   className="bg-red-500 hover:bg-red-500/90"
                 >

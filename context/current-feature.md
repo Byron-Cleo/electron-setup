@@ -18,6 +18,16 @@ Not Started
 
 ## History
 
+### frontend - 2026-07-16 — Settings & Store Route Refactor
+- Renamed all `/admin/manager/` URLs to `/admin/settings/` across 11 files
+- Moved StockSupply CRUD (list, create, edit) from Settings tab to Store tab
+- Settings tab now shows only: StockSupplyCategory, Department, Kitchen Stock Config
+- Stock edit in Store uses modal dialog (StockSupplyEditDialog) instead of page navigation
+- Manager.tsx shows "Settings" heading persistively with thumbnail cards; clicking a card renders content inline below
+- DepartmentManager, KitchenStockConfig, StockSupplyCategories headings updated to h2 uppercase centered style
+- Buttons placed above headings for consistent layout across all three settings sub-views
+- Branch: feature/admin/settings-store-route-refactor
+
 ### frontend - 2026-07-16 — Stock Management Phase 5: Electron IPC
 - Added department, cookingRecord, kitchen namespaces to ElectronAPI
 - Added getLowStockCount and getKitchenInventory to stockSupply namespace

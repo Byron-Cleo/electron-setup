@@ -25,6 +25,7 @@ import {
   deleteStockSupply,
   formatSupplyDescription,
 } from "@/lib/api"
+import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 
 export default function StockSupplies() {
   const navigate = useNavigate()
@@ -37,6 +38,7 @@ export default function StockSupplies() {
   const [deleteTarget, setDeleteTarget] = useState<StockSupply | null>(null)
   const [deleteError, setDeleteError] = useState("")
   const [deleting, setDeleting] = useState(false)
+  const [editTarget, setEditTarget] = useState<StockSupply | null>(null)
 
   async function fetchAll() {
     setLoading(true)
@@ -85,11 +87,11 @@ export default function StockSupplies() {
       <Heading as="h1" className="mb-6 text-admin-header-text">Stock Supplies</Heading>
 
       <div className="flex items-center justify-between mb-4">
-        <Button onClick={() => navigate("/admin/manager")} className="px-6 py-6">
+        <Button onClick={() => navigate("/admin/store")} className="px-6 py-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <Button onClick={() => navigate("/admin/manager/stock-supplies/new")} className="px-6 py-6 bg-red-500 hover:bg-red-500/90">
+        <Button onClick={() => navigate("/admin/store/stock-supplies/new")} className="px-6 py-6 bg-red-500 hover:bg-red-500/90">
           <Plus className="h-4 w-4 mr-2" />
           Add New Supply
         </Button>
@@ -163,7 +165,7 @@ export default function StockSupplies() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => navigate(`/admin/manager/stock-supplies/${supply.id}`)}
+                            onClick={() => setEditTarget(supply)}
                           >
                             <Pencil className="h-4 w-4 mr-1" />
                             Edit
@@ -212,6 +214,13 @@ export default function StockSupplies() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StockSupplyEditDialog
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        supplyId={editTarget?.id ?? null}
+        onSaved={fetchAll}
+      />
     </div>
   )
 }

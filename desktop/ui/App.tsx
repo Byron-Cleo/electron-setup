@@ -39,17 +39,17 @@ function App() {
           }
         >
           <Route index element={<AdminIndex />} />
-          <Route path="manager" element={<AdminManager />} />
-          <Route path="manager/stock-supply-categories" element={<StockSupplyCategories />} />
-          <Route path="manager/stock-supply-categories/new" element={<StockSupplyCategoryForm />} />
-          <Route path="manager/stock-supply-categories/:id" element={<StockSupplyCategoryForm />} />
-          <Route path="manager/stock-supplies" element={<StockSupplies />} />
-          <Route path="manager/stock-supplies/new" element={<StockSupplyForm />} />
-          <Route path="manager/stock-supplies/:id" element={<StockSupplyForm />} />
+          <Route path="settings" element={<AdminManager />} />
+          <Route path="settings/stock-supply-categories" element={<StockSupplyCategories />} />
+          <Route path="settings/stock-supply-categories/new" element={<StockSupplyCategoryForm />} />
+          <Route path="settings/stock-supply-categories/:id" element={<StockSupplyCategoryForm />} />
+          <Route path="store" element={<AdminStore />} />
+          <Route path="store/stock-supplies" element={<StockSupplies />} />
+          <Route path="store/stock-supplies/new" element={<StockSupplyForm />} />
+          <Route path="store/stock-supplies/:id" element={<StockSupplyForm />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="menu" element={<AdminMenu />} />
           <Route path="kitchen" element={<AdminKitchen />} />
-          <Route path="store" element={<AdminStore />} />
           <Route path="cashier" element={<AdminCashier />} />
         </Route>
         <Route

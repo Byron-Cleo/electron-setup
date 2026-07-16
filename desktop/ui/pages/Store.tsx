@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { getStockSupplies, getStockRequests, getStockSupplyCategories, createStockSupply, deleteStockSupply, getLowStockCount } from "@/lib/api"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
+import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 
 type StoreView = "dashboard" | "requests" | "stock" | "restock"
 
@@ -160,7 +161,6 @@ function Store() {
 }
 
 function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; setShowAddModal: (v: boolean) => void }) {
-  const navigate = useNavigate()
   const [items, setItems] = useState<StockSupply[]>([])
   const [categories, setCategories] = useState<StockSupplyCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -172,6 +172,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   const [deleteTarget, setDeleteTarget] = useState<StockSupply | null>(null)
   const [deleteError, setDeleteError] = useState("")
   const [deleting, setDeleting] = useState(false)
+  const [editTarget, setEditTarget] = useState<StockSupply | null>(null)
 
   // Form state
   const [formName, setFormName] = useState("")
@@ -322,7 +323,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate(`/admin/manager/stock-supplies/${item.id}`)}
+                        onClick={() => setEditTarget(item)}
                       >
                         <Pencil className="h-4 w-4 mr-1" />
                         Edit
@@ -478,6 +479,13 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StockSupplyEditDialog
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        supplyId={editTarget?.id ?? null}
+        onSaved={loadStock}
+      />
     </div>
   )
 }

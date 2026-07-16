@@ -111,8 +111,6 @@ export default function DepartmentManager({ onBack }: Props) {
 
   return (
     <div>
-      <Heading as="h1" className="mb-6 text-admin-header-text">Restaurant Departments</Heading>
-
       <div className="flex items-center justify-between mb-4">
         <Button onClick={onBack} className="px-6 py-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -123,6 +121,8 @@ export default function DepartmentManager({ onBack }: Props) {
           Add Department
         </Button>
       </div>
+
+      <Heading as="h2" className="mb-6 text-admin-header-text text-center uppercase">Restaurant Departments</Heading>
 
       <Card className="bg-admin-card border-admin-card-border">
         <div className="p-4 border-b border-admin-card-border">

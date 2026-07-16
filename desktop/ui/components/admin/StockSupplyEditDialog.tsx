@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
-import { useForm, useWatch } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Heading } from "@/components/ui/heading"
 import {
   Select,
   SelectTrigger,
@@ -15,7 +12,13 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import {
   Form,
   FormField,
@@ -26,7 +29,6 @@ import {
 } from "@/components/ui/form"
 import {
   getStockSupplyById,
-  createStockSupply,
   updateStockSupply,
   getStockSupplyCategories,
   getDepartments,
@@ -52,13 +54,18 @@ const UNIT_OPTIONS = [
   { value: "PCS", label: "Pieces (PCS)" },
 ]
 
-export default function StockSupplyForm() {
-  const navigate = useNavigate()
-  const { id } = useParams<{ id: string }>()
-  const isEdit = Boolean(id)
+interface Props {
+  open: boolean
+  onClose: () => void
+  supplyId: string | null
+  onSaved: () => void
+}
+
+export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved }: Props) {
   const [categories, setCategories] = useState<StockSupplyCategory[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(false)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -73,79 +80,78 @@ export default function StockSupplyForm() {
   })
 
   useEffect(() => {
+    if (!open) return
+    form.clearErrors("root")
+    setSelectedDepts(new Set())
+    setLoading(true)
+
     Promise.all([getStockSupplyCategories(), getDepartments()])
       .then(([cats, depts]) => {
         setCategories(cats)
         setDepartments(depts)
+        if (supplyId) {
+          return getStockSupplyById(supplyId)
+        }
       })
-      .catch((e) => form.setError("root", { message: e.message }))
-  }, [form])
-
-  useEffect(() => {
-    if (!id) return
-    getStockSupplyById(id)
       .then((supply) => {
-        form.reset({
-          name: supply.name,
-          description: supply.description ?? "",
-          categoryId: supply.categoryId,
-          unit: supply.unit,
-          currentStock: supply.currentStock,
-          reorderLevel: supply.reorderLevel ?? 0,
-        })
+        if (supply) {
+          form.reset({
+            name: supply.name,
+            description: supply.description ?? "",
+            categoryId: supply.categoryId,
+            unit: supply.unit,
+            currentStock: supply.currentStock,
+            reorderLevel: supply.reorderLevel ?? 0,
+          })
+          if (supply.departments) {
+            setSelectedDepts(new Set(supply.departments.map((d) => d.departmentId)))
+          }
+        }
       })
       .catch((e) => form.setError("root", { message: e.message }))
-  }, [id, form])
+      .finally(() => setLoading(false))
+  }, [open, supplyId, form])
 
   async function onSubmit(values: FormValues) {
+    if (!supplyId) return
     form.clearErrors("root")
     try {
-      if (isEdit && id) {
-        await updateStockSupply(id, values)
-      } else {
-        await createStockSupply(values)
-      }
-      navigate("/admin/store/stock-supplies")
+      await updateStockSupply(supplyId, values)
+      onSaved()
+      onClose()
     } catch (e: any) {
       form.setError("root", { message: e.message })
     }
   }
 
-  const watchedName = useWatch({ control: form.control, name: "name" })
-  const watchedUnit = useWatch({ control: form.control, name: "unit" })
-  const watchedStock = useWatch({ control: form.control, name: "currentStock" })
-
-  const previewName = watchedName || ""
-  const previewUnit = watchedUnit || "PCS"
-  const previewStock = watchedStock ?? 0
-  const showPreview = isEdit || (previewName && previewUnit)
+  const previewName = form.watch("name") || ""
+  const previewUnit = form.watch("unit") || "PCS"
+  const previewStock = form.watch("currentStock") ?? 0
+  const showPreview = previewName && previewUnit
 
   return (
-    <div>
-      <Heading as="h1" className="mb-6 text-admin-header-text">
-        {isEdit ? "Edit Stock Supply" : "New Stock Supply"}
-      </Heading>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base uppercase text-admin-header-text">
+            Edit Stock Supply
+          </DialogTitle>
+        </DialogHeader>
 
-      <div className="mb-4">
-        <Button onClick={() => navigate("/admin/store/stock-supplies")} className="px-6 py-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-      </div>
-
-      {showPreview && (
-        <p className="text-sm text-admin-header-text/60 mb-4">
-          {formatSupplyDescription({ name: previewName, unit: previewUnit, currentStock: previewStock })}
-        </p>
-      )}
-
-      <Card className="bg-admin-card border-admin-card-border mx-auto max-w-lg">
-        <CardContent>
+        {loading ? (
+          <p className="text-sm text-admin-header-text/60 py-4">Loading...</p>
+        ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               {form.formState.errors.root && (
                 <p className="text-sm text-red-500">
                   {form.formState.errors.root.message}
+                </p>
+              )}
+
+              {showPreview && (
+                <p className="text-xs text-admin-header-text/60">
+                  {formatSupplyDescription({ name: previewName, unit: previewUnit, currentStock: previewStock })}
                 </p>
               )}
 
@@ -170,7 +176,7 @@ export default function StockSupplyForm() {
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="Optional description" rows={3} />
+                      <Textarea {...field} placeholder="Optional description" rows={2} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -294,23 +300,18 @@ export default function StockSupplyForm() {
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  onClick={() => navigate("/admin/store/stock-supplies")}
-                  disabled={form.formState.isSubmitting}
-                  className="bg-red-500 hover:bg-red-500/90"
-                >
+              <DialogFooter>
+                <Button variant="outline" type="button" onClick={onClose} disabled={form.formState.isSubmitting}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={form.formState.isSubmitting} className="bg-brand-green hover:bg-brand-green/90">
                   {form.formState.isSubmitting ? "Saving..." : "Save"}
                 </Button>
-              </div>
+              </DialogFooter>
             </form>
           </Form>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

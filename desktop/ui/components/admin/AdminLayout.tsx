@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 
 const allNavItems = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin"] as const },
-  { label: "Settings", path: "/admin/manager", icon: Settings, roles: ["admin"] as const },
+  { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin"] as const },
   { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "store"] as const },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "kitchen"] as const },
   { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin"] as const },

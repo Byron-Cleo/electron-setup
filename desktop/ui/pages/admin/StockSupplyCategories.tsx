@@ -14,7 +14,11 @@ import {
 import { Plus, Pencil, Trash2, ArrowLeft } from "lucide-react"
 import { getStockSupplyCategories, deleteStockSupplyCategory } from "@/lib/api"
 
-export default function StockSupplyCategories() {
+interface Props {
+  onBack?: () => void
+}
+
+export default function StockSupplyCategories({ onBack }: Props) {
   const navigate = useNavigate()
   const [categories, setCategories] = useState<StockSupplyCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,18 +66,20 @@ export default function StockSupplyCategories() {
 
   return (
     <div>
-      <Heading as="h1" className="mb-6 text-admin-header-text">Restaurant Stock Supply Categories</Heading>
-
       <div className="flex items-center justify-between mb-4">
-        <Button onClick={() => navigate("/admin/manager")} className="px-6 py-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-        <Button onClick={() => navigate("/admin/manager/stock-supply-categories/new")} className="px-6 py-6 bg-red-500 hover:bg-red-500/90">
+        {onBack && (
+          <Button onClick={onBack} className="px-6 py-6">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+        )}
+        <Button onClick={() => navigate("/admin/settings/stock-supply-categories/new")} className="px-6 py-6 bg-red-500 hover:bg-red-500/90">
           <Plus className="h-4 w-4 mr-2" />
           Add New Category
         </Button>
       </div>
+
+      <Heading as="h2" className="mb-6 text-admin-header-text text-center uppercase">Restaurant Stock Supply Categories</Heading>
 
       <Card className="bg-admin-card border-admin-card-border">
         <div className="p-4 border-b border-admin-card-border">
@@ -119,7 +125,7 @@ export default function StockSupplyCategories() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate(`/admin/manager/stock-supply-categories/${cat.id}`)}
+                          onClick={() => navigate(`/admin/settings/stock-supply-categories/${cat.id}`)}
                         >
                           <Pencil className="h-4 w-4 mr-1" />
                           Edit
