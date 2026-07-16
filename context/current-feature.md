@@ -10,13 +10,19 @@ Not Started
 
 ## Goals
 
-- 
+
 
 ## Notes
 
-- 
-
 ## History
+
+### frontend - 2026-07-16 — Stock Management Phase 3: Admin UI (Settings Page)
+- Created DepartmentManager component for department CRUD
+- Created KitchenStockConfig component for platesPerUnit/menuId configuration
+- Updated StockSupplyForm with department access multi-select
+- Integrated both config components into Settings page (Manager.tsx)
+- Fixed APPROVED → COMPLETED status in StockRequestsList and Kitchen (blank screen fix)
+- Branch: feature/frontend/stock-management-phase-3-admin-ui (merged to main)
 
 ### frontend - 2026-07-16 — Stock Management Phase 2: Frontend Types + API Layer
 - Updated StockRequestStatus: APPROVED → COMPLETED
