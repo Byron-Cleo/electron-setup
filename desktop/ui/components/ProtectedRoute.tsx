@@ -2,7 +2,7 @@ import { Navigate } from "react-router-dom"
 import { useAuthStore } from "../stores/auth"
 
 interface Props {
-  role: User["role"]
+  role?: User["role"] | User["role"][]
   children: React.ReactNode
 }
 
@@ -13,8 +13,11 @@ function ProtectedRoute({ role, children }: Props) {
     return <Navigate to="/" replace />
   }
 
-  if (user.role !== role) {
-    return <Navigate to="/" replace />
+  if (role) {
+    const allowedRoles = Array.isArray(role) ? role : [role]
+    if (!allowedRoles.includes(user.role)) {
+      return <Navigate to="/" replace />
+    }
   }
 
   return <>{children}</>

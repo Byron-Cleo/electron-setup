@@ -106,8 +106,8 @@ function Login() {
       const paths: Record<string, string> = {
         admin: "/admin",
         waiter: "/waiter",
-        store: "/store",
-        kitchen: "/kitchen",
+        store: "/admin",
+        kitchen: "/admin",
       };
       navigate(paths[user.role] || "/");
     }

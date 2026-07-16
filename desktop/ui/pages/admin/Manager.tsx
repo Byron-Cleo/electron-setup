@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom"
 import { Card, CardContent } from "@/components/ui/card"
+import { Heading } from "@/components/ui/heading"
 import { Package, Tag } from "lucide-react"
 
 const cards = [
@@ -22,7 +23,7 @@ function Manager() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-admin-header-text mb-6">Settings</h1>
+      <Heading as="h1" className="mb-6 text-admin-header-text">Settings</Heading>
       <div className="flex gap-6">
         {cards.map((card) => (
           <Card
@@ -35,7 +36,7 @@ function Manager() {
                 <card.icon className="h-7 w-7 text-admin-accent" />
               </div>
               <div>
-                <h3 className="font-semibold text-admin-header-text">{card.title}</h3>
+                <Heading as="h3" className="text-admin-header-text">{card.title}</Heading>
                 <p className="text-sm text-admin-header-text/60 mt-1">{card.description}</p>
               </div>
             </CardContent>

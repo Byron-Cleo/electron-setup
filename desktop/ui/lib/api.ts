@@ -103,3 +103,34 @@ export async function deleteStockSupply(id: string) {
   }
   return apiFetch(`/stock-supplies/${id}`, { method: "DELETE" })
 }
+
+// ─── Stock Requests ──────────────────────────────────────────────────────────
+
+export async function getStockRequests(status?: string): Promise<StockRequest[]> {
+  if (window.electron?.stockRequest?.getAll) {
+    return window.electron.stockRequest.getAll(status)
+  }
+  const query = status ? `?status=${encodeURIComponent(status)}` : ""
+  return apiFetch(`/stock-requests${query}`)
+}
+
+export async function getStockRequestById(id: string): Promise<StockRequest> {
+  if (window.electron?.stockRequest?.getById) {
+    return window.electron.stockRequest.getById(id)
+  }
+  return apiFetch(`/stock-requests/${id}`)
+}
+
+export async function createStockRequest(data: CreateStockRequestData): Promise<StockRequest> {
+  if (window.electron?.stockRequest?.create) {
+    return window.electron.stockRequest.create(data)
+  }
+  return apiFetch("/stock-requests", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function fulfillStockRequest(id: string, data: FulfillStockRequestData): Promise<StockRequest> {
+  if (window.electron?.stockRequest?.fulfill) {
+    return window.electron.stockRequest.fulfill(id, data)
+  }
+  return apiFetch(`/stock-requests/${id}/fulfill`, { method: "PUT", body: JSON.stringify(data) })
+}

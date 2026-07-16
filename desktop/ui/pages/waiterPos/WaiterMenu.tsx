@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Loader2, AlertCircle, Package, Plus, Minus, X, Star } from "lucide-react"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Heading } from "@/components/ui/heading"
 
 
 import { cn } from "@/lib/utils"
@@ -181,7 +182,7 @@ export function WaiterMenu() {
         <Button variant="ghost" size="icon" onClick={() => navigate("/waiter")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h2 className="text-xl font-bold text-brand-ebony">{mealPeriod} Menu</h2>
+        <Heading as="h2" className="text-brand-ebony">{mealPeriod} Menu</Heading>
       </div>
 
       <div className="flex gap-4 flex-1 min-h-0">
@@ -289,7 +290,7 @@ export function WaiterMenu() {
                 {/* Name, Price, Stock, Description */}
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="text-lg font-bold text-brand-ebony">{selectedItem.name}</h3>
+                    <Heading as="h3" className="text-lg text-brand-ebony">{selectedItem.name}</Heading>
                     <p className="text-sm text-brand-ebony/60 leading-relaxed mt-0.5">
                       {selectedItem.description}
                     </p>
@@ -390,7 +391,7 @@ export function WaiterMenu() {
           <Card className="flex-1 flex flex-col min-h-0">
             <CardHeader className="pb-3 shrink-0">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-brand-ebony">Current Order</h3>
+                <Heading as="h3" className="text-brand-ebony">Current Order</Heading>
                 {orderItems.length > 0 && (
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-maroon text-white">
                     {orderItems.length}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Heading } from "@/components/ui/heading";
 
 interface Props {
   onEdit: (id: string) => void;
@@ -43,7 +44,7 @@ export default function MealTypeList({ onEdit, onAdd }: Props) {
   return (
     <section>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2>Meal Types</h2>
+        <Heading as="h2" className="text-admin-header-text">Meal Types</Heading>
         <button onClick={onAdd}>+ Add New</button>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>

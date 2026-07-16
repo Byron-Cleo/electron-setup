@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Heading } from "@/components/ui/heading"
 import {
   Select,
   SelectTrigger,
@@ -115,9 +116,9 @@ export default function StockSupplyForm() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-admin-header-text mb-6">
+      <Heading as="h1" className="mb-6 text-admin-header-text">
         {isEdit ? "Edit Stock Supply" : "New Stock Supply"}
-      </h1>
+      </Heading>
 
       <div className="mb-4">
         <Button onClick={() => navigate("/admin/manager/stock-supplies")} className="px-6 py-6">

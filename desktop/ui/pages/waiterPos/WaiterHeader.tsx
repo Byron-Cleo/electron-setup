@@ -1,5 +1,6 @@
 import { LogOut, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Heading } from "@/components/ui/heading"
 import { useAuthStore } from "@/stores/auth"
 
 export function WaiterHeader() {
@@ -17,7 +18,7 @@ export function WaiterHeader() {
           <p className="text-xs text-brand-ebony/60">Catering Services</p>
         </div>
         <div className="h-6 w-px bg-brand-ebony/20 mx-2" />
-        <h1 className="text-xl font-bold text-brand-maroon">Waiter POS</h1>
+        <Heading as="h1" className="text-xl text-brand-maroon">Waiter POS</Heading>
       </div>
 
       <div className="flex items-center gap-3">

@@ -121,6 +121,42 @@ interface StockSupplyUpdateData {
   isActive?: boolean;
 }
 
+type StockRequestStatus = "PENDING" | "PARTIAL" | "APPROVED";
+
+interface StockRequestItem {
+  id: string;
+  stockRequestId: string;
+  stockSupplyId: string;
+  quantityRequested: number;
+  quantityDelivered: number;
+  createdAt: string;
+  updatedAt: string;
+  stockSupply: StockSupply;
+}
+
+interface StockRequest {
+  id: string;
+  requestedById: string;
+  department: string;
+  status: StockRequestStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  requestedBy: { id: string; name: string };
+  items: StockRequestItem[];
+}
+
+interface CreateStockRequestData {
+  requestedById: string;
+  department: string;
+  notes?: string;
+  items: { stockSupplyId: string; quantityRequested: number }[];
+}
+
+interface FulfillStockRequestData {
+  items: { stockRequestItemId: string; quantityDelivered: number }[];
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: any) => void) => void;
   getStaticData: () => void;
@@ -156,6 +192,12 @@ interface ElectronAPI {
     create: (data: StockSupplyCreateData) => Promise<StockSupply>;
     update: (id: string, data: StockSupplyUpdateData) => Promise<StockSupply>;
     delete: (id: string) => Promise<{ message: string; id: string }>;
+  };
+  stockRequest: {
+    getAll: (status?: string) => Promise<StockRequest[]>;
+    getById: (id: string) => Promise<StockRequest>;
+    create: (data: CreateStockRequestData) => Promise<StockRequest>;
+    fulfill: (id: string, data: FulfillStockRequestData) => Promise<StockRequest>;
   };
 }
 

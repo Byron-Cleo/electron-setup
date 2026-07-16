@@ -4,8 +4,6 @@ import Dashboard from "./pages/Dashboard"
 import WaiterPOS from "./pages/waiterPos/WaiterPOS"
 import WaiterLayout from "./pages/waiterPos/WaiterLayout"
 import WaiterMenu from "./pages/waiterPos/WaiterMenu"
-import Store from "./pages/Store"
-import Kitchen from "./pages/Kitchen"
 import AdminLayout from "./components/admin/AdminLayout"
 import AdminUsers from "./pages/admin/Users"
 import AdminMenu from "./pages/admin/Menu"
@@ -18,6 +16,14 @@ import StockSupplyCategoryForm from "./pages/admin/StockSupplyCategoryForm"
 import StockSupplies from "./pages/admin/StockSupplies"
 import StockSupplyForm from "./pages/admin/StockSupplyForm"
 import ProtectedRoute from "./components/ProtectedRoute"
+import { useAuthStore } from "./stores/auth"
+
+function AdminIndex() {
+  const user = useAuthStore((s) => s.user)
+  if (user?.role === "store") return <Navigate to="/admin/store" replace />
+  if (user?.role === "kitchen") return <Navigate to="/admin/kitchen" replace />
+  return <Dashboard />
+}
 
 function App() {
   return (
@@ -27,12 +33,12 @@ function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute role="admin">
+            <ProtectedRoute role={["admin", "store", "kitchen"]}>
               <AdminLayout />
             </ProtectedRoute>
           }
         >
-          <Route index element={<Dashboard />} />
+          <Route index element={<AdminIndex />} />
           <Route path="manager" element={<AdminManager />} />
           <Route path="manager/stock-supply-categories" element={<StockSupplyCategories />} />
           <Route path="manager/stock-supply-categories/new" element={<StockSupplyCategoryForm />} />
@@ -57,22 +63,6 @@ function App() {
           <Route index element={<WaiterPOS />} />
           <Route path="menu/:mealPeriod" element={<WaiterMenu />} />
         </Route>
-        <Route
-          path="/store/*"
-          element={
-            <ProtectedRoute role="store">
-              <Store />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/kitchen/*"
-          element={
-            <ProtectedRoute role="kitchen">
-              <Kitchen />
-            </ProtectedRoute>
-          }
-        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

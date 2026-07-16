@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Sunrise, Sun, Moon, CakeSlice, CupSoda } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
 
 type MealPeriod = {
@@ -107,7 +108,7 @@ export function WaiterPOS() {
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="text-sm font-bold text-brand-green uppercase tracking-wider mb-4">Now Serving</h2>
+        <Heading as="h2" className="text-sm text-brand-green uppercase tracking-wider mb-4">Now Serving</Heading>
         <div className="flex flex-wrap justify-center gap-4">
           {activePeriods.map(renderCard)}
         </div>
@@ -115,7 +116,7 @@ export function WaiterPOS() {
 
       {closedPeriods.length > 0 && (
         <section>
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Closed</h2>
+          <Heading as="h2" className="text-sm text-gray-400 uppercase tracking-wider mb-4">Closed</Heading>
           <div className="flex flex-wrap justify-center gap-4">
             {closedPeriods.map(renderCard)}
           </div>

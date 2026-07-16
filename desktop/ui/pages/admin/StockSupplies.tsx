@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Heading } from "@/components/ui/heading"
 import {
   Select,
   SelectTrigger,
@@ -81,7 +82,7 @@ export default function StockSupplies() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-admin-header-text mb-6">Stock Supplies</h1>
+      <Heading as="h1" className="mb-6 text-admin-header-text">Stock Supplies</Heading>
 
       <div className="flex items-center justify-between mb-4">
         <Button onClick={() => navigate("/admin/manager")} className="px-6 py-6">

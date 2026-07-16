@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Heading } from "@/components/ui/heading";
 
 const MEAL_PERIODS = ["BREAKFAST", "LUNCH", "DINNER", "DESSERT", "BEVERAGE"];
 
@@ -41,7 +42,7 @@ export default function MealTypeForm({ editId, onSaved, onCancel }: Props) {
 
   return (
     <section>
-      <h2>{editId ? "Edit Meal Type" : "New Meal Type"}</h2>
+      <Heading as="h2" className="text-admin-header-text">{editId ? "Edit Meal Type" : "New Meal Type"}</Heading>
       {error && <p style={{ color: "red" }}>Error: {error}</p>}
       <div style={{ display: "grid", gap: "0.5rem", maxWidth: 300 }}>
         <select value={name} onChange={(e) => setName(e.target.value)}>

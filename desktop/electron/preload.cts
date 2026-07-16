@@ -42,4 +42,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
       electron.ipcRenderer.invoke("stock-supply:update", id, data),
     delete: (id: string) => electron.ipcRenderer.invoke("stock-supply:delete", id),
   },
+  stockRequest: {
+    getAll: (status?: string) => electron.ipcRenderer.invoke("stock-request:get-all", status),
+    getById: (id: string) => electron.ipcRenderer.invoke("stock-request:get-by-id", id),
+    create: (data: any) => electron.ipcRenderer.invoke("stock-request:create", data),
+    fulfill: (id: string, data: any) => electron.ipcRenderer.invoke("stock-request:fulfill", id, data),
+  },
 });

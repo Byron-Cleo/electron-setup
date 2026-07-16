@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 import { ArrowLeft, Terminal } from "lucide-react"
+import { Heading } from "@/components/ui/heading"
 
 function Landing() {
   return (
@@ -9,9 +10,9 @@ function Landing() {
           <Terminal className="w-8 h-8 text-[#f5a623]" />
         </div>
 
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-2">
+        <Heading as="h1" className="text-3xl tracking-tight text-white mb-2">
           LANDING PAGE
-        </h1>
+        </Heading>
         
         <p className="text-slate-400 text-sm mb-8 leading-relaxed">
           Welcome to the Eraeva POS main workspace. You have successfully authenticated.

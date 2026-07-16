@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Heading } from "@/components/ui/heading"
 import { ArrowLeft } from "lucide-react"
 import {
   Form,
@@ -64,9 +65,9 @@ export default function StockSupplyCategoryForm() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-admin-header-text mb-6">
+      <Heading as="h1" className="mb-6 text-admin-header-text">
         {isEdit ? "Edit Category" : "New Stock Supply Category"}
-      </h1>
+      </Heading>
 
       <div className="mb-4">
         <Button onClick={() => navigate("/admin/manager/stock-supply-categories")} className="px-6 py-6">

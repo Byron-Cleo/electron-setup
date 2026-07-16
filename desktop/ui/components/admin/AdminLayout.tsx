@@ -3,19 +3,23 @@ import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const navItems = [
-  { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true },
-  { label: "Settings", path: "/admin/manager", icon: Settings },
-  { label: "Store/Procurement", path: "/admin/store", icon: Warehouse },
-  { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat },
-  { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed },
-  { label: "Cashier", path: "/admin/cashier", icon: Receipt },
-  { label: "Users", path: "/admin/users", icon: Users },
+const allNavItems = [
+  { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin"] as const },
+  { label: "Settings", path: "/admin/manager", icon: Settings, roles: ["admin"] as const },
+  { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "store"] as const },
+  { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "kitchen"] as const },
+  { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin"] as const },
+  { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin"] as const },
+  { label: "Users", path: "/admin/users", icon: Users, roles: ["admin"] as const },
 ]
 
 function AdminLayout() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+
+  const navItems = allNavItems.filter((item) =>
+    item.roles.includes(user?.role as "admin" | "store" | "kitchen")
+  )
 
   return (
     <div className="min-h-screen flex bg-admin-content">

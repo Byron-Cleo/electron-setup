@@ -76,3 +76,17 @@ export function registerStockSupplyHandlers() {
     apiFetch(`/stock-supplies/${id}`, { method: "DELETE" })
   );
 }
+
+export function registerStockRequestHandlers() {
+  ipcMain.handle("stock-request:get-all", async (_event, status?: string) => {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    return apiFetch(`/stock-requests${query}`);
+  });
+  ipcMain.handle("stock-request:get-by-id", async (_event, id: string) => apiFetch(`/stock-requests/${id}`));
+  ipcMain.handle("stock-request:create", async (_event, data) =>
+    apiFetch("/stock-requests", { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("stock-request:fulfill", async (_event, id: string, data) =>
+    apiFetch(`/stock-requests/${id}/fulfill`, { method: "PUT", body: JSON.stringify(data) })
+  );
+}

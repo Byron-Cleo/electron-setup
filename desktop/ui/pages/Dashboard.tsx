@@ -1,5 +1,6 @@
 import { ShoppingCart, DollarSign, Users, Clock } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Heading } from "@/components/ui/heading"
 
 const statCards = [
   { icon: ShoppingCart, label: "Total Orders", value: "156", trend: "+12% this week", trendUp: true },
@@ -38,7 +39,7 @@ const yLabels = [0, 5000, 10000, 15000, 20000]
 function Dashboard() {
   return (
     <div className="p-6 bg-admin-content text-admin-header-text min-h-screen">
-      <h1 className="font-bold text-3xl mb-8 text-brand-maroon">Dashboard</h1>
+      <Heading as="h1" className="mb-8 text-brand-maroon">Dashboard</Heading>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((card) => (
