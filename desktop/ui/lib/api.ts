@@ -71,7 +71,7 @@ export async function deleteStockSupplyCategory(id: string) {
 
 export async function getStockSupplies(departmentId?: string): Promise<StockSupply[]> {
   if (window.electron?.stockSupply?.getAll) {
-    return window.electron.stockSupply.getAll()
+    return window.electron.stockSupply.getAll(departmentId)
   }
   const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : ""
   return apiFetch(`/stock-supplies${query}`)
@@ -139,58 +139,94 @@ export async function fulfillStockRequest(id: string, data: FulfillStockRequestD
 // ─── Departments ────────────────────────────────────────────────────────────
 
 export async function getDepartments(): Promise<Department[]> {
+  if (window.electron?.department?.getAll) {
+    return window.electron.department.getAll()
+  }
   return apiFetch("/departments")
 }
 
 export async function getDepartmentById(id: string): Promise<Department> {
+  if (window.electron?.department?.getById) {
+    return window.electron.department.getById(id)
+  }
   return apiFetch(`/departments/${id}`)
 }
 
 export async function createDepartment(data: CreateDepartmentData): Promise<Department> {
+  if (window.electron?.department?.create) {
+    return window.electron.department.create(data)
+  }
   return apiFetch("/departments", { method: "POST", body: JSON.stringify(data) })
 }
 
 export async function updateDepartment(id: string, data: UpdateDepartmentData): Promise<Department> {
+  if (window.electron?.department?.update) {
+    return window.electron.department.update(id, data)
+  }
   return apiFetch(`/departments/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
 export async function deleteDepartment(id: string): Promise<void> {
+  if (window.electron?.department?.delete) {
+    return window.electron.department.delete(id)
+  }
   return apiFetch(`/departments/${id}`, { method: "DELETE" })
 }
 
 // ─── Cooking Records ────────────────────────────────────────────────────────
 
 export async function getCookingRecords(stockSupplyId?: string): Promise<CookingRecord[]> {
+  if (window.electron?.cookingRecord?.getAll) {
+    return window.electron.cookingRecord.getAll(stockSupplyId)
+  }
   const query = stockSupplyId ? `?stockSupplyId=${encodeURIComponent(stockSupplyId)}` : ""
   return apiFetch(`/cooking-records${query}`)
 }
 
 export async function createCookingRecord(data: CreateCookingRecordData): Promise<CookingRecord> {
+  if (window.electron?.cookingRecord?.create) {
+    return window.electron.cookingRecord.create(data)
+  }
   return apiFetch("/cooking-records", { method: "POST", body: JSON.stringify(data) })
 }
 
 export async function deleteCookingRecord(id: string): Promise<void> {
+  if (window.electron?.cookingRecord?.delete) {
+    return window.electron.cookingRecord.delete(id)
+  }
   return apiFetch(`/cooking-records/${id}`, { method: "DELETE" })
 }
 
 // ─── Kitchen Inventory ──────────────────────────────────────────────────────
 
 export async function getKitchenInventory(stockSupplyId: string): Promise<KitchenInventory> {
+  if (window.electron?.stockSupply?.getKitchenInventory) {
+    return window.electron.stockSupply.getKitchenInventory(stockSupplyId)
+  }
   return apiFetch(`/stock-supplies/${stockSupplyId}/kitchen-inventory`)
 }
 
 // ─── Low Stock ──────────────────────────────────────────────────────────────
 
 export async function getLowStockCount(): Promise<{ count: number }> {
+  if (window.electron?.stockSupply?.getLowStockCount) {
+    return window.electron.stockSupply.getLowStockCount()
+  }
   return apiFetch("/stock-supplies/low-stock-count")
 }
 
 // ─── Kitchen Config ─────────────────────────────────────────────────────────
 
 export async function getKitchenConfig(): Promise<KitchenConfigItem[]> {
+  if (window.electron?.kitchen?.getConfig) {
+    return window.electron.kitchen.getConfig()
+  }
   return apiFetch("/kitchen-config")
 }
 
 export async function saveKitchenConfig(id: string, data: KitchenConfigData): Promise<KitchenConfigItem> {
+  if (window.electron?.kitchen?.saveConfig) {
+    return window.electron.kitchen.saveConfig(id, data)
+  }
   return apiFetch(`/kitchen-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }

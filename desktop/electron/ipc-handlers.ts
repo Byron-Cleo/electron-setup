@@ -90,3 +90,48 @@ export function registerStockRequestHandlers() {
     apiFetch(`/stock-requests/${id}/fulfill`, { method: "PUT", body: JSON.stringify(data) })
   );
 }
+
+export function registerStockSupplyExtraHandlers() {
+  ipcMain.handle("stock-supply:get-low-stock-count", async () => apiFetch("/stock-supplies/low-stock-count"));
+  ipcMain.handle("stock-supply:get-kitchen-inventory", async (_event, id: string) =>
+    apiFetch(`/stock-supplies/${id}/kitchen-inventory`)
+  );
+  ipcMain.handle("stock-supply:get-all-with-department", async (_event, departmentId?: string) => {
+    const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : "";
+    return apiFetch(`/stock-supplies${query}`);
+  });
+}
+
+export function registerDepartmentHandlers() {
+  ipcMain.handle("department:get-all", async () => apiFetch("/departments"));
+  ipcMain.handle("department:get-by-id", async (_event, id: string) => apiFetch(`/departments/${id}`));
+  ipcMain.handle("department:create", async (_event, data) =>
+    apiFetch("/departments", { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("department:update", async (_event, id: string, data) =>
+    apiFetch(`/departments/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("department:delete", async (_event, id: string) =>
+    apiFetch(`/departments/${id}`, { method: "DELETE" })
+  );
+}
+
+export function registerCookingRecordHandlers() {
+  ipcMain.handle("cooking-record:get-all", async (_event, stockSupplyId?: string) => {
+    const query = stockSupplyId ? `?stockSupplyId=${encodeURIComponent(stockSupplyId)}` : "";
+    return apiFetch(`/cooking-records${query}`);
+  });
+  ipcMain.handle("cooking-record:create", async (_event, data) =>
+    apiFetch("/cooking-records", { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("cooking-record:delete", async (_event, id: string) =>
+    apiFetch(`/cooking-records/${id}`, { method: "DELETE" })
+  );
+}
+
+export function registerKitchenConfigHandlers() {
+  ipcMain.handle("kitchen-config:get", async () => apiFetch("/kitchen-config"));
+  ipcMain.handle("kitchen-config:save", async (_event, id: string, data) =>
+    apiFetch(`/kitchen-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  );
+}

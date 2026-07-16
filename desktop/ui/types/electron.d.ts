@@ -281,17 +281,35 @@ interface ElectronAPI {
     delete: (id: string) => Promise<{ message: string; id: string }>;
   };
   stockSupply: {
-    getAll: () => Promise<StockSupply[]>;
+    getAll: (departmentId?: string) => Promise<StockSupply[]>;
     getById: (id: string) => Promise<StockSupply>;
     create: (data: StockSupplyCreateData) => Promise<StockSupply>;
     update: (id: string, data: StockSupplyUpdateData) => Promise<StockSupply>;
     delete: (id: string) => Promise<{ message: string; id: string }>;
+    getLowStockCount: () => Promise<{ count: number }>;
+    getKitchenInventory: (id: string) => Promise<KitchenInventory>;
   };
   stockRequest: {
     getAll: (status?: string) => Promise<StockRequest[]>;
     getById: (id: string) => Promise<StockRequest>;
     create: (data: CreateStockRequestData) => Promise<StockRequest>;
     fulfill: (id: string, data: FulfillStockRequestData) => Promise<StockRequest>;
+  };
+  department: {
+    getAll: () => Promise<Department[]>;
+    getById: (id: string) => Promise<Department>;
+    create: (data: CreateDepartmentData) => Promise<Department>;
+    update: (id: string, data: UpdateDepartmentData) => Promise<Department>;
+    delete: (id: string) => Promise<{ message: string }>;
+  };
+  cookingRecord: {
+    getAll: (stockSupplyId?: string) => Promise<CookingRecord[]>;
+    create: (data: CreateCookingRecordData) => Promise<CookingRecord>;
+    delete: (id: string) => Promise<{ message: string }>;
+  };
+  kitchen: {
+    getConfig: () => Promise<KitchenConfigItem[]>;
+    saveConfig: (id: string, data: KitchenConfigData) => Promise<KitchenConfigItem>;
   };
 }
 
