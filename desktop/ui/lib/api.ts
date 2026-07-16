@@ -69,11 +69,12 @@ export async function deleteStockSupplyCategory(id: string) {
 
 // ─── Stock Supply ───────────────────────────────────────────────────────────
 
-export async function getStockSupplies(): Promise<StockSupply[]> {
+export async function getStockSupplies(departmentId?: string): Promise<StockSupply[]> {
   if (window.electron?.stockSupply?.getAll) {
     return window.electron.stockSupply.getAll()
   }
-  return apiFetch("/stock-supplies")
+  const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : ""
+  return apiFetch(`/stock-supplies${query}`)
 }
 
 export async function getStockSupplyById(id: string): Promise<StockSupply> {
@@ -133,4 +134,63 @@ export async function fulfillStockRequest(id: string, data: FulfillStockRequestD
     return window.electron.stockRequest.fulfill(id, data)
   }
   return apiFetch(`/stock-requests/${id}/fulfill`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+// ─── Departments ────────────────────────────────────────────────────────────
+
+export async function getDepartments(): Promise<Department[]> {
+  return apiFetch("/departments")
+}
+
+export async function getDepartmentById(id: string): Promise<Department> {
+  return apiFetch(`/departments/${id}`)
+}
+
+export async function createDepartment(data: CreateDepartmentData): Promise<Department> {
+  return apiFetch("/departments", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function updateDepartment(id: string, data: UpdateDepartmentData): Promise<Department> {
+  return apiFetch(`/departments/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export async function deleteDepartment(id: string): Promise<void> {
+  return apiFetch(`/departments/${id}`, { method: "DELETE" })
+}
+
+// ─── Cooking Records ────────────────────────────────────────────────────────
+
+export async function getCookingRecords(stockSupplyId?: string): Promise<CookingRecord[]> {
+  const query = stockSupplyId ? `?stockSupplyId=${encodeURIComponent(stockSupplyId)}` : ""
+  return apiFetch(`/cooking-records${query}`)
+}
+
+export async function createCookingRecord(data: CreateCookingRecordData): Promise<CookingRecord> {
+  return apiFetch("/cooking-records", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function deleteCookingRecord(id: string): Promise<void> {
+  return apiFetch(`/cooking-records/${id}`, { method: "DELETE" })
+}
+
+// ─── Kitchen Inventory ──────────────────────────────────────────────────────
+
+export async function getKitchenInventory(stockSupplyId: string): Promise<KitchenInventory> {
+  return apiFetch(`/stock-supplies/${stockSupplyId}/kitchen-inventory`)
+}
+
+// ─── Low Stock ──────────────────────────────────────────────────────────────
+
+export async function getLowStockCount(): Promise<{ count: number }> {
+  return apiFetch("/stock-supplies/low-stock-count")
+}
+
+// ─── Kitchen Config ─────────────────────────────────────────────────────────
+
+export async function getKitchenConfig(): Promise<KitchenConfigItem[]> {
+  return apiFetch("/kitchen-config")
+}
+
+export async function saveKitchenConfig(id: string, data: KitchenConfigData): Promise<KitchenConfigItem> {
+  return apiFetch(`/kitchen-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }

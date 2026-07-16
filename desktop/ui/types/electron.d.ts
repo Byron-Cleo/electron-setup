@@ -91,6 +91,8 @@ interface StockSupply {
   categoryId: string;
   currentStock: number;
   reorderLevel: number | null;
+  platesPerUnit: number | null;
+  menuId: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -98,6 +100,8 @@ interface StockSupply {
     id: string;
     name: string;
   };
+  menu?: { id: string; name: string } | null;
+  departments?: Department[];
 }
 
 interface StockSupplyCreateData {
@@ -121,7 +125,7 @@ interface StockSupplyUpdateData {
   isActive?: boolean;
 }
 
-type StockRequestStatus = "PENDING" | "PARTIAL" | "APPROVED";
+type StockRequestStatus = "PENDING" | "PARTIAL" | "COMPLETED";
 
 interface StockRequestItem {
   id: string;
@@ -144,6 +148,7 @@ interface StockRequest {
   updatedAt: string;
   requestedBy: { id: string; name: string };
   items: StockRequestItem[];
+  fulfillments?: StockFulfillment[];
 }
 
 interface CreateStockRequestData {
@@ -154,7 +159,96 @@ interface CreateStockRequestData {
 }
 
 interface FulfillStockRequestData {
+  fulfilledById: string;
+  notes?: string;
   items: { stockRequestItemId: string; quantityDelivered: number }[];
+}
+
+interface Department {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  DepartmentStockSupply?: DepartmentStockSupply[];
+}
+
+interface DepartmentStockSupply {
+  id: string;
+  departmentId: string;
+  stockSupplyId: string;
+  createdAt: string;
+  stockSupply?: { id: string; name: string; unit: string; currentStock?: number };
+}
+
+interface CreateDepartmentData {
+  name: string;
+  description?: string;
+}
+
+type UpdateDepartmentData = Partial<CreateDepartmentData>;
+
+interface StockFulfillment {
+  id: string;
+  stockRequestId: string;
+  fulfilledById: string;
+  notes: string | null;
+  createdAt: string;
+  fulfilledBy: { id: string; name: string };
+  items: StockFulfillmentItem[];
+}
+
+interface StockFulfillmentItem {
+  id: string;
+  stockFulfillmentId: string;
+  stockRequestItemId: string;
+  quantityDelivered: number;
+  createdAt: string;
+}
+
+interface CookingRecord {
+  id: string;
+  stockSupplyId: string;
+  quantityCooked: number;
+  platesExpected: number;
+  cookedById: string;
+  notes: string | null;
+  createdAt: string;
+  stockSupply: { id: string; name: string; unit: string; platesPerUnit: number | null; menuId: string | null };
+  cookedBy: { id: string; name: string };
+}
+
+interface CreateCookingRecordData {
+  stockSupplyId: string;
+  quantityCooked: number;
+  cookedById: string;
+  notes?: string;
+}
+
+interface KitchenInventory {
+  id: string;
+  name: string;
+  unit: string;
+  platesPerUnit: number | null;
+  menuId: string | null;
+  totalReceived: number;
+  totalCooked: number;
+  kitchenInventory: number;
+}
+
+interface KitchenConfigItem {
+  id: string;
+  name: string;
+  unit: string;
+  platesPerUnit: number | null;
+  menuId: string | null;
+  category: { id: string; name: string };
+  menu?: { id: string; name: string } | null;
+}
+
+interface KitchenConfigData {
+  platesPerUnit?: number;
+  menuId?: string | null;
 }
 
 interface ElectronAPI {

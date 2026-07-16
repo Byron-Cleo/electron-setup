@@ -1,20 +1,26 @@
-# Current Feature
+# Stock Management System — Phase 2: Frontend Types + API Layer
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-- 
+- Add TypeScript types for all new models (Department, StockFulfillment, CookingRecord, etc.)
+- Update existing types (StockRequestStatus, StockSupply, StockRequest)
+- Add API functions for all new endpoints
+- Update existing API functions for modified endpoints
 
 ## Notes
 
-- 
+- Types go in desktop/ui/types/electron.d.ts
+- API functions go in desktop/ui/lib/api.ts
+- Follow existing patterns in both files
+- Full implementation plan in @context/project-plan/stock-management-system.md
 
 ## History
 
