@@ -14,9 +14,16 @@ Not Started
 
 ## Notes
 
-
-
 ## History
+
+### backend - 2026-07-16 — Stock Supply Image Upload (Phase 1)
+- Installed multer for multipart/form-data handling
+- Added `image String` (mandatory) to StockSupply in Prisma schema
+- Added static file serving for uploaded images via express.static
+- Updated POST /api/stock-supplies to accept image file via multer
+- Updated PUT /api/stock-supplies/:id to accept image file via multer, with old image cleanup
+- DELETE cleans up image file from disk
+- Branch: feature/backend/stock-supply-image-upload
 
 ### frontend - 2026-07-16 — Settings & Store Route Refactor
 - Renamed all `/admin/manager/` URLs to `/admin/settings/` across 11 files

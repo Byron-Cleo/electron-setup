@@ -1,10 +1,40 @@
 import { Router } from "express";
 import prisma from "../db/db";
 import { ItemUnit } from "../db/generated/prisma/client";
+import multer from "multer";
+import path from "path";
+import crypto from "crypto";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const router = Router();
 
 const VALID_UNITS = Object.values(ItemUnit) as string[];
+
+const storage = multer.diskStorage({
+  destination: path.resolve(__dirname, "../uploads/stock-supplies"),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
+
+function deleteImageFile(imagePath: string | null) {
+  if (!imagePath) return;
+  const fullPath = path.resolve(__dirname, "..", imagePath);
+  if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+}
 
 // GET /api/stock-supplies/low-stock-count - Count of items at or below reorder level
 router.get("/low-stock-count", async (_req, res) => {
@@ -94,18 +124,18 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST /api/stock-supplies - Create item
-router.post("/", async (req, res) => {
+router.post("/", upload.single("image"), async (req, res) => {
   const { name, slug, description, unit, categoryId, currentStock, reorderLevel } = req.body;
+  const image = req.file ? `/uploads/stock-supplies/${req.file.filename}` : null;
   
-  if (!name || !unit || !categoryId) {
-    return res.status(400).json({ error: "name, unit, categoryId are required" });
+  if (!name || !unit || !categoryId || !image) {
+    return res.status(400).json({ error: "name, unit, categoryId, and image are required" });
   }
   
   if (!VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
   }
   
-  // Verify category exists
   const category = await prisma.stockSupplyCategory.findUnique({ where: { id: categoryId } });
   if (!category) return res.status(400).json({ error: "Category not found" });
   
@@ -121,6 +151,7 @@ router.post("/", async (req, res) => {
         categoryId,
         currentStock: currentStock ?? 0,
         reorderLevel,
+        image,
       },
       include: { category: true },
     });
@@ -132,7 +163,7 @@ router.post("/", async (req, res) => {
 });
 
 // PUT /api/stock-supplies/:id - Update item
-router.put("/:id", async (req, res) => {
+router.put("/:id", upload.single("image"), async (req, res) => {
   const { id } = req.params;
   const { name, slug, description, unit, categoryId, currentStock, reorderLevel, isActive } = req.body;
   
@@ -143,6 +174,19 @@ router.put("/:id", async (req, res) => {
   if (categoryId) {
     const category = await prisma.stockSupplyCategory.findUnique({ where: { id: categoryId } });
     if (!category) return res.status(400).json({ error: "Category not found" });
+  }
+  
+  const existing = await prisma.stockSupply.findUnique({ where: { id } });
+  if (!existing) return res.status(404).json({ error: "Item not found" });
+  
+  if (!req.file) {
+    return res.status(400).json({ error: "Image file is required" });
+  }
+  
+  const newImage = `/uploads/stock-supplies/${req.file.filename}`;
+  
+  if (newImage && existing.image) {
+    deleteImageFile(existing.image);
   }
   
   try {
@@ -157,6 +201,7 @@ router.put("/:id", async (req, res) => {
         ...(currentStock !== undefined && { currentStock }),
         ...(reorderLevel !== undefined && { reorderLevel }),
         ...(isActive !== undefined && { isActive }),
+        image: newImage,
       },
       include: { category: true },
     });
@@ -172,11 +217,16 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    const item = await prisma.stockSupply.update({
+    const item = await prisma.stockSupply.findUnique({ where: { id } });
+    if (!item) return res.status(404).json({ error: "Item not found" });
+    
+    if (item.image) deleteImageFile(item.image);
+    
+    await prisma.stockSupply.update({
       where: { id },
       data: { isActive: false },
     });
-    res.json({ message: "Item deactivated", id: item.id });
+    res.json({ message: "Item deactivated", id });
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Item not found" });
     throw e;

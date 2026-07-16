@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import mealTypesRouter from "./routes/mealTypes";
 import menuRouter from "./routes/menu";
 import accompanimentsRouter from "./routes/accompaniments";
@@ -11,10 +13,14 @@ import departmentsRouter from "./routes/departments";
 import cookingRecordsRouter from "./routes/cookingRecords";
 import kitchenConfigRouter from "./routes/kitchenConfig";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/uploads/stock-supplies", express.static(path.join(__dirname, "uploads/stock-supplies")));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
