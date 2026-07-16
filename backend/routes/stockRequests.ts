@@ -1,10 +1,9 @@
 import { Router } from "express";
 import prisma from "../db/db";
-import { StockRequestStatus } from "../db/generated/prisma/client";
 
 const router = Router();
 
-const VALID_STATUSES = Object.values(StockRequestStatus) as string[];
+const VALID_STATUSES = ["PENDING", "PARTIAL", "COMPLETED"];
 
 // GET /api/stock-requests - List all requests (optional ?status filter)
 router.get("/", async (req, res) => {
@@ -79,7 +78,7 @@ router.post("/", async (req, res) => {
       requestedById,
       department,
       notes,
-      status: StockRequestStatus.PENDING,
+      status: "PENDING",
       items: {
         create: items.map((item: { stockSupplyId: string; quantityRequested: number }) => ({
           stockSupplyId: item.stockSupplyId,
@@ -103,67 +102,158 @@ router.post("/", async (req, res) => {
 // PUT /api/stock-requests/:id/fulfill - Store fulfills request items
 router.put("/:id/fulfill", async (req, res) => {
   const { id } = req.params;
-  const { items } = req.body;
+  const { fulfilledById, notes, items } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "items[] is required" });
   }
+  if (!fulfilledById) {
+    return res.status(400).json({ error: "fulfilledById is required" });
+  }
 
-  // Verify request exists
+  // Verify request exists and is not already completed
   const existing = await prisma.stockRequest.findUnique({
     where: { id },
-    include: { items: true },
+    include: { items: { include: { stockSupply: true } } },
   });
   if (!existing) return res.status(404).json({ error: "Request not found" });
+  if (existing.status === "COMPLETED") {
+    return res.status(400).json({ error: "Request is already completed" });
+  }
 
-  // Update each item's quantityDelivered
+  // Verify fulfiller exists
+  const fulfiller = await prisma.user.findUnique({ where: { id: fulfilledById } });
+  if (!fulfiller) return res.status(400).json({ error: "Fulfiller not found" });
+
+  // Validate and collect fulfillment items
+  const fulfillmentItems: { stockRequestItemId: string; quantityDelivered: number }[] = [];
+
   for (const item of items) {
-    if (!item.stockRequestItemId) continue;
-    await prisma.stockRequestItem.update({
-      where: { id: item.stockRequestItemId },
-      data: { quantityDelivered: item.quantityDelivered ?? 0 },
-    });
+    if (!item.stockRequestItemId || item.quantityDelivered === undefined) continue;
+
+    const requestItem = existing.items.find((i) => i.id === item.stockRequestItemId);
+    if (!requestItem) return res.status(400).json({ error: `Request item ${item.stockRequestItemId} not found` });
+
+    const qty = Number(item.quantityDelivered);
+    if (qty < 0) {
+      return res.status(400).json({ error: "quantityDelivered cannot be negative" });
+    }
+
+    // Cannot deliver more than requested
+    const totalAlreadyDelivered = Number(requestItem.quantityDelivered);
+    const requested = Number(requestItem.quantityRequested);
+    if (totalAlreadyDelivered + qty > requested) {
+      return res.status(400).json({
+        error: `Cannot deliver more than requested for "${requestItem.stockSupply.name}". Requested: ${requested}, Already delivered: ${totalAlreadyDelivered}`,
+      });
+    }
+
+    // Cannot deliver more than available store stock
+    const availableStock = Number(requestItem.stockSupply.currentStock);
+    if (qty > availableStock) {
+      return res.status(400).json({
+        error: `Insufficient store stock for "${requestItem.stockSupply.name}". Available: ${availableStock}, Requested to deliver: ${qty}`,
+      });
+    }
+
+    if (qty > 0) {
+      fulfillmentItems.push({ stockRequestItemId: item.stockRequestItemId, quantityDelivered: qty });
+    }
   }
 
-  // Re-fetch to calculate status
-  const updated = await prisma.stockRequest.findUnique({
-    where: { id },
-    include: { items: true },
-  });
-
-  if (!updated) return res.status(404).json({ error: "Request not found after update" });
-
-  // Auto-calculate status
-  const allFullyDelivered = updated.items.every(
-    (item) => Number(item.quantityDelivered) >= Number(item.quantityRequested)
-  );
-  const anyDelivered = updated.items.some(
-    (item) => Number(item.quantityDelivered) > 0
-  );
-
-  let newStatus: StockRequestStatus;
-  if (allFullyDelivered) {
-    newStatus = StockRequestStatus.APPROVED;
-  } else if (anyDelivered) {
-    newStatus = StockRequestStatus.PARTIAL;
-  } else {
-    newStatus = StockRequestStatus.PENDING;
+  if (fulfillmentItems.length === 0) {
+    return res.status(400).json({ error: "Must deliver at least one item with quantity > 0" });
   }
 
-  const finalRequest = await prisma.stockRequest.update({
-    where: { id },
-    data: { status: newStatus },
-    include: {
-      requestedBy: { select: { id: true, name: true } },
-      items: {
-        include: {
-          stockSupply: { select: { id: true, name: true, unit: true, currentStock: true } },
+  // Execute in a transaction: deduct stock, update request items, create fulfillment trail
+  const result = await prisma.$transaction(async (tx) => {
+    // Deduct stock and update request items
+    for (const fi of fulfillmentItems) {
+      const requestItem = existing.items.find((i) => i.id === fi.stockRequestItemId)!;
+
+      // Deduct from store stock
+      await tx.stockSupply.update({
+        where: { id: requestItem.stockSupplyId },
+        data: { currentStock: { decrement: fi.quantityDelivered } },
+      });
+
+      // Update quantityDelivered on the request item
+      await tx.stockRequestItem.update({
+        where: { id: fi.stockRequestItemId },
+        data: { quantityDelivered: { increment: fi.quantityDelivered } },
+      });
+    }
+
+    // Create fulfillment record
+    await tx.stockFulfillment.create({
+      data: {
+        stockRequestId: id,
+        fulfilledById,
+        notes,
+        items: {
+          create: fulfillmentItems.map((fi) => ({
+            stockRequestItemId: fi.stockRequestItemId,
+            quantityDelivered: fi.quantityDelivered,
+          })),
         },
       },
-    },
+    });
+
+    // Re-fetch to calculate status
+    const updated = await tx.stockRequest.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+
+    if (!updated) throw new Error("Request not found after update");
+
+    // Auto-calculate status (only goes forward)
+    const allFullyDelivered = updated.items.every(
+      (item) => Number(item.quantityDelivered) >= Number(item.quantityRequested)
+    );
+    const anyDelivered = updated.items.some(
+      (item) => Number(item.quantityDelivered) > 0
+    );
+
+    let newStatus: "PENDING" | "PARTIAL" | "COMPLETED";
+    if (allFullyDelivered) {
+      newStatus = "COMPLETED";
+    } else if (anyDelivered) {
+      newStatus = "PARTIAL";
+    } else {
+      newStatus = "PENDING";
+    }
+
+    // Only allow forward status transitions
+    const statusOrder = { PENDING: 0, PARTIAL: 1, COMPLETED: 2 };
+    if (statusOrder[newStatus] < statusOrder[existing.status]) {
+      newStatus = existing.status;
+    }
+
+    const finalRequest = await tx.stockRequest.update({
+      where: { id },
+      data: { status: newStatus },
+      include: {
+        requestedBy: { select: { id: true, name: true } },
+        items: {
+          include: {
+            stockSupply: { select: { id: true, name: true, unit: true, currentStock: true } },
+          },
+        },
+        fulfillments: {
+          include: {
+            fulfilledBy: { select: { id: true, name: true } },
+            items: true,
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+
+    return finalRequest;
   });
 
-  res.json(finalRequest);
+  res.json(result);
 });
 
 export default router;

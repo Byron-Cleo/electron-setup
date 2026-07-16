@@ -1,20 +1,56 @@
-# Current Feature
+# Stock Management System — Phase 1: Schema + Backend Routes
 
 ## Platform
 
-Not Specified
+backend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-- 
+- Update Prisma schema with all new models and fields
+- Create Department CRUD route
+- Update stock request endpoint (deduct stock, create fulfillment trail)
+- Create cooking records CRUD route
+- Create kitchen stock configuration route
+- Add kitchen inventory endpoint
+- Add low stock count endpoint
+- Register all new routes in Express app
 
 ## Notes
 
-- 
+- Rename APPROVED → COMPLETED in StockRequestStatus enum
+- Add platesPerUnit and menuId fields to StockSupply (for ingredients only)
+- New models: Department, DepartmentStockSupply, StockFulfillment, StockFulfillmentItem, CookingRecord
+- Fulfillment trail tracks each delivery event separately
+- Kitchen inventory is derived: Total Received − Total Cooked
+- Menu stock auto-updates when cooking is recorded (if menuId is set)
+- Full implementation plan in @context/project-plan/stock-management-system.md
+
+### Schema Changes
+- New fields on StockSupply: platesPerUnit (Decimal), menuId (String, optional)
+- New models: Department, DepartmentStockSupply, StockFulfillment, StockFulfillmentItem, CookingRecord
+- Enum change: StockRequestStatus: PENDING, PARTIAL, COMPLETED (renamed from APPROVED)
+
+### Validation Rules
+1. Cannot deliver more than available store stock
+2. Cannot deliver more than requested quantity
+3. Status can only go forward: PENDING → PARTIAL → COMPLETED
+4. Must have at least one item to fulfill
+5. Cannot cook more than kitchen inventory (received minus cooked)
+6. Must have platesPerUnit configured to cook
+7. Quantity cooked must be greater than 0
+
+### Files to Modify
+- backend/prisma/schema.prisma — Add fields, models, relations
+- backend/routes/departments.ts — Create (Department CRUD)
+- backend/routes/stockRequests.ts — Modify fulfill endpoint
+- backend/routes/cookingRecords.ts — Create (Cooking records CRUD)
+- backend/routes/kitchenConfig.ts — Create (Kitchen stock configuration)
+- backend/routes/stockSupplies.ts — Add low stock, kitchen inventory endpoints
+- backend/app.ts — Register new routes
 
 ## History
 

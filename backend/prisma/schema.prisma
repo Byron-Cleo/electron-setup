@@ -62,6 +62,7 @@ model Menu {
   MenuMealType                                          MenuMealType[]
   OrderItem                                             OrderItem[]
   Review                                                Review[]
+  StockSupply                                           StockSupply[]
 }
 
 model MenuAccompaniment {
@@ -160,6 +161,8 @@ model User {
   Review        Review[]
   Session       Session[]
   StockRequest  StockRequest[]
+  fulfillments  StockFulfillment[]
+  cookingRecords CookingRecord[]
 }
 
 model VerificationToken {
@@ -202,7 +205,7 @@ enum ItemUnit {
 enum StockRequestStatus {
   PENDING
   PARTIAL
-  APPROVED
+  COMPLETED
 }
 
 model StockSupplyCategory {
@@ -223,11 +226,16 @@ model StockSupply {
   categoryId    String             @db.Uuid
   currentStock  Decimal            @default(0) @db.Decimal(12, 2)
   reorderLevel  Decimal?           @db.Decimal(12, 2)
+  platesPerUnit Decimal?           @db.Decimal(12, 2)
+  menuId        String?            @db.Uuid
   isActive      Boolean            @default(true)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   category      StockSupplyCategory @relation(fields: [categoryId], references: [id])
+  menu          Menu?              @relation(fields: [menuId], references: [id])
   StockRequestItem StockRequestItem[]
+  DepartmentStockSupply DepartmentStockSupply[]
+  CookingRecord CookingRecord[]
 }
 
 model StockRequest {
@@ -240,6 +248,7 @@ model StockRequest {
   updatedAt     DateTime           @updatedAt
   requestedBy   User               @relation(fields: [requestedById], references: [id])
   items         StockRequestItem[]
+  fulfillments  StockFulfillment[]
 }
 
 model StockRequestItem {
@@ -252,4 +261,58 @@ model StockRequestItem {
   updatedAt         DateTime     @updatedAt
   stockRequest      StockRequest @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
   stockSupply       StockSupply  @relation(fields: [stockSupplyId], references: [id])
+  fulfillmentItems  StockFulfillmentItem[]
+}
+
+model Department {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  description      String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  DepartmentStockSupply DepartmentStockSupply[]
+}
+
+model DepartmentStockSupply {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  departmentId   String          @db.Uuid
+  stockSupplyId  String          @db.Uuid
+  createdAt      DateTime        @default(now())
+  department     Department      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  stockSupply    StockSupply     @relation(fields: [stockSupplyId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, stockSupplyId])
+}
+
+model StockFulfillment {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockRequestId  String            @db.Uuid
+  fulfilledById   String            @db.Uuid
+  notes           String?
+  createdAt       DateTime          @default(now())
+  stockRequest    StockRequest      @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
+  fulfilledBy     User              @relation(fields: [fulfilledById], references: [id])
+  items           StockFulfillmentItem[]
+}
+
+model StockFulfillmentItem {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockFulfillmentId   String            @db.Uuid
+  stockRequestItemId   String            @db.Uuid
+  quantityDelivered    Decimal           @db.Decimal(12, 2)
+  createdAt            DateTime          @default(now())
+  stockFulfillment     StockFulfillment  @relation(fields: [stockFulfillmentId], references: [id], onDelete: Cascade)
+  stockRequestItem     StockRequestItem  @relation(fields: [stockRequestItemId], references: [id])
+}
+
+model CookingRecord {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockSupplyId   String      @db.Uuid
+  quantityCooked  Decimal     @db.Decimal(12, 2)
+  platesExpected  Decimal     @db.Decimal(12, 2)
+  cookedById      String      @db.Uuid
+  notes           String?
+  createdAt       DateTime    @default(now())
+  stockSupply     StockSupply @relation(fields: [stockSupplyId], references: [id])
+  cookedBy        User        @relation(fields: [cookedById], references: [id])
 }

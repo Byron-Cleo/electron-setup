@@ -7,6 +7,9 @@ import authRouter from "./routes/auth.ts";
 import stockSupplyCategoriesRouter from "./routes/itemCategories";
 import stockSuppliesRouter from "./routes/items";
 import stockRequestsRouter from "./routes/stockRequests";
+import departmentsRouter from "./routes/departments";
+import cookingRecordsRouter from "./routes/cookingRecords";
+import kitchenConfigRouter from "./routes/kitchenConfig";
 
 const app = express();
 
@@ -24,5 +27,8 @@ app.use("/api/auth", authRouter);
 app.use("/api/stock-supply-categories", stockSupplyCategoriesRouter);
 app.use("/api/stock-supplies", stockSuppliesRouter);
 app.use("/api/stock-requests", stockRequestsRouter);
+app.use("/api/departments", departmentsRouter);
+app.use("/api/cooking-records", cookingRecordsRouter);
+app.use("/api/kitchen-config", kitchenConfigRouter);
 
 export default app;
