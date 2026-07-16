@@ -2,9 +2,12 @@ import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, AlertTriangle } from "lucide-react"
 import { fulfillStockRequest } from "@/lib/api"
+import { useAuthStore } from "@/stores/auth"
 
 interface Props {
   request: StockRequest
@@ -13,11 +16,13 @@ interface Props {
 }
 
 export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
+  const user = useAuthStore((s) => s.user)
   const [deliveries, setDeliveries] = useState<Record<string, number>>(
     Object.fromEntries(
       request.items.map((item) => [item.id, Number(item.quantityDelivered)])
     )
   )
+  const [notes, setNotes] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
@@ -29,7 +34,31 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
     }))
   }
 
+  function getValidationErrors(): string[] {
+    const errors: string[] = []
+    for (const item of request.items) {
+      const requested = Number(item.quantityRequested)
+      const available = Number(item.stockSupply.currentStock)
+      const delivered = deliveries[item.id] ?? 0
+      if (delivered > requested) {
+        errors.push(`${item.stockSupply.name}: Cannot deliver ${delivered} (requested: ${requested})`)
+      }
+      if (delivered > available) {
+        errors.push(`${item.stockSupply.name}: Insufficient stock (available: ${available})`)
+      }
+    }
+    return errors
+  }
+
+  const validationErrors = getValidationErrors()
+  const hasValidationErrors = validationErrors.length > 0
+
   async function handleSave(asComplete: boolean) {
+    if (hasValidationErrors) {
+      setError("Please fix validation errors before submitting")
+      return
+    }
+
     try {
       setSaving(true)
       setError("")
@@ -41,7 +70,11 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
           : deliveries[item.id] ?? 0,
       }))
 
-      await fulfillStockRequest(request.id, { items })
+      await fulfillStockRequest(request.id, {
+        fulfilledById: user?.id ?? "",
+        notes: notes || undefined,
+        items,
+      })
       onFulfilled()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save")
@@ -69,6 +102,20 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
       {error && (
         <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm">
           {error}
+        </div>
+      )}
+
+      {hasValidationErrors && (
+        <div className="bg-amber-50 border border-amber-200 px-4 py-3 rounded-lg">
+          <div className="flex items-center gap-2 text-amber-700 text-sm font-medium mb-2">
+            <AlertTriangle size={16} />
+            Validation Errors
+          </div>
+          <ul className="list-disc list-inside text-sm text-amber-600 space-y-1">
+            {validationErrors.map((err, i) => (
+              <li key={i}>{err}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -117,7 +164,7 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
                     <Input
                       type="number"
                       min={0}
-                      max={requested}
+                      max={Math.min(requested, available)}
                       step="0.01"
                       value={delivered}
                       onChange={(e) => updateDelivery(item.id, e.target.value)}
@@ -135,17 +182,28 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
         </table>
       </Card>
 
+      <div className="space-y-2">
+        <Label htmlFor="fulfillNotes">Notes (optional)</Label>
+        <Textarea
+          id="fulfillNotes"
+          placeholder="Delivery notes, e.g., 'Delivery received on time'"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+        />
+      </div>
+
       <div className="flex gap-3 justify-end">
         <Button
           variant="outline"
           onClick={() => handleSave(false)}
-          disabled={saving}
+          disabled={saving || hasValidationErrors}
         >
           Save as Partial
         </Button>
         <Button
           onClick={() => handleSave(true)}
-          disabled={saving}
+          disabled={saving || hasValidationErrors}
         >
           Mark Complete
         </Button>

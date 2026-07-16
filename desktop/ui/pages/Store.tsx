@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, getStockSupplyCategories, createStockSupply, deleteStockSupply } from "@/lib/api"
+import { getStockSupplies, getStockRequests, getStockSupplyCategories, createStockSupply, deleteStockSupply, getLowStockCount } from "@/lib/api"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 
 type StoreView = "dashboard" | "requests" | "stock" | "restock"
@@ -31,6 +31,7 @@ function Store() {
   const [stockCount, setStockCount] = useState(0)
   const [pendingCount, setPendingCount] = useState(0)
   const [partialCount, setPartialCount] = useState(0)
+  const [lowStockCount, setLowStockCount] = useState(0)
   const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => {
@@ -39,14 +40,16 @@ function Store() {
 
   async function loadCounts() {
     try {
-      const [supplies, pending, partial] = await Promise.all([
+      const [supplies, pending, partial, lowStock] = await Promise.all([
         getStockSupplies(),
         getStockRequests("PENDING"),
         getStockRequests("PARTIAL"),
+        getLowStockCount(),
       ])
       setStockCount(supplies.length)
       setPendingCount(pending.length)
       setPartialCount(partial.length)
+      setLowStockCount(lowStock.count)
     } catch (err) {
       console.error("Failed to load store counts:", err)
     }
@@ -84,6 +87,7 @@ function Store() {
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">All Current Stock Items</Heading>
                 <p className="text-sm text-admin-muted">{stockCount} items</p>
+                <p className="text-xs text-admin-muted mt-1">View current stock levels for all items across the store.</p>
               </div>
             </div>
           </Card>
@@ -115,6 +119,7 @@ function Store() {
                     <span className="text-sm text-admin-muted">No pending requests</span>
                   )}
                 </div>
+                <p className="text-xs text-admin-muted mt-1">Request and fulfill stock from store to kitchen and departments.</p>
               </div>
             </div>
           </Card>
@@ -130,6 +135,13 @@ function Store() {
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">Restock / Procure Items</Heading>
                 <p className="text-sm text-admin-muted">Order new stock</p>
+                <p className="text-xs text-admin-muted mt-1">Track all stock movements and transactions.</p>
+                {lowStockCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 mt-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                    {lowStockCount} low stock items
+                  </span>
+                )}
               </div>
             </div>
           </Card>
@@ -177,11 +189,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     setFormCurrentStock("")
     setFormReorderLevel("")
     setSaveError("")
-  }
-
-  function openAddModal() {
-    resetForm()
-    setShowAddModal(true)
   }
 
   async function handleAddItem() {

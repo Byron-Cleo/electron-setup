@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
+import { ChevronDown, ChevronRight, CheckCircle } from "lucide-react"
 import { getStockRequests } from "@/lib/api"
 import { FulfillRequest } from "./FulfillRequest"
 
@@ -23,6 +24,7 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [fulfillingRequest, setFulfillingRequest] = useState<StockRequest | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     loadRequests()
@@ -101,10 +103,12 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
         <div className="space-y-3">
           {filtered.map((request) => {
             const config = STATUS_CONFIG[request.status]
+            const isExpanded = expandedId === request.id
+            const fulfillments = request.fulfillments ?? []
             return (
               <Card key={request.id} className="p-4">
                 <div className="flex items-start justify-between">
-                  <div className="space-y-1">
+                  <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-admin-header-text">
                         {request.requestedBy.name}
@@ -145,6 +149,54 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
                         )
                       })}
                     </div>
+
+                    {/* Fulfillment Trail */}
+                    {fulfillments.length > 0 && (
+                      <div className="mt-3">
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : request.id)}
+                          className="flex items-center gap-1 text-xs font-medium text-admin-accent hover:underline"
+                        >
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          Fulfillment History ({fulfillments.length})
+                        </button>
+                        {isExpanded && (
+                          <div className="mt-2 pl-4 border-l-2 border-admin-card-border space-y-3">
+                            {fulfillments.map((fulfillment) => (
+                              <div key={fulfillment.id} className="space-y-1">
+                                <div className="flex items-center gap-2 text-xs">
+                                  <CheckCircle size={12} className="text-green-600" />
+                                  <span className="font-medium text-admin-header-text">
+                                    Fulfilled by {fulfillment.fulfilledBy.name}
+                                  </span>
+                                  <span className="text-admin-muted">
+                                    on {new Date(fulfillment.createdAt).toLocaleString("en-GB", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </div>
+                                {fulfillment.notes && (
+                                  <p className="text-xs text-admin-muted italic pl-5">
+                                    Notes: {fulfillment.notes}
+                                  </p>
+                                )}
+                                <div className="pl-5 space-y-0.5">
+                                  {fulfillment.items.map((fi) => (
+                                    <div key={fi.id} className="text-xs text-admin-muted">
+                                      Delivered: {Number(fi.quantityDelivered)} units
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {request.status !== "COMPLETED" && (
                     <Button
