@@ -1,21 +1,25 @@
-# complete — Commit, push, merge, reset
+# complete — Commit, merge, sync, reset
 
 ## Steps (execute ALL in order)
 
 ### 1. Stage & commit
 - Run `git status`, `git diff --stat`, `git log --oneline -5`
-- `git add -A` then commit with descriptive message summarizing changes
+- Stage only the files changed during feature implementation (not `git add -A`)
+- Commit with descriptive message summarizing changes
 
-### 2. Push
-- Push current branch to remote with `git push`
+### 2. Checkout main
+- `git checkout main`
 
-### 3. Create Pull Request
-- Use `gh pr create` with title and body summarizing changes
+### 3. Merge feature branch
+- `git merge <feature-branch>` (fast-forward or regular merge)
 
-### 4. Merge
-- Merge the PR (squash or regular merge)
+### 4. Delete feature branch
+- `git branch -d <feature-branch>`
 
-### 5. Reset current-feature.md
+### 5. Push main
+- `git push origin main` (sync merged changes with remote)
+
+### 6. Reset current-feature.md
 - Set Platform to "Not Specified"
 - Set status back to "Not Started"
 - Clear Goals and Notes sections (leave blank)
