@@ -2,7 +2,7 @@
 
 ## Platform
 
-backend + frontend
+Not Specified
 
 ## Status
 
@@ -10,129 +10,27 @@ Not Started
 
 ## Goals
 
-- Automatic stock deduction when orders are placed (kitchen uses ingredients)
-- Automatic stock increase when stock requests are fulfilled (store delivers to kitchen)
-- Manual stock adjustments (damaged goods, count corrections)
-- Stock audit trail / transaction history
-- Low stock alerts when inventory drops below reorder level
+- 
 
 ## Notes
 
-- **Branch**: `feature/store/stock-tracking`
-- **Requires**: Menu ↔ StockSupply ingredient mapping (new model)
-- **Key models**: `StockSupply.currentStock`, `Menu.stock`, new `MenuItemIngredient` model
-- **Scenarios for stock change**:
-  1. Order placed → deduct ingredients from StockSupply
-  2. Stock request fulfilled → increase StockSupply
-  3. Manual adjustment → increase/decrease with reason
-- **No link yet**: Menu items don't know which stock supplies they use
-- **Prisma transaction**: Use `$transaction` for atomic stock updates
-- **Use lib/api.ts** for all API calls
-- **IPC pattern**: preload.cts → ipc-handlers.ts → Express API
-
-### Schema Changes (Planned)
-
-```prisma
-// New model: maps menu items to stock supply ingredients
-model MenuItemIngredient {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  menuId          String      @db.Uuid
-  stockSupplyId   String      @db.Uuid
-  quantityPerUnit Decimal     @db.Decimal(12, 2) // amount used per 1 menu item
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  menu            Menu        @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  stockSupply     StockSupply @relation(fields: [stockSupplyId], references: [id])
-
-  @@unique([menuId, stockSupplyId])
-}
-
-// New model: tracks all stock movements
-model StockTransaction {
-  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  stockSupplyId   String              @db.Uuid
-  type            StockTransactionType
-  quantity        Decimal             @db.Decimal(12, 2)
-  referenceId     String?             // orderId, stockRequestId, or manual adjustment id
-  referenceType   String?             // "ORDER", "STOCK_REQUEST", "ADJUSTMENT"
-  notes           String?
-  createdBy       String?             @db.Uuid
-  createdAt       DateTime            @default(now())
-  stockSupply     StockSupply         @relation(fields: [stockSupplyId], references: [id])
-  createdByUser   User?               @relation(fields: [createdBy], references: [id])
-}
-
-enum StockTransactionType {
-  DEDUCTION       // order placed, ingredient used
-  INCREASE        // stock request fulfilled, manual restock
-  ADJUSTMENT      // manual correction (damaged, count error)
-}
-
-// Menu model gets: MenuItemIngredient[]
-// StockSupply model gets: MenuItemIngredient[], StockTransaction[]
-// User model gets: StockTransaction[]
-```
-
-### API Endpoints (Planned)
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/stock-transactions` | List transactions (filter by supplyId, type, date range) |
-| POST | `/api/stock-adjustments` | Manual stock adjustment |
-| GET | `/api/menu-ingredients/:menuId` | Get ingredients for a menu item |
-| POST | `/api/menu-ingredients` | Add ingredient mapping |
-| DELETE | `/api/menu-ingredients/:id` | Remove ingredient mapping |
-
-### Stock Flow Logic (Planned)
-
-**Order placed** (automatic):
-```
-For each OrderItem:
-  → Look up MenuItemIngredient for that menu item
-  → For each ingredient:
-    → Deduct (quantityPerUnit × orderItem.qty) from StockSupply.currentStock
-    → Create StockTransaction (type: DEDUCTION, referenceId: orderId)
-```
-
-**Stock request fulfilled** (automatic):
-```
-For each StockRequestItem:
-  → Add quantityDelivered to StockSupply.currentStock
-  → Create StockTransaction (type: INCREASE, referenceId: stockRequestId)
-```
-
-**Manual adjustment** (user-triggered):
-```
-→ Update StockSupply.currentStock
-→ Create StockTransaction (type: ADJUSTMENT, notes: reason)
-```
-
-### Files to Create/Modify
-
-| File | Action |
-|---|---|
-| `backend/prisma/schema.prisma` | Add MenuItemIngredient, StockTransaction, enum |
-| `backend/routes/stockTransactions.ts` | **Create** |
-| `backend/routes/menuIngredients.ts` | **Create** |
-| `backend/routes/orders.ts` | Modify to trigger stock deduction |
-| `backend/routes/stockRequests.ts` | Modify to trigger stock increase on fulfill |
-| `backend/app.ts` | Register new routes |
-| `desktop/electron/preload.cts` | Add new methods |
-| `desktop/electron/ipc-handlers.ts` | Add handlers |
-| `desktop/electron/main.ts` | Register handlers |
-| `desktop/ui/types/electron.d.ts` | Add types |
-| `desktop/ui/lib/api.ts` | Add API functions |
-
-## Pending
-
-### backend + frontend — Stock Tracking (Automatic Deductions & Increases)
-- Menu ↔ StockSupply ingredient mapping
-- Automatic stock deduction on order placement
-- Automatic stock increase on request fulfillment
-- Manual stock adjustments with audit trail
-- Stock transaction history view
+- 
 
 ## History
+
+### frontend - 2026-07-16 — Kitchen Request Button & Store UI Refinements
+- Kitchen: replaced Request Stock tab with inline request button per stock item row
+- Kitchen: added request dialog with quantity input, notes, and success feedback
+- Store: added notification badges for pending/partial stock requests (amber/orange pills)
+- Store/Kitchen/Menu: updated dashboard card thumbnails from red to green (brand green #4c7f1f)
+- Branch: main (direct commit)
+
+### backend + frontend - 2026-07-15 — Stock Request Flow (Kitchen ↔ Store)
+- Kitchen views stock levels, submits requests with items + quantities
+- Store sees incoming requests with pending/partial/approved tabs
+- Store fulfills via form (enter delivered quantities per item)
+- Status auto-calculates: PENDING → PARTIAL → APPROVED
+- Branch: main (direct commit)
 
 ### frontend - 2026-07-15 — Settings tab rename
 - Renamed "Manager" sidebar label to "Settings" in AdminLayout.tsx
