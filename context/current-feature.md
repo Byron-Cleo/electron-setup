@@ -1,28 +1,24 @@
 # Current Feature
 
 ## Platform
-frontend
+Not Specified
 
 ## Status
-Complete
+Not Started
 
 ## Goals
-- Create a single reusable `DataTable` component that encapsulates all table settings
-- Eliminate repeated table boilerplate across 10+ tables
-- Consistent styling, sizing, and behavior across all tables
-- Non-data columns (Actions, Details) flex to fill remaining space
-- Data columns use fixed minimum width (150px default)
-- Pagination built-in
-- Horizontal scroll when data columns exceed container
 
 ## Notes
-- Component lives in `desktop/ui/components/ui/data-table.tsx`
-- Uses existing shadcn Card and Pagination components
-- Column sizing: data columns get `min-w-[150px]`, non-data columns flex to fill
-- Scroll appears naturally when data columns × 150px > container width
-- Refactor all 10 existing tables to use DataTable
 
 ## History
+
+### backend - 2026-07-17 — Stock Deduction at Request Creation
+- Added stock validation before deduction in POST /api/stock-requests
+- Added stock deduction in Prisma transaction for atomicity
+- Removed stock validation from PUT /api/stock-requests/:id/fulfill
+- Removed stock deduction from PUT /api/stock-requests/:id/fulfill
+- Fixed .ts import extensions in app.ts and auth.ts
+- Branch: feature/backend/stock-deduction-at-request
 
 ### frontend - 2026-07-17 — Reusable DataTable Component
 - Created generic DataTable component with typed props (Column, renderCell, keyExtractor)
