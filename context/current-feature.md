@@ -2,30 +2,17 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Remove StockSupplyCategory types from electron.d.ts
-- Remove stockSupplyCategory namespace from ElectronAPI
-- Remove 5 category API functions from lib/api.ts
-- Delete StockSupplyCategories.tsx and StockSupplyCategoryForm.tsx
-- Remove category routes from App.tsx
-- Remove category card from Manager.tsx settings view
-- Remove category select from StockSupplyForm and StockSupplyEditDialog
-- Remove category filter from StockSupplies and Store tables
-- Remove categoryId from StockSupply types
+
 
 ## Notes
-
-- Stock supply forms no longer have a category dropdown
-- Stock tables no longer have a category filter dropdown
-- Settings page shows only Departments and Kitchen Config cards
-- Stock supply search still works by name
 
 ## History
 
