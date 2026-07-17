@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Heading } from "@/components/ui/heading";
+import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/usePagination";
 
 interface Props {
   onEdit: (id: string) => void;
@@ -38,6 +40,16 @@ export default function MealTypeList({ onEdit, onAdd }: Props) {
     }
   }
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(mealTypes);
+
   if (error) return <p style={{ color: "red" }}>Error: {error}</p>;
   if (loading) return <p>Loading...</p>;
 
@@ -47,16 +59,16 @@ export default function MealTypeList({ onEdit, onAdd }: Props) {
         <Heading as="h2" className="text-admin-header-text">Meal Types</Heading>
         <button onClick={onAdd}>+ Add New</button>
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table className="table-fixed w-full" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ textAlign: "left" }}>
-            <th>Name</th>
-            <th>Sort Order</th>
-            <th />
+            <th style={{ minWidth: 150 }}>Name</th>
+            <th style={{ minWidth: 150 }}>Sort Order</th>
+            <th style={{ width: 180 }}>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {mealTypes.map((mt) => (
+          {paginatedItems.map((mt) => (
             <tr key={mt.id} style={{ borderTop: "1px solid #ccc" }}>
               <td>{mt.name}</td>
               <td>{mt.sortOrder}</td>
@@ -68,6 +80,14 @@ export default function MealTypeList({ onEdit, onAdd }: Props) {
           ))}
         </tbody>
       </table>
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPrev={prevPage}
+        onNext={nextPage}
+        canPrev={canPrev}
+        canNext={canNext}
+      />
     </section>
   );
 }

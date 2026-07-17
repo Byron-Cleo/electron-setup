@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
+import { Pagination } from "@/components/ui/pagination"
 import { ArrowLeft, AlertTriangle } from "lucide-react"
 import { fulfillStockRequest } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
+import { usePagination } from "@/hooks/usePagination"
 
 interface Props {
   request: StockRequest
@@ -52,6 +54,16 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
 
   const validationErrors = getValidationErrors()
   const hasValidationErrors = validationErrors.length > 0
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(request.items)
 
   async function handleSave(asComplete: boolean) {
     if (hasValidationErrors) {
@@ -119,26 +131,27 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
         </div>
       )}
 
-      <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-admin-card-border bg-admin-content">
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">
-                Item
-              </th>
-              <th className="text-right px-4 py-3 font-medium text-admin-header-text">
-                Requested
-              </th>
-              <th className="text-right px-4 py-3 font-medium text-admin-header-text">
-                Available
-              </th>
-              <th className="text-right px-4 py-3 font-medium text-admin-header-text">
-                Deliver
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {request.items.map((item) => {
+      <Card className="overflow-hidden flex flex-col">
+        <div className="overflow-x-auto flex-1 min-h-[384px]">
+          <table className="table-fixed w-full text-sm">
+            <thead>
+              <tr className="border-b border-admin-card-border bg-admin-content">
+                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">
+                  Item
+                </th>
+                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">
+                  Requested
+                </th>
+                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">
+                  Available
+                </th>
+                <th className="text-right px-4 py-3 font-medium text-admin-header-text w-[120px]">
+                  Deliver
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedItems.map((item) => {
               const requested = Number(item.quantityRequested)
               const available = Number(item.stockSupply.currentStock)
               const delivered = deliveries[item.id] ?? 0
@@ -180,6 +193,15 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
             })}
           </tbody>
         </table>
+        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPrev={prevPage}
+          onNext={nextPage}
+          canPrev={canPrev}
+          canNext={canNext}
+        />
       </Card>
 
       <div className="space-y-2">

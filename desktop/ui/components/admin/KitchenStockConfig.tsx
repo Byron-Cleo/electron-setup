@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Heading } from "@/components/ui/heading"
+import { Pagination } from "@/components/ui/pagination"
 import {
   Select,
   SelectTrigger,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Plus, Pencil, ArrowLeft } from "lucide-react"
 import { getKitchenConfig, saveKitchenConfig, getStockSupplies } from "@/lib/api"
+import { usePagination } from "@/hooks/usePagination"
 
 interface Props {
   onBack: () => void
@@ -98,6 +100,16 @@ export default function KitchenStockConfig({ onBack }: Props) {
   const configuredIds = new Set(configItems.map((c) => c.id))
   const unconfiguredSupplies = allSupplies.filter((s) => !configuredIds.has(s.id))
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(configItems)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -117,51 +129,63 @@ export default function KitchenStockConfig({ onBack }: Props) {
         Configure how stock items convert to menu plates. Set the plates per unit for each ingredient.
       </p>
 
-      <Card className="bg-admin-card border-admin-card-border">
+      <Card className="bg-admin-card border-admin-card-border flex flex-col">
         {loading && <p className="p-4 text-admin-header-text/60">Loading...</p>}
         {error && <p className="p-4 text-red-500">Error: {error}</p>}
 
         {!loading && !error && (
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
-                <th className="px-4 py-3 w-[60px]">#</th>
-                <th className="px-4 py-3">Stock Item</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Plates per Unit</th>
-                <th className="px-4 py-3">Menu Item</th>
-                <th className="px-4 py-3 w-[100px]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {configItems.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-admin-header-text/60">
-                    No configurations yet. Click "Add Configuration" to get started.
-                  </td>
-                </tr>
-              ) : (
-                configItems.map((item, i) => (
-                  <tr
-                    key={item.id}
-                    className="border-b border-admin-card-border last:border-0 hover:bg-admin-content/50"
-                  >
-                    <td className="px-4 py-3 text-admin-header-text/60">{i + 1}</td>
-                    <td className="px-4 py-3 font-medium text-admin-header-text">{item.name}</td>
-                    <td className="px-4 py-3 text-admin-header-text/60">{item.category.name}</td>
-                    <td className="px-4 py-3 text-admin-header-text">{item.platesPerUnit ?? "—"}</td>
-                    <td className="px-4 py-3 text-admin-header-text/60">{item.menu?.name ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                        <Pencil className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                    </td>
+          <>
+            <div className="overflow-x-auto flex-1 min-h-[384px]">
+              <table className="table-fixed w-full">
+                <thead>
+                  <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
+                    <th className="px-4 py-3 min-w-[150px]">Stock Item</th>
+                    <th className="px-4 py-3 min-w-[150px]">Category</th>
+                    <th className="px-4 py-3 min-w-[150px]">Plates per Unit</th>
+                    <th className="px-4 py-3 min-w-[150px]">Menu Item</th>
+                    <th className="px-4 py-3 w-[120px]">Actions</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {paginatedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-admin-header-text/60">
+                        No configurations yet. Click "Add Configuration" to get started.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedItems.map((item) => {
+                      return (
+                        <tr
+                          key={item.id}
+                          className="border-b border-admin-card-border last:border-0 hover:bg-admin-content/50"
+                        >
+                          <td className="px-4 py-3 font-medium text-admin-header-text">{item.name}</td>
+                          <td className="px-4 py-3 text-admin-header-text/60">{item.category?.name ?? "—"}</td>
+                          <td className="px-4 py-3 text-admin-header-text">{item.platesPerUnit ?? "—"}</td>
+                          <td className="px-4 py-3 text-admin-header-text/60">{item.menu?.name ?? "—"}</td>
+                          <td className="px-4 py-3">
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPrev={prevPage}
+              onNext={nextPage}
+              canPrev={canPrev}
+              canNext={canNext}
+            />
+          </>
         )}
       </Card>
 

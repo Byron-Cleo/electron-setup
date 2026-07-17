@@ -22,7 +22,7 @@ function AdminLayout() {
   )
 
   return (
-    <div className="min-h-screen flex bg-admin-content">
+    <div className="h-screen flex overflow-hidden bg-admin-content">
       <aside className="w-60 bg-admin-sidebar flex flex-col shrink-0 border-r border-admin-card-border">
         <div className="flex flex-col items-center gap-1 pt-4 pb-2 px-4">
           <img src="/images/logo/eraeva-logo.png" alt="Eraeva Logo" className="h-20 w-20 object-contain" />

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
+import { Pagination } from "@/components/ui/pagination"
 import {
   Dialog,
   DialogContent,
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Plus, Pencil, Trash2, ArrowLeft } from "lucide-react"
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from "@/lib/api"
+import { usePagination } from "@/hooks/usePagination"
 
 interface Props {
   onBack: () => void
@@ -109,6 +111,16 @@ export default function DepartmentManager({ onBack }: Props) {
     d.name.toLowerCase().includes(search.toLowerCase())
   )
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(filtered)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -124,8 +136,8 @@ export default function DepartmentManager({ onBack }: Props) {
 
       <Heading as="h2" className="mb-6 text-admin-header-text text-center uppercase">Restaurant Departments</Heading>
 
-      <Card className="bg-admin-card border-admin-card-border">
-        <div className="p-4 border-b border-admin-card-border">
+      <Card className="bg-admin-card border-admin-card-border flex flex-col">
+        <div className="p-4 border-b border-admin-card-border shrink-0">
           <Input
             placeholder="Search departments..."
             value={search}
@@ -138,52 +150,64 @@ export default function DepartmentManager({ onBack }: Props) {
         {error && <p className="p-4 text-red-500">Error: {error}</p>}
 
         {!loading && !error && (
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
-                <th className="px-4 py-3 w-[60px]">#</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3 w-[150px]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-admin-header-text/60">
-                    No departments found
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((dept, i) => (
-                  <tr
-                    key={dept.id}
-                    className="border-b border-admin-card-border last:border-0 hover:bg-admin-content/50"
-                  >
-                    <td className="px-4 py-3 text-admin-header-text/60">{i + 1}</td>
-                    <td className="px-4 py-3 font-medium text-admin-header-text">{dept.name}</td>
-                    <td className="px-4 py-3 text-admin-header-text/60">{dept.description ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(dept)}>
-                          <Pencil className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => { setDeleteTarget(dept); setDeleteError("") }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-1 text-red-500" />
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
+          <>
+            <div className="overflow-x-auto flex-1 min-h-[384px]">
+              <table className="table-fixed w-full">
+                <thead>
+                  <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
+                    <th className="px-4 py-3 min-w-[150px]">Name</th>
+                    <th className="px-4 py-3 min-w-[150px]">Description</th>
+                    <th className="px-4 py-3 w-[180px]">Actions</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {paginatedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-8 text-center text-admin-header-text/60">
+                        No departments found
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedItems.map((dept) => {
+                      return (
+                        <tr
+                          key={dept.id}
+                          className="border-b border-admin-card-border last:border-0 hover:bg-admin-content/50"
+                        >
+                          <td className="px-4 py-3 font-medium text-admin-header-text">{dept.name}</td>
+                          <td className="px-4 py-3 text-admin-header-text/60">{dept.description ?? "—"}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => openEdit(dept)}>
+                                <Pencil className="h-4 w-4 mr-1" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => { setDeleteTarget(dept); setDeleteError("") }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-1 text-red-500" />
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPrev={prevPage}
+              onNext={nextPage}
+              canPrev={canPrev}
+              canNext={canNext}
+            />
+          </>
         )}
       </Card>
 

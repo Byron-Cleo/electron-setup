@@ -6,6 +6,7 @@ import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Pagination } from "@/components/ui/pagination"
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import {
   stockSupplyImageUrl,
   formatQuantityWithUnit,
 } from "@/lib/api"
+import { usePagination } from "@/hooks/usePagination"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
 
 type KitchenView = "dashboard" | "request-food" | "cooked-food"
@@ -208,83 +210,103 @@ function CurrentStockView({ userId }: { userId: string }) {
     }
   }
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(items)
+
   if (loading) return <div className="text-admin-muted">Loading stock...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
     <div className="space-y-4">
       <Heading as="h2" className="text-admin-header-text">Available Stock</Heading>
-      <div className="rounded-lg border border-admin-card-border bg-admin-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-admin-card-border bg-admin-content">
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text w-[80px]">Details</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Image</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Name</th>
-              <th className="text-right px-4 py-3 font-medium text-admin-header-text">Stock</th>
-              <th className="px-4 py-3 font-medium text-admin-header-text w-[140px]">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => {
-              const isLow = item.reorderLevel != null && item.currentStock <= item.reorderLevel
-              return (
-                <tr
-                  key={item.id}
-                  className={`border-b border-admin-card-border last:border-0 ${
-                    isLow ? "bg-red-50" : ""
-                  }`}
-                >
-                  <td className="px-4 py-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setDetailTarget(item)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Details
-                    </Button>
-                  </td>
-                  <td className="px-4 py-3">
-                    {item.image ? (
-                      <img
-                        src={stockSupplyImageUrl(item.image) ?? ""}
-                        alt=""
-                        className="h-10 w-10 rounded object-cover"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
-                        <Package size={16} className="text-admin-header-text/30" />
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">{item.name}</td>
-                  <td className={`px-4 py-3 text-right font-medium ${isLow ? "text-red-600" : ""}`}>
-                    {formatQuantityWithUnit(item.currentStock, item.unit)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600 border-red-200 hover:bg-red-50"
-                      onClick={() => openRequestDialog(item)}
-                    >
-                      <Send size={14} className="mr-1" />
-                      Request
-                    </Button>
+      <div className="rounded-lg border border-admin-card-border bg-admin-card overflow-hidden flex flex-col">
+        <div className="overflow-x-auto flex-1 min-h-[384px]">
+          <table className="table-fixed w-full text-sm">
+            <thead>
+              <tr className="border-b border-admin-card-border bg-admin-content">
+                <th className="text-left px-4 py-3 font-medium text-admin-header-text w-[100px]">Details</th>
+                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Image</th>
+                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Name</th>
+                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Stock</th>
+                <th className="px-4 py-3 font-medium text-admin-header-text w-[180px]">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedItems.map((item) => {
+                const isLow = item.reorderLevel != null && item.currentStock <= item.reorderLevel
+                return (
+                  <tr
+                    key={item.id}
+                    className={`border-b border-admin-card-border last:border-0 ${
+                      isLow ? "bg-red-50" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDetailTarget(item)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Details
+                      </Button>
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.image ? (
+                        <img
+                          src={stockSupplyImageUrl(item.image) ?? ""}
+                          alt=""
+                          className="h-10 w-10 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+                          <Package size={16} className="text-admin-header-text/30" />
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">{item.name}</td>
+                    <td className={`px-4 py-3 text-right font-medium ${isLow ? "text-red-600" : ""}`}>
+                      {formatQuantityWithUnit(item.currentStock, item.unit)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => openRequestDialog(item)}
+                      >
+                        <Send size={14} className="mr-1" />
+                        Request
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
+              {paginatedItems.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-admin-muted">
+                    No stock items found
                   </td>
                 </tr>
-              )
-            })}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-admin-muted">
-                  No stock items found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPrev={prevPage}
+          onNext={nextPage}
+          canPrev={canPrev}
+          canNext={canNext}
+        />
       </div>
 
       <Dialog
@@ -502,56 +524,76 @@ function KitchenInventoryView({ userId }: { userId: string }) {
     }
   }
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(items)
+
   if (loading) return <div className="text-admin-muted">Loading kitchen inventory...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
     <div className="space-y-4">
       <Heading as="h2" className="text-admin-header-text">Kitchen Stock</Heading>
-      <div className="rounded-lg border border-admin-card-border bg-admin-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-admin-card-border bg-admin-content">
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Item</th>
-              <th className="text-right px-4 py-3 font-medium text-admin-header-text">Plates/Unit</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Unit</th>
-              <th className="text-center px-4 py-3 font-medium text-admin-header-text">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr
-                key={item.id}
-                className="border-b border-admin-card-border last:border-0"
-              >
-                <td className="px-4 py-3 font-medium">{item.name}</td>
-                <td className="px-4 py-3 text-right text-admin-muted">
-                  {item.platesPerUnit ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-admin-muted">{item.unit}</td>
-                <td className="px-4 py-3 text-center">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-green-600 border-green-200 hover:bg-green-50"
-                    onClick={() => openCookDialog(item)}
-                    disabled={!item.platesPerUnit}
-                  >
-                    <ChefHat size={14} className="mr-1" />
-                    Cook...
-                  </Button>
-                </td>
+      <div className="rounded-lg border border-admin-card-border bg-admin-card overflow-hidden flex flex-col">
+        <div className="overflow-x-auto flex-1 min-h-[384px]">
+          <table className="table-fixed w-full text-sm">
+            <thead>
+              <tr className="border-b border-admin-card-border bg-admin-content">
+                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Item</th>
+                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Plates/Unit</th>
+                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Unit</th>
+                <th className="text-center px-4 py-3 font-medium text-admin-header-text w-[120px]">Action</th>
               </tr>
-            ))}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-admin-muted">
-                  No kitchen items configured. Set up plates per unit in Settings.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {paginatedItems.map((item) => (
+                <tr
+                  key={item.id}
+                  className="border-b border-admin-card-border last:border-0"
+                >
+                  <td className="px-4 py-3 font-medium">{item.name}</td>
+                  <td className="px-4 py-3 text-right text-admin-muted">
+                    {item.platesPerUnit ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 text-admin-muted">{item.unit}</td>
+                  <td className="px-4 py-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-green-600 border-green-200 hover:bg-green-50"
+                      onClick={() => openCookDialog(item)}
+                      disabled={!item.platesPerUnit}
+                    >
+                      <ChefHat size={14} className="mr-1" />
+                      Cook...
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {paginatedItems.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-admin-muted">
+                    No kitchen items configured. Set up plates per unit in Settings.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPrev={prevPage}
+          onNext={nextPage}
+          canPrev={canPrev}
+          canNext={canNext}
+        />
       </div>
 
       <Dialog
@@ -641,59 +683,75 @@ function CookingHistoryView({ userId }: { userId: string }) {
     loadRecords()
   }, [userId])
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(records)
+
   if (loading) return <div className="text-admin-muted">Loading cooking history...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
     <div className="space-y-4">
       <Heading as="h2" className="text-admin-header-text">Cooking History</Heading>
-      <div className="rounded-lg border border-admin-card-border bg-admin-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-admin-card-border bg-admin-content">
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Date/Time</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Item</th>
-              <th className="text-right px-4 py-3 font-medium text-admin-header-text">Cooked</th>
-              <th className="text-right px-4 py-3 font-medium text-admin-header-text">Plates</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map((record) => (
-              <tr
-                key={record.id}
-                className="border-b border-admin-card-border last:border-0"
-              >
-                <td className="px-4 py-3 text-admin-muted">
-                  {new Date(record.createdAt).toLocaleString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </td>
-                <td className="px-4 py-3 font-medium">{record.stockSupply.name}</td>
-                <td className="px-4 py-3 text-right">
-                  {Number(record.quantityCooked)} {record.stockSupply.unit}
-                </td>
-                <td className="px-4 py-3 text-right text-admin-muted">
-                  {record.platesExpected}
-                </td>
-                <td className="px-4 py-3 text-admin-muted italic">
-                  {record.notes ?? "—"}
-                </td>
+      <div className="rounded-lg border border-admin-card-border bg-admin-card overflow-hidden flex flex-col">
+        <div className="overflow-x-auto flex-1 min-h-[384px]">
+          <table className="table-fixed w-full text-sm">
+            <thead>
+              <tr className="border-b border-admin-card-border bg-admin-content">
+                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Date/Time</th>
+                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Item</th>
+                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Cooked</th>
+                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Plates</th>
               </tr>
-            ))}
-            {records.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-admin-muted">
-                  No cooking records yet
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {paginatedItems.map((record) => (
+                <tr
+                  key={record.id}
+                  className="border-b border-admin-card-border last:border-0"
+                >
+                  <td className="px-4 py-3 text-admin-muted">
+                    {new Date(record.createdAt).toLocaleString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </td>
+                  <td className="px-4 py-3 font-medium">{record.stockSupply.name}</td>
+                  <td className="px-4 py-3 text-right">
+                    {Number(record.quantityCooked)} {record.stockSupply.unit}
+                  </td>
+                  <td className="px-4 py-3 text-right text-admin-muted">
+                    {record.platesExpected}
+                  </td>
+                </tr>
+              ))}
+              {paginatedItems.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-admin-muted">
+                    No cooking records yet
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPrev={prevPage}
+          onNext={nextPage}
+          canPrev={canPrev}
+          canNext={canNext}
+        />
       </div>
     </div>
   )

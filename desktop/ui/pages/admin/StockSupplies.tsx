@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Heading } from "@/components/ui/heading"
+import { Pagination } from "@/components/ui/pagination"
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import {
   formatQuantityWithUnit,
   stockSupplyImageUrl,
 } from "@/lib/api"
+import { usePagination } from "@/hooks/usePagination"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
 
@@ -70,6 +72,16 @@ export default function StockSupplies() {
     return s.name.toLowerCase().includes(search.toLowerCase())
   })
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(filtered)
+
   return (
     <div>
       <Heading as="h1" className="mb-6 text-admin-header-text">Stock Supplies</Heading>
@@ -85,8 +97,8 @@ export default function StockSupplies() {
         </Button>
       </div>
 
-      <Card className="bg-admin-card border-admin-card-border">
-        <div className="p-4 border-b border-admin-card-border">
+      <Card className="bg-admin-card border-admin-card-border flex flex-col">
+        <div className="p-4 border-b border-admin-card-border shrink-0">
           <Input
             placeholder="Search supplies..."
             value={search}
@@ -99,91 +111,101 @@ export default function StockSupplies() {
         {error && <p className="p-4 text-red-500">Error: {error}</p>}
 
         {!loading && !error && (
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
-                <th className="px-4 py-3 w-[60px]">#</th>
-                <th className="px-4 py-3 w-[60px]"></th>
-                <th className="px-4 py-3 flex-1">Description</th>
-                <th className="px-4 py-3 w-[100px]">Reorder</th>
-                <th className="px-4 py-3 w-[150px]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-admin-header-text/60">
-                    No supplies found
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((supply, i) => {
-                  const stock = Number(supply.currentStock)
-                  const reorder = Number(supply.reorderLevel ?? 0)
-                  const isLow = stock <= reorder
-                  return (
-                    <tr
-                      key={supply.id}
-                      className={`border-b border-admin-card-border last:border-0 hover:bg-admin-content/50 ${isLow ? "bg-red-500/5" : ""}`}
-                    >
-                      <td className="px-4 py-3 text-admin-header-text/60">{i + 1}</td>
-                      <td className="px-4 py-3">
-                        {supply.image ? (
-                          <img
-                            src={stockSupplyImageUrl(supply.image) ?? ""}
-                            alt=""
-                            className="h-10 w-10 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
-                            <Package size={16} className="text-admin-header-text/30" />
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-admin-header-text">
-                        {formatSupplyDescription(supply)}
-                        {isLow && (
-                          <span className="ml-2 text-xs text-red-500 font-normal">Low Stock</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-admin-header-text/60">{reorder ? formatQuantityWithUnit(reorder, supply.unit) : "—"}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDetailTarget(supply)}
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Details
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditTarget(supply)}
-                          >
-                            <Pencil className="h-4 w-4 mr-1" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setDeleteTarget(supply)
-                              setDeleteError("")
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1 text-red-500" />
-                            Delete
-                          </Button>
-                        </div>
+          <>
+            <div className="overflow-x-auto flex-1 min-h-[384px]">
+              <table className="table-fixed w-full">
+                <thead>
+                  <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
+                    <th className="px-4 py-3 min-w-[150px]"></th>
+                    <th className="px-4 py-3 min-w-[150px]">Description</th>
+                    <th className="px-4 py-3 min-w-[150px]">Reorder</th>
+                    <th className="px-4 py-3 w-[180px]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-admin-header-text/60">
+                        No supplies found
                       </td>
                     </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+                  ) : (
+                    paginatedItems.map((supply) => {
+                      const stock = Number(supply.currentStock)
+                      const reorder = Number(supply.reorderLevel ?? 0)
+                      const isLow = stock <= reorder
+                      return (
+                        <tr
+                          key={supply.id}
+                          className={`border-b border-admin-card-border last:border-0 hover:bg-admin-content/50 ${isLow ? "bg-red-500/5" : ""}`}
+                        >
+                          <td className="px-4 py-3">
+                            {supply.image ? (
+                              <img
+                                src={stockSupplyImageUrl(supply.image) ?? ""}
+                                alt=""
+                                className="h-10 w-10 rounded object-cover"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+                                <Package size={16} className="text-admin-header-text/30" />
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-admin-header-text">
+                            {formatSupplyDescription(supply)}
+                            {isLow && (
+                              <span className="ml-2 text-xs text-red-500 font-normal">Low Stock</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-admin-header-text/60">{reorder ? formatQuantityWithUnit(reorder, supply.unit) : "—"}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDetailTarget(supply)}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                Details
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditTarget(supply)}
+                              >
+                                <Pencil className="h-4 w-4 mr-1" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setDeleteTarget(supply)
+                                  setDeleteError("")
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-1 text-red-500" />
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPrev={prevPage}
+              onNext={nextPage}
+              canPrev={canPrev}
+              canNext={canNext}
+            />
+          </>
         )}
       </Card>
 
