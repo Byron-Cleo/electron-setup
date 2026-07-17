@@ -1,4 +1,11 @@
 const API_BASE = "http://localhost:3001/api"
+const API_ORIGIN = "http://localhost:3001"
+
+export function stockSupplyImageUrl(image: string | null): string | null {
+  if (!image) return null
+  if (image.startsWith("http")) return image
+  return `${API_ORIGIN}${image}`
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -19,8 +26,9 @@ export function formatSupplyDescription(supply: { name: string; unit: string; cu
 }
 
 async function apiFetch(path: string, options?: RequestInit) {
+  const isFormData = options?.body instanceof FormData
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    ...(isFormData ? {} : { headers: { "Content-Type": "application/json" } }),
     ...options,
   })
   if (!res.ok) {
@@ -84,14 +92,30 @@ export async function getStockSupplyById(id: string): Promise<StockSupply> {
   return apiFetch(`/stock-supplies/${id}`)
 }
 
-export async function createStockSupply(data: StockSupplyCreateData) {
+export async function createStockSupply(data: StockSupplyCreateData, imageFile?: File) {
+  if (imageFile) {
+    const formData = new FormData()
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) formData.append(key, String(value))
+    })
+    formData.append("image", imageFile)
+    return apiFetch("/stock-supplies", { method: "POST", body: formData })
+  }
   if (window.electron?.stockSupply?.create) {
     return window.electron.stockSupply.create(data)
   }
   return apiFetch("/stock-supplies", { method: "POST", body: JSON.stringify(data) })
 }
 
-export async function updateStockSupply(id: string, data: StockSupplyUpdateData) {
+export async function updateStockSupply(id: string, data: StockSupplyUpdateData, imageFile?: File) {
+  if (imageFile) {
+    const formData = new FormData()
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) formData.append(key, String(value))
+    })
+    formData.append("image", imageFile)
+    return apiFetch(`/stock-supplies/${id}`, { method: "PUT", body: formData })
+  }
   if (window.electron?.stockSupply?.update) {
     return window.electron.stockSupply.update(id, data)
   }

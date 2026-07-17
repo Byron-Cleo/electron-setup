@@ -18,12 +18,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Pencil, Trash2, ArrowLeft, Package } from "lucide-react"
 import {
   getStockSupplies,
   getStockSupplyCategories,
   deleteStockSupply,
   formatSupplyDescription,
+  stockSupplyImageUrl,
 } from "@/lib/api"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 
@@ -128,6 +129,7 @@ export default function StockSupplies() {
             <thead>
               <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
                 <th className="px-4 py-3 w-[60px]">#</th>
+                <th className="px-4 py-3 w-[60px]"></th>
                 <th className="px-4 py-3 flex-1">Description</th>
                 <th className="px-4 py-3 w-[140px]">Category</th>
                 <th className="px-4 py-3 w-[100px]">Reorder</th>
@@ -137,7 +139,7 @@ export default function StockSupplies() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-admin-header-text/60">
+                  <td colSpan={6} className="px-4 py-8 text-center text-admin-header-text/60">
                     No supplies found
                   </td>
                 </tr>
@@ -152,6 +154,19 @@ export default function StockSupplies() {
                       className={`border-b border-admin-card-border last:border-0 hover:bg-admin-content/50 ${isLow ? "bg-red-500/5" : ""}`}
                     >
                       <td className="px-4 py-3 text-admin-header-text/60">{i + 1}</td>
+                      <td className="px-4 py-3">
+                        {supply.image ? (
+                          <img
+                            src={stockSupplyImageUrl(supply.image) ?? ""}
+                            alt=""
+                            className="h-10 w-10 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+                            <Package size={16} className="text-admin-header-text/30" />
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 font-medium text-admin-header-text">
                         {formatSupplyDescription(supply)}
                         {isLow && (

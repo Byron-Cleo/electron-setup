@@ -2,19 +2,38 @@
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-
+- Add `image` field to StockSupply TypeScript type
+- Update createStockSupply/updateStockSupply in lib/api.ts to send FormData when image present
+- Add image upload UI with preview to StockSupplyForm (create/edit pages)
+- Add image upload UI with preview to StockSupplyEditDialog (modal)
+- Display thumbnail in Store StockView table
+- Display thumbnail in StockSupplies table
 
 ## Notes
 
+- FormData is only used when an image file is selected; otherwise send JSON as before
+- Image preview shows current image (edit mode) or selected file (before upload)
+- Thumbnail in tables: 40x40 rounded, object-cover
+- No image placeholder: gray box with Package icon
+- Full implementation plan in @context/project-plan/stock-supply-image-upload.md
+
 ## History
+
+### frontend - 2026-07-17 — Stock Supply Image Upload (Phase 2)
+- Added `image: string | null` to StockSupply type
+- Updated createStockSupply/updateStockSupply to send FormData when image present
+- Bypass Electron IPC when image file present (FormData can't serialize through IPC)
+- Added image upload with preview to StockSupplyForm, StockSupplyEditDialog, and Store Add modal
+- Added thumbnail column (40x40, rounded, Package icon fallback) to Store StockView and StockSupplies tables
+- Branch: feature/frontend/stock-supply-image-upload-phase-2
 
 ### backend - 2026-07-16 — Stock Supply Image Upload (Phase 1)
 - Installed multer for multipart/form-data handling
@@ -178,7 +197,7 @@ Not Started
 - Created AdminLayout with sidebar, header, main content area, and footer
 - Set up nested routes under /admin/* (Dashboard, Store, Kitchen, Menu, Cashier, Users)
 - Built Dashboard page with stat cards (Orders, Revenue, Tables Served, Avg Prep Time) and SVG sales overview chart
-- Added admin color tokens to index.css (--color-admin-*) 
+- Added admin color tokens to index.css (--color-admin-*)
 - All page headings use text-admin-header-text (#562215) for consistent maroon color
 - Global h1 rule updated with color: var(--color-brand-maroon)
 - Added p-6 padding to AdminLayout main content area

@@ -91,6 +91,7 @@ interface StockSupply {
   categoryId: string;
   currentStock: number;
   reorderLevel: number | null;
+  image: string | null;
   platesPerUnit: number | null;
   menuId: string | null;
   isActive: boolean;

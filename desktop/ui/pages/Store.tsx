@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Package, ClipboardList, ArrowLeft, Plus, Pencil, Trash2, RefreshCw } from "lucide-react"
+import { Package, ClipboardList, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, getStockSupplyCategories, createStockSupply, deleteStockSupply, getLowStockCount } from "@/lib/api"
+import { getStockSupplies, getStockRequests, getStockSupplyCategories, createStockSupply, deleteStockSupply, getLowStockCount, stockSupplyImageUrl } from "@/lib/api"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 
@@ -181,6 +181,8 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   const [formUnit, setFormUnit] = useState("")
   const [formCurrentStock, setFormCurrentStock] = useState("")
   const [formReorderLevel, setFormReorderLevel] = useState("")
+  const [formImageFile, setFormImageFile] = useState<File | null>(null)
+  const [formImagePreview, setFormImagePreview] = useState<string | null>(null)
 
   function resetForm() {
     setFormName("")
@@ -189,6 +191,8 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     setFormUnit("")
     setFormCurrentStock("")
     setFormReorderLevel("")
+    setFormImageFile(null)
+    setFormImagePreview(null)
     setSaveError("")
   }
 
@@ -208,7 +212,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         unit: formUnit as "KG" | "G" | "L" | "ML" | "PCS",
         currentStock: formCurrentStock ? Number(formCurrentStock) : 0,
         reorderLevel: formReorderLevel ? Number(formReorderLevel) : undefined,
-      })
+      }, formImageFile ?? undefined)
       setShowAddModal(false)
       await loadStock()
     } catch (err) {
@@ -290,6 +294,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-admin-card-border bg-admin-content">
+              <th className="text-left px-4 py-3 font-medium text-admin-header-text"></th>
               <th className="text-left px-4 py-3 font-medium text-admin-header-text">Name</th>
               <th className="text-left px-4 py-3 font-medium text-admin-header-text">Category</th>
               <th className="text-right px-4 py-3 font-medium text-admin-header-text">Stock</th>
@@ -309,6 +314,19 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                     isLow ? "bg-red-50" : ""
                   }`}
                 >
+                  <td className="px-4 py-3">
+                    {item.image ? (
+                      <img
+                        src={stockSupplyImageUrl(item.image) ?? ""}
+                        alt=""
+                        className="h-10 w-10 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+                        <Package size={16} className="text-admin-header-text/30" />
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{item.name}</td>
                   <td className="px-4 py-3 text-admin-muted">{item.category.name}</td>
                   <td className={`px-4 py-3 text-right font-medium ${isLow ? "text-red-600" : ""}`}>
@@ -346,7 +364,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-admin-muted">
+                <td colSpan={7} className="px-4 py-8 text-center text-admin-muted">
                   No stock items found
                 </td>
               </tr>
@@ -438,6 +456,55 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                   value={formReorderLevel}
                   onChange={(e) => setFormReorderLevel(e.target.value)}
                 />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Image</Label>
+              <p className="text-xs text-admin-muted">JPEG, PNG, or WebP. Max 5MB.</p>
+              <div className="flex items-start gap-4">
+                <div className="h-20 w-20 rounded-lg border border-admin-card-border bg-admin-content flex items-center justify-center overflow-hidden shrink-0">
+                  {formImagePreview ? (
+                    <img src={formImagePreview} alt="Preview" className="h-full w-full object-cover" />
+                  ) : (
+                    <Package size={20} className="text-admin-muted/40" />
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-admin-card-border cursor-pointer hover:bg-admin-content/50 text-sm text-admin-header-text">
+                    Choose Image
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        if (file.size > 5 * 1024 * 1024) {
+                          setSaveError("Image must be under 5MB")
+                          return
+                        }
+                        setFormImageFile(file)
+                        setFormImagePreview(URL.createObjectURL(file))
+                      }}
+                    />
+                  </label>
+                  {formImagePreview && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFormImageFile(null)
+                        setFormImagePreview(null)
+                      }}
+                      className="text-red-500 hover:text-red-600 h-auto py-1"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 

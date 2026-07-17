@@ -15,7 +15,7 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, X, Package } from "lucide-react"
 import {
   Form,
   FormField,
@@ -31,6 +31,7 @@ import {
   getStockSupplyCategories,
   getDepartments,
   formatSupplyDescription,
+  stockSupplyImageUrl,
 } from "@/lib/api"
 
 const formSchema = z.object({
@@ -59,6 +60,9 @@ export default function StockSupplyForm() {
   const [categories, setCategories] = useState<StockSupplyCategory[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [existingImage, setExistingImage] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -93,6 +97,7 @@ export default function StockSupplyForm() {
           currentStock: supply.currentStock,
           reorderLevel: supply.reorderLevel ?? 0,
         })
+        setExistingImage(supply.image)
       })
       .catch((e) => form.setError("root", { message: e.message }))
   }, [id, form])
@@ -100,15 +105,33 @@ export default function StockSupplyForm() {
   async function onSubmit(values: FormValues) {
     form.clearErrors("root")
     try {
+      const file = imageFile ?? undefined
       if (isEdit && id) {
-        await updateStockSupply(id, values)
+        await updateStockSupply(id, values, file)
       } else {
-        await createStockSupply(values)
+        await createStockSupply(values, file)
       }
       navigate("/admin/store/stock-supplies")
     } catch (e: any) {
       form.setError("root", { message: e.message })
     }
+  }
+
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      form.setError("root", { message: "Image must be under 5MB" })
+      return
+    }
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  function clearImage() {
+    setImageFile(null)
+    setImagePreview(null)
+    setExistingImage(null)
   }
 
   const watchedName = useWatch({ control: form.control, name: "name" })
@@ -257,6 +280,49 @@ export default function StockSupplyForm() {
                     </FormItem>
                   )}
                 />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-admin-header-text">Image</label>
+                <p className="text-xs text-admin-header-text/50 mb-2">JPEG, PNG, or WebP. Max 5MB.</p>
+                <div className="flex items-start gap-4">
+                  <div className="h-24 w-24 rounded-lg border border-admin-card-border bg-admin-content flex items-center justify-center overflow-hidden shrink-0">
+                    {imagePreview ? (
+                      <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
+                    ) : existingImage ? (
+                      <img
+                        src={stockSupplyImageUrl(existingImage) ?? ""}
+                        alt="Current"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Package size={24} className="text-admin-header-text/30" />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-admin-card-border cursor-pointer hover:bg-admin-content/50 text-sm text-admin-header-text">
+                      Choose Image
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handleImageChange}
+                      />
+                    </label>
+                    {(imagePreview || existingImage) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearImage}
+                        className="text-red-500 hover:text-red-600"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {departments.length > 0 && (
