@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Package, Send, Clock, ArrowLeft, UtensilsCrossed, ChefHat, History, Eye } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -38,6 +38,40 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   PENDING: { label: "Pending", className: "bg-yellow-100 text-yellow-800" },
   PARTIAL: { label: "Partial", className: "bg-orange-100 text-orange-800" },
   COMPLETED: { label: "Completed", className: "bg-green-100 text-green-800" },
+}
+
+type StockDisplayStatus = "Available" | "Not Available"
+type RequestDisplayStatus = "Pending" | "Partial" | "Completed"
+
+function computeStockStatus(stock: StockSupply): StockDisplayStatus {
+  return stock.currentStock > 0 ? "Available" : "Not Available"
+}
+
+function computeRequestStatus(
+  lastRequest: StockRequest | undefined
+): RequestDisplayStatus | null {
+  if (!lastRequest) return null
+  switch (lastRequest.status) {
+    case "PENDING":   return "Pending"
+    case "PARTIAL":   return "Partial"
+    case "COMPLETED": return "Completed"
+    default:          return null
+  }
+}
+
+function getLastRequestMap(requests: StockRequest[]): Map<string, StockRequestItem> {
+  const map = new Map<string, StockRequestItem>()
+  const sorted = [...requests].sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+  for (const req of sorted) {
+    for (const item of req.items) {
+      if (!map.has(item.stockSupplyId)) {
+        map.set(item.stockSupplyId, item)
+      }
+    }
+  }
+  return map
 }
 
 function Kitchen() {
@@ -152,6 +186,7 @@ function Kitchen() {
 
 function CurrentStockView({ userId }: { userId: string }) {
   const [items, setItems] = useState<StockSupply[]>([])
+  const [requests, setRequests] = useState<StockRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [requestDialog, setRequestDialog] = useState<{ open: boolean; item: StockSupply | null }>({
@@ -167,8 +202,12 @@ function CurrentStockView({ userId }: { userId: string }) {
   async function loadStock() {
     try {
       setLoading(true)
-      const data = await getStockSupplies()
-      setItems(data)
+      const [stockData, requestData] = await Promise.all([
+        getStockSupplies(),
+        getStockRequests(),
+      ])
+      setItems(stockData)
+      setRequests(requestData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load stock")
     } finally {
@@ -179,6 +218,8 @@ function CurrentStockView({ userId }: { userId: string }) {
   useEffect(() => {
     loadStock()
   }, [])
+
+  const lastRequestMap = useMemo(() => getLastRequestMap(requests), [requests])
 
   function openRequestDialog(item: StockSupply) {
     setRequestDialog({ open: true, item })
@@ -225,6 +266,7 @@ function CurrentStockView({ userId }: { userId: string }) {
     { label: "Image", key: "image" },
     { label: "Name", key: "name" },
     { label: "Stock", key: "stock" },
+    { label: "Last Request", key: "lastRequest" },
           { label: "Actions", key: "actions", isAction: true },
   ]
 
@@ -247,14 +289,59 @@ function CurrentStockView({ userId }: { userId: string }) {
             <Package size={16} className="text-admin-header-text/30" />
           </div>
         )
-      case "name":
-        return <span>{item.name}</span>
+      case "name": {
+        const lastItem = lastRequestMap.get(item.id)
+        const lastReq = lastItem
+          ? requests.find(r => r.id === lastItem.stockRequestId)
+          : undefined
+        const reqStatus = computeRequestStatus(lastReq)
+        const stockStatus = computeStockStatus(item)
+        return (
+          <div className="flex items-center gap-2">
+            <span>{item.name}</span>
+            {!reqStatus && (
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                stockStatus === "Available"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}>
+                {stockStatus}
+              </span>
+            )}
+          </div>
+        )
+      }
       case "stock":
         return (
           <span className={`font-medium ${isLow ? "text-red-600" : ""}`}>
             {formatQuantityWithUnit(item.currentStock, item.unit)}
           </span>
         )
+      case "lastRequest": {
+        const lastItem = lastRequestMap.get(item.id)
+        const lastReq = lastItem
+          ? requests.find(r => r.id === lastItem.stockRequestId)
+          : undefined
+        const reqStatus = computeRequestStatus(lastReq)
+        if (!reqStatus || !lastItem) {
+          return <span className="text-admin-muted">—</span>
+        }
+        const qtyText = formatQuantityWithUnit(lastItem.quantityRequested, item.unit)
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{qtyText}</span>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+              reqStatus === "Pending"
+                ? "bg-yellow-100 text-yellow-700"
+                : reqStatus === "Partial"
+                ? "bg-orange-100 text-orange-700"
+                : "bg-green-100 text-green-700"
+            }`}>
+              {reqStatus}
+            </span>
+          </div>
+        )
+      }
       case "actions":
         return (
           <Button

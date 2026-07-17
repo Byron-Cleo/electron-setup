@@ -1,14 +1,25 @@
 # Current Feature
 
 ## Platform
-Not Specified
+frontend
 
 ## Status
-Not Started
+In Progress
 
 ## Goals
+- Show stock availability status (Available / Not Available) in the Name column
+- Add "Last Request" column showing requested qty + request status
+- Kitchen staff can immediately see what's available and what they've requested
+- Detailed requested vs delivered breakdown stays in the "My Requests" tab
 
 ## Notes
+- Modify `CurrentStockView` in `desktop/ui/pages/Kitchen.tsx`
+- Fetch stock requests alongside stock supplies on mount
+- Build lookup map: `stockSupplyId → most recent StockRequestItem`
+- Compute stock status and request status for each row
+- Badge colors: Available (green), Not Available (red), Pending (yellow), Partial (orange), Completed (green)
+- No backend changes needed — all data already available via existing API endpoints
+- Follow existing DataTable pattern and shadcn/ui badge styling
 
 ## History
 
