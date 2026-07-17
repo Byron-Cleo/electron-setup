@@ -1,16 +1,33 @@
 # Current Feature
 
 ## Platform
-Not Specified
+frontend
 
 ## Status
-Not Started
+In Progress
 
 ## Goals
+- Add 3 sub-tabs: Pending, Partial, Completed
+- Each tab shows a table of requests filtered to that status
+- Kitchen staff can quickly see what's awaiting attention, what's partially delivered, and what's done
+- Each table shows request date, items count, and expandable detail
 
 ## Notes
+- Modify `MyRequestsView` in `desktop/ui/pages/Kitchen.tsx`
+- Add sub-tab state and filter logic
+- Replace Card list with DataTable component
+- Add expandable row detail with items breakdown
+- No backend changes needed — uses existing API data
+- Follow existing DataTable pattern and shadcn/ui styling
 
 ## History
+
+### frontend - 2026-07-17 — Kitchen My Requests Sub-tabs by Status
+- Added 3 sub-tabs (Pending, Partial, Completed) with count badges
+- Each tab shows filtered DataTable of requests by status
+- Expandable row detail shows items with requested/delivered breakdown
+- Replaced Card list with DataTable for consistent styling
+- Empty state messages per tab
 
 ### frontend - 2026-07-17 — Kitchen Stock Status & Last Request Columns
 - Added stock status badges (Available/Not Available) in Name column when no request exists
