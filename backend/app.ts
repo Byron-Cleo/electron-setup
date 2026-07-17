@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import mealTypesRouter from "./routes/mealTypes";
 import menuRouter from "./routes/menu";
 import accompanimentsRouter from "./routes/accompaniments";
-import authRouter from "./routes/auth.ts";
+import authRouter from "./routes/auth";
 import stockSuppliesRouter from "./routes/items";
 import stockRequestsRouter from "./routes/stockRequests";
 import departmentsRouter from "./routes/departments";

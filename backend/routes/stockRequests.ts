@@ -73,27 +73,51 @@ router.post("/", async (req, res) => {
     }
   }
 
-  const request = await prisma.stockRequest.create({
-    data: {
-      requestedById,
-      department,
-      notes,
-      status: "PENDING",
-      items: {
-        create: items.map((item: { stockSupplyId: string; quantityRequested: number }) => ({
-          stockSupplyId: item.stockSupplyId,
-          quantityRequested: item.quantityRequested,
-        })),
-      },
-    },
-    include: {
-      requestedBy: { select: { id: true, name: true } },
-      items: {
-        include: {
-          stockSupply: { select: { id: true, name: true, unit: true, currentStock: true } },
+  // Validate stock availability
+  for (const item of items) {
+    const supply = supplies.find((s) => s.id === item.stockSupplyId)!;
+    const available = Number(supply.currentStock);
+    const requested = Number(item.quantityRequested);
+    if (requested > available) {
+      return res.status(400).json({
+        error: `Insufficient stock for "${supply.name}". Available: ${available}, Requested: ${requested}`,
+      });
+    }
+  }
+
+  // Deduct stock and create request in a transaction
+  const request = await prisma.$transaction(async (tx) => {
+    // Deduct stock for each item
+    for (const item of items) {
+      await tx.stockSupply.update({
+        where: { id: item.stockSupplyId },
+        data: { currentStock: { decrement: item.quantityRequested } },
+      });
+    }
+
+    // Create the request
+    return tx.stockRequest.create({
+      data: {
+        requestedById,
+        department,
+        notes,
+        status: "PENDING",
+        items: {
+          create: items.map((item: { stockSupplyId: string; quantityRequested: number }) => ({
+            stockSupplyId: item.stockSupplyId,
+            quantityRequested: item.quantityRequested,
+          })),
         },
       },
-    },
+      include: {
+        requestedBy: { select: { id: true, name: true } },
+        items: {
+          include: {
+            stockSupply: { select: { id: true, name: true, unit: true, currentStock: true } },
+          },
+        },
+      },
+    });
   });
 
   res.status(201).json(request);
@@ -148,14 +172,6 @@ router.put("/:id/fulfill", async (req, res) => {
       });
     }
 
-    // Cannot deliver more than available store stock
-    const availableStock = Number(requestItem.stockSupply.currentStock);
-    if (qty > availableStock) {
-      return res.status(400).json({
-        error: `Insufficient store stock for "${requestItem.stockSupply.name}". Available: ${availableStock}, Requested to deliver: ${qty}`,
-      });
-    }
-
     if (qty > 0) {
       fulfillmentItems.push({ stockRequestItemId: item.stockRequestItemId, quantityDelivered: qty });
     }
@@ -165,18 +181,10 @@ router.put("/:id/fulfill", async (req, res) => {
     return res.status(400).json({ error: "Must deliver at least one item with quantity > 0" });
   }
 
-  // Execute in a transaction: deduct stock, update request items, create fulfillment trail
+  // Execute in a transaction: update request items, create fulfillment trail
   const result = await prisma.$transaction(async (tx) => {
-    // Deduct stock and update request items
+    // Update request items
     for (const fi of fulfillmentItems) {
-      const requestItem = existing.items.find((i) => i.id === fi.stockRequestItemId)!;
-
-      // Deduct from store stock
-      await tx.stockSupply.update({
-        where: { id: requestItem.stockSupplyId },
-        data: { currentStock: { decrement: fi.quantityDelivered } },
-      });
-
       // Update quantityDelivered on the request item
       await tx.stockRequestItem.update({
         where: { id: fi.stockRequestItemId },
