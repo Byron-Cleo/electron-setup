@@ -598,27 +598,15 @@ const sampleData = {
     { menuId: ID.rice, mealType: ServiceTime.DINNER },
   ],
 
-  // ── Stock Supply Categories ─────────────────────────────────────────────────
-  stockSupplyCategories: [
-    { name: "Proteins", description: "Fish, chicken, beef, eggs" },
-    { name: "Spices & Seasonings", description: "Sugar, salt, pepper, herbs" },
-    { name: "Oils & Fats", description: "Cooking oil, butter, margarine" },
-    { name: "Produce", description: "Vegetables, fruits" },
-    { name: "Beverages", description: "Water, juice, soft drinks" },
-    { name: "Grains & Starches", description: "Rice, flour, bread, pasta" },
-    { name: "Packaging", description: "Containers, wraps, bags" },
-    { name: "Cleaning", description: "Detergents, sanitizers" },
-  ],
-
   // ── Stock Supplies ─────────────────────────────────────────────────────────
   stockSupplies: [
-    { name: "Fish (Tilapia)", unit: "PCS", categoryName: "Proteins", currentStock: 50 },
-    { name: "Chicken", unit: "PCS", categoryName: "Proteins", currentStock: 40 },
-    { name: "Sugar", unit: "KG", categoryName: "Spices & Seasonings", currentStock: 100 },
-    { name: "Salt", unit: "KG", categoryName: "Spices & Seasonings", currentStock: 80 },
-    { name: "Cooking Oil", unit: "L", categoryName: "Oils & Fats", currentStock: 60 },
-    { name: "Rice", unit: "KG", categoryName: "Grains & Starches", currentStock: 200 },
-    { name: "Onion", unit: "KG", categoryName: "Produce", currentStock: 30 },
+    { name: "Fish (Tilapia)", unit: "PCS", currentStock: 50 },
+    { name: "Chicken", unit: "PCS", currentStock: 40 },
+    { name: "Sugar", unit: "KG", currentStock: 100 },
+    { name: "Salt", unit: "KG", currentStock: 80 },
+    { name: "Cooking Oil", unit: "L", currentStock: 60 },
+    { name: "Rice", unit: "KG", currentStock: 200 },
+    { name: "Onion", unit: "KG", currentStock: 30 },
   ],
 };
 

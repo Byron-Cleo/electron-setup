@@ -208,22 +208,12 @@ enum StockRequestStatus {
   COMPLETED
 }
 
-model StockSupplyCategory {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name          String        @unique
-  description   String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  StockSupply   StockSupply[]
-}
-
 model StockSupply {
   id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name          String
   slug          String             @unique
   description   String?
   unit          ItemUnit
-  categoryId    String             @db.Uuid
   currentStock  Decimal            @default(0) @db.Decimal(12, 2)
   reorderLevel  Decimal?           @db.Decimal(12, 2)
   platesPerUnit Decimal?           @db.Decimal(12, 2)
@@ -232,7 +222,6 @@ model StockSupply {
   isActive      Boolean            @default(true)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
-  category      StockSupplyCategory @relation(fields: [categoryId], references: [id])
   menu          Menu?              @relation(fields: [menuId], references: [id])
   StockRequestItem StockRequestItem[]
   DepartmentStockSupply DepartmentStockSupply[]

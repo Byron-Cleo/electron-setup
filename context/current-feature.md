@@ -2,7 +2,7 @@
 
 ## Platform
 
-frontend
+backend
 
 ## Status
 
@@ -10,22 +10,50 @@ Complete
 
 ## Goals
 
-- Add `image` field to StockSupply TypeScript type
-- Update createStockSupply/updateStockSupply in lib/api.ts to send FormData when image present
-- Add image upload UI with preview to StockSupplyForm (create/edit pages)
-- Add image upload UI with preview to StockSupplyEditDialog (modal)
-- Display thumbnail in Store StockView table
-- Display thumbnail in StockSupplies table
+- Remove StockSupplyCategory model from Prisma schema
+- Remove categoryId from StockSupply model
+- Delete stock supply category CRUD routes
+- Remove category route from Express app
+- Remove categoryId handling from stock supply create/update routes
+- Update seed data
 
 ## Notes
 
-- FormData is only used when an image file is selected; otherwise send JSON as before
-- Image preview shows current image (edit mode) or selected file (before upload)
-- Thumbnail in tables: 40x40 rounded, object-cover
-- No image placeholder: gray box with Package icon
-- Full implementation plan in @context/project-plan/stock-supply-image-upload.md
+- Migration will drop the StockSupplyCategory table and categoryId column
+- Existing stock supply data will lose category association
+- Stock supply create no longer requires categoryId
+- Stock supply update no longer accepts categoryId
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `backend/prisma/schema.prisma` | Remove StockSupplyCategory model, remove categoryId + category from StockSupply |
+| `backend/routes/itemCategories.ts` | Delete |
+| `backend/app.ts` | Remove import + route registration |
+| `backend/routes/items.ts` | Remove categoryId from POST/PUT destructuring, validation, Prisma queries |
+| `backend/db/seed.ts` | Remove category seeding, update stock supply seed |
+| `backend/db/sample-data.ts` | Remove stockSupplyCategories array |
+
+## Verification
+
+1. `npx prisma generate` passes
+2. `npx prisma db push` succeeds
+3. `npx tsc --noEmit` passes
+4. POST /api/stock-supplies works without categoryId
+5. PUT /api/stock-supplies/:id works without categoryId
 
 ## History
+
+### backend - 2026-07-17 — Remove StockSupplyCategory
+- Removed StockSupplyCategory model from Prisma schema
+- Removed categoryId and category relation from StockSupply model
+- Deleted backend/routes/itemCategories.ts (category CRUD routes)
+- Removed category import and route from app.ts
+- Removed categoryId from items.ts: POST/PUT destructuring, validation, Prisma queries, category lookups
+- Updated seed.ts: removed category seeding, simplified stock supply seeding
+- Updated sample-data.ts: removed stockSupplyCategories array and categoryName from stock supplies
+- Branch: feature/backend/remove-stock-supply-category
 
 ### frontend - 2026-07-17 — Stock Supply Image Upload (Phase 2)
 - Added `image: string | null` to StockSupply type
@@ -184,7 +212,7 @@ Complete
 ### frontend - 2026-07-01 — Waiter POS — Meal Period Time Slots
 - Implemented time-slot logic (BREAKFAST 6-11, LUNCH 12-17, DINNER 18-5 overnight, DESSERT/BEVERAGE always)
 - Split meal period cards into "Now Serving" (active + always available) and "Closed" sections
-- Created WaiterDateTime component with day strip (Mon–Sun), live clock, date, and login timestamp
+- Created WaiterDateTime component with day strip (Mon-Sun), live clock, date, and login timestamp
 - Centered header layout, side-by-side day strip and timestamp display
 - Replaced deepseek-coder:6.7b with gemma3:4b, then unified on qwen2.5-coder:7b, then back to deepseek-coder:latest (1.3B) for frontend + qwen2.5-coder:7b for backend
 - Ran tsc --noEmit and lint — clean

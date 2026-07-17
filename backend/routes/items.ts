@@ -64,7 +64,7 @@ router.get("/", async (req, res) => {
         isActive: true,
         DepartmentStockSupply: { some: { departmentId: departmentId as string } },
       },
-      include: { category: { select: { id: true, name: true } } },
+      include: { },
       orderBy: { name: "asc" },
     });
     return res.json(items);
@@ -72,7 +72,6 @@ router.get("/", async (req, res) => {
 
   const items = await prisma.stockSupply.findMany({
     where: { isActive: true },
-    include: { category: { select: { id: true, name: true } } },
     orderBy: { name: "asc" },
   });
   res.json(items);
@@ -117,7 +116,6 @@ router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const item = await prisma.stockSupply.findUnique({
     where: { id },
-    include: { category: true },
   });
   if (!item) return res.status(404).json({ error: "Item not found" });
   res.json(item);
@@ -125,19 +123,16 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/stock-supplies - Create item
 router.post("/", upload.single("image"), async (req, res) => {
-  const { name, slug, description, unit, categoryId, currentStock, reorderLevel } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel } = req.body;
   const image = req.file ? `/uploads/stock-supplies/${req.file.filename}` : null;
   
-  if (!name || !unit || !categoryId || !image) {
-    return res.status(400).json({ error: "name, unit, categoryId, and image are required" });
+  if (!name || !unit || !image) {
+    return res.status(400).json({ error: "name, unit, and image are required" });
   }
   
   if (!VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
   }
-  
-  const category = await prisma.stockSupplyCategory.findUnique({ where: { id: categoryId } });
-  if (!category) return res.status(400).json({ error: "Category not found" });
   
   const generatedSlug = slug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   
@@ -148,12 +143,10 @@ router.post("/", upload.single("image"), async (req, res) => {
         slug: generatedSlug,
         description,
         unit,
-        categoryId,
         currentStock: currentStock ?? 0,
         reorderLevel,
         image,
       },
-      include: { category: true },
     });
     res.status(201).json(item);
   } catch (e: any) {
@@ -165,15 +158,10 @@ router.post("/", upload.single("image"), async (req, res) => {
 // PUT /api/stock-supplies/:id - Update item
 router.put("/:id", upload.single("image"), async (req, res) => {
   const { id } = req.params;
-  const { name, slug, description, unit, categoryId, currentStock, reorderLevel, isActive } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isActive } = req.body;
   
   if (unit && !VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
-  }
-  
-  if (categoryId) {
-    const category = await prisma.stockSupplyCategory.findUnique({ where: { id: categoryId } });
-    if (!category) return res.status(400).json({ error: "Category not found" });
   }
   
   const existing = await prisma.stockSupply.findUnique({ where: { id } });
@@ -197,13 +185,11 @@ router.put("/:id", upload.single("image"), async (req, res) => {
         ...(slug !== undefined && { slug }),
         ...(description !== undefined && { description }),
         ...(unit !== undefined && { unit }),
-        ...(categoryId !== undefined && { categoryId }),
         ...(currentStock !== undefined && { currentStock }),
         ...(reorderLevel !== undefined && { reorderLevel }),
         ...(isActive !== undefined && { isActive }),
         image: newImage,
       },
-      include: { category: true },
     });
     res.json(item);
   } catch (e: any) {

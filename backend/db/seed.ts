@@ -19,7 +19,6 @@ async function main() {
   await prisma.menu.deleteMany();
   await prisma.menuAccompaniment.deleteMany();
   await prisma.stockSupply.deleteMany();
-  await prisma.stockSupplyCategory.deleteMany();
   await prisma.account.deleteMany();
   await prisma.session.deleteMany();
   await prisma.verificationToken.deleteMany();
@@ -47,23 +46,12 @@ async function main() {
   await prisma.user.createMany({ data: sampleData.users });
   console.log("Seeded users");
 
-  // 5. Stock Supply Categories — must exist before stock supplies.
-  await prisma.stockSupplyCategory.createMany({ data: sampleData.stockSupplyCategories });
-  console.log("Seeded stock supply categories");
-
-  // 6. Stock Supplies — references categoryId (looked up by category name).
-  const categories = await prisma.stockSupplyCategory.findMany();
-  const categoryMap = new Map(categories.map((c) => [c.name, c.id]));
-
-  const suppliesWithIds = sampleData.stockSupplies.map((item) => {
-    const { categoryName, ...rest } = item;
-    return {
-      ...rest,
-      slug: item.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
-      categoryId: categoryMap.get(categoryName)!,
-      unit: rest.unit as ItemUnit,
-    };
-  });
+  // 5. Stock Supplies
+  const suppliesWithIds = sampleData.stockSupplies.map((item) => ({
+    ...item,
+    slug: item.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+    unit: item.unit as ItemUnit,
+  }));
 
   await prisma.stockSupply.createMany({ data: suppliesWithIds });
   console.log("Seeded stock supplies");
