@@ -1,11 +1,10 @@
 import { useState } from "react"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
-import { Pagination } from "@/components/ui/pagination"
+import { DataTable, type Column } from "@/components/ui/data-table"
 import { ArrowLeft, AlertTriangle } from "lucide-react"
 import { fulfillStockRequest } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
@@ -131,78 +130,60 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
         </div>
       )}
 
-      <Card className="overflow-hidden flex flex-col">
-        <div className="overflow-x-auto flex-1 min-h-[384px]">
-          <table className="table-fixed w-full text-sm">
-            <thead>
-              <tr className="border-b border-admin-card-border bg-admin-content">
-                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">
-                  Item
-                </th>
-                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">
-                  Requested
-                </th>
-                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">
-                  Available
-                </th>
-                <th className="text-right px-4 py-3 font-medium text-admin-header-text w-[120px]">
-                  Deliver
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedItems.map((item) => {
-              const requested = Number(item.quantityRequested)
-              const available = Number(item.stockSupply.currentStock)
-              const delivered = deliveries[item.id] ?? 0
-              const isOverDelivered = delivered > requested
-              const isOverAvailable = delivered > available
+      <DataTable
+        columns={[
+          { label: "Item", key: "item" },
+          { label: "Requested", key: "requested", align: "right" },
+          { label: "Available", key: "available", align: "right" },
+          { label: "Deliver", key: "deliver", isAction: true, width: 120, align: "right" },
+        ]}
+        data={paginatedItems}
+        renderCell={(item, column) => {
+          const requested = Number(item.quantityRequested)
+          const available = Number(item.stockSupply.currentStock)
+          const delivered = deliveries[item.id] ?? 0
+          const isOverDelivered = delivered > requested
+          const isOverAvailable = delivered > available
 
+          switch (column.key) {
+            case "item":
               return (
-                <tr
-                  key={item.id}
-                  className="border-b border-admin-card-border last:border-0"
-                >
-                  <td className="px-4 py-3">
-                    <span className="font-medium">{item.stockSupply.name}</span>
-                    <span className="text-admin-muted ml-1">
-                      ({item.stockSupply.unit})
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">{requested}</td>
-                  <td className="px-4 py-3 text-right text-admin-muted">
-                    {available}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={Math.min(requested, available)}
-                      step="0.01"
-                      value={delivered}
-                      onChange={(e) => updateDelivery(item.id, e.target.value)}
-                      className={`w-24 text-right ${
-                        isOverDelivered || isOverAvailable
-                          ? "border-red-500"
-                          : ""
-                      }`}
-                    />
-                  </td>
-                </tr>
+                <>
+                  <span className="font-medium">{item.stockSupply.name}</span>
+                  <span className="text-admin-muted ml-1">({item.stockSupply.unit})</span>
+                </>
               )
-            })}
-          </tbody>
-        </table>
-        </div>
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPrev={prevPage}
-          onNext={nextPage}
-          canPrev={canPrev}
-          canNext={canNext}
-        />
-      </Card>
+            case "requested":
+              return <span>{requested}</span>
+            case "available":
+              return <span className="text-admin-muted">{available}</span>
+            case "deliver":
+              return (
+                <Input
+                  type="number"
+                  min={0}
+                  max={Math.min(requested, available)}
+                  step="0.01"
+                  value={delivered}
+                  onChange={(e) => updateDelivery(item.id, e.target.value)}
+                  className={`w-24 text-right ${isOverDelivered || isOverAvailable ? "border-red-500" : ""}`}
+                />
+              )
+            default:
+              return null
+          }
+        }}
+        keyExtractor={(item) => item.id}
+        emptyMessage="No items to fulfill"
+        pagination={{
+          currentPage,
+          totalPages,
+          onPrev: prevPage,
+          onNext: nextPage,
+          canPrev,
+          canNext,
+        }}
+      />
 
       <div className="space-y-2">
         <Label htmlFor="fulfillNotes">Notes (optional)</Label>

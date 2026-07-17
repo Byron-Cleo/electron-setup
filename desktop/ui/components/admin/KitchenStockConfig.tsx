@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Heading } from "@/components/ui/heading"
-import { Pagination } from "@/components/ui/pagination"
+import { DataTable } from "@/components/ui/data-table"
 import {
   Select,
   SelectTrigger,
@@ -129,65 +128,49 @@ export default function KitchenStockConfig({ onBack }: Props) {
         Configure how stock items convert to menu plates. Set the plates per unit for each ingredient.
       </p>
 
-      <Card className="bg-admin-card border-admin-card-border flex flex-col">
-        {loading && <p className="p-4 text-admin-header-text/60">Loading...</p>}
-        {error && <p className="p-4 text-red-500">Error: {error}</p>}
+      {loading && <p className="p-4 text-admin-header-text/60">Loading...</p>}
+      {error && <p className="p-4 text-red-500">Error: {error}</p>}
 
-        {!loading && !error && (
-          <>
-            <div className="overflow-x-auto flex-1 min-h-[384px]">
-              <table className="table-fixed w-full">
-                <thead>
-                  <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
-                    <th className="px-4 py-3 min-w-[150px]">Stock Item</th>
-                    <th className="px-4 py-3 min-w-[150px]">Category</th>
-                    <th className="px-4 py-3 min-w-[150px]">Plates per Unit</th>
-                    <th className="px-4 py-3 min-w-[150px]">Menu Item</th>
-                    <th className="px-4 py-3 w-[120px]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-admin-header-text/60">
-                        No configurations yet. Click "Add Configuration" to get started.
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedItems.map((item) => {
-                      return (
-                        <tr
-                          key={item.id}
-                          className="border-b border-admin-card-border last:border-0 hover:bg-admin-content/50"
-                        >
-                          <td className="px-4 py-3 font-medium text-admin-header-text">{item.name}</td>
-                          <td className="px-4 py-3 text-admin-header-text/60">{item.category?.name ?? "—"}</td>
-                          <td className="px-4 py-3 text-admin-header-text">{item.platesPerUnit ?? "—"}</td>
-                          <td className="px-4 py-3 text-admin-header-text/60">{item.menu?.name ?? "—"}</td>
-                          <td className="px-4 py-3">
-                            <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                              <Pencil className="h-4 w-4 mr-1" />
-                              Edit
-                            </Button>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPrev={prevPage}
-              onNext={nextPage}
-              canPrev={canPrev}
-              canNext={canNext}
-            />
-          </>
-        )}
-      </Card>
+      {!loading && !error && (
+        <DataTable
+          columns={[
+            { label: "Stock Item", key: "name" },
+            { label: "Plates per Unit", key: "platesPerUnit" },
+            { label: "Menu Item", key: "menu" },
+            { label: "Actions", key: "actions", isAction: true, width: 120 },
+          ]}
+          data={paginatedItems}
+          renderCell={(item, column) => {
+            switch (column.key) {
+              case "name":
+                return <span className="font-medium text-admin-header-text">{item.name}</span>
+              case "platesPerUnit":
+                return <span className="text-admin-header-text">{item.platesPerUnit ?? "—"}</span>
+              case "menu":
+                return <span className="text-admin-header-text/60">{item.menu?.name ?? "—"}</span>
+              case "actions":
+                return (
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                )
+              default:
+                return null
+            }
+          }}
+          keyExtractor={(item) => item.id}
+          emptyMessage="No configurations yet. Click 'Add Configuration' to get started."
+          pagination={{
+            currentPage,
+            totalPages,
+            onPrev: prevPage,
+            onNext: nextPage,
+            canPrev,
+            canNext,
+          }}
+        />
+      )}
 
       {/* Create / Edit Dialog */}
       <Dialog open={showForm} onOpenChange={(open) => !open && setShowForm(false)}>

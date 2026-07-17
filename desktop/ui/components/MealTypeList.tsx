@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Heading } from "@/components/ui/heading";
-import { Pagination } from "@/components/ui/pagination";
+import { DataTable } from "@/components/ui/data-table";
 import { usePagination } from "@/hooks/usePagination";
 
 interface Props {
@@ -59,34 +59,40 @@ export default function MealTypeList({ onEdit, onAdd }: Props) {
         <Heading as="h2" className="text-admin-header-text">Meal Types</Heading>
         <button onClick={onAdd}>+ Add New</button>
       </div>
-      <table className="table-fixed w-full" style={{ borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ textAlign: "left" }}>
-            <th style={{ minWidth: 150 }}>Name</th>
-            <th style={{ minWidth: 150 }}>Sort Order</th>
-            <th style={{ width: 180 }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {paginatedItems.map((mt) => (
-            <tr key={mt.id} style={{ borderTop: "1px solid #ccc" }}>
-              <td>{mt.name}</td>
-              <td>{mt.sortOrder}</td>
-              <td>
-                <button onClick={() => onEdit(mt.id)}>Edit</button>
-                <button onClick={() => handleDelete(mt.id)}>Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <Pagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPrev={prevPage}
-        onNext={nextPage}
-        canPrev={canPrev}
-        canNext={canNext}
+      <DataTable
+        columns={[
+          { label: "Name", key: "name" },
+          { label: "Sort Order", key: "sortOrder" },
+          { label: "Actions", key: "actions", isAction: true, width: 180 },
+        ]}
+        data={paginatedItems}
+        renderCell={(mt, column) => {
+          switch (column.key) {
+            case "name":
+              return <span>{mt.name}</span>
+            case "sortOrder":
+              return <span>{mt.sortOrder}</span>
+            case "actions":
+              return (
+                <>
+                  <button onClick={() => onEdit(mt.id)}>Edit</button>
+                  <button onClick={() => handleDelete(mt.id)}>Delete</button>
+                </>
+              )
+            default:
+              return null
+          }
+        }}
+        keyExtractor={(mt) => mt.id}
+        emptyMessage="No meal types found"
+        pagination={{
+          currentPage,
+          totalPages,
+          onPrev: prevPage,
+          onNext: nextPage,
+          canPrev,
+          canNext,
+        }}
       />
     </section>
   );

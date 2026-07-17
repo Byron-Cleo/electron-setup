@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Heading } from "@/components/ui/heading"
-import { Pagination } from "@/components/ui/pagination"
+import { DataTable, type Column } from "@/components/ui/data-table"
 import {
   Dialog,
   DialogContent,
@@ -82,6 +81,72 @@ export default function StockSupplies() {
     canPrev,
   } = usePagination(filtered)
 
+  const columns: Column[] = [
+    { label: "", key: "image" },
+    { label: "Description", key: "description" },
+    { label: "Reorder", key: "reorder" },
+    { label: "Actions", key: "actions", isAction: true, width: 180 },
+  ]
+
+  function renderCell(supply: StockSupply, column: Column) {
+    const stock = Number(supply.currentStock)
+    const reorder = Number(supply.reorderLevel ?? 0)
+    const isLow = stock <= reorder
+
+    switch (column.key) {
+      case "image":
+        return supply.image ? (
+          <img
+            src={stockSupplyImageUrl(supply.image) ?? ""}
+            alt=""
+            className="h-10 w-10 rounded object-cover"
+          />
+        ) : (
+          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+            <Package size={16} className="text-admin-header-text/30" />
+          </div>
+        )
+      case "description":
+        return (
+          <span className="font-medium text-admin-header-text">
+            {formatSupplyDescription(supply)}
+            {isLow && (
+              <span className="ml-2 text-xs text-red-500 font-normal">Low Stock</span>
+            )}
+          </span>
+        )
+      case "reorder":
+        return (
+          <span className="text-admin-header-text/60">
+            {reorder ? formatQuantityWithUnit(reorder, supply.unit) : "—"}
+          </span>
+        )
+      case "actions":
+        return (
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setDetailTarget(supply)}>
+              <Eye className="h-4 w-4 mr-1" />
+              Details
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setEditTarget(supply)}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setDeleteTarget(supply); setDeleteError("") }}
+            >
+              <Trash2 className="h-4 w-4 mr-1 text-red-500" />
+              Delete
+            </Button>
+          </div>
+        )
+      default:
+        return null
+    }
+  }
+
   return (
     <div>
       <Heading as="h1" className="mb-6 text-admin-header-text">Stock Supplies</Heading>
@@ -97,117 +162,39 @@ export default function StockSupplies() {
         </Button>
       </div>
 
-      <Card className="bg-admin-card border-admin-card-border flex flex-col">
-        <div className="p-4 border-b border-admin-card-border shrink-0">
-          <Input
-            placeholder="Search supplies..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
-        </div>
+      {loading && <p className="p-4 text-admin-header-text/60">Loading...</p>}
+      {error && <p className="p-4 text-red-500">Error: {error}</p>}
 
-        {loading && <p className="p-4 text-admin-header-text/60">Loading...</p>}
-        {error && <p className="p-4 text-red-500">Error: {error}</p>}
-
-        {!loading && !error && (
-          <>
-            <div className="overflow-x-auto flex-1 min-h-[384px]">
-              <table className="table-fixed w-full">
-                <thead>
-                  <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
-                    <th className="px-4 py-3 min-w-[150px]"></th>
-                    <th className="px-4 py-3 min-w-[150px]">Description</th>
-                    <th className="px-4 py-3 min-w-[150px]">Reorder</th>
-                    <th className="px-4 py-3 w-[180px]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-admin-header-text/60">
-                        No supplies found
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedItems.map((supply) => {
-                      const stock = Number(supply.currentStock)
-                      const reorder = Number(supply.reorderLevel ?? 0)
-                      const isLow = stock <= reorder
-                      return (
-                        <tr
-                          key={supply.id}
-                          className={`border-b border-admin-card-border last:border-0 hover:bg-admin-content/50 ${isLow ? "bg-red-500/5" : ""}`}
-                        >
-                          <td className="px-4 py-3">
-                            {supply.image ? (
-                              <img
-                                src={stockSupplyImageUrl(supply.image) ?? ""}
-                                alt=""
-                                className="h-10 w-10 rounded object-cover"
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
-                                <Package size={16} className="text-admin-header-text/30" />
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 font-medium text-admin-header-text">
-                            {formatSupplyDescription(supply)}
-                            {isLow && (
-                              <span className="ml-2 text-xs text-red-500 font-normal">Low Stock</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-admin-header-text/60">{reorder ? formatQuantityWithUnit(reorder, supply.unit) : "—"}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDetailTarget(supply)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                Details
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditTarget(supply)}
-                              >
-                                <Pencil className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setDeleteTarget(supply)
-                                  setDeleteError("")
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4 mr-1 text-red-500" />
-                                Delete
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPrev={prevPage}
-              onNext={nextPage}
-              canPrev={canPrev}
-              canNext={canNext}
+      {!loading && !error && (
+        <DataTable
+          columns={columns}
+          data={paginatedItems}
+          renderCell={renderCell}
+          keyExtractor={(s) => s.id}
+          emptyMessage="No supplies found"
+          rowClassName={(s) => {
+            const stock = Number(s.currentStock)
+            const reorder = Number(s.reorderLevel ?? 0)
+            return stock <= reorder ? "bg-red-500/5" : ""
+          }}
+          pagination={{
+            currentPage,
+            totalPages,
+            onPrev: prevPage,
+            onNext: nextPage,
+            canPrev,
+            canNext,
+          }}
+          header={
+            <Input
+              placeholder="Search supplies..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
             />
-          </>
-        )}
-      </Card>
+          }
+        />
+      )}
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="min-h-[250px] p-8">

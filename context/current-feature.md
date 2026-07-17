@@ -1,18 +1,26 @@
 # Current Feature
 
 ## Platform
-
-Not Specified
+frontend
 
 ## Status
-
-Not Started
+Complete
 
 ## Goals
-
-
+- Create a single reusable `DataTable` component that encapsulates all table settings
+- Eliminate repeated table boilerplate across 10+ tables
+- Consistent styling, sizing, and behavior across all tables
+- Non-data columns (Actions, Details) flex to fill remaining space
+- Data columns use fixed minimum width (150px default)
+- Pagination built-in
+- Horizontal scroll when data columns exceed container
 
 ## Notes
+- Component lives in `desktop/ui/components/ui/data-table.tsx`
+- Uses existing shadcn Card and Pagination components
+- Column sizing: data columns get `min-w-[150px]`, non-data columns flex to fill
+- Scroll appears naturally when data columns × 150px > container width
+- Refactor all 10 existing tables to use DataTable
 
 ## History
 

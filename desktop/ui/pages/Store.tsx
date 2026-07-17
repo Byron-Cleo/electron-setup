@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
-import { Pagination } from "@/components/ui/pagination"
+import { DataTable, type Column } from "@/components/ui/data-table"
 import {
   Select,
   SelectTrigger,
@@ -265,119 +265,99 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     canPrev,
   } = usePagination(filtered)
 
+  const columns: Column[] = [
+    { label: "Details", key: "details", isAction: true, width: 100 },
+    { label: "Image", key: "image" },
+    { label: "Name", key: "name" },
+    { label: "Stock", key: "stock", align: "right" },
+    { label: "Reorder Level", key: "reorderLevel", align: "right" },
+    { label: "Actions", key: "actions", isAction: true, width: 180 },
+  ]
+
+  function renderCell(item: StockSupply, column: Column) {
+    const isLow = item.reorderLevel != null && item.currentStock <= item.reorderLevel
+
+    switch (column.key) {
+      case "details":
+        return (
+          <Button variant="ghost" size="sm" onClick={() => setDetailTarget(item)}>
+            <Eye className="h-4 w-4 mr-1" />
+            Details
+          </Button>
+        )
+      case "image":
+        return item.image ? (
+          <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover" />
+        ) : (
+          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+            <Package size={16} className="text-admin-header-text/30" />
+          </div>
+        )
+      case "name":
+        return <span>{item.name}</span>
+      case "stock":
+        return (
+          <span className={`font-medium ${isLow ? "text-red-600" : ""}`}>
+            {formatQuantityWithUnit(item.currentStock, item.unit)}
+          </span>
+        )
+      case "reorderLevel":
+        return (
+          <span className="text-admin-muted">
+            {item.reorderLevel != null ? formatQuantityWithUnit(item.reorderLevel, item.unit) : "—"}
+          </span>
+        )
+      case "actions":
+        return (
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setEditTarget(item)}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setDeleteTarget(item); setDeleteError("") }}>
+              <Trash2 className="h-4 w-4 mr-1 text-red-500" />
+              Delete
+            </Button>
+          </div>
+        )
+      default:
+        return null
+    }
+  }
+
   if (loading) return <div className="text-admin-muted">Loading stock...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
     <div className="space-y-4">
       <Heading as="h2" className="text-admin-header-text text-center uppercase">All Current Stock Items</Heading>
-      <div className="rounded-lg border border-admin-card-border bg-admin-card overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-admin-card-border shrink-0">
+      <DataTable
+        columns={columns}
+        data={paginatedItems}
+        renderCell={renderCell}
+        keyExtractor={(item) => item.id}
+        emptyMessage="No stock items found"
+        rowClassName={(item) => {
+          const isLow = item.reorderLevel != null && item.currentStock <= item.reorderLevel
+          return isLow ? "bg-red-50" : ""
+        }}
+        pagination={{
+          currentPage,
+          totalPages,
+          onPrev: prevPage,
+          onNext: nextPage,
+          canPrev,
+          canNext,
+        }}
+        header={
           <Input
             placeholder="Search stock items..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
           />
-        </div>
-        <div className="overflow-x-auto flex-1 min-h-[384px]">
-          <table className="table-fixed w-full text-sm">
-            <thead>
-              <tr className="border-b border-admin-card-border bg-admin-content">
-                <th className="text-left px-4 py-3 font-medium text-admin-header-text w-[100px]">Details</th>
-                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Image</th>
-                <th className="text-left px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Name</th>
-                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Stock</th>
-                <th className="text-right px-4 py-3 font-medium text-admin-header-text min-w-[150px]">Reorder Level</th>
-                <th className="px-4 py-3 font-medium text-admin-header-text w-[180px]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedItems.map((item) => {
-                const isLow =
-                  item.reorderLevel != null && item.currentStock <= item.reorderLevel
-                return (
-                  <tr
-                    key={item.id}
-                    className={`border-b border-admin-card-border last:border-0 ${
-                      isLow ? "bg-red-50" : ""
-                    }`}
-                  >
-                    <td className="px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDetailTarget(item)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Details
-                      </Button>
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.image ? (
-                        <img
-                          src={stockSupplyImageUrl(item.image) ?? ""}
-                          alt=""
-                          className="h-10 w-10 rounded object-cover"
-                        />
-                      ) : (
-                        <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
-                          <Package size={16} className="text-admin-header-text/30" />
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">{item.name}</td>
-                    <td className={`px-4 py-3 text-right font-medium ${isLow ? "text-red-600" : ""}`}>
-                      {formatQuantityWithUnit(item.currentStock, item.unit)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-admin-muted">
-                      {item.reorderLevel != null ? formatQuantityWithUnit(item.reorderLevel, item.unit) : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditTarget(item)}
-                        >
-                          <Pencil className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setDeleteTarget(item)
-                            setDeleteError("")
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-1 text-red-500" />
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-              {paginatedItems.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-admin-muted">
-                    No stock items found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPrev={prevPage}
-          onNext={nextPage}
-          canPrev={canPrev}
-          canNext={canNext}
-        />
-      </div>
+        }
+      />
 
       <Dialog open={showAddModal} onOpenChange={(open) => !open && setShowAddModal(false)}>
         <DialogContent className="min-h-[400px]">

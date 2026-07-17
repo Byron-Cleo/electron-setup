@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
-import { Pagination } from "@/components/ui/pagination"
+import { DataTable } from "@/components/ui/data-table"
 import {
   Dialog,
   DialogContent,
@@ -136,80 +135,64 @@ export default function DepartmentManager({ onBack }: Props) {
 
       <Heading as="h2" className="mb-6 text-admin-header-text text-center uppercase">Restaurant Departments</Heading>
 
-      <Card className="bg-admin-card border-admin-card-border flex flex-col">
-        <div className="p-4 border-b border-admin-card-border shrink-0">
-          <Input
-            placeholder="Search departments..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
-        </div>
-
         {loading && <p className="p-4 text-admin-header-text/60">Loading...</p>}
         {error && <p className="p-4 text-red-500">Error: {error}</p>}
 
         {!loading && !error && (
-          <>
-            <div className="overflow-x-auto flex-1 min-h-[384px]">
-              <table className="table-fixed w-full">
-                <thead>
-                  <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border">
-                    <th className="px-4 py-3 min-w-[150px]">Name</th>
-                    <th className="px-4 py-3 min-w-[150px]">Description</th>
-                    <th className="px-4 py-3 w-[180px]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="px-4 py-8 text-center text-admin-header-text/60">
-                        No departments found
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedItems.map((dept) => {
-                      return (
-                        <tr
-                          key={dept.id}
-                          className="border-b border-admin-card-border last:border-0 hover:bg-admin-content/50"
-                        >
-                          <td className="px-4 py-3 font-medium text-admin-header-text">{dept.name}</td>
-                          <td className="px-4 py-3 text-admin-header-text/60">{dept.description ?? "—"}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => openEdit(dept)}>
-                                <Pencil className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => { setDeleteTarget(dept); setDeleteError("") }}
-                              >
-                                <Trash2 className="h-4 w-4 mr-1 text-red-500" />
-                                Delete
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPrev={prevPage}
-              onNext={nextPage}
-              canPrev={canPrev}
-              canNext={canNext}
-            />
-          </>
+          <DataTable
+            columns={[
+              { label: "Name", key: "name" },
+              { label: "Description", key: "description" },
+              { label: "Actions", key: "actions", isAction: true, width: 180 },
+            ]}
+            data={paginatedItems}
+            renderCell={(dept, column) => {
+              switch (column.key) {
+                case "name":
+                  return <span className="font-medium text-admin-header-text">{dept.name}</span>
+                case "description":
+                  return <span className="text-admin-header-text/60">{dept.description ?? "—"}</span>
+                case "actions":
+                  return (
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(dept)}>
+                        <Pencil className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setDeleteTarget(dept); setDeleteError("") }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1 text-red-500" />
+                        Delete
+                      </Button>
+                    </div>
+                  )
+                default:
+                  return null
+              }
+            }}
+            keyExtractor={(dept) => dept.id}
+            emptyMessage="No departments found"
+            pagination={{
+              currentPage,
+              totalPages,
+              onPrev: prevPage,
+              onNext: nextPage,
+              canPrev,
+              canNext,
+            }}
+            header={
+              <Input
+                placeholder="Search departments..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="max-w-sm"
+              />
+            }
+          />
         )}
-      </Card>
 
       {/* Create / Edit Dialog */}
       <Dialog open={showForm} onOpenChange={(open) => !open && setShowForm(false)}>
