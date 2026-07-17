@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Package, ClipboardList, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X } from "lucide-react"
+import { Package, ClipboardList, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X, Eye } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,9 +20,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, stockSupplyImageUrl } from "@/lib/api"
+import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, stockSupplyImageUrl, formatQuantityWithUnit } from "@/lib/api"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
+import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
 
 type StoreView = "dashboard" | "requests" | "stock" | "restock"
 
@@ -170,6 +171,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   const [deleteError, setDeleteError] = useState("")
   const [deleting, setDeleting] = useState(false)
   const [editTarget, setEditTarget] = useState<StockSupply | null>(null)
+  const [detailTarget, setDetailTarget] = useState<StockSupply | null>(null)
 
   // Form state
   const [formName, setFormName] = useState("")
@@ -269,12 +271,12 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-admin-card-border bg-admin-content">
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text"></th>
+              <th className="text-left px-4 py-3 font-medium text-admin-header-text w-[80px]">Details</th>
+              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Image</th>
               <th className="text-left px-4 py-3 font-medium text-admin-header-text">Name</th>
               <th className="text-right px-4 py-3 font-medium text-admin-header-text">Stock</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Unit</th>
               <th className="text-right px-4 py-3 font-medium text-admin-header-text">Reorder Level</th>
-              <th className="px-4 py-3 font-medium text-admin-header-text w-[160px]">Actions</th>
+              <th className="px-4 py-3 font-medium text-admin-header-text w-[140px]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -288,6 +290,16 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                     isLow ? "bg-red-50" : ""
                   }`}
                 >
+                  <td className="px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDetailTarget(item)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Details
+                    </Button>
+                  </td>
                   <td className="px-4 py-3">
                     {item.image ? (
                       <img
@@ -303,11 +315,10 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                   </td>
                   <td className="px-4 py-3">{item.name}</td>
                   <td className={`px-4 py-3 text-right font-medium ${isLow ? "text-red-600" : ""}`}>
-                    {item.currentStock}
+                    {formatQuantityWithUnit(item.currentStock, item.unit)}
                   </td>
-                  <td className="px-4 py-3 text-admin-muted">{item.unit}</td>
                   <td className="px-4 py-3 text-right text-admin-muted">
-                    {item.reorderLevel ?? "—"}
+                    {item.reorderLevel != null ? formatQuantityWithUnit(item.reorderLevel, item.unit) : "—"}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
@@ -509,6 +520,12 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         onClose={() => setEditTarget(null)}
         supplyId={editTarget?.id ?? null}
         onSaved={loadStock}
+      />
+
+      <StockSupplyDetailDialog
+        open={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
+        supplyId={detailTarget?.id ?? null}
       />
     </div>
   )

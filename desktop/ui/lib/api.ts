@@ -17,6 +17,17 @@ const UNIT_LABELS: Record<string, string> = {
   PCS: "pieces",
 }
 
+export function formatUnitLabel(unit: string): string {
+  return UNIT_LABELS[unit] ?? unit
+}
+
+export function formatQuantityWithUnit(quantity: number | string, unit: string): string {
+  const num = Number(quantity)
+  const label = formatUnitLabel(unit)
+  const display = num % 1 === 0 ? num.toString() : num.toFixed(2)
+  return `${display} ${label}`
+}
+
 export function formatSupplyDescription(supply: { name: string; unit: string; currentStock: number | string }): string {
   const stock = Number(supply.currentStock)
   const unit = UNIT_LABELS[supply.unit] ?? supply.unit.toLowerCase()

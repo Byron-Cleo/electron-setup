@@ -11,14 +11,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, ArrowLeft, Package } from "lucide-react"
+import { Plus, Pencil, Trash2, ArrowLeft, Package, Eye } from "lucide-react"
 import {
   getStockSupplies,
   deleteStockSupply,
   formatSupplyDescription,
+  formatQuantityWithUnit,
   stockSupplyImageUrl,
 } from "@/lib/api"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
+import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
 
 export default function StockSupplies() {
   const navigate = useNavigate()
@@ -30,6 +32,7 @@ export default function StockSupplies() {
   const [deleteError, setDeleteError] = useState("")
   const [deleting, setDeleting] = useState(false)
   const [editTarget, setEditTarget] = useState<StockSupply | null>(null)
+  const [detailTarget, setDetailTarget] = useState<StockSupply | null>(null)
 
   async function fetchAll() {
     setLoading(true)
@@ -143,9 +146,17 @@ export default function StockSupplies() {
                           <span className="ml-2 text-xs text-red-500 font-normal">Low Stock</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-admin-header-text/60">{reorder ? reorder.toFixed(2) : "—"}</td>
+                      <td className="px-4 py-3 text-admin-header-text/60">{reorder ? formatQuantityWithUnit(reorder, supply.unit) : "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDetailTarget(supply)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Details
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -204,6 +215,12 @@ export default function StockSupplies() {
         onClose={() => setEditTarget(null)}
         supplyId={editTarget?.id ?? null}
         onSaved={fetchAll}
+      />
+
+      <StockSupplyDetailDialog
+        open={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
+        supplyId={detailTarget?.id ?? null}
       />
     </div>
   )

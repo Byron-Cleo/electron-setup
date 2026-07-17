@@ -218,9 +218,11 @@ interface KitchenConfigItem {
   id: string;
   name: string;
   unit: string;
+  image: string | null;
+  currentStock: number;
+  reorderLevel: number | null;
   platesPerUnit: number | null;
   menuId: string | null;
-  category: { id: string; name: string };
   menu?: { id: string; name: string } | null;
 }
 

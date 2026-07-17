@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Package, Send, Clock, ArrowLeft, UtensilsCrossed, ChefHat, History } from "lucide-react"
+import { Package, Send, Clock, ArrowLeft, UtensilsCrossed, ChefHat, History, Eye } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
@@ -23,7 +23,10 @@ import {
   getKitchenConfig,
   getCookingRecords,
   createCookingRecord,
+  stockSupplyImageUrl,
+  formatQuantityWithUnit,
 } from "@/lib/api"
+import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
 
 type KitchenView = "dashboard" | "request-food" | "cooked-food"
 type RequestTab = "stock" | "history"
@@ -157,6 +160,7 @@ function CurrentStockView({ userId }: { userId: string }) {
   const [requestNotes, setRequestNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [detailTarget, setDetailTarget] = useState<StockSupply | null>(null)
 
   async function loadStock() {
     try {
@@ -214,11 +218,11 @@ function CurrentStockView({ userId }: { userId: string }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-admin-card-border bg-admin-content">
+              <th className="text-left px-4 py-3 font-medium text-admin-header-text w-[80px]">Details</th>
+              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Image</th>
               <th className="text-left px-4 py-3 font-medium text-admin-header-text">Name</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Category</th>
-              <th className="text-right px-4 py-3 font-medium text-admin-header-text">Stock Level</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Unit</th>
-              <th className="text-center px-4 py-3 font-medium text-admin-header-text">Request Stock Item</th>
+              <th className="text-right px-4 py-3 font-medium text-admin-header-text">Stock</th>
+              <th className="px-4 py-3 font-medium text-admin-header-text w-[140px]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -231,13 +235,34 @@ function CurrentStockView({ userId }: { userId: string }) {
                     isLow ? "bg-red-50" : ""
                   }`}
                 >
-                  <td className="px-4 py-3">{item.name}</td>
-                  <td className="px-4 py-3 text-admin-muted">{item.category.name}</td>
-                  <td className={`px-4 py-3 text-right font-medium ${isLow ? "text-red-600" : ""}`}>
-                    {item.currentStock}
+                  <td className="px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDetailTarget(item)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Details
+                    </Button>
                   </td>
-                  <td className="px-4 py-3 text-admin-muted">{item.unit}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3">
+                    {item.image ? (
+                      <img
+                        src={stockSupplyImageUrl(item.image) ?? ""}
+                        alt=""
+                        className="h-10 w-10 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+                        <Package size={16} className="text-admin-header-text/30" />
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">{item.name}</td>
+                  <td className={`px-4 py-3 text-right font-medium ${isLow ? "text-red-600" : ""}`}>
+                    {formatQuantityWithUnit(item.currentStock, item.unit)}
+                  </td>
+                  <td className="px-4 py-3">
                     <Button
                       size="sm"
                       variant="outline"
@@ -321,6 +346,12 @@ function CurrentStockView({ userId }: { userId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StockSupplyDetailDialog
+        open={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
+        supplyId={detailTarget?.id ?? null}
+      />
     </div>
   )
 }
@@ -482,7 +513,6 @@ function KitchenInventoryView({ userId }: { userId: string }) {
           <thead>
             <tr className="border-b border-admin-card-border bg-admin-content">
               <th className="text-left px-4 py-3 font-medium text-admin-header-text">Item</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Category</th>
               <th className="text-right px-4 py-3 font-medium text-admin-header-text">Plates/Unit</th>
               <th className="text-left px-4 py-3 font-medium text-admin-header-text">Unit</th>
               <th className="text-center px-4 py-3 font-medium text-admin-header-text">Action</th>
@@ -495,7 +525,6 @@ function KitchenInventoryView({ userId }: { userId: string }) {
                 className="border-b border-admin-card-border last:border-0"
               >
                 <td className="px-4 py-3 font-medium">{item.name}</td>
-                <td className="px-4 py-3 text-admin-muted">{item.category.name}</td>
                 <td className="px-4 py-3 text-right text-admin-muted">
                   {item.platesPerUnit ?? "—"}
                 </td>
@@ -516,7 +545,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-admin-muted">
+                <td colSpan={4} className="px-4 py-8 text-center text-admin-muted">
                   No kitchen items configured. Set up plates per unit in Settings.
                 </td>
               </tr>
