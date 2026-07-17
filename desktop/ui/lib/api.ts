@@ -38,43 +38,6 @@ async function apiFetch(path: string, options?: RequestInit) {
   return res.json()
 }
 
-// ─── Stock Supply Category ──────────────────────────────────────────────────
-
-export async function getStockSupplyCategories(): Promise<StockSupplyCategory[]> {
-  if (window.electron?.stockSupplyCategory?.getAll) {
-    return window.electron.stockSupplyCategory.getAll()
-  }
-  return apiFetch("/stock-supply-categories")
-}
-
-export async function getStockSupplyCategoryById(id: string): Promise<StockSupplyCategory> {
-  if (window.electron?.stockSupplyCategory?.getById) {
-    return window.electron.stockSupplyCategory.getById(id)
-  }
-  return apiFetch(`/stock-supply-categories/${id}`)
-}
-
-export async function createStockSupplyCategory(data: StockSupplyCategoryCreateData) {
-  if (window.electron?.stockSupplyCategory?.create) {
-    return window.electron.stockSupplyCategory.create(data)
-  }
-  return apiFetch("/stock-supply-categories", { method: "POST", body: JSON.stringify(data) })
-}
-
-export async function updateStockSupplyCategory(id: string, data: StockSupplyCategoryUpdateData) {
-  if (window.electron?.stockSupplyCategory?.update) {
-    return window.electron.stockSupplyCategory.update(id, data)
-  }
-  return apiFetch(`/stock-supply-categories/${id}`, { method: "PUT", body: JSON.stringify(data) })
-}
-
-export async function deleteStockSupplyCategory(id: string) {
-  if (window.electron?.stockSupplyCategory?.delete) {
-    return window.electron.stockSupplyCategory.delete(id)
-  }
-  return apiFetch(`/stock-supply-categories/${id}`, { method: "DELETE" })
-}
-
 // ─── Stock Supply ───────────────────────────────────────────────────────────
 
 export async function getStockSupplies(departmentId?: string): Promise<StockSupply[]> {

@@ -31,7 +31,6 @@ import { X, Package } from "lucide-react"
 import {
   getStockSupplyById,
   updateStockSupply,
-  getStockSupplyCategories,
   getDepartments,
   formatSupplyDescription,
   stockSupplyImageUrl,
@@ -40,7 +39,6 @@ import {
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  categoryId: z.string().min(1, "Category is required"),
   unit: z.enum(["KG", "G", "L", "ML", "PCS"], { required_error: "Unit is required" }),
   currentStock: z.coerce.number().min(0).optional(),
   reorderLevel: z.coerce.number().min(0).optional(),
@@ -64,7 +62,6 @@ interface Props {
 }
 
 export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved }: Props) {
-  const [categories, setCategories] = useState<StockSupplyCategory[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
@@ -77,7 +74,6 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
     defaultValues: {
       name: "",
       description: "",
-      categoryId: "",
       unit: undefined,
       currentStock: 0,
       reorderLevel: 0,
@@ -93,9 +89,8 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
     setExistingImage(null)
     setLoading(true)
 
-    Promise.all([getStockSupplyCategories(), getDepartments()])
-      .then(([cats, depts]) => {
-        setCategories(cats)
+    Promise.all([getDepartments()])
+      .then(([depts]) => {
         setDepartments(depts)
         if (supplyId) {
           return getStockSupplyById(supplyId)
@@ -106,7 +101,6 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
           form.reset({
             name: supply.name,
             description: supply.description ?? "",
-            categoryId: supply.categoryId,
             unit: supply.unit,
             currentStock: supply.currentStock,
             reorderLevel: supply.reorderLevel ?? 0,
@@ -210,31 +204,6 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
               />
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="categoryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <FormField
                   control={form.control}
                   name="unit"

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
 import { Package, ClipboardList, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,7 +20,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, getStockSupplyCategories, createStockSupply, deleteStockSupply, getLowStockCount, stockSupplyImageUrl } from "@/lib/api"
+import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, stockSupplyImageUrl } from "@/lib/api"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 
@@ -162,11 +161,9 @@ function Store() {
 
 function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; setShowAddModal: (v: boolean) => void }) {
   const [items, setItems] = useState<StockSupply[]>([])
-  const [categories, setCategories] = useState<StockSupplyCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("all")
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<StockSupply | null>(null)
@@ -177,7 +174,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   // Form state
   const [formName, setFormName] = useState("")
   const [formDescription, setFormDescription] = useState("")
-  const [formCategoryId, setFormCategoryId] = useState("")
   const [formUnit, setFormUnit] = useState("")
   const [formCurrentStock, setFormCurrentStock] = useState("")
   const [formReorderLevel, setFormReorderLevel] = useState("")
@@ -187,7 +183,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   function resetForm() {
     setFormName("")
     setFormDescription("")
-    setFormCategoryId("")
     setFormUnit("")
     setFormCurrentStock("")
     setFormReorderLevel("")
@@ -197,8 +192,8 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   }
 
   async function handleAddItem() {
-    if (!formName || !formCategoryId || !formUnit) {
-      setSaveError("Name, category, and unit are required")
+    if (!formName || !formUnit) {
+      setSaveError("Name and unit are required")
       return
     }
 
@@ -208,7 +203,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
       await createStockSupply({
         name: formName,
         description: formDescription || undefined,
-        categoryId: formCategoryId,
         unit: formUnit as "KG" | "G" | "L" | "ML" | "PCS",
         currentStock: formCurrentStock ? Number(formCurrentStock) : 0,
         reorderLevel: formReorderLevel ? Number(formReorderLevel) : undefined,
@@ -240,12 +234,8 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   async function loadStock() {
     try {
       setLoading(true)
-      const [supplyData, categoryData] = await Promise.all([
-        getStockSupplies(),
-        getStockSupplyCategories(),
-      ])
+      const supplyData = await getStockSupplies()
       setItems(supplyData)
-      setCategories(categoryData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load stock")
     } finally {
@@ -258,9 +248,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   }, [])
 
   const filtered = items.filter((item) => {
-    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase())
-    const matchesCategory = categoryFilter === "all" || item.categoryId === categoryFilter
-    return matchesSearch && matchesCategory
+    return item.name.toLowerCase().includes(search.toLowerCase())
   })
 
   if (loading) return <div className="text-admin-muted">Loading stock...</div>
@@ -270,33 +258,19 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     <div className="space-y-4">
       <Heading as="h2" className="text-admin-header-text text-center uppercase">All Current Stock Items</Heading>
       <div className="rounded-lg border border-admin-card-border bg-admin-card overflow-hidden">
-        <div className="p-4 border-b border-admin-card-border flex gap-4">
+        <div className="p-4 border-b border-admin-card-border">
           <Input
             placeholder="Search stock items..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
           />
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-admin-card-border bg-admin-content">
               <th className="text-left px-4 py-3 font-medium text-admin-header-text"></th>
               <th className="text-left px-4 py-3 font-medium text-admin-header-text">Name</th>
-              <th className="text-left px-4 py-3 font-medium text-admin-header-text">Category</th>
               <th className="text-right px-4 py-3 font-medium text-admin-header-text">Stock</th>
               <th className="text-left px-4 py-3 font-medium text-admin-header-text">Unit</th>
               <th className="text-right px-4 py-3 font-medium text-admin-header-text">Reorder Level</th>
@@ -328,7 +302,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                     )}
                   </td>
                   <td className="px-4 py-3">{item.name}</td>
-                  <td className="px-4 py-3 text-admin-muted">{item.category.name}</td>
                   <td className={`px-4 py-3 text-right font-medium ${isLow ? "text-red-600" : ""}`}>
                     {item.currentStock}
                   </td>
@@ -364,7 +337,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-admin-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-admin-muted">
                   No stock items found
                 </td>
               </tr>
@@ -400,22 +373,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-xs">Category *</Label>
-                <Select value={formCategoryId} onValueChange={setFormCategoryId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">Unit *</Label>
                 <Select value={formUnit} onValueChange={setFormUnit}>

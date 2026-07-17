@@ -1,12 +1,11 @@
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Package, Building2, ChefHat } from "lucide-react"
+import { Building2, ChefHat } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
-import StockSupplyCategories from "./StockSupplyCategories"
 
-type ActiveView = "departments" | "stock-supply-categories" | "kitchen-config" | null
+type ActiveView = "departments" | "kitchen-config" | null
 
 const cards: { title: string; description: string; icon: typeof Building2; view: NonNullable<ActiveView> }[] = [
   {
@@ -14,12 +13,6 @@ const cards: { title: string; description: string; icon: typeof Building2; view:
     description: "Manage departments that can request stock",
     icon: Building2,
     view: "departments",
-  },
-  {
-    title: "Stock Supply Categories",
-    description: "Manage types of raw materials",
-    icon: Package,
-    view: "stock-supply-categories",
   },
   {
     title: "Kitchen Stock Configuration",
@@ -38,10 +31,6 @@ function Manager() {
 
       {activeView === "departments" && (
         <DepartmentManager onBack={() => setActiveView(null)} />
-      )}
-
-      {activeView === "stock-supply-categories" && (
-        <StockSupplyCategories onBack={() => setActiveView(null)} />
       )}
 
       {activeView === "kitchen-config" && (

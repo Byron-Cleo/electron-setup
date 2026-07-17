@@ -11,8 +11,6 @@ import AdminKitchen from "./pages/admin/Kitchen"
 import AdminStore from "./pages/admin/Store"
 import AdminCashier from "./pages/admin/Cashier"
 import AdminManager from "./pages/admin/Manager"
-import StockSupplyCategories from "./pages/admin/StockSupplyCategories"
-import StockSupplyCategoryForm from "./pages/admin/StockSupplyCategoryForm"
 import StockSupplies from "./pages/admin/StockSupplies"
 import StockSupplyForm from "./pages/admin/StockSupplyForm"
 import ProtectedRoute from "./components/ProtectedRoute"
@@ -40,9 +38,6 @@ function App() {
         >
           <Route index element={<AdminIndex />} />
           <Route path="settings" element={<AdminManager />} />
-          <Route path="settings/stock-supply-categories" element={<StockSupplyCategories />} />
-          <Route path="settings/stock-supply-categories/new" element={<StockSupplyCategoryForm />} />
-          <Route path="settings/stock-supply-categories/:id" element={<StockSupplyCategoryForm />} />
           <Route path="store" element={<AdminStore />} />
           <Route path="store/stock-supplies" element={<StockSupplies />} />
           <Route path="store/stock-supplies/new" element={<StockSupplyForm />} />

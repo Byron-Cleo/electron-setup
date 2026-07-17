@@ -2,7 +2,7 @@
 
 ## Platform
 
-backend
+frontend
 
 ## Status
 
@@ -10,40 +10,38 @@ Complete
 
 ## Goals
 
-- Remove StockSupplyCategory model from Prisma schema
-- Remove categoryId from StockSupply model
-- Delete stock supply category CRUD routes
-- Remove category route from Express app
-- Remove categoryId handling from stock supply create/update routes
-- Update seed data
+- Remove StockSupplyCategory types from electron.d.ts
+- Remove stockSupplyCategory namespace from ElectronAPI
+- Remove 5 category API functions from lib/api.ts
+- Delete StockSupplyCategories.tsx and StockSupplyCategoryForm.tsx
+- Remove category routes from App.tsx
+- Remove category card from Manager.tsx settings view
+- Remove category select from StockSupplyForm and StockSupplyEditDialog
+- Remove category filter from StockSupplies and Store tables
+- Remove categoryId from StockSupply types
 
 ## Notes
 
-- Migration will drop the StockSupplyCategory table and categoryId column
-- Existing stock supply data will lose category association
-- Stock supply create no longer requires categoryId
-- Stock supply update no longer accepts categoryId
-
-## Files Modified
-
-| File | Change |
-|------|--------|
-| `backend/prisma/schema.prisma` | Remove StockSupplyCategory model, remove categoryId + category from StockSupply |
-| `backend/routes/itemCategories.ts` | Delete |
-| `backend/app.ts` | Remove import + route registration |
-| `backend/routes/items.ts` | Remove categoryId from POST/PUT destructuring, validation, Prisma queries |
-| `backend/db/seed.ts` | Remove category seeding, update stock supply seed |
-| `backend/db/sample-data.ts` | Remove stockSupplyCategories array |
-
-## Verification
-
-1. `npx prisma generate` passes
-2. `npx prisma db push` succeeds
-3. `npx tsc --noEmit` passes
-4. POST /api/stock-supplies works without categoryId
-5. PUT /api/stock-supplies/:id works without categoryId
+- Stock supply forms no longer have a category dropdown
+- Stock tables no longer have a category filter dropdown
+- Settings page shows only Departments and Kitchen Config cards
+- Stock supply search still works by name
 
 ## History
+
+### frontend - 2026-07-17 — Remove StockSupplyCategory
+- Removed StockSupplyCategory, StockSupplyCategoryCreateData, StockSupplyCategoryUpdateData types from electron.d.ts
+- Removed categoryId from StockSupply, StockSupplyCreateData, StockSupplyUpdateData types
+- Removed stockSupplyCategory namespace from ElectronAPI
+- Removed 5 category API functions from lib/api.ts
+- Deleted StockSupplyCategories.tsx and StockSupplyCategoryForm.tsx
+- Removed 3 category routes and 2 imports from App.tsx
+- Removed category card, icon, and view from Manager.tsx settings
+- Removed categoryId from StockSupplyForm schema, state, form, and category fetch
+- Removed categoryId from StockSupplyEditDialog schema, state, form, and category fetch
+- Removed category filter and category column from StockSupplies table
+- Removed category filter, category column, and category form field from Store StockView
+- Branch: feature/frontend/remove-stock-supply-category
 
 ### backend - 2026-07-17 — Remove StockSupplyCategory
 - Removed StockSupplyCategory model from Prisma schema

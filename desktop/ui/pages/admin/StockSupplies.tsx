@@ -5,13 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Heading } from "@/components/ui/heading"
 import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -21,7 +14,6 @@ import {
 import { Plus, Pencil, Trash2, ArrowLeft, Package } from "lucide-react"
 import {
   getStockSupplies,
-  getStockSupplyCategories,
   deleteStockSupply,
   formatSupplyDescription,
   stockSupplyImageUrl,
@@ -31,11 +23,9 @@ import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 export default function StockSupplies() {
   const navigate = useNavigate()
   const [supplies, setSupplies] = useState<StockSupply[]>([])
-  const [categories, setCategories] = useState<StockSupplyCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("all")
   const [deleteTarget, setDeleteTarget] = useState<StockSupply | null>(null)
   const [deleteError, setDeleteError] = useState("")
   const [deleting, setDeleting] = useState(false)
@@ -45,12 +35,8 @@ export default function StockSupplies() {
     setLoading(true)
     setError("")
     try {
-      const [supplyData, categoryData] = await Promise.all([
-        getStockSupplies(),
-        getStockSupplyCategories(),
-      ])
+      const supplyData = await getStockSupplies()
       setSupplies(supplyData)
-      setCategories(categoryData)
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -78,9 +64,7 @@ export default function StockSupplies() {
   }
 
   const filtered = supplies.filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase())
-    const matchesCategory = categoryFilter === "all" || s.categoryId === categoryFilter
-    return matchesSearch && matchesCategory
+    return s.name.toLowerCase().includes(search.toLowerCase())
   })
 
   return (
@@ -99,26 +83,13 @@ export default function StockSupplies() {
       </div>
 
       <Card className="bg-admin-card border-admin-card-border">
-        <div className="p-4 border-b border-admin-card-border flex gap-4">
+        <div className="p-4 border-b border-admin-card-border">
           <Input
             placeholder="Search supplies..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
           />
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         {loading && <p className="p-4 text-admin-header-text/60">Loading...</p>}
@@ -131,7 +102,6 @@ export default function StockSupplies() {
                 <th className="px-4 py-3 w-[60px]">#</th>
                 <th className="px-4 py-3 w-[60px]"></th>
                 <th className="px-4 py-3 flex-1">Description</th>
-                <th className="px-4 py-3 w-[140px]">Category</th>
                 <th className="px-4 py-3 w-[100px]">Reorder</th>
                 <th className="px-4 py-3 w-[150px]">Actions</th>
               </tr>
@@ -139,7 +109,7 @@ export default function StockSupplies() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-admin-header-text/60">
+                      <td colSpan={5} className="px-4 py-8 text-center text-admin-header-text/60">
                     No supplies found
                   </td>
                 </tr>
@@ -173,7 +143,6 @@ export default function StockSupplies() {
                           <span className="ml-2 text-xs text-red-500 font-normal">Low Stock</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-admin-header-text/60">{supply.category.name}</td>
                       <td className="px-4 py-3 text-admin-header-text/60">{reorder ? reorder.toFixed(2) : "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
