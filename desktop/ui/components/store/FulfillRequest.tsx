@@ -133,9 +133,9 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
       <DataTable
         columns={[
           { label: "Item", key: "item" },
-          { label: "Requested", key: "requested", align: "right" },
-          { label: "Available", key: "available", align: "right" },
-          { label: "Deliver", key: "deliver", isAction: true, width: 120, align: "right" },
+          { label: "Requested", key: "requested" },
+          { label: "Available", key: "available" },
+          { label: "Deliver", key: "deliver", isAction: true, align: "right" },
         ]}
         data={paginatedItems}
         renderCell={(item, column) => {

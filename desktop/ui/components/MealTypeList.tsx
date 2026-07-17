@@ -63,7 +63,7 @@ export default function MealTypeList({ onEdit, onAdd }: Props) {
         columns={[
           { label: "Name", key: "name" },
           { label: "Sort Order", key: "sortOrder" },
-          { label: "Actions", key: "actions", isAction: true, width: 180 },
+          { label: "Actions", key: "actions", isAction: true },
         ]}
         data={paginatedItems}
         renderCell={(mt, column) => {

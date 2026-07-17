@@ -143,7 +143,7 @@ export default function DepartmentManager({ onBack }: Props) {
             columns={[
               { label: "Name", key: "name" },
               { label: "Description", key: "description" },
-              { label: "Actions", key: "actions", isAction: true, width: 180 },
+              { label: "Actions", key: "actions", isAction: true },
             ]}
             data={paginatedItems}
             renderCell={(dept, column) => {

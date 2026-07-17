@@ -137,7 +137,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
             { label: "Stock Item", key: "name" },
             { label: "Plates per Unit", key: "platesPerUnit" },
             { label: "Menu Item", key: "menu" },
-            { label: "Actions", key: "actions", isAction: true, width: 120 },
+            { label: "Actions", key: "actions", isAction: true },
           ]}
           data={paginatedItems}
           renderCell={(item, column) => {

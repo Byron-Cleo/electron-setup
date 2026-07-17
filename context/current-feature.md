@@ -24,6 +24,16 @@ Complete
 
 ## History
 
+### frontend - 2026-07-17 — Reusable DataTable Component
+- Created generic DataTable component with typed props (Column, renderCell, keyExtractor)
+- Data columns: `max-w-[144px]` (expand to fill, cap at 144px), center aligned
+- Non-data columns (`isAction: true`): right aligned, flex to fill remaining space
+- Scroll appears when >8 data columns exceed container width
+- Built-in Pagination integration (always renders, even with exactly 8 records)
+- Table height stays constant during page navigation
+- Refactored 10 tables across 8 files to use DataTable
+- Branch: feature/frontend/reusable-data-table
+
 ### frontend - 2026-07-17 — Remove StockSupplyCategory
 - Removed StockSupplyCategory, StockSupplyCategoryCreateData, StockSupplyCategoryUpdateData types from electron.d.ts
 - Removed categoryId from StockSupply, StockSupplyCreateData, StockSupplyUpdateData types

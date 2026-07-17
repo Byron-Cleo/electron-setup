@@ -266,12 +266,12 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   } = usePagination(filtered)
 
   const columns: Column[] = [
-    { label: "Details", key: "details", isAction: true, width: 100 },
+          { label: "Details", key: "details" },
     { label: "Image", key: "image" },
     { label: "Name", key: "name" },
-    { label: "Stock", key: "stock", align: "right" },
-    { label: "Reorder Level", key: "reorderLevel", align: "right" },
-    { label: "Actions", key: "actions", isAction: true, width: 180 },
+    { label: "Stock", key: "stock" },
+    { label: "Reorder Level", key: "reorderLevel" },
+          { label: "Actions", key: "actions", isAction: true },
   ]
 
   function renderCell(item: StockSupply, column: Column) {

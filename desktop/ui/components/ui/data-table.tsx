@@ -7,8 +7,6 @@ interface Column {
   label: string
   key: string
   isAction?: boolean
-  minWidth?: number
-  width?: number
   align?: "left" | "right" | "center"
   className?: string
 }
@@ -47,17 +45,16 @@ function DataTable<T>({
       <div className="overflow-x-auto flex-1 min-h-[384px]">
         <table className="table-fixed w-full">
           <thead>
-            <tr className="text-left text-sm text-admin-header-text/60 border-b border-admin-card-border bg-admin-content">
+            <tr className="text-sm text-admin-header-text/60 border-b border-admin-card-border bg-admin-content">
               {columns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
                     "px-4 py-3 font-medium",
+                    col.isAction ? "text-right" : "text-center",
                     col.isAction
-                      ? col.width
-                        ? `w-[${col.width}px]`
-                        : ""
-                      : `min-w-[${col.minWidth ?? 150}px]`,
+                      ? "w-auto"
+                      : "max-w-[144px]",
                     col.align === "right" && "text-right",
                     col.align === "center" && "text-center",
                     col.className
@@ -94,6 +91,7 @@ function DataTable<T>({
                       key={col.key}
                       className={cn(
                         "px-4 py-3",
+                        col.isAction ? "text-right" : "text-center",
                         col.align === "right" && "text-right",
                         col.align === "center" && "text-center",
                         col.className

@@ -67,7 +67,7 @@ export default function MenuList({ onEdit, onAdd }: Props) {
           { label: "Price", key: "price" },
           { label: "Stock", key: "stock" },
           { label: "Featured", key: "featured" },
-          { label: "Actions", key: "actions", isAction: true, width: 180 },
+          { label: "Actions", key: "actions", isAction: true },
         ]}
         data={paginatedItems}
         renderCell={(item, column) => {

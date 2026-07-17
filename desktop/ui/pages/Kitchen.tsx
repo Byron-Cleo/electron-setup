@@ -221,11 +221,11 @@ function CurrentStockView({ userId }: { userId: string }) {
   } = usePagination(items)
 
   const columns: Column[] = [
-    { label: "Details", key: "details", isAction: true, width: 100 },
+          { label: "Details", key: "details" },
     { label: "Image", key: "image" },
     { label: "Name", key: "name" },
-    { label: "Stock", key: "stock", align: "right" },
-    { label: "Actions", key: "actions", isAction: true, width: 180 },
+    { label: "Stock", key: "stock" },
+          { label: "Actions", key: "actions", isAction: true },
   ]
 
   function renderCell(item: StockSupply, column: Column) {
@@ -525,9 +525,9 @@ function KitchenInventoryView({ userId }: { userId: string }) {
 
   const columns: Column[] = [
     { label: "Item", key: "name" },
-    { label: "Plates/Unit", key: "platesPerUnit", align: "right" },
+    { label: "Plates/Unit", key: "platesPerUnit" },
     { label: "Unit", key: "unit" },
-    { label: "Action", key: "action", isAction: true, width: 120, align: "center" },
+          { label: "Action", key: "action", isAction: true, align: "center" },
   ]
 
   function renderCell(item: KitchenConfigItem, column: Column) {
@@ -678,8 +678,8 @@ function CookingHistoryView({ userId }: { userId: string }) {
   const columns: Column[] = [
     { label: "Date/Time", key: "createdAt" },
     { label: "Item", key: "name" },
-    { label: "Cooked", key: "cooked", align: "right" },
-    { label: "Plates", key: "plates", align: "right" },
+    { label: "Cooked", key: "cooked" },
+    { label: "Plates", key: "plates" },
   ]
 
   function renderCell(record: CookingRecord, column: Column) {

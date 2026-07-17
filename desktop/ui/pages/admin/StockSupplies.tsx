@@ -85,7 +85,7 @@ export default function StockSupplies() {
     { label: "", key: "image" },
     { label: "Description", key: "description" },
     { label: "Reorder", key: "reorder" },
-    { label: "Actions", key: "actions", isAction: true, width: 180 },
+    { label: "Actions", key: "actions", isAction: true },
   ]
 
   function renderCell(supply: StockSupply, column: Column) {
