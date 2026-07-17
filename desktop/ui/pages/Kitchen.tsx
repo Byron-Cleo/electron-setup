@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Package, Send, Clock, ArrowLeft, UtensilsCrossed, ChefHat, History, Eye } from "lucide-react"
+import { Package, Send, Clock, ArrowLeft, UtensilsCrossed, ChefHat, History, Eye, CheckCircle } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
@@ -34,11 +34,7 @@ type KitchenView = "dashboard" | "request-food" | "cooked-food"
 type RequestTab = "stock" | "history"
 type CookedTab = "inventory" | "cooking-history"
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  PENDING: { label: "Pending", className: "bg-yellow-100 text-yellow-800" },
-  PARTIAL: { label: "Partial", className: "bg-orange-100 text-orange-800" },
-  COMPLETED: { label: "Completed", className: "bg-green-100 text-green-800" },
-}
+
 
 type StockDisplayStatus = "Available" | "Not Available"
 type RequestDisplayStatus = "Pending" | "Partial" | "Completed"
@@ -459,6 +455,7 @@ function MyRequestsView({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<"pending" | "partial" | "completed">("pending")
 
   async function loadRequests() {
     try {
@@ -476,66 +473,159 @@ function MyRequestsView({ userId }: { userId: string }) {
     loadRequests()
   }, [userId])
 
+  const tabs = [
+    { key: "pending" as const, label: "Pending", icon: Clock },
+    { key: "partial" as const, label: "Partial", icon: Package },
+    { key: "completed" as const, label: "Completed", icon: CheckCircle },
+  ]
+
+  const tabCounts = {
+    pending: requests.filter((r) => r.status === "PENDING").length,
+    partial: requests.filter((r) => r.status === "PARTIAL").length,
+    completed: requests.filter((r) => r.status === "COMPLETED").length,
+  }
+
+  const filteredRequests = requests.filter((r) => {
+    switch (activeTab) {
+      case "pending":   return r.status === "PENDING"
+      case "partial":   return r.status === "PARTIAL"
+      case "completed": return r.status === "COMPLETED"
+    }
+  })
+
+  const columns: Column[] = [
+    { label: "Date", key: "date" },
+    { label: "Items", key: "items" },
+    { label: "Notes", key: "notes" },
+    { label: "Details", key: "details", isAction: true },
+  ]
+
+  function renderCell(request: StockRequest, column: Column) {
+    switch (column.key) {
+      case "date":
+        return (
+          <span className="text-sm">
+            {new Date(request.createdAt).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+        )
+      case "items":
+        return (
+          <span className="text-sm text-admin-muted">
+            {request.items.length} item{request.items.length !== 1 ? "s" : ""}
+          </span>
+        )
+      case "notes":
+        return (
+          <span className="text-sm text-admin-muted truncate max-w-[200px]">
+            {request.notes || "—"}
+          </span>
+        )
+      case "details":
+        return (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setExpandedId(expandedId === request.id ? null : request.id)}
+          >
+            <Eye size={14} className="mr-1" />
+            {expandedId === request.id ? "Hide" : "Details"}
+          </Button>
+        )
+      default:
+        return null
+    }
+  }
+
+  const expandedRequest = expandedId ? requests.find((r) => r.id === expandedId) : null
+
   if (loading) return <div className="text-admin-muted">Loading requests...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
     <div className="space-y-4">
       <Heading as="h2" className="text-admin-header-text">My Requests</Heading>
-      {requests.length === 0 && (
-        <div className="text-center py-8 text-admin-muted">No requests yet</div>
-      )}
-      <div className="space-y-3">
-        {requests.map((request) => {
-          const config = STATUS_CONFIG[request.status]
-          const isExpanded = expandedId === request.id
-          return (
-            <Card key={request.id} className="p-4">
-              <div
-                className="flex items-center justify-between cursor-pointer"
-                onClick={() => setExpandedId(isExpanded ? null : request.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-admin-muted">
-                    {new Date(request.createdAt).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </span>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
-                    {config.label}
-                  </span>
-                </div>
-                <span className="text-xs text-admin-muted">
-                  {request.items.length} item{request.items.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-              {isExpanded && (
-                <div className="mt-3 pt-3 border-t border-admin-card-border space-y-2">
-                  {request.notes && (
-                    <p className="text-sm text-admin-muted italic">{request.notes}</p>
-                  )}
-                  {request.items.map((item) => {
-                    const delivered = Number(item.quantityDelivered)
-                    const requested = Number(item.quantityRequested)
-                    const isComplete = delivered >= requested
-                    return (
-                      <div key={item.id} className="flex items-center gap-2 text-sm">
-                        <span>{item.stockSupply.name}</span>
-                        <span className="text-admin-muted">—</span>
-                        <span className={isComplete ? "text-green-600" : "text-orange-600"}>
-                          {delivered} / {requested} {item.stockSupply.unit}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </Card>
-          )
-        })}
+      <div className="flex items-center gap-2 border-b border-admin-card-border">
+        {tabs.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === key
+                ? "border-b-2 border-admin-accent text-admin-accent"
+                : "text-admin-muted hover:text-admin-header-text"
+            }`}
+          >
+            <Icon size={16} />
+            {label}
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-admin-content text-admin-muted">
+              {tabCounts[key]}
+            </span>
+          </button>
+        ))}
       </div>
+      {filteredRequests.length === 0 && (
+        <div className="text-center py-8 text-admin-muted">
+          No {activeTab} requests
+        </div>
+      )}
+      {filteredRequests.length > 0 && (
+        <DataTable
+          columns={columns}
+          data={filteredRequests}
+          renderCell={renderCell}
+          keyExtractor={(request) => request.id}
+          emptyMessage={`No ${activeTab} requests`}
+        />
+      )}
+      {expandedRequest && (
+        <Card className="p-4 mt-2">
+          <Heading as="h3" className="text-sm font-medium text-admin-header-text mb-3">
+            Request Details — {new Date(expandedRequest.createdAt).toLocaleDateString("en-GB")}
+          </Heading>
+          <div className="space-y-2">
+            {expandedRequest.notes && (
+              <p className="text-sm text-admin-muted italic">{expandedRequest.notes}</p>
+            )}
+            <div className="grid grid-cols-5 text-xs font-medium text-admin-muted border-b pb-1">
+              <span>Image</span>
+              <span>Item</span>
+              <span>Requested</span>
+              <span>Delivered</span>
+              <span>Unit</span>
+            </div>
+            {expandedRequest.items.map((item) => {
+              const delivered = Number(item.quantityDelivered)
+              const requested = Number(item.quantityRequested)
+              const isComplete = delivered >= requested
+              return (
+                <div key={item.id} className="grid grid-cols-5 items-center text-sm py-1">
+                  {item.stockSupply.image ? (
+                    <img
+                      src={stockSupplyImageUrl(item.stockSupply.image) ?? ""}
+                      alt=""
+                      className="h-8 w-8 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded bg-admin-content flex items-center justify-center">
+                      <Package size={14} className="text-admin-header-text/30" />
+                    </div>
+                  )}
+                  <span>{item.stockSupply.name}</span>
+                  <span>{requested}</span>
+                  <span className={isComplete ? "text-green-600" : "text-orange-600"}>
+                    {delivered}
+                  </span>
+                  <span className="text-admin-muted">{item.stockSupply.unit}</span>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }
