@@ -199,6 +199,13 @@ code {
   --color-admin-muted: #999999;
   --color-admin-chart: #0087D4;
 
+  --color-status-pending-bg: #fef9c3;
+  --color-status-pending-text: #a16207;
+  --color-status-partial-bg: #dbeafe;
+  --color-status-partial-text: #1d4ed8;
+  --color-status-completed-bg: #dcfce7;
+  --color-status-completed-text: #15803d;
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

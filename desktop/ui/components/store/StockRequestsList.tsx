@@ -1,30 +1,53 @@
-import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
-import { ChevronDown, ChevronRight, CheckCircle } from "lucide-react"
+import { DataTable, type Column } from "@/components/ui/data-table"
+import { stockSupplyImageUrl, formatQuantityWithUnit } from "@/lib/api"
 import { getStockRequests } from "@/lib/api"
-import { FulfillRequest } from "./FulfillRequest"
+import { usePagination } from "@/hooks/usePagination"
+import { FulfillItemDialog } from "./FulfillItemDialog"
+import { ShoppingBasket } from "lucide-react"
 
 type TabStatus = "ALL" | "PENDING" | "PARTIAL" | "COMPLETED"
+
+interface FlatItem {
+  item: StockRequestItem
+  request: StockRequest
+}
 
 interface Props {
   onRequestFulfilled: () => void
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  PENDING: { label: "Pending", className: "bg-yellow-100 text-yellow-800" },
-  PARTIAL: { label: "Partial", className: "bg-orange-100 text-orange-800" },
-  COMPLETED: { label: "Completed", className: "bg-green-100 text-green-800" },
+  PENDING: { label: "Pending", className: "bg-status-pending-bg text-status-pending-text" },
+  PARTIAL: { label: "Partial", className: "bg-status-partial-bg text-status-partial-text" },
+  COMPLETED: { label: "Completed", className: "bg-status-completed-bg text-status-completed-text" },
 }
+
+const STATUS_TEXT_COLOR: Record<string, string> = {
+  PENDING: "text-yellow-500",
+  PARTIAL: "text-status-partial-text",
+  COMPLETED: "text-status-completed-text",
+}
+
+const COLUMNS: Column[] = [
+  { label: "Image", key: "image", align: "center" },
+  { label: "Name", key: "name", align: "left" },
+  { label: "Requested", key: "requested", align: "center" },
+  { label: "Delivered", key: "delivered", align: "center" },
+  { label: "Request Status", key: "status", align: "center" },
+  { label: "Department", key: "department", align: "left" },
+  { label: "Requested By", key: "requestedBy", align: "left" },
+  { label: "Action", key: "action", isAction: true },
+]
 
 export function StockRequestsList({ onRequestFulfilled }: Props) {
   const [activeTab, setActiveTab] = useState<TabStatus>("ALL")
   const [requests, setRequests] = useState<StockRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [fulfillingRequest, setFulfillingRequest] = useState<StockRequest | null>(null)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [fulfillingItem, setFulfillingItem] = useState<FlatItem | null>(null)
 
   useEffect(() => {
     loadRequests()
@@ -42,10 +65,15 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
     }
   }
 
-  const filtered =
-    activeTab === "ALL"
-      ? requests
-      : requests.filter((r) => r.status === activeTab)
+  const filtered = useMemo(() => {
+    const source =
+      activeTab === "ALL"
+        ? requests
+        : requests.filter((r) => r.status === activeTab)
+    return source.flatMap((request) =>
+      request.items.map((item) => ({ item, request }))
+    )
+  }, [requests, activeTab])
 
   const counts = {
     ALL: requests.length,
@@ -54,20 +82,20 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
     COMPLETED: requests.filter((r) => r.status === "COMPLETED").length,
   }
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(filtered)
+
   function handleFulfilled() {
-    setFulfillingRequest(null)
+    setFulfillingItem(null)
     loadRequests()
     onRequestFulfilled()
-  }
-
-  if (fulfillingRequest) {
-    return (
-      <FulfillRequest
-        request={fulfillingRequest}
-        onBack={() => setFulfillingRequest(null)}
-        onFulfilled={handleFulfilled}
-      />
-    )
   }
 
   return (
@@ -95,122 +123,101 @@ export function StockRequestsList({ onRequestFulfilled }: Props) {
       {loading && <div className="text-admin-muted">Loading requests...</div>}
       {error && <div className="text-red-500">{error}</div>}
 
-      {!loading && !error && filtered.length === 0 && (
-        <div className="text-center py-8 text-admin-muted">No requests found</div>
+      {!loading && !error && (
+        <DataTable
+          columns={COLUMNS}
+          data={paginatedItems}
+          keyExtractor={(fi) => fi.item.id}
+          emptyMessage="No stock request items found"
+          renderCell={(fi, column) => {
+            const { item, request } = fi
+            const delivered = Number(item.quantityDelivered)
+            const requested = Number(item.quantityRequested)
+            const imageUrl = stockSupplyImageUrl(item.stockSupply.image)
+
+            switch (column.key) {
+              case "requestedBy":
+                return (
+                  <span className="font-medium text-admin-header-text">
+                    {request.requestedBy.name}
+                  </span>
+                )
+              case "department":
+                return (
+                  <span className="text-admin-muted">{request.department}</span>
+                )
+              case "image":
+                return imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt={item.stockSupply.name}
+                    className="w-10 h-10 rounded object-cover mx-auto"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded bg-admin-content flex items-center justify-center text-admin-muted text-xs mx-auto">
+                    N/A
+                  </div>
+                )
+              case "name":
+                return (
+                  <span className="font-medium text-admin-header-text">
+                    {item.stockSupply.name}
+                  </span>
+                )
+              case "requested":
+                return (
+                  <span>{formatQuantityWithUnit(requested, item.stockSupply.unit)}</span>
+                )
+              case "delivered":
+                return (
+                  <span className={STATUS_TEXT_COLOR[request.status]}>
+                    {formatQuantityWithUnit(delivered, item.stockSupply.unit)}
+                  </span>
+                )
+              case "status": {
+                const config = STATUS_CONFIG[request.status]
+                return (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
+                    {config.label}
+                  </span>
+                )
+              }
+              case "action":
+                return request.status !== "COMPLETED" ? (
+                  <Button
+                    size="sm"
+                    className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setFulfillingItem(fi)
+                    }}
+                  >
+                    <ShoppingBasket size={14} className="mr-1" />
+                    Fulfill
+                  </Button>
+                ) : null
+              default:
+                return null
+            }
+          }}
+          pagination={{
+            currentPage,
+            totalPages,
+            onPrev: prevPage,
+            onNext: nextPage,
+            canPrev,
+            canNext,
+          }}
+        />
       )}
 
-      {!loading && !error && (
-        <div className="space-y-3">
-          {filtered.map((request) => {
-            const config = STATUS_CONFIG[request.status]
-            const isExpanded = expandedId === request.id
-            const fulfillments = request.fulfillments ?? []
-            return (
-              <Card key={request.id} className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-admin-header-text">
-                        {request.requestedBy.name}
-                      </span>
-                      <span className="text-xs text-admin-muted">
-                        {request.department}
-                      </span>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
-                        {config.label}
-                      </span>
-                    </div>
-                    <p className="text-xs text-admin-muted">
-                      {new Date(request.createdAt).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
-                    {request.notes && (
-                      <p className="text-sm text-admin-muted italic">{request.notes}</p>
-                    )}
-                    <div className="mt-2 space-y-1">
-                      {request.items.map((item) => {
-                        const delivered = Number(item.quantityDelivered)
-                        const requested = Number(item.quantityRequested)
-                        const isComplete = delivered >= requested
-                        return (
-                          <div
-                            key={item.id}
-                            className="flex items-center gap-2 text-sm"
-                          >
-                            <span>{item.stockSupply.name}</span>
-                            <span className="text-admin-muted">—</span>
-                            <span className={isComplete ? "text-green-600" : "text-orange-600"}>
-                              {delivered} / {requested} {item.stockSupply.unit}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Fulfillment Trail */}
-                    {fulfillments.length > 0 && (
-                      <div className="mt-3">
-                        <button
-                          onClick={() => setExpandedId(isExpanded ? null : request.id)}
-                          className="flex items-center gap-1 text-xs font-medium text-admin-accent hover:underline"
-                        >
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          Fulfillment History ({fulfillments.length})
-                        </button>
-                        {isExpanded && (
-                          <div className="mt-2 pl-4 border-l-2 border-admin-card-border space-y-3">
-                            {fulfillments.map((fulfillment) => (
-                              <div key={fulfillment.id} className="space-y-1">
-                                <div className="flex items-center gap-2 text-xs">
-                                  <CheckCircle size={12} className="text-green-600" />
-                                  <span className="font-medium text-admin-header-text">
-                                    Fulfilled by {fulfillment.fulfilledBy.name}
-                                  </span>
-                                  <span className="text-admin-muted">
-                                    on {new Date(fulfillment.createdAt).toLocaleString("en-GB", {
-                                      day: "numeric",
-                                      month: "short",
-                                      year: "numeric",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                                </div>
-                                {fulfillment.notes && (
-                                  <p className="text-xs text-admin-muted italic pl-5">
-                                    Notes: {fulfillment.notes}
-                                  </p>
-                                )}
-                                <div className="pl-5 space-y-0.5">
-                                  {fulfillment.items.map((fi) => (
-                                    <div key={fi.id} className="text-xs text-admin-muted">
-                                      Delivered: {Number(fi.quantityDelivered)} units
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {request.status !== "COMPLETED" && (
-                    <Button
-                      size="sm"
-                      onClick={() => setFulfillingRequest(request)}
-                    >
-                      Fulfill
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            )
-          })}
-        </div>
+      {fulfillingItem && (
+        <FulfillItemDialog
+          flatItem={fulfillingItem}
+          open={!!fulfillingItem}
+          onClose={() => setFulfillingItem(null)}
+          onFulfilled={handleFulfilled}
+        />
       )}
     </div>
   )

@@ -18,7 +18,7 @@ router.get("/", async (req, res) => {
       requestedBy: { select: { id: true, name: true } },
       items: {
         include: {
-          stockSupply: { select: { id: true, name: true, unit: true, currentStock: true } },
+          stockSupply: { select: { id: true, name: true, unit: true, currentStock: true, image: true } },
         },
       },
     },
@@ -36,7 +36,7 @@ router.get("/:id", async (req, res) => {
       requestedBy: { select: { id: true, name: true } },
       items: {
         include: {
-          stockSupply: { select: { id: true, name: true, unit: true, currentStock: true } },
+          stockSupply: { select: { id: true, name: true, unit: true, currentStock: true, image: true } },
         },
       },
     },
@@ -113,7 +113,7 @@ router.post("/", async (req, res) => {
         requestedBy: { select: { id: true, name: true } },
         items: {
           include: {
-            stockSupply: { select: { id: true, name: true, unit: true, currentStock: true } },
+            stockSupply: { select: { id: true, name: true, unit: true, currentStock: true, image: true } },
           },
         },
       },
@@ -245,7 +245,7 @@ router.put("/:id/fulfill", async (req, res) => {
         requestedBy: { select: { id: true, name: true } },
         items: {
           include: {
-            stockSupply: { select: { id: true, name: true, unit: true, currentStock: true } },
+            stockSupply: { select: { id: true, name: true, unit: true, currentStock: true, image: true } },
           },
         },
         fulfillments: {

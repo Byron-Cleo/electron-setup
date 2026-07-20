@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Package, ClipboardList, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X, Eye } from "lucide-react"
+import { Package, ShoppingBasket, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X, Eye } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,15 @@ import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
 
 type StoreView = "dashboard" | "requests" | "stock" | "restock"
+
+type StockDisplayStatus = "Available" | "Restock" | "Not Available"
+
+function computeStockStatus(stock: StockSupply): StockDisplayStatus {
+  const current = Number(stock.currentStock)
+  if (current <= 0) return "Not Available"
+  if (stock.reorderLevel != null && current <= Number(stock.reorderLevel)) return "Restock"
+  return "Available"
+}
 
 function Store() {
   const [view, setView] = useState<StoreView>("dashboard")
@@ -101,7 +110,7 @@ function Store() {
           >
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <ClipboardList size={24} className="text-green-600" />
+                <ShoppingBasket size={24} className="text-green-600" />
               </div>
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">Inhouse Stock Requests</Heading>
@@ -113,8 +122,8 @@ function Store() {
                     </span>
                   )}
                   {partialCount > 0 && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
-                      <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-status-partial-bg text-status-partial-text">
+                      <span className="h-1.5 w-1.5 rounded-full bg-status-partial-text" />
                       {partialCount} partial
                     </span>
                   )}
@@ -270,13 +279,12 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     { label: "Image", key: "image" },
     { label: "Name", key: "name" },
     { label: "Stock", key: "stock" },
+    { label: "Stock Status", key: "stockStatus" },
     { label: "Reorder Level", key: "reorderLevel" },
           { label: "Actions", key: "actions", isAction: true },
   ]
 
   function renderCell(item: StockSupply, column: Column) {
-    const isLow = item.reorderLevel != null && item.currentStock <= item.reorderLevel
-
     switch (column.key) {
       case "details":
         return (
@@ -297,10 +305,24 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         return <span>{item.name}</span>
       case "stock":
         return (
-          <span className={`font-medium ${isLow ? "text-red-600" : ""}`}>
+          <span className="font-medium">
             {formatQuantityWithUnit(item.currentStock, item.unit)}
           </span>
         )
+      case "stockStatus": {
+        const stockStatus = computeStockStatus(item)
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            stockStatus === "Available"
+              ? "bg-green-100 text-green-700"
+              : stockStatus === "Restock"
+              ? "bg-amber-100 text-amber-700"
+              : "bg-red-100 text-red-700"
+          }`}>
+            {stockStatus}
+          </span>
+        )
+      }
       case "reorderLevel":
         return (
           <span className="text-admin-muted">
@@ -337,10 +359,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         renderCell={renderCell}
         keyExtractor={(item) => item.id}
         emptyMessage="No stock items found"
-        rowClassName={(item) => {
-          const isLow = item.reorderLevel != null && item.currentStock <= item.reorderLevel
-          return isLow ? "bg-red-50" : ""
-        }}
         pagination={{
           currentPage,
           totalPages,

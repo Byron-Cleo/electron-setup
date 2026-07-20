@@ -36,6 +36,15 @@ function deleteImageFile(imagePath: string | null) {
   if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
 }
 
+function serializeStockSupply(item: any) {
+  return {
+    ...item,
+    currentStock: Number(item.currentStock),
+    reorderLevel: item.reorderLevel != null ? Number(item.reorderLevel) : null,
+    platesPerUnit: item.platesPerUnit != null ? Number(item.platesPerUnit) : null,
+  };
+}
+
 // GET /api/stock-supplies/low-stock-count - Count of items at or below reorder level
 router.get("/low-stock-count", async (_req, res) => {
   const items = await prisma.stockSupply.findMany({
@@ -67,14 +76,14 @@ router.get("/", async (req, res) => {
       include: { },
       orderBy: { name: "asc" },
     });
-    return res.json(items);
+      return res.json(items.map(serializeStockSupply));
   }
 
   const items = await prisma.stockSupply.findMany({
     where: { isActive: true },
     orderBy: { name: "asc" },
   });
-  res.json(items);
+  res.json(items.map(serializeStockSupply));
 });
 
 // GET /api/stock-supplies/:id/kitchen-inventory - Kitchen inventory for specific item
@@ -104,7 +113,7 @@ router.get("/:id/kitchen-inventory", async (req, res) => {
   const kitchenInventory = received - cooked;
 
   res.json({
-    ...stockSupply,
+    ...serializeStockSupply(stockSupply),
     totalReceived: received,
     totalCooked: cooked,
     kitchenInventory,
@@ -118,7 +127,7 @@ router.get("/:id", async (req, res) => {
     where: { id },
   });
   if (!item) return res.status(404).json({ error: "Item not found" });
-  res.json(item);
+  res.json(serializeStockSupply(item));
 });
 
 // POST /api/stock-supplies - Create item
@@ -148,7 +157,7 @@ router.post("/", upload.single("image"), async (req, res) => {
         image,
       },
     });
-    res.status(201).json(item);
+    res.status(201).json(serializeStockSupply(item));
   } catch (e: any) {
     if (e.code === "P2002") return res.status(409).json({ error: "Item slug already exists" });
     throw e;
@@ -191,7 +200,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
         image: newImage,
       },
     });
-    res.json(item);
+    res.json(serializeStockSupply(item));
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Item not found" });
     if (e.code === "P2002") return res.status(409).json({ error: "Item slug already exists" });

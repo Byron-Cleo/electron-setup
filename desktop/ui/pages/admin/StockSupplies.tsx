@@ -23,6 +23,15 @@ import { usePagination } from "@/hooks/usePagination"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
 
+type StockDisplayStatus = "Available" | "Restock" | "Not Available"
+
+function computeStockStatus(stock: StockSupply): StockDisplayStatus {
+  const current = Number(stock.currentStock)
+  if (current <= 0) return "Not Available"
+  if (stock.reorderLevel != null && current <= Number(stock.reorderLevel)) return "Restock"
+  return "Available"
+}
+
 export default function StockSupplies() {
   const navigate = useNavigate()
   const [supplies, setSupplies] = useState<StockSupply[]>([])
@@ -84,6 +93,7 @@ export default function StockSupplies() {
   const columns: Column[] = [
     { label: "", key: "image" },
     { label: "Description", key: "description" },
+    { label: "Stock Status", key: "stockStatus" },
     { label: "Reorder", key: "reorder" },
     { label: "Actions", key: "actions", isAction: true },
   ]
@@ -91,7 +101,6 @@ export default function StockSupplies() {
   function renderCell(supply: StockSupply, column: Column) {
     const stock = Number(supply.currentStock)
     const reorder = Number(supply.reorderLevel ?? 0)
-    const isLow = stock <= reorder
 
     switch (column.key) {
       case "image":
@@ -110,11 +119,22 @@ export default function StockSupplies() {
         return (
           <span className="font-medium text-admin-header-text">
             {formatSupplyDescription(supply)}
-            {isLow && (
-              <span className="ml-2 text-xs text-red-500 font-normal">Low Stock</span>
-            )}
           </span>
         )
+      case "stockStatus": {
+        const stockStatus = computeStockStatus(supply)
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            stockStatus === "Available"
+              ? "bg-green-100 text-green-700"
+              : stockStatus === "Restock"
+              ? "bg-amber-100 text-amber-700"
+              : "bg-red-100 text-red-700"
+          }`}>
+            {stockStatus}
+          </span>
+        )
+      }
       case "reorder":
         return (
           <span className="text-admin-header-text/60">
@@ -172,11 +192,6 @@ export default function StockSupplies() {
           renderCell={renderCell}
           keyExtractor={(s) => s.id}
           emptyMessage="No supplies found"
-          rowClassName={(s) => {
-            const stock = Number(s.currentStock)
-            const reorder = Number(s.reorderLevel ?? 0)
-            return stock <= reorder ? "bg-red-500/5" : ""
-          }}
           pagination={{
             currentPage,
             totalPages,

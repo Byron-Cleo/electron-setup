@@ -36,11 +36,14 @@ type CookedTab = "inventory" | "cooking-history"
 
 
 
-type StockDisplayStatus = "Available" | "Not Available"
+type StockDisplayStatus = "Available" | "Restock" | "Not Available"
 type RequestDisplayStatus = "Pending" | "Partial" | "Completed"
 
 function computeStockStatus(stock: StockSupply): StockDisplayStatus {
-  return stock.currentStock > 0 ? "Available" : "Not Available"
+  const current = Number(stock.currentStock)
+  if (current <= 0) return "Not Available"
+  if (stock.reorderLevel != null && current <= Number(stock.reorderLevel)) return "Restock"
+  return "Available"
 }
 
 function computeRequestStatus(
@@ -259,17 +262,17 @@ function CurrentStockView({ userId }: { userId: string }) {
   } = usePagination(items)
 
   const columns: Column[] = [
-          { label: "Details", key: "details" },
+    { label: "Details", key: "details" },
     { label: "Image", key: "image" },
     { label: "Name", key: "name" },
     { label: "Stock", key: "stock" },
+    { label: "Stock Status", key: "stockStatus" },
     { label: "Last Request", key: "lastRequest" },
-          { label: "Actions", key: "actions", isAction: true },
+    { label: "Request Status", key: "requestStatus" },
+    { label: "Actions", key: "actions", isAction: true },
   ]
 
   function renderCell(item: StockSupply, column: Column) {
-    const isLow = item.reorderLevel != null && item.currentStock <= item.reorderLevel
-
     switch (column.key) {
       case "details":
         return (
@@ -286,32 +289,28 @@ function CurrentStockView({ userId }: { userId: string }) {
             <Package size={16} className="text-admin-header-text/30" />
           </div>
         )
-      case "name": {
-        const lastItem = lastRequestMap.get(item.id)
-        const lastReq = lastItem
-          ? requests.find(r => r.id === lastItem.stockRequestId)
-          : undefined
-        const reqStatus = computeRequestStatus(lastReq)
-        const stockStatus = computeStockStatus(item)
-        return (
-          <div className="flex items-center gap-2">
-            <span>{item.name}</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-              stockStatus === "Available"
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700"
-            }`}>
-              {stockStatus}
-            </span>
-          </div>
-        )
-      }
+      case "name":
+        return <span className="font-medium">{item.name}</span>
       case "stock":
         return (
-          <span className={`font-medium ${isLow ? "text-red-600" : ""}`}>
+          <span className="font-medium">
             {formatQuantityWithUnit(item.currentStock, item.unit)}
           </span>
         )
+      case "stockStatus": {
+        const stockStatus = computeStockStatus(item)
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            stockStatus === "Available"
+              ? "bg-green-100 text-green-700"
+              : stockStatus === "Restock"
+              ? "bg-amber-100 text-amber-700"
+              : "bg-red-100 text-red-700"
+          }`}>
+            {stockStatus}
+          </span>
+        )
+      }
       case "lastRequest": {
         const lastItem = lastRequestMap.get(item.id)
         const lastReq = lastItem
@@ -321,20 +320,29 @@ function CurrentStockView({ userId }: { userId: string }) {
         if (!reqStatus || !lastItem) {
           return <span className="text-admin-muted">—</span>
         }
-        const qtyText = formatQuantityWithUnit(lastItem.quantityRequested, item.unit)
         return (
-          <div className="flex items-center gap-2">
-            <span className="text-sm">{qtyText}</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-              reqStatus === "Pending"
-                ? "bg-yellow-100 text-yellow-700"
-                : reqStatus === "Partial"
-                ? "bg-blue-100 text-blue-700"
-                : "bg-green-100 text-green-700"
-            }`}>
-              {reqStatus}
-            </span>
-          </div>
+          <span className="text-sm">{formatQuantityWithUnit(lastItem.quantityRequested, item.unit)}</span>
+        )
+      }
+      case "requestStatus": {
+        const lastItem = lastRequestMap.get(item.id)
+        const lastReq = lastItem
+          ? requests.find(r => r.id === lastItem.stockRequestId)
+          : undefined
+        const reqStatus = computeRequestStatus(lastReq)
+        if (!reqStatus) {
+          return <span className="text-admin-muted">—</span>
+        }
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            reqStatus === "Pending"
+              ? "bg-status-pending-bg text-status-pending-text"
+              : reqStatus === "Partial"
+              ? "bg-status-partial-bg text-status-partial-text"
+              : "bg-status-completed-bg text-status-completed-text"
+          }`}>
+            {reqStatus}
+          </span>
         )
       }
       case "actions":
@@ -366,10 +374,6 @@ function CurrentStockView({ userId }: { userId: string }) {
         renderCell={renderCell}
         keyExtractor={(item) => item.id}
         emptyMessage="No stock items found"
-        rowClassName={(item) => {
-          const isLow = item.reorderLevel != null && item.currentStock <= item.reorderLevel
-          return isLow ? "bg-red-50" : ""
-        }}
         pagination={{
           currentPage,
           totalPages,
