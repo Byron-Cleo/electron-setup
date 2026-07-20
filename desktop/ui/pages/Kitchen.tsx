@@ -237,6 +237,7 @@ function CurrentStockView({ userId }: { userId: string }) {
         items: [{ stockSupplyId: requestDialog.item.id, quantityRequested: requestQty }],
       })
       setSubmitSuccess(true)
+      await loadStock()
       setTimeout(() => {
         setRequestDialog({ open: false, item: null })
       }, 1500)
@@ -295,15 +296,13 @@ function CurrentStockView({ userId }: { userId: string }) {
         return (
           <div className="flex items-center gap-2">
             <span>{item.name}</span>
-            {!reqStatus && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                stockStatus === "Available"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-red-100 text-red-700"
-              }`}>
-                {stockStatus}
-              </span>
-            )}
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+              stockStatus === "Available"
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-700"
+            }`}>
+              {stockStatus}
+            </span>
           </div>
         )
       }
@@ -330,7 +329,7 @@ function CurrentStockView({ userId }: { userId: string }) {
               reqStatus === "Pending"
                 ? "bg-yellow-100 text-yellow-700"
                 : reqStatus === "Partial"
-                ? "bg-orange-100 text-orange-700"
+                ? "bg-blue-100 text-blue-700"
                 : "bg-green-100 text-green-700"
             }`}>
               {reqStatus}
