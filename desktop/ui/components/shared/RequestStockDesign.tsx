@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { stockSupplyImageUrl, formatQuantityWithUnit } from "@/lib/api"
+import { formatDate } from "@/lib/utils"
 import { getStockRequests } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import { FulfillItemDialog } from "@/components/store/FulfillItemDialog"
@@ -46,6 +47,7 @@ const ALL_COLUMNS: Column[] = [
   { label: "Request Status", key: "status", align: "center" },
   { label: "Department", key: "department", align: "left" },
   { label: "Requested By", key: "requestedBy", align: "left" },
+  { label: "Req. Date", key: "reqDate", align: "left" },
   { label: "Action", key: "action", isAction: true },
 ]
 
@@ -137,6 +139,12 @@ export function RequestStockDesign({
         return (
           <span className="font-medium text-admin-header-text">
             {request.requestedBy.name}
+          </span>
+        )
+      case "reqDate":
+        return (
+          <span className="text-admin-muted text-sm">
+            {formatDate(request.createdAt)}
           </span>
         )
       case "department":

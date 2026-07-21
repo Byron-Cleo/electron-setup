@@ -39,7 +39,7 @@ import {
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  unit: z.enum(["KG", "G", "L", "ML", "PCS"], { required_error: "Unit is required" }),
+  unit: z.enum(["KG", "PKT", "L", "ML", "PCS"], { required_error: "Unit is required" }),
   currentStock: z.coerce.number().min(0).optional(),
   reorderLevel: z.coerce.number().min(0).optional(),
 })
@@ -48,7 +48,7 @@ type FormValues = z.infer<typeof formSchema>
 
 const UNIT_OPTIONS = [
   { value: "KG", label: "Kilogram (KG)" },
-  { value: "G", label: "Gram (G)" },
+  { value: "PKT", label: "Packets (Pkt)" },
   { value: "L", label: "Liter (L)" },
   { value: "ML", label: "Milliliter (ML)" },
   { value: "PCS", label: "Pieces (PCS)" },

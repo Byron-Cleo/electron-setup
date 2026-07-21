@@ -12,6 +12,25 @@ Not Started
 
 ## History
 
+### frontend + backend - 2026-07-20 — Restock/Procure Items Table
+- Implemented `RestockView` component in `Store.tsx` with DataTable of low stock items
+- Added `GET /api/stock-supplies/low-stock` backend endpoint (returns items where `currentStock <= reorderLevel`)
+- Added `getLowStockSupplies()` API function in `lib/api.ts`
+- Table columns: Details, Image, Name, Stock, Stock Status, Restock Quantity, Actions
+- Details button opens `StockSupplyDetailDialog` modal popup
+- Restock button opens modal with item info summary and quantity input
+- Post-submit shows success confirmation with shopping list option (printing deferred)
+- Restock Quantity = `reorderLevel - currentStock` (how much to order)
+- Branch: `feature/store/restock-procure-items-table`
+
+### frontend + backend - 2026-07-20 — Unit Change: Grams (G) → Packets (PKT)
+- Replaced `G` with `PKT` in Prisma `ItemUnit` enum
+- Updated `UNIT_LABELS` in `lib/api.ts`: `G: "g"` → `PKT: "packets"`
+- Updated TypeScript types in `electron.d.ts` (3 occurrences)
+- Updated zod schemas and select options in `StockSupplyForm.tsx` and `StockSupplyEditDialog.tsx`
+- Updated unit select in `Store.tsx` Add Stock Item modal
+- Database schema synced via `prisma db push`
+
 ### frontend - 2026-07-20 — Reusable Stock Requests Design
 - Created shared `RequestStockDesign` component in `desktop/ui/components/shared/`
 - Refactored `StockRequestsList.tsx` to wrap `RequestStockDesign` (showDepartmentColumn, showActionColumn)

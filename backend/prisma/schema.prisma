@@ -196,7 +196,7 @@ enum AccompanimentType {
 
 enum ItemUnit {
   KG
-  G
+  PKT
   L
   ML
   PCS

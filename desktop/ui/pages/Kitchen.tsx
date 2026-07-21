@@ -270,7 +270,7 @@ function CurrentStockView({ userId }: { userId: string }) {
 
   const columns: Column[] = [
     { label: "Details", key: "details" },
-    { label: "Image", key: "image" },
+    { label: "Image", key: "image", align: "center" },
     { label: "Name", key: "name" },
     { label: "Stock", key: "stock" },
     { label: "Stock Status", key: "stockStatus" },
@@ -290,9 +290,9 @@ function CurrentStockView({ userId }: { userId: string }) {
         )
       case "image":
         return item.image ? (
-          <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover" />
+          <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover mx-auto" />
         ) : (
-          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center mx-auto">
             <Package size={16} className="text-admin-header-text/30" />
           </div>
         )

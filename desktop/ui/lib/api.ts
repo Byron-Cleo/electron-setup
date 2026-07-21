@@ -11,7 +11,7 @@ export function stockSupplyImageUrl(image: string | null): string | null {
 
 const UNIT_LABELS: Record<string, string> = {
   KG: "kg",
-  G: "g",
+  PKT: "packets",
   L: "litres",
   ML: "ml",
   PCS: "pieces",
@@ -205,6 +205,13 @@ export async function getKitchenInventory(stockSupplyId: string): Promise<Kitche
 }
 
 // ─── Low Stock ──────────────────────────────────────────────────────────────
+
+export async function getLowStockSupplies(): Promise<StockSupply[]> {
+  if (window.electron?.stockSupply?.getLowStockSupplies) {
+    return window.electron.stockSupply.getLowStockSupplies()
+  }
+  return apiFetch("/stock-supplies/low-stock")
+}
 
 export async function getLowStockCount(): Promise<{ count: number }> {
   if (window.electron?.stockSupply?.getLowStockCount) {

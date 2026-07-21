@@ -71,7 +71,7 @@ interface StockSupply {
   name: string;
   slug: string;
   description: string | null;
-  unit: "KG" | "G" | "L" | "ML" | "PCS";
+  unit: "KG" | "PKT" | "L" | "ML" | "PCS";
   currentStock: number;
   reorderLevel: number | null;
   image: string | null;
@@ -88,7 +88,7 @@ interface StockSupplyCreateData {
   name: string;
   slug?: string;
   description?: string;
-  unit: "KG" | "G" | "L" | "ML" | "PCS";
+  unit: "KG" | "PKT" | "L" | "ML" | "PCS";
   currentStock?: number;
   reorderLevel?: number;
 }
@@ -97,7 +97,7 @@ interface StockSupplyUpdateData {
   name?: string;
   slug?: string;
   description?: string;
-  unit?: "KG" | "G" | "L" | "ML" | "PCS";
+  unit?: "KG" | "PKT" | "L" | "ML" | "PCS";
   currentStock?: number;
   reorderLevel?: number;
   isActive?: boolean;

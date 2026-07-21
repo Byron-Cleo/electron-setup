@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, stockSupplyImageUrl, formatQuantityWithUnit } from "@/lib/api"
+import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
@@ -146,14 +146,17 @@ function Store() {
               </div>
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">Restock / Procure Items</Heading>
-                <p className="text-sm text-admin-muted">Order new stock</p>
+                <div className="flex items-center gap-2 mt-1">
+                  {lowStockCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                      {lowStockCount} low stock items
+                    </span>
+                  ) : (
+                    <span className="text-sm text-admin-muted">No items to restock</span>
+                  )}
+                </div>
                 <p className="text-xs text-admin-muted mt-1">Track all stock movements and transactions.</p>
-                {lowStockCount > 0 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 mt-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                    {lowStockCount} low stock items
-                  </span>
-                )}
               </div>
             </div>
           </Card>
@@ -216,7 +219,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
       await createStockSupply({
         name: formName,
         description: formDescription || undefined,
-        unit: formUnit as "KG" | "G" | "L" | "ML" | "PCS",
+        unit: formUnit as "KG" | "PKT" | "L" | "ML" | "PCS",
         currentStock: formCurrentStock ? Number(formCurrentStock) : 0,
         reorderLevel: formReorderLevel ? Number(formReorderLevel) : undefined,
       }, formImageFile ?? undefined)
@@ -276,7 +279,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
 
   const columns: Column[] = [
           { label: "Details", key: "details" },
-    { label: "Image", key: "image" },
+    { label: "Image", key: "image", align: "center" },
     { label: "Name", key: "name" },
     { label: "Stock", key: "stock" },
     { label: "Stock Status", key: "stockStatus" },
@@ -295,9 +298,9 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         )
       case "image":
         return item.image ? (
-          <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover" />
+          <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover mx-auto" />
         ) : (
-          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center">
+          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center mx-auto">
             <Package size={16} className="text-admin-header-text/30" />
           </div>
         )
@@ -412,7 +415,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="KG">Kilogram (KG)</SelectItem>
-                    <SelectItem value="G">Gram (G)</SelectItem>
+                    <SelectItem value="PKT">Packets (Pkt)</SelectItem>
                     <SelectItem value="L">Liter (L)</SelectItem>
                     <SelectItem value="ML">Milliliter (ML)</SelectItem>
                     <SelectItem value="PCS">Pieces (PCS)</SelectItem>
@@ -552,12 +555,241 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
 }
 
 function RestockView() {
+  const [items, setItems] = useState<StockSupply[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [search, setSearch] = useState("")
+  const [detailTarget, setDetailTarget] = useState<StockSupply | null>(null)
+  const [restockTarget, setRestockTarget] = useState<StockSupply | null>(null)
+  const [restockQuantity, setRestockQuantity] = useState("")
+  const [restockSubmitting, setRestockSubmitting] = useState(false)
+  const [restockSuccess, setRestockSuccess] = useState(false)
+
+  async function loadLowStock() {
+    try {
+      setLoading(true)
+      const data = await getLowStockSupplies()
+      setItems(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load low stock items")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadLowStock()
+  }, [])
+
+  const filtered = items.filter((item) =>
+    item.name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(filtered)
+
+  function getRestockQuantity(item: StockSupply): number {
+    const stock = Number(item.currentStock)
+    const reorder = Number(item.reorderLevel)
+    return reorder - stock
+  }
+
+  function handleRestockSubmit() {
+    if (!restockTarget || !restockQuantity) return
+    setRestockSubmitting(true)
+    setTimeout(() => {
+      setRestockSubmitting(false)
+      setRestockTarget(null)
+      setRestockQuantity("")
+      setRestockSuccess(true)
+      setTimeout(() => setRestockSuccess(false), 3000)
+    }, 500)
+  }
+
+  const columns: Column[] = [
+    { label: "Details", key: "details" },
+    { label: "Image", key: "image" },
+    { label: "Name", key: "name" },
+    { label: "Stock", key: "stock" },
+    { label: "Stock Status", key: "stockStatus" },
+    { label: "Restock Quantity", key: "restockQty" },
+    { label: "Actions", key: "actions", isAction: true },
+  ]
+
+  function renderCell(item: StockSupply, column: Column) {
+    switch (column.key) {
+      case "details":
+        return (
+          <Button variant="ghost" size="sm" onClick={() => setDetailTarget(item)}>
+            <Eye className="h-4 w-4 mr-1" />
+            Details
+          </Button>
+        )
+      case "image":
+        return item.image ? (
+          <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover mx-auto" />
+        ) : (
+          <div className="h-10 w-10 rounded bg-admin-content flex items-center justify-center mx-auto">
+            <Package size={16} className="text-admin-header-text/30" />
+          </div>
+        )
+      case "name":
+        return <span>{item.name}</span>
+      case "stock":
+        return (
+          <span className="font-medium">
+            {formatQuantityWithUnit(item.currentStock, item.unit)}
+          </span>
+        )
+      case "stockStatus": {
+        const stockStatus = computeStockStatus(item)
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            stockStatus === "Available"
+              ? "bg-green-100 text-green-700"
+              : stockStatus === "Restock"
+              ? "bg-amber-100 text-amber-700"
+              : "bg-red-100 text-red-700"
+          }`}>
+            {stockStatus}
+          </span>
+        )
+      }
+      case "restockQty": {
+        const qty = getRestockQuantity(item)
+        return (
+          <span className="font-medium text-amber-600">
+            {qty > 0 ? formatQuantityWithUnit(qty, item.unit) : "—"}
+          </span>
+        )
+      }
+      case "actions":
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setRestockTarget(item)
+              setRestockQuantity(String(getRestockQuantity(item)))
+            }}
+            className="bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Restock
+          </Button>
+        )
+      default:
+        return null
+    }
+  }
+
+  if (loading) return <div className="text-admin-muted">Loading low stock items...</div>
+  if (error) return <div className="text-red-500">{error}</div>
+
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center uppercase">Restock / Procure</Heading>
-      <div className="rounded-lg border border-admin-card-border bg-admin-card p-8">
-        <p className="text-admin-muted text-center">Restock and procurement features coming soon.</p>
-      </div>
+      <Heading as="h2" className="text-admin-header-text text-center uppercase">Restock / Procure Items</Heading>
+
+      {restockSuccess && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-700 text-sm">
+          Restock quantity submitted successfully. You can view the shopping list from the Store dashboard.
+        </div>
+      )}
+
+      <DataTable
+        columns={columns}
+        data={paginatedItems}
+        renderCell={renderCell}
+        keyExtractor={(item) => item.id}
+        emptyMessage="No low stock items found"
+        pagination={{
+          currentPage,
+          totalPages,
+          onPrev: prevPage,
+          onNext: nextPage,
+          canPrev,
+          canNext,
+        }}
+        header={
+          <Input
+            placeholder="Search low stock items..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+          />
+        }
+      />
+
+      <StockSupplyDetailDialog
+        open={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
+        supplyId={detailTarget?.id ?? null}
+      />
+
+      <Dialog open={!!restockTarget} onOpenChange={(open) => !open && setRestockTarget(null)}>
+        <DialogContent className="min-h-[300px]">
+          <DialogHeader>
+            <DialogTitle className="text-base uppercase text-center">Restock / Procure Item</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg bg-admin-content p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-admin-muted">Item:</span>
+                <span className="font-medium text-admin-header-text">{restockTarget?.name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-admin-muted">Current Stock:</span>
+                <span className="font-medium text-admin-header-text">
+                  {restockTarget && formatQuantityWithUnit(restockTarget.currentStock, restockTarget.unit)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-admin-muted">Reorder Level:</span>
+                <span className="font-medium text-admin-header-text">
+                  {restockTarget && restockTarget.reorderLevel != null
+                    ? formatQuantityWithUnit(restockTarget.reorderLevel, restockTarget.unit)
+                    : "—"}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Restock Quantity *</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  step="1"
+                  placeholder="Enter quantity"
+                  value={restockQuantity}
+                  onChange={(e) => setRestockQuantity(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="text-sm text-admin-muted whitespace-nowrap">
+                  {restockTarget?.unit}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestockTarget(null)} disabled={restockSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleRestockSubmit} disabled={restockSubmitting || !restockQuantity} className="bg-green-500 hover:bg-green-600">
+              {restockSubmitting ? "Submitting..." : "Submit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -86,6 +86,23 @@ router.get("/", async (req, res) => {
   res.json(items.map(serializeStockSupply));
 });
 
+// GET /api/stock-supplies/low-stock - All items at or below reorder level
+router.get("/low-stock", async (_req, res) => {
+  const items = await prisma.stockSupply.findMany({
+    where: {
+      isActive: true,
+      reorderLevel: { not: null },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const lowStockItems = items.filter(
+    (item) => Number(item.currentStock) <= Number(item.reorderLevel!)
+  );
+
+  res.json(lowStockItems.map(serializeStockSupply));
+});
+
 // GET /api/stock-supplies/:id/kitchen-inventory - Kitchen inventory for specific item
 router.get("/:id/kitchen-inventory", async (req, res) => {
   const { id } = req.params;
