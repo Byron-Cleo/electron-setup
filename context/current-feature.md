@@ -1,25 +1,25 @@
 # Current Feature
 
 ## Platform
-frontend
+Not Specified
 
 ## Status
-In Progress
+Not Started
 
 ## Goals
-- Create AssignmentModal component for dynamic plate assignment
-- Show current assignments with sold/remaining counts
-- Enable add/edit/remove assignments throughout the day
-- Show sold out detection and badges
 
 ## Notes
-- Admin assigns plates to menu variants (not kitchen staff)
-- Assignment is dynamic — can add more plates throughout the day
-- When variant sold out, admin can assign more plates from unassigned pool
-- This phase depends on Phase 3 (CookedFoodTable must exist)
-- Backend endpoints: `POST /api/cooking-assignments`, `PUT /api/cooking-assignments/:id`, `DELETE /api/cooking-assignments/:id`
 
 ## History
+
+### frontend - 2026-07-21 — Kitchen Cooking Production Phase 4: Menu Tab — Plate Assignment
+- Created AssignmentModal with summary, current assignments, add/edit/remove
+- Inline edit and remove with confirmation
+- Validation prevents over-assignment beyond available plates
+- Backend POST accepts stockSupplyId + date as alternative to cookingRecordId
+- CookedFoodTable passes cookedDate and full row data to modal
+- Parent refresh via ref pattern for instant data updates
+- Branch: feature/kitchen/cooking-phase-4-plate-assignment
 
 ### frontend - 2026-07-21 — Kitchen Cooking Production Phase 3: Menu Tab — Cooked Food Management
 - Created CookedFoodTable component with Produced/Assigned/Available/Variants columns
