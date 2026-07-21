@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Package, Send, Clock, ArrowLeft, UtensilsCrossed, ChefHat, History, Eye } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ import {
   getStockSupplies,
   getStockRequests,
   createStockRequest,
-  getKitchenConfig,
+  getKitchenInventoryList,
   getCookingRecords,
   createCookingRecord,
   stockSupplyImageUrl,
@@ -461,14 +461,15 @@ function CurrentStockView({ userId }: { userId: string }) {
 }
 
 function KitchenInventoryView({ userId }: { userId: string }) {
-  const [items, setItems] = useState<KitchenConfigItem[]>([])
+  const [items, setItems] = useState<KitchenStockItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [cookDialog, setCookDialog] = useState<{ open: boolean; item: KitchenConfigItem | null }>({
+  const [cookDialog, setCookDialog] = useState<{ open: boolean; item: KitchenStockItem | null }>({
     open: false,
     item: null,
   })
   const [cookQty, setCookQty] = useState(1)
+  const [cookPlatesActual, setCookPlatesActual] = useState<number | "">("")
   const [cookNotes, setCookNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -476,7 +477,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   async function loadInventory() {
     try {
       setLoading(true)
-      const data = await getKitchenConfig()
+      const data = await getKitchenInventoryList()
       setItems(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load kitchen inventory")
@@ -489,12 +490,17 @@ function KitchenInventoryView({ userId }: { userId: string }) {
     loadInventory()
   }, [])
 
-  function openCookDialog(item: KitchenConfigItem) {
+  function openCookDialog(item: KitchenStockItem) {
     setCookDialog({ open: true, item })
     setCookQty(1)
+    setCookPlatesActual("")
     setCookNotes("")
     setSubmitSuccess(false)
   }
+
+  const expectedPlates = cookDialog.item
+    ? cookQty * Number(cookDialog.item.platesPerUnit ?? 0)
+    : 0
 
   async function handleCookSubmit() {
     if (!cookDialog.item || cookQty <= 0) return
@@ -505,6 +511,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
       await createCookingRecord({
         stockSupplyId: cookDialog.item.id,
         quantityCooked: cookQty,
+        platesActual: cookPlatesActual !== "" ? Number(cookPlatesActual) : undefined,
         cookedById: userId,
         notes: cookNotes || undefined,
       })
@@ -533,18 +540,31 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   const columns: Column[] = [
     { label: "Item", key: "name" },
     { label: "Plates/Unit", key: "platesPerUnit" },
-    { label: "Unit", key: "unit" },
-          { label: "Action", key: "action", isAction: true, align: "center" },
+    { label: "Ordered", key: "ordered" },
+    { label: "Cooked", key: "cooked" },
+    { label: "Remaining", key: "remaining" },
+    { label: "Plates Made", key: "platesMade" },
+    { label: "Action", key: "action", isAction: true, align: "center" },
   ]
 
-  function renderCell(item: KitchenConfigItem, column: Column) {
+  function renderCell(item: KitchenStockItem, column: Column) {
     switch (column.key) {
       case "name":
         return <span className="font-medium">{item.name}</span>
       case "platesPerUnit":
         return <span className="text-admin-muted">{item.platesPerUnit ?? "—"}</span>
-      case "unit":
-        return <span className="text-admin-muted">{item.unit}</span>
+      case "ordered":
+        return <span>{item.totalOrdered}</span>
+      case "cooked":
+        return <span>{item.totalCooked}</span>
+      case "remaining":
+        return (
+          <span className={item.rawStockPending > 0 ? "text-amber-600 font-medium" : "text-admin-muted"}>
+            {item.rawStockPending > 0 ? `${item.rawStockPending} PENDING` : "0"}
+          </span>
+        )
+      case "platesMade":
+        return <span>{item.totalPlatesProduced}</span>
       case "action":
         return (
           <Button
@@ -552,10 +572,10 @@ function KitchenInventoryView({ userId }: { userId: string }) {
             variant="outline"
             className="text-green-600 border-green-200 hover:bg-green-50"
             onClick={() => openCookDialog(item)}
-            disabled={!item.platesPerUnit}
+            disabled={!item.platesPerUnit || item.rawStockPending <= 0}
           >
             <ChefHat size={14} className="mr-1" />
-            Cook...
+            Cook More
           </Button>
         )
       default:
@@ -568,7 +588,10 @@ function KitchenInventoryView({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text">Kitchen Stock</Heading>
+      <Heading as="h2" className="text-admin-header-text">Kitchen Stock — Cooking Production</Heading>
+      <p className="text-sm text-admin-muted">
+        PENDING = Ordered but not yet cooked (carries to tomorrow)
+      </p>
       <DataTable
         columns={columns}
         data={paginatedItems}
@@ -603,23 +626,49 @@ function KitchenInventoryView({ userId }: { userId: string }) {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="text-sm text-admin-muted">
-                Plates per unit: {cookDialog.item?.platesPerUnit}
+              <div className="rounded-md bg-muted p-3 text-sm space-y-1">
+                <div>Stock Ordered: <span className="font-medium">{cookDialog.item?.totalOrdered} {cookDialog.item?.unit}</span></div>
+                <div>Already Cooked: <span className="font-medium">{cookDialog.item?.totalCooked} {cookDialog.item?.unit}</span></div>
+                <div className="text-amber-600 font-medium">Remaining (PENDING): {cookDialog.item?.rawStockPending} {cookDialog.item?.unit}</div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="cookQty">Quantity to cook</Label>
+                <Label htmlFor="cookQty">Quantity to Cook</Label>
                 <Input
                   id="cookQty"
                   type="number"
                   min={0.01}
                   step="0.01"
+                  max={cookDialog.item?.rawStockPending ?? 0}
                   value={cookQty}
                   onChange={(e) => setCookQty(parseFloat(e.target.value) || 0)}
                 />
                 <p className="text-xs text-admin-muted">
-                  Unit: {cookDialog.item?.unit} | Expected plates: {cookQty * (cookDialog.item?.platesPerUnit ?? 0)}
+                  Max: {cookDialog.item?.rawStockPending} {cookDialog.item?.unit}
                 </p>
               </div>
+
+              <div className="rounded-md bg-muted p-3 text-sm space-y-1">
+                <div>Configured Rate: <span className="font-medium">{cookDialog.item?.platesPerUnit} plates per {cookDialog.item?.unit?.toLowerCase()}</span></div>
+                <div>Expected Plates: <span className="font-medium">{expectedPlates} (= {cookQty} × {cookDialog.item?.platesPerUnit})</span></div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cookPlatesActual">Actual Plates Produced</Label>
+                <Input
+                  id="cookPlatesActual"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder={`Expected: ${expectedPlates}`}
+                  value={cookPlatesActual}
+                  onChange={(e) => setCookPlatesActual(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+                />
+                <p className="text-xs text-admin-muted">
+                  Kitchen inputs what was actually produced (may differ from expected)
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="cookNotes">Notes (optional)</Label>
                 <Textarea
@@ -655,22 +704,35 @@ function CookingHistoryView({ userId }: { userId: string }) {
   const [records, setRecords] = useState<CookingRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date()
+    return now.toISOString().split("T")[0]
+  })
 
-  async function loadRecords() {
+  const loadRecords = useCallback(async () => {
     try {
       setLoading(true)
-      const data = await getCookingRecords()
+      const data = await getCookingRecords(selectedDate)
       setRecords(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cooking records")
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedDate])
 
   useEffect(() => {
     loadRecords()
-  }, [userId])
+  }, [userId, loadRecords])
+
+  function formatDateOption(daysOffset: number): { label: string; value: string } {
+    const d = new Date()
+    d.setDate(d.getDate() + daysOffset)
+    return {
+      label: daysOffset === 0 ? "Today" : daysOffset === -1 ? "Yesterday" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+      value: d.toISOString().split("T")[0],
+    }
+  }
 
   const {
     currentPage,
@@ -683,10 +745,13 @@ function CookingHistoryView({ userId }: { userId: string }) {
   } = usePagination(records)
 
   const columns: Column[] = [
-    { label: "Date/Time", key: "createdAt" },
+    { label: "Time", key: "createdAt" },
     { label: "Item", key: "name" },
     { label: "Cooked", key: "cooked" },
-    { label: "Plates", key: "plates" },
+    { label: "Expected", key: "expected" },
+    { label: "Actual", key: "actual" },
+    { label: "Variance", key: "variance" },
+    { label: "Notes", key: "notes" },
   ]
 
   function renderCell(record: CookingRecord, column: Column) {
@@ -694,10 +759,7 @@ function CookingHistoryView({ userId }: { userId: string }) {
       case "createdAt":
         return (
           <span className="text-admin-muted">
-            {new Date(record.createdAt).toLocaleString("en-GB", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
+            {new Date(record.createdAt).toLocaleTimeString("en-GB", {
               hour: "2-digit",
               minute: "2-digit",
             })}
@@ -707,8 +769,24 @@ function CookingHistoryView({ userId }: { userId: string }) {
         return <span className="font-medium">{record.stockSupply.name}</span>
       case "cooked":
         return <span>{Number(record.quantityCooked)} {record.stockSupply.unit}</span>
-      case "plates":
-        return <span className="text-admin-muted">{record.platesExpected}</span>
+      case "expected":
+        return <span>{record.platesExpected}</span>
+      case "actual":
+        return <span>{record.platesActual ?? "—"}</span>
+      case "variance": {
+        const actual = record.platesActual
+        if (actual === null || actual === undefined) return <span className="text-admin-muted">—</span>
+        const variance = Number(actual) - Number(record.platesExpected)
+        return (
+          <span className={`font-medium ${
+            variance > 0 ? "text-green-600" : variance < 0 ? "text-red-600" : "text-admin-muted"
+          }`}>
+            {variance > 0 ? `+${variance}` : variance}
+          </span>
+        )
+      }
+      case "notes":
+        return <span className="text-admin-muted text-xs">{record.notes || "—"}</span>
       default:
         return null
     }
@@ -719,13 +797,33 @@ function CookingHistoryView({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text">Cooking History</Heading>
+      <div className="flex items-center justify-between">
+        <Heading as="h2" className="text-admin-header-text">Cooking History</Heading>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="historyDate" className="text-sm">Date:</Label>
+          <select
+            id="historyDate"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="border border-input bg-background rounded-md px-3 py-1.5 text-sm"
+          >
+            <option value={formatDateOption(0).value}>{formatDateOption(0).label}</option>
+            <option value={formatDateOption(-1).value}>{formatDateOption(-1).label}</option>
+            <option value={formatDateOption(-2).value}>{formatDateOption(-2).label}</option>
+            <option value={formatDateOption(-3).value}>{formatDateOption(-3).label}</option>
+            <option value={formatDateOption(-4).value}>{formatDateOption(-4).label}</option>
+            <option value={formatDateOption(-5).value}>{formatDateOption(-5).label}</option>
+            <option value={formatDateOption(-6).value}>{formatDateOption(-6).label}</option>
+          </select>
+        </div>
+      </div>
+      <p className="text-sm text-admin-muted">Variance = Actual − Expected (negative = under-produced)</p>
       <DataTable
         columns={columns}
         data={paginatedItems}
         renderCell={renderCell}
         keyExtractor={(record) => record.id}
-        emptyMessage="No cooking records yet"
+        emptyMessage="No cooking records for this date"
         pagination={{
           currentPage,
           totalPages,

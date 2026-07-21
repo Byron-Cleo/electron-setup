@@ -189,18 +189,50 @@ interface CookingRecord {
   stockSupplyId: string;
   quantityCooked: number;
   platesExpected: number;
+  platesActual: number | null;
+  cookedDate: string;
   cookedById: string;
   notes: string | null;
   createdAt: string;
   stockSupply: { id: string; name: string; unit: string; platesPerUnit: number | null; menuId: string | null };
   cookedBy: { id: string; name: string };
+  assignments: CookingRecordAssignment[];
+}
+
+interface CookingRecordAssignment {
+  id: string;
+  cookingRecordId: string;
+  menuId: string;
+  quantityPlates: number;
+  createdAt: string;
+  menu: { id: string; name: string; slug: string; images: string[] };
 }
 
 interface CreateCookingRecordData {
   stockSupplyId: string;
   quantityCooked: number;
+  platesActual?: number;
   cookedById: string;
   notes?: string;
+}
+
+interface UpdateCookingRecordData {
+  platesActual?: number;
+  notes?: string;
+}
+
+interface KitchenStockItem {
+  id: string;
+  name: string;
+  slug: string;
+  unit: string;
+  platesPerUnit: number | null;
+  image: string | null;
+  menu: { id: string; name: string; slug: string; images: string[] } | null;
+  totalOrdered: number;
+  totalCooked: number;
+  rawStockPending: number;
+  totalPlatesProduced: number;
 }
 
 interface KitchenInventory {

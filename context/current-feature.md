@@ -1,14 +1,23 @@
 # Current Feature
 
 ## Platform
-Not Specified
+frontend
 
 ## Status
-Not Started
+In Progress
 
 ## Goals
+- Filter kitchen stock items to only those with `platesPerUnit` configured
+- Add date selector for viewing different days
+- Enhance cooking modal with PENDING stock display and platesActual input
+- Update cooking history table with variance column and date filter
 
 ## Notes
+- Only stock items with `platesPerUnit > 0` appear in kitchen cooking table
+- Kitchen staff ONLY records cooking — they do NOT assign plates to variants
+- Conversion rate can vary from configured value (kitchen inputs actual)
+- This phase depends on Phase 1 (backend API must be ready)
+- Uses endpoints: `GET /api/kitchen/inventory`, `GET /api/cooking-records?date=`, `POST /api/cooking-records`
 
 ## History
 
@@ -18,7 +27,6 @@ Not Started
 - Enhanced cooking records route with date filtering and platesActual support
 - Created cooking assignments route with available plates validation
 - Created kitchen inventory route returning stock items with platesPerUnit > 0
-- Registered all new routes in Express app
 - Branch: feature/backend/kitchen-cooking-phase-1
 
 ### frontend + backend - 2026-07-20 — Restock/Procure Items Table

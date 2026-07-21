@@ -173,11 +173,14 @@ export async function deleteDepartment(id: string): Promise<void> {
 
 // ─── Cooking Records ────────────────────────────────────────────────────────
 
-export async function getCookingRecords(stockSupplyId?: string): Promise<CookingRecord[]> {
+export async function getCookingRecords(date?: string, stockSupplyId?: string): Promise<CookingRecord[]> {
   if (window.electron?.cookingRecord?.getAll) {
     return window.electron.cookingRecord.getAll(stockSupplyId)
   }
-  const query = stockSupplyId ? `?stockSupplyId=${encodeURIComponent(stockSupplyId)}` : ""
+  const params = new URLSearchParams()
+  if (date) params.set("date", date)
+  if (stockSupplyId) params.set("stockSupplyId", stockSupplyId)
+  const query = params.toString() ? `?${params.toString()}` : ""
   return apiFetch(`/cooking-records${query}`)
 }
 
@@ -188,11 +191,21 @@ export async function createCookingRecord(data: CreateCookingRecordData): Promis
   return apiFetch("/cooking-records", { method: "POST", body: JSON.stringify(data) })
 }
 
+export async function updateCookingRecord(id: string, data: UpdateCookingRecordData): Promise<CookingRecord> {
+  return apiFetch(`/cooking-records/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
 export async function deleteCookingRecord(id: string): Promise<void> {
   if (window.electron?.cookingRecord?.delete) {
     return window.electron.cookingRecord.delete(id)
   }
   return apiFetch(`/cooking-records/${id}`, { method: "DELETE" })
+}
+
+// ─── Kitchen Inventory (new endpoint) ───────────────────────────────────────
+
+export async function getKitchenInventoryList(): Promise<KitchenStockItem[]> {
+  return apiFetch("/kitchen/inventory")
 }
 
 // ─── Kitchen Inventory ──────────────────────────────────────────────────────
