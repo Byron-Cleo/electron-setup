@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, type MutableRefObject } from "react"
 import { ChefHat } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ interface CookedFoodRow {
   stockSupplyId: string
   stockSupplyName: string
   unit: string
+  cookedDate: string
   totalProduced: number
   totalAssigned: number
   totalAvailable: number
@@ -23,7 +24,8 @@ interface CookedFoodRow {
 }
 
 interface Props {
-  onAssign?: (stockSupplyId: string) => void
+  onAssign?: (item: CookedFoodRow) => void
+  refreshRef?: MutableRefObject<() => void>
 }
 
 function formatDateOption(daysOffset: number): { label: string; value: string } {
@@ -35,7 +37,7 @@ function formatDateOption(daysOffset: number): { label: string; value: string } 
   }
 }
 
-export default function CookedFoodTable({ onAssign }: Props) {
+export default function CookedFoodTable({ onAssign, refreshRef }: Props) {
   const [rows, setRows] = useState<CookedFoodRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -56,6 +58,7 @@ export default function CookedFoodTable({ onAssign }: Props) {
             stockSupplyId: record.stockSupplyId,
             stockSupplyName: record.stockSupply.name,
             unit: record.stockSupply.unit,
+            cookedDate: record.cookedDate,
             totalProduced: 0,
             totalAssigned: 0,
             totalAvailable: 0,
@@ -94,6 +97,10 @@ export default function CookedFoodTable({ onAssign }: Props) {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    if (refreshRef) refreshRef.current = loadData
+  }, [loadData, refreshRef])
 
   const {
     currentPage,
@@ -150,7 +157,7 @@ export default function CookedFoodTable({ onAssign }: Props) {
             size="sm"
             variant="outline"
             className="text-green-600 border-green-200 hover:bg-green-50"
-            onClick={() => onAssign?.(row.stockSupplyId)}
+            onClick={() => onAssign?.(row)}
           >
             <ChefHat size={14} className="mr-1" />
             Assign...

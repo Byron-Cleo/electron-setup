@@ -51,26 +51,45 @@ router.get("/available", async (req, res) => {
 
 // POST /api/cooking-assignments - Assign plates to a menu variant
 router.post("/", async (req, res) => {
-  const { cookingRecordId, menuId, quantityPlates } = req.body;
+  const { cookingRecordId, stockSupplyId, date, menuId, quantityPlates } = req.body;
 
-  if (!cookingRecordId || !menuId || !quantityPlates) {
-    return res.status(400).json({ error: "cookingRecordId, menuId, and quantityPlates are required" });
+  if (!menuId || !quantityPlates) {
+    return res.status(400).json({ error: "menuId and quantityPlates are required" });
+  }
+
+  if (!cookingRecordId && !stockSupplyId) {
+    return res.status(400).json({ error: "cookingRecordId or stockSupplyId is required" });
   }
 
   if (Number(quantityPlates) <= 0) {
     return res.status(400).json({ error: "quantityPlates must be greater than 0" });
   }
 
-  // Verify cooking record exists
-  const cookingRecord = await prisma.cookingRecord.findUnique({
-    where: { id: cookingRecordId },
-    include: { assignments: true },
-  });
-  if (!cookingRecord) return res.status(404).json({ error: "Cooking record not found" });
-
   // Verify menu exists
   const menu = await prisma.menu.findUnique({ where: { id: menuId } });
   if (!menu) return res.status(404).json({ error: "Menu not found" });
+
+  // Resolve cooking record
+  let cookingRecord;
+  if (cookingRecordId) {
+    cookingRecord = await prisma.cookingRecord.findUnique({
+      where: { id: cookingRecordId },
+      include: { assignments: true },
+    });
+  } else {
+    // Find cooking record by stockSupplyId and date (latest first)
+    const where: Record<string, unknown> = { stockSupplyId };
+    if (date) {
+      where.cookedDate = new Date(date);
+    }
+    cookingRecord = await prisma.cookingRecord.findFirst({
+      where,
+      include: { assignments: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  if (!cookingRecord) return res.status(404).json({ error: "Cooking record not found" });
 
   // Check available plates
   const platesActual = Number(cookingRecord.platesActual ?? cookingRecord.platesExpected);
@@ -88,7 +107,7 @@ router.post("/", async (req, res) => {
 
   // Check if assignment already exists for this cooking record + menu combo
   const existing = await prisma.cookingRecordAssignment.findUnique({
-    where: { cookingRecordId_menuId: { cookingRecordId, menuId } },
+    where: { cookingRecordId_menuId: { cookingRecordId: cookingRecord.id, menuId } },
   });
   if (existing) {
     return res.status(400).json({ error: "Assignment already exists for this cooking record and menu. Use PUT to update." });
@@ -96,7 +115,7 @@ router.post("/", async (req, res) => {
 
   const assignment = await prisma.cookingRecordAssignment.create({
     data: {
-      cookingRecordId,
+      cookingRecordId: cookingRecord.id,
       menuId,
       quantityPlates: Number(quantityPlates),
     },

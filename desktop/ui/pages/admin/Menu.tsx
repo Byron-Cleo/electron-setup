@@ -1,19 +1,45 @@
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import { UtensilsCrossed, Plus } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import CookedFoodTable from "@/components/menu/CookedFoodTable"
+import AssignmentModal from "@/components/menu/AssignmentModal"
 import MenuForm from "@/components/MenuForm"
 
 type MenuTab = "cooked-food" | "create"
 
+interface CookedItemForAssign {
+  stockSupplyId: string
+  stockSupplyName: string
+  cookedDate: string
+  totalProduced: number
+  totalAssigned: number
+  totalAvailable: number
+  assignments: {
+    id: string
+    menuId: string
+    menuName: string
+    quantityPlates: number
+  }[]
+}
+
 function Menu() {
   const [tab, setTab] = useState<MenuTab>("cooked-food")
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [assignItem, setAssignItem] = useState<CookedItemForAssign | null>(null)
+  const refreshRef = useRef<() => void>(() => {})
 
   function handleSaved() {
     setTab("cooked-food")
     setEditingId(null)
   }
+
+  const handleAssign = useCallback((item: CookedItemForAssign) => {
+    setAssignItem(item)
+  }, [])
+
+  const handleAssignRefresh = useCallback(() => {
+    refreshRef.current()
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -41,9 +67,8 @@ function Menu() {
 
       {tab === "cooked-food" && (
         <CookedFoodTable
-          onAssign={(stockSupplyId) => {
-            console.log("Assign plates for stock supply:", stockSupplyId)
-          }}
+          onAssign={handleAssign}
+          refreshRef={refreshRef}
         />
       )}
 
@@ -54,6 +79,13 @@ function Menu() {
           onCancel={() => { setTab("cooked-food"); setEditingId(null) }}
         />
       )}
+
+      <AssignmentModal
+        open={assignItem !== null}
+        onClose={() => setAssignItem(null)}
+        cookedItem={assignItem}
+        onRefresh={handleAssignRefresh}
+      />
     </div>
   )
 }

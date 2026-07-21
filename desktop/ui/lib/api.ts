@@ -214,7 +214,7 @@ export async function getCookingAssignments(date?: string): Promise<CookingRecor
   return apiFetch(`/cooking-assignments/available${date ? `?date=${date}` : ""}`)
 }
 
-export async function createCookingAssignment(data: { cookingRecordId: string; menuId: string; quantityPlates: number }) {
+export async function createCookingAssignment(data: { cookingRecordId?: string; stockSupplyId?: string; date?: string; menuId: string; quantityPlates: number }) {
   return apiFetch("/cooking-assignments", { method: "POST", body: JSON.stringify(data) })
 }
 
