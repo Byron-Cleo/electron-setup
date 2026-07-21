@@ -1,24 +1,24 @@
 # Current Feature
 
 ## Platform
-frontend
+Not Specified
 
 ## Status
-In Progress
+Not Started
 
 ## Goals
-- Create CookedFoodTable component to display cooked food from kitchen
-- Update MenuForm with stock item dropdown (filtered by platesPerUnit)
-- Display cooked food with available plates per variant
 
 ## Notes
-- Menu tab has no existing data — this is all new content
-- Only stock items with `platesPerUnit > 0` appear in stock dropdown
-- One stock item can produce multiple menu variants (e.g., Chicken → Fry, Stew)
-- This phase depends on Phase 1 (backend API must be ready)
-- Uses endpoints: `GET /api/cooking-assignments/available?date=`, `GET /api/kitchen/inventory`
 
 ## History
+
+### frontend - 2026-07-21 — Kitchen Cooking Production Phase 3: Menu Tab — Cooked Food Management
+- Created CookedFoodTable component with Produced/Assigned/Available/Variants columns
+- Added date selector, SOLD OUT badge, Assign button per row
+- Updated Menu.tsx with Cooked Food tab and Create Menu Item tab
+- Updated MenuForm with stock item dropdown (filtered by platesPerUnit > 0)
+- Added getCookingAssignments, assignment CRUD, getMenus API functions
+- Branch: feature/kitchen/cooking-phase-3-menu-cooked-food
 
 ### frontend - 2026-07-21 — Kitchen Cooking Production Phase 2: Kitchen Tab UI
 - Updated CookingRecord type with platesActual, cookedDate, assignments fields
