@@ -208,6 +208,34 @@ export async function getKitchenInventoryList(): Promise<KitchenStockItem[]> {
   return apiFetch("/kitchen/inventory")
 }
 
+// ─── Cooking Assignments ────────────────────────────────────────────────────
+
+export async function getCookingAssignments(date?: string): Promise<CookingRecord[]> {
+  return apiFetch(`/cooking-assignments/available${date ? `?date=${date}` : ""}`)
+}
+
+export async function createCookingAssignment(data: { cookingRecordId: string; menuId: string; quantityPlates: number }) {
+  return apiFetch("/cooking-assignments", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function updateCookingAssignment(id: string, data: { quantityPlates: number }) {
+  return apiFetch(`/cooking-assignments/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export async function deleteCookingAssignment(id: string) {
+  return apiFetch(`/cooking-assignments/${id}`, { method: "DELETE" })
+}
+
+// ─── Menu ───────────────────────────────────────────────────────────────────
+
+export async function getMenus(): Promise<MenuItem[]> {
+  return apiFetch("/menu")
+}
+
+export async function getMenuById(id: string): Promise<MenuItem> {
+  return apiFetch(`/menu/${id}`)
+}
+
 // ─── Kitchen Inventory ──────────────────────────────────────────────────────
 
 export async function getKitchenInventory(stockSupplyId: string): Promise<KitchenInventory> {

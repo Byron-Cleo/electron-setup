@@ -197,6 +197,7 @@ interface CookingRecord {
   stockSupply: { id: string; name: string; unit: string; platesPerUnit: number | null; menuId: string | null };
   cookedBy: { id: string; name: string };
   assignments: CookingRecordAssignment[];
+  availablePlates?: number;
 }
 
 interface CookingRecordAssignment {

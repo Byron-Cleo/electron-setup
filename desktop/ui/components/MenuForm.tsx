@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -29,6 +29,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getStockSupplies } from "@/lib/api";
 
 interface Props {
   editId: string | null;
@@ -54,6 +55,7 @@ const formSchema = z.object({
   stock: z.number().min(0, "Stock must be 0 or more"),
   price: z.number().min(0, "Price must be 0 or more"),
   isFeatured: z.boolean(),
+  stockSupplyId: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -63,6 +65,8 @@ function slugify(text: string) {
 }
 
 export default function MenuForm({ editId, onSaved, onCancel }: Props) {
+  const [stockSupplies, setStockSupplies] = useState<StockSupply[]>([]);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -73,8 +77,15 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
       stock: 0,
       price: 0,
       isFeatured: false,
+      stockSupplyId: undefined,
     },
   });
+
+  useEffect(() => {
+    getStockSupplies()
+      .then((items) => setStockSupplies(items.filter((s) => s.platesPerUnit && Number(s.platesPerUnit) > 0)))
+      .catch(() => {})
+  }, []);
 
   useEffect(() => {
     if (!editId) return;
@@ -87,6 +98,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
         stock: item.stock,
         price: Number(item.price),
         isFeatured: item.isFeatured,
+        stockSupplyId: undefined,
       });
     }).catch((err) => {
       form.setError("root", { message: err instanceof Error ? err.message : "An error occurred" });
@@ -156,6 +168,36 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              name="stockSupplyId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stock Item (Optional)</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value ?? ""}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Link to a stock item" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {stockSupplies.map((supply) => (
+                        <SelectItem key={supply.id} value={supply.id}>
+                          {supply.name} ({supply.platesPerUnit} plates/{supply.unit.toLowerCase()})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Link to a stock item with plates per unit configured
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

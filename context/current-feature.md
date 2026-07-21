@@ -1,14 +1,22 @@
 # Current Feature
 
 ## Platform
-Not Specified
+frontend
 
 ## Status
-Not Started
+In Progress
 
 ## Goals
+- Create CookedFoodTable component to display cooked food from kitchen
+- Update MenuForm with stock item dropdown (filtered by platesPerUnit)
+- Display cooked food with available plates per variant
 
 ## Notes
+- Menu tab has no existing data — this is all new content
+- Only stock items with `platesPerUnit > 0` appear in stock dropdown
+- One stock item can produce multiple menu variants (e.g., Chicken → Fry, Stew)
+- This phase depends on Phase 1 (backend API must be ready)
+- Uses endpoints: `GET /api/cooking-assignments/available?date=`, `GET /api/kitchen/inventory`
 
 ## History
 
