@@ -1,25 +1,25 @@
 # Current Feature
 
 ## Platform
-frontend
+Not Specified
 
 ## Status
-In Progress
+Not Started
 
 ## Goals
-- Filter kitchen stock items to only those with `platesPerUnit` configured
-- Add date selector for viewing different days
-- Enhance cooking modal with PENDING stock display and platesActual input
-- Update cooking history table with variance column and date filter
 
 ## Notes
-- Only stock items with `platesPerUnit > 0` appear in kitchen cooking table
-- Kitchen staff ONLY records cooking — they do NOT assign plates to variants
-- Conversion rate can vary from configured value (kitchen inputs actual)
-- This phase depends on Phase 1 (backend API must be ready)
-- Uses endpoints: `GET /api/kitchen/inventory`, `GET /api/cooking-records?date=`, `POST /api/cooking-records`
 
 ## History
+
+### frontend - 2026-07-21 — Kitchen Cooking Production Phase 2: Kitchen Tab UI
+- Updated CookingRecord type with platesActual, cookedDate, assignments fields
+- Added CookingRecordAssignment, UpdateCookingRecordData, KitchenStockItem types
+- Updated getCookingRecords with date param, added updateCookingRecord, getKitchenInventoryList
+- Inventory tab: shows Ordered/Cooked/Remaining(PENDING)/Plates Made columns
+- Cooking modal: shows PENDING stock summary, platesActual input, auto-calculates expected plates
+- History tab: date selector dropdown (Today through 6 days back), Variance column (color-coded)
+- Branch: feature/kitchen/cooking-phase-2-kitchen-tab
 
 ### backend - 2026-07-21 — Kitchen Cooking Production Phase 1: Schema + Backend Foundation
 - Added `platesActual` and `cookedDate` fields to CookingRecord model
