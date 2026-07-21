@@ -1,14 +1,26 @@
 # Current Feature
 
 ## Platform
-Not Specified
+backend
 
 ## Status
-Not Started
+In Progress
 
 ## Goals
+- Update Prisma schema with new fields and model
+- Enhance cooking records route with date filtering and actual plates
+- Create cooking assignments route for menu variant plate assignment
+- Create kitchen inventory endpoint
+- Register all new routes in Express app
 
 ## Notes
+- Only stock items with `platesPerUnit > 0` appear in kitchen cooking form
+- Kitchen records what they cooked, system calculates expected plates
+- Kitchen inputs actual plates produced (may differ from expected)
+- Date stamping is critical for daily reset logic and reporting
+- This phase must be completed before frontend phases (2-4)
+- New `CookingRecordAssignment` model for menu variant plate assignment
+- Validation: cannot exceed available/assigned plates
 
 ## History
 

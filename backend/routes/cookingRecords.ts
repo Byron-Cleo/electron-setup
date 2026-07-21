@@ -3,12 +3,19 @@ import prisma from "../db/db";
 
 const router = Router();
 
-// GET /api/cooking-records - List cooking records (optional ?stockSupplyId filter)
+// GET /api/cooking-records - List cooking records (optional ?date=YYYY-MM-DD, ?stockSupplyId filter)
 router.get("/", async (req, res) => {
-  const { stockSupplyId } = req.query;
+  const { stockSupplyId, date } = req.query;
   const where: Record<string, unknown> = {};
   if (stockSupplyId) {
     where.stockSupplyId = stockSupplyId;
+  }
+  if (date) {
+    const d = new Date(date as string);
+    if (isNaN(d.getTime())) {
+      return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
+    }
+    where.cookedDate = d;
   }
 
   const records = await prisma.cookingRecord.findMany({
@@ -16,6 +23,11 @@ router.get("/", async (req, res) => {
     include: {
       stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true, menuId: true } },
       cookedBy: { select: { id: true, name: true } },
+      assignments: {
+        include: {
+          menu: { select: { id: true, name: true, slug: true, images: true } },
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -24,7 +36,7 @@ router.get("/", async (req, res) => {
 
 // POST /api/cooking-records - Create cooking record
 router.post("/", async (req, res) => {
-  const { stockSupplyId, quantityCooked, cookedById, notes } = req.body;
+  const { stockSupplyId, quantityCooked, platesActual, cookedById, notes } = req.body;
 
   if (!stockSupplyId || !quantityCooked || !cookedById) {
     return res.status(400).json({ error: "stockSupplyId, quantityCooked, and cookedById are required" });
@@ -32,6 +44,10 @@ router.post("/", async (req, res) => {
 
   if (Number(quantityCooked) <= 0) {
     return res.status(400).json({ error: "quantityCooked must be greater than 0" });
+  }
+
+  if (platesActual !== undefined && platesActual !== null && Number(platesActual) <= 0) {
+    return res.status(400).json({ error: "platesActual must be greater than 0" });
   }
 
   // Verify stock supply exists and has platesPerUnit configured
@@ -73,18 +89,23 @@ router.post("/", async (req, res) => {
   const platesExpected = qtyToCook * Number(stockSupply.platesPerUnit);
 
   const result = await prisma.$transaction(async (tx) => {
-    // Create cooking record
     const record = await tx.cookingRecord.create({
       data: {
         stockSupplyId,
         quantityCooked: qtyToCook,
         platesExpected,
+        platesActual: platesActual ? Number(platesActual) : null,
         cookedById,
         notes,
       },
       include: {
         stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true, menuId: true } },
         cookedBy: { select: { id: true, name: true } },
+        assignments: {
+          include: {
+            menu: { select: { id: true, name: true, slug: true, images: true } },
+          },
+        },
       },
     });
 
@@ -100,6 +121,38 @@ router.post("/", async (req, res) => {
   });
 
   res.status(201).json(result);
+});
+
+// PUT /api/cooking-records/:id - Update cooking record
+router.put("/:id", async (req, res) => {
+  const { id } = req.params;
+  const { platesActual, notes } = req.body;
+
+  const existing = await prisma.cookingRecord.findUnique({ where: { id } });
+  if (!existing) return res.status(404).json({ error: "Cooking record not found" });
+
+  if (platesActual !== undefined && platesActual !== null && Number(platesActual) <= 0) {
+    return res.status(400).json({ error: "platesActual must be greater than 0" });
+  }
+
+  const record = await prisma.cookingRecord.update({
+    where: { id },
+    data: {
+      platesActual: platesActual !== undefined ? Number(platesActual) : existing.platesActual,
+      notes: notes !== undefined ? notes : existing.notes,
+    },
+    include: {
+      stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true, menuId: true } },
+      cookedBy: { select: { id: true, name: true } },
+      assignments: {
+        include: {
+          menu: { select: { id: true, name: true, slug: true, images: true } },
+        },
+      },
+    },
+  });
+
+  res.json(record);
 });
 
 // DELETE /api/cooking-records/:id - Delete cooking record (reverse menu stock)

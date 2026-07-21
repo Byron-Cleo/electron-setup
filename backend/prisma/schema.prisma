@@ -63,6 +63,7 @@ model Menu {
   OrderItem                                             OrderItem[]
   Review                                                Review[]
   StockSupply                                           StockSupply[]
+  CookingRecordAssignment                               CookingRecordAssignment[]
 }
 
 model MenuAccompaniment {
@@ -296,13 +297,28 @@ model StockFulfillmentItem {
 }
 
 model CookingRecord {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  stockSupplyId   String      @db.Uuid
-  quantityCooked  Decimal     @db.Decimal(12, 2)
-  platesExpected  Decimal     @db.Decimal(12, 2)
-  cookedById      String      @db.Uuid
+  id              String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockSupplyId   String                     @db.Uuid
+  quantityCooked  Decimal                    @db.Decimal(12, 2)
+  platesExpected  Decimal                    @db.Decimal(12, 2)
+  platesActual    Decimal?                   @db.Decimal(12, 2)
+  cookedDate      DateTime                   @default(now()) @db.Date
+  cookedById      String                     @db.Uuid
   notes           String?
-  createdAt       DateTime    @default(now())
-  stockSupply     StockSupply @relation(fields: [stockSupplyId], references: [id])
-  cookedBy        User        @relation(fields: [cookedById], references: [id])
+  createdAt       DateTime                   @default(now())
+  stockSupply     StockSupply                @relation(fields: [stockSupplyId], references: [id])
+  cookedBy        User                       @relation(fields: [cookedById], references: [id])
+  assignments     CookingRecordAssignment[]
+}
+
+model CookingRecordAssignment {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cookingRecordId   String        @db.Uuid
+  menuId            String        @db.Uuid
+  quantityPlates    Decimal       @db.Decimal(12, 2)
+  createdAt         DateTime      @default(now())
+  cookingRecord     CookingRecord @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
+  menu              Menu          @relation(fields: [menuId], references: [id])
+
+  @@unique([cookingRecordId, menuId])
 }

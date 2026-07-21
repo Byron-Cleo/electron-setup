@@ -10,6 +10,8 @@ import stockSuppliesRouter from "./routes/items";
 import stockRequestsRouter from "./routes/stockRequests";
 import departmentsRouter from "./routes/departments";
 import cookingRecordsRouter from "./routes/cookingRecords";
+import cookingAssignmentsRouter from "./routes/cookingAssignments";
+import kitchenInventoryRouter from "./routes/kitchenInventory";
 import kitchenConfigRouter from "./routes/kitchenConfig";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +35,8 @@ app.use("/api/stock-supplies", stockSuppliesRouter);
 app.use("/api/stock-requests", stockRequestsRouter);
 app.use("/api/departments", departmentsRouter);
 app.use("/api/cooking-records", cookingRecordsRouter);
+app.use("/api/cooking-assignments", cookingAssignmentsRouter);
+app.use("/api/kitchen/inventory", kitchenInventoryRouter);
 app.use("/api/kitchen-config", kitchenConfigRouter);
 
 export default app;
