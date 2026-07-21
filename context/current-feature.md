@@ -1,28 +1,25 @@
 # Current Feature
 
 ## Platform
-backend
+Not Specified
 
 ## Status
-In Progress
+Not Started
 
 ## Goals
-- Update Prisma schema with new fields and model
-- Enhance cooking records route with date filtering and actual plates
-- Create cooking assignments route for menu variant plate assignment
-- Create kitchen inventory endpoint
-- Register all new routes in Express app
 
 ## Notes
-- Only stock items with `platesPerUnit > 0` appear in kitchen cooking form
-- Kitchen records what they cooked, system calculates expected plates
-- Kitchen inputs actual plates produced (may differ from expected)
-- Date stamping is critical for daily reset logic and reporting
-- This phase must be completed before frontend phases (2-4)
-- New `CookingRecordAssignment` model for menu variant plate assignment
-- Validation: cannot exceed available/assigned plates
 
 ## History
+
+### backend - 2026-07-21 — Kitchen Cooking Production Phase 1: Schema + Backend Foundation
+- Added `platesActual` and `cookedDate` fields to CookingRecord model
+- Created `CookingRecordAssignment` model for menu variant plate assignment
+- Enhanced cooking records route with date filtering and platesActual support
+- Created cooking assignments route with available plates validation
+- Created kitchen inventory route returning stock items with platesPerUnit > 0
+- Registered all new routes in Express app
+- Branch: feature/backend/kitchen-cooking-phase-1
 
 ### frontend + backend - 2026-07-20 — Restock/Procure Items Table
 - Implemented `RestockView` component in `Store.tsx` with DataTable of low stock items
