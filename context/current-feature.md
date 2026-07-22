@@ -2,7 +2,7 @@
 
 ## Platform
 
-frontend
+backend
 
 ## Status
 
@@ -10,20 +10,26 @@ Complete
 
 ## Goals
 
-- Create a reusable `SearchableSelect` component in `desktop/ui/components/shared/`
-- Shows ALL dropdown options by default when opened
-- Filters options in real-time as user types to search
-- Allows selecting an option to populate the input field
-- Pure Tailwind + React — no new packages
+- Add `StockSupplyMenu` junction table to Prisma schema
+- Remove single `menuId` column from `StockSupply` model
+- Add `menus` relation to `StockSupply` and `Menu` models
+- Run migration to sync database
 
 ## Notes
 
-- This phase depends on Phase 1 (backend accepts menuId) — DONE
-- Component goes in `shared/` folder for reuse across the app
-- Label only shows menu item name (e.g. "Beef Fry"), not IDs or extra details
-- The internal value is the ID, but user only sees the name
+- This is a **breaking schema change** — `menuId` is removed, routes will break until Phase 2
+- The junction table enables many-to-many: one stock supply ↔ many menus
+- Use `onDelete: Cascade` so deleting a stock supply or menu cleans up the junction
+- Existing `menuId` data will be LOST during migration — acceptable since this is a new feature with minimal production data
 
 ## History
+
+### backend - 2026-07-22 — Multi-Select Menu Phase 1: Schema + Migration
+- Added `StockSupplyMenu` junction table (stockSupplyId + menuId composite PK)
+- Removed `menuId` column and `menu` relation from `StockSupply` model
+- Added `menus` relation to `StockSupply` model
+- Added `stockSupplyMenus` relation to `Menu` model
+- Ran prisma migrate to sync database
 
 ### frontend - 2026-07-22 — Menu-StockSupply Link Phase 3: Form Integration
 - Added `menuId` to `StockSupplyCreateData` and `StockSupplyUpdateData` types
