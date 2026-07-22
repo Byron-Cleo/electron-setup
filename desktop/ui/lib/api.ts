@@ -240,6 +240,18 @@ export async function getMenuById(id: string): Promise<MenuItem> {
   return apiFetch(`/menu/${id}`)
 }
 
+export async function getCookedMenus(): Promise<CookedMenuItem[]> {
+  return apiFetch("/menu/cooked")
+}
+
+export async function updateMenu(id: string, data: Partial<MenuCreateData>): Promise<MenuItem> {
+  return apiFetch(`/menu/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export async function updateMenuAvailability(id: string, isAvailable: boolean): Promise<MenuItem> {
+  return apiFetch(`/menu/${id}/availability`, { method: "PUT", body: JSON.stringify({ isAvailable }) })
+}
+
 // ─── Kitchen Inventory ──────────────────────────────────────────────────────
 
 export async function getKitchenInventory(stockSupplyId: string): Promise<KitchenInventory> {

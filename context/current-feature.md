@@ -14,6 +14,14 @@ Not Started
 
 ## History
 
+### frontend - 2026-07-22 — Menu Cooked Food Variants Phase 2: Frontend CookedFoodTable
+- Added `CookedMenuItem` type to electron.d.ts
+- Added `getCookedMenus()`, `updateMenu()`, `updateMenuAvailability()` API functions
+- Created `EditMenuDialog` component with form fields for name, category, price, description
+- Rewrote `CookedFoodTable` with search, edit, and hide (soft-delete) actions
+- Updated `Menu.tsx` — removed AssignmentModal, simplified to new CookedFoodTable
+- Branch: feature/frontend/menu-cooked-food-phase-2
+
 ### backend - 2026-07-22 — Menu Cooked Food Variants Phase 1: Schema + Backend API
 - Added `isAvailable` Boolean field (default `true`) to Menu model in Prisma schema
 - Synced database via `prisma db push`

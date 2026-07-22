@@ -227,6 +227,28 @@ interface UpdateCookingRecordData {
   notes?: string;
 }
 
+interface CookedMenuItem {
+  id: string;
+  name: string;
+  slug: string;
+  category: string;
+  price: number;
+  stock: number;
+  isAvailable: boolean;
+  images: string[];
+  stockSupply: {
+    id: string;
+    name: string;
+    unit: string;
+    platesPerUnit: number | null;
+  } | null;
+  cooking: {
+    totalProduced: number;
+    totalAssigned: number;
+    totalAvailable: number;
+  };
+}
+
 interface KitchenStockItem {
   id: string;
   name: string;

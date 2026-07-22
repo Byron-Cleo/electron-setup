@@ -1,106 +1,63 @@
-import { useState, useEffect, useCallback, type MutableRefObject } from "react"
-import { ChefHat } from "lucide-react"
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { Pencil, Trash2, Search } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
-import { getCookingAssignments } from "@/lib/api"
-import { Label } from "@/components/ui/label"
-
-interface CookedFoodRow {
-  stockSupplyId: string
-  stockSupplyName: string
-  unit: string
-  cookedDate: string
-  totalProduced: number
-  totalAssigned: number
-  totalAvailable: number
-  assignments: {
-    id: string
-    menuId: string
-    menuName: string
-    quantityPlates: number
-  }[]
-}
+import { getCookedMenus, updateMenuAvailability } from "@/lib/api"
+import EditMenuDialog from "./EditMenuDialog"
 
 interface Props {
-  onAssign?: (item: CookedFoodRow) => void
-  refreshRef?: MutableRefObject<() => void>
+  onRefresh?: () => void
 }
 
-function formatDateOption(daysOffset: number): { label: string; value: string } {
-  const d = new Date()
-  d.setDate(d.getDate() + daysOffset)
-  return {
-    label: daysOffset === 0 ? "Today" : daysOffset === -1 ? "Yesterday" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-    value: d.toISOString().split("T")[0],
-  }
-}
-
-export default function CookedFoodTable({ onAssign, refreshRef }: Props) {
-  const [rows, setRows] = useState<CookedFoodRow[]>([])
+export default function CookedFoodTable({ onRefresh }: Props) {
+  const [items, setItems] = useState<CookedMenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0])
+  const [search, setSearch] = useState("")
+  const [editDialog, setEditDialog] = useState<{ open: boolean; item: CookedMenuItem | null }>({
+    open: false,
+    item: null,
+  })
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item: CookedMenuItem | null }>({
+    open: false,
+    item: null,
+  })
+  const [deleting, setDeleting] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
       setError("")
-      const records = await getCookingAssignments(selectedDate)
-
-      const rowMap = new Map<string, CookedFoodRow>()
-
-      for (const record of records) {
-        const key = record.stockSupplyId
-        if (!rowMap.has(key)) {
-          rowMap.set(key, {
-            stockSupplyId: record.stockSupplyId,
-            stockSupplyName: record.stockSupply.name,
-            unit: record.stockSupply.unit,
-            cookedDate: record.cookedDate,
-            totalProduced: 0,
-            totalAssigned: 0,
-            totalAvailable: 0,
-            assignments: [],
-          })
-        }
-
-        const row = rowMap.get(key)!
-        const produced = Number(record.platesActual ?? record.platesExpected)
-        row.totalProduced += produced
-
-        for (const assignment of record.assignments) {
-          row.totalAssigned += Number(assignment.quantityPlates)
-          row.assignments.push({
-            id: assignment.id,
-            menuId: assignment.menuId,
-            menuName: assignment.menu.name,
-            quantityPlates: Number(assignment.quantityPlates),
-          })
-        }
-      }
-
-      const result = Array.from(rowMap.values())
-      for (const row of result) {
-        row.totalAvailable = row.totalProduced - row.totalAssigned
-      }
-
-      setRows(result)
+      const data = await getCookedMenus()
+      setItems(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load cooked food")
+      setError(err instanceof Error ? err.message : "Failed to load cooked menus")
     } finally {
       setLoading(false)
     }
-  }, [selectedDate])
+  }, [])
 
   useEffect(() => {
     loadData()
   }, [loadData])
 
   useEffect(() => {
-    if (refreshRef) refreshRef.current = loadData
-  }, [loadData, refreshRef])
+    onRefresh?.()
+  }, [items, onRefresh])
+
+  const filteredItems = useMemo(() => {
+    if (!search) return items
+    const q = search.toLowerCase()
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q) ||
+        item.stockSupply?.name.toLowerCase().includes(q)
+    )
+  }, [items, search])
 
   const {
     currentPage,
@@ -110,84 +67,96 @@ export default function CookedFoodTable({ onAssign, refreshRef }: Props) {
     prevPage,
     canNext,
     canPrev,
-  } = usePagination(rows)
+  } = usePagination(filteredItems)
+
+  async function handleDelete() {
+    if (!deleteDialog.item) return
+    try {
+      setDeleting(true)
+      await updateMenuAvailability(deleteDialog.item.id, false)
+      setItems((prev) => prev.filter((i) => i.id !== deleteDialog.item!.id))
+      setDeleteDialog({ open: false, item: null })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to hide menu")
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const columns: Column[] = [
-    { label: "Stock Item", key: "name" },
+    { label: "Name", key: "name" },
+    { label: "Category", key: "category" },
+    { label: "Stock Item", key: "stockItem" },
     { label: "Produced", key: "produced" },
     { label: "Assigned", key: "assigned" },
     { label: "Available", key: "available" },
-    { label: "Variants", key: "variants" },
-    { label: "Action", key: "action", isAction: true, align: "center" },
+    { label: "Actions", key: "actions", isAction: true, align: "right" },
   ]
 
-  function renderCell(row: CookedFoodRow, column: Column) {
+  function renderCell(row: CookedMenuItem, column: Column) {
     switch (column.key) {
       case "name":
-        return <span className="font-medium">{row.stockSupplyName}</span>
+        return <span className="font-medium">{row.name}</span>
+      case "category":
+        return <span>{row.category}</span>
+      case "stockItem":
+        return <span>{row.stockSupply?.name ?? "—"}</span>
       case "produced":
-        return <span>{row.totalProduced}</span>
+        return <span>{row.cooking.totalProduced}</span>
       case "assigned":
-        return <span>{row.totalAssigned}</span>
+        return <span>{row.cooking.totalAssigned}</span>
       case "available":
-        return row.totalAvailable <= 0 ? (
+        return row.cooking.totalAvailable <= 0 ? (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
             SOLD OUT
           </span>
         ) : (
-          <span className="font-medium text-green-600">{row.totalAvailable}</span>
+          <span className="font-medium text-green-600">{row.cooking.totalAvailable}</span>
         )
-      case "variants": {
-        if (row.assignments.length === 0) {
-          return <span className="text-admin-muted text-xs">No assignments yet</span>
-        }
+      case "actions":
         return (
-          <div className="flex flex-wrap gap-1">
-            {row.assignments.map((a) => (
-              <span key={a.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-muted">
-                {a.menuName}({a.quantityPlates})
-              </span>
-            ))}
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEditDialog({ open: true, item: row })}
+            >
+              <Pencil size={14} className="mr-1" />
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-red-600 border-red-200 hover:bg-red-50"
+              onClick={() => setDeleteDialog({ open: true, item: row })}
+            >
+              <Trash2 size={14} className="mr-1" />
+              Hide
+            </Button>
           </div>
-        )
-      }
-      case "action":
-        return (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-green-600 border-green-200 hover:bg-green-50"
-            onClick={() => onAssign?.(row)}
-          >
-            <ChefHat size={14} className="mr-1" />
-            Assign...
-          </Button>
         )
       default:
         return null
     }
   }
 
-  if (loading) return <div className="text-admin-muted">Loading cooked food...</div>
+  if (loading) return <div className="text-admin-muted">Loading cooked menus...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Heading as="h2" className="text-admin-header-text">Cooked Food &amp; Variants</Heading>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="cookedDate" className="text-sm">Date:</Label>
-          <select
-            id="cookedDate"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-input bg-background rounded-md px-3 py-1.5 text-sm"
-          >
-            {[0, -1, -2, -3, -4, -5, -6].map((offset) => {
-              const opt = formatDateOption(offset)
-              return <option key={offset} value={opt.value}>{opt.label}</option>
-            })}
-          </select>
+        <Heading as="h2" className="text-admin-header-text">
+          Today&apos;s Cooked Food — Menu Variants
+        </Heading>
+        <div className="relative w-64">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-muted" />
+          <Input
+            placeholder="Search by name, category, stock..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
       </div>
 
@@ -195,8 +164,12 @@ export default function CookedFoodTable({ onAssign, refreshRef }: Props) {
         columns={columns}
         data={paginatedItems}
         renderCell={renderCell}
-        keyExtractor={(row) => row.stockSupplyId}
-        emptyMessage="No cooked food for this date. Cook items in Kitchen first."
+        keyExtractor={(row) => row.id}
+        emptyMessage={
+          search
+            ? "No menu items match your search."
+            : "No cooked menu items. Cook items in Kitchen first."
+        }
         pagination={{
           currentPage,
           totalPages,
@@ -206,6 +179,45 @@ export default function CookedFoodTable({ onAssign, refreshRef }: Props) {
           canNext,
         }}
       />
+
+      <EditMenuDialog
+        open={editDialog.open}
+        onClose={() => setEditDialog({ open: false, item: null })}
+        item={editDialog.item}
+        onSaved={loadData}
+      />
+
+      {deleteDialog.open && deleteDialog.item && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
+          <div className="bg-popover rounded-xl p-6 shadow-lg ring-1 ring-foreground/10 w-full max-w-sm space-y-4">
+            <Heading as="h3" className="text-admin-header-text">
+              Hide Menu Item
+            </Heading>
+            <p className="text-sm text-admin-muted">
+              Are you sure you want to hide &quot;{deleteDialog.item.name}&quot; from the waiter
+              screen?
+            </p>
+            <p className="text-sm text-admin-muted">You can restore it later from this table.</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteDialog({ open: false, item: null })}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? "Hiding..." : "Hide"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
