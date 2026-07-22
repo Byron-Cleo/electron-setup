@@ -1,23 +1,24 @@
 # Current Feature
 
 ## Platform
-full-stack
+Not Specified
 
 ## Status
-In Progress — Branch: feature/admin/is-menu-stock-flag
+Not Started
 
 ## Goals
-- Replace `platesPerUnit > 0` check with dedicated `isMenuStock` boolean
-- Add `isMenuStock` toggle to stock supply create/edit forms
-- Filter kitchen inventory and menu form by `isMenuStock`
-- Validate cooking records using `isMenuStock`
 
 ## Notes
-- `isMenuStock` = "is this stock used for menu items?"
-- `platesPerUnit` = "how many plates does one unit produce?"
-- Database, backend routes, and frontend types all need updates
 
 ## History
+
+### full-stack - 2026-07-22 — Add isMenuStock Flag to StockSupply
+- Added isMenuStock Boolean field to StockSupply model (Prisma schema)
+- Updated kitchenInventory, cookingRecords, items, kitchenConfig routes
+- Added isMenuStock toggle to StockSupplyForm and StockSupplyEditDialog
+- Shows isMenuStock status in StockSupplyDetailDialog
+- Filtered KitchenStockConfig dropdown by isMenuStock
+- Updated frontend types (StockSupply, KitchenStockItem, KitchenConfigItem, KitchenInventory)
 
 ### frontend - 2026-07-22 — Kitchen Cooking Production Phase 6: Waiter Availability Display
 - Replaced item.stock with item.availablePlates in WaiterMenu.tsx
