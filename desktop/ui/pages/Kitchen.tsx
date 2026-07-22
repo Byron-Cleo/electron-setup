@@ -119,7 +119,7 @@ function Kitchen() {
                 <UtensilsCrossed size={24} className="text-green-600" />
               </div>
               <div>
-                <Heading as="h3" className="text-lg text-admin-header-text">Cooked Food</Heading>
+                <Heading as="h3" className="text-lg text-admin-header-text">Kitchen Production/Cooked Food</Heading>
                 <p className="text-sm text-admin-muted">Manage prepared meals</p>
               </div>
             </div>
@@ -572,7 +572,6 @@ function KitchenInventoryView({ userId }: { userId: string }) {
             variant="outline"
             className="text-green-600 border-green-200 hover:bg-green-50"
             onClick={() => openCookDialog(item)}
-            disabled={!item.isMenuStock || item.rawStockPending <= 0}
           >
             <ChefHat size={14} className="mr-1" />
             Cook More
@@ -588,7 +587,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text">Kitchen Stock — Cooking Production</Heading>
+      <Heading as="h2" className="text-admin-header-text">Today's Cooked Food — Kitchen Production</Heading>
       <p className="text-sm text-admin-muted">
         PENDING = Ordered but not yet cooked (carries to tomorrow)
       </p>

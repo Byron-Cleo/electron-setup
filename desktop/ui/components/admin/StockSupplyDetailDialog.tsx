@@ -12,6 +12,7 @@ import {
   getStockSupplyById,
   stockSupplyImageUrl,
 } from "@/lib/api"
+import { formatDate } from "@/lib/utils"
 
 interface Props {
   open: boolean
@@ -50,8 +51,28 @@ export default function StockSupplyDetailDialog({ open, onClose, supplyId }: Pro
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base uppercase text-admin-header-text">
-            Stock Supply Details
+          <DialogTitle className="text-base uppercase text-center text-admin-header-text">
+            {supply ? (
+              <>
+                <span className={`px-3 py-1 rounded-lg inline-block ${
+                  (() => {
+                    const current = Number(supply.currentStock)
+                    const reorder = supply.reorderLevel != null ? Number(supply.reorderLevel) : null
+                    const status = current <= 0 ? "Not Available" : reorder != null && current <= reorder ? "Restock" : "Available"
+                    return status === "Available"
+                      ? "bg-green-100 text-green-700"
+                      : status === "Restock"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-red-100 text-red-700"
+                  })()
+                }`}>
+                  {supply.name}
+                </span>
+                {" Details"}
+              </>
+            ) : (
+              "Stock Supply Details"
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -81,100 +102,81 @@ export default function StockSupplyDetailDialog({ open, onClose, supplyId }: Pro
               </div>
             )}
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-admin-header-text/60">Name</span>
+            <div className="space-y-3 flex flex-col items-center">
+              <div className="inline-grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 items-center">
+                <span className="text-sm text-admin-header-text/60 text-right">Name</span>
                 <span className="text-sm font-medium text-admin-header-text">{supply.name}</span>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-admin-header-text/60">Status</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  supply.isActive
-                    ? "bg-green-100 text-green-700"
-                    : "bg-gray-100 text-gray-600"
-                }`}>
-                  {supply.isActive ? "Active" : "Inactive"}
-                </span>
-              </div>
+                <span className="text-sm text-admin-header-text/60 text-right">Status</span>
+                {(() => {
+                  const current = Number(supply.currentStock)
+                  const reorder = supply.reorderLevel != null ? Number(supply.reorderLevel) : null
+                  const status = current <= 0 ? "Not Available" : reorder != null && current <= reorder ? "Restock" : "Available"
+                  return (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium w-fit ${
+                      status === "Available"
+                        ? "bg-green-100 text-green-700"
+                        : status === "Restock"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-red-100 text-red-700"
+                    }`}>
+                      {status}
+                    </span>
+                  )
+                })()}
 
-              {supply.description && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-admin-header-text/60">Description</span>
-                  <span className="text-sm text-admin-header-text text-right max-w-[60%]">{supply.description}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-admin-header-text/60">Unit</span>
+                <span className="text-sm text-admin-header-text/60 text-right">Unit</span>
                 <span className="text-sm text-admin-header-text">{supply.unit}</span>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-admin-header-text/60">Current Stock</span>
-                <span className={`text-sm font-medium ${isLow ? "text-red-600" : "text-admin-header-text"}`}>
+                <span className="text-sm text-admin-header-text/60 text-right">Current Stock</span>
+                <span className={`text-sm font-medium ${isLow ? "text-red-600" : "text-green-600"}`}>
                   {supply.currentStock}
-                  {isLow && (
-                    <span className="ml-2 text-xs text-red-500 font-normal">Low Stock</span>
-                  )}
                 </span>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-admin-header-text/60">Reorder Level</span>
+                <span className="text-sm text-admin-header-text/60 text-right">Reorder Level</span>
                 <span className="text-sm text-admin-header-text">{supply.reorderLevel ?? "—"}</span>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-admin-header-text/60">Menu Stock</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                <span className="text-sm text-admin-header-text/60 text-right">Menu Stock</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium w-fit ${
                   supply.isMenuStock
-                    ? "bg-green-100 text-green-700"
-                    : "bg-gray-100 text-gray-600"
+                    ? "bg-amber-800 text-white"
+                    : "bg-orange-500 text-white"
                 }`}>
                   {supply.isMenuStock ? "Yes" : "No"}
                 </span>
-              </div>
 
-              {supply.platesPerUnit != null && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-admin-header-text/60">Plates Per Unit</span>
-                  <span className="text-sm text-admin-header-text">{supply.platesPerUnit}</span>
-                </div>
-              )}
+                {supply.platesPerUnit != null && (
+                  <>
+                    <span className="text-sm text-admin-header-text/60 text-right">Plates Per Unit</span>
+                    <span className="text-sm text-admin-header-text">{supply.platesPerUnit}</span>
+                  </>
+                )}
 
-              {supply.menu && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-admin-header-text/60">Linked Menu Item</span>
-                  <span className="text-sm text-admin-header-text">{supply.menu.name}</span>
-                </div>
-              )}
+                {supply.menu && (
+                  <>
+                    <span className="text-sm text-admin-header-text/60 text-right">Linked Menu Item</span>
+                    <span className="text-sm text-admin-header-text">{supply.menu.name}</span>
+                  </>
+                )}
 
-              {supply.departments && supply.departments.length > 0 && (
-                <div className="flex items-start justify-between gap-4">
-                  <span className="text-sm text-admin-header-text/60 shrink-0">Departments</span>
-                  <div className="flex flex-wrap gap-1 justify-end">
-                    {supply.departments.map((d) => (
-                      <span key={d.id} className="text-xs px-2 py-0.5 rounded bg-admin-content text-admin-header-text/70 border border-admin-card-border">
-                        {d.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+                {supply.departments && supply.departments.length > 0 && (
+                  <>
+                    <span className="text-sm text-admin-header-text/60 text-right">Departments</span>
+                    <div className="flex flex-wrap gap-1">
+                      {supply.departments.map((d) => (
+                        <span key={d.id} className="text-xs px-2 py-0.5 rounded bg-admin-content text-admin-header-text/70 border border-admin-card-border">
+                          {d.name}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-admin-header-text/60">Created</span>
-                <span className="text-sm text-admin-header-text">
-                  {new Date(supply.createdAt).toLocaleDateString()}
-                </span>
-              </div>
+                <span className="text-sm text-admin-header-text/60 text-right">Created</span>
+                <span className="text-sm text-admin-header-text">{formatDate(supply.createdAt)}</span>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-admin-header-text/60">Updated</span>
-                <span className="text-sm text-admin-header-text">
-                  {new Date(supply.updatedAt).toLocaleDateString()}
-                </span>
+                <span className="text-sm text-admin-header-text/60 text-right">Updated</span>
+                <span className="text-sm text-admin-header-text">{formatDate(supply.updatedAt)}</span>
               </div>
             </div>
           </div>

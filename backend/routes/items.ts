@@ -44,7 +44,7 @@ function serializeStockSupply(item: any) {
     isMenuStock: item.isMenuStock ?? false,
     platesPerUnit: item.platesPerUnit != null ? Number(item.platesPerUnit) : null,
     departments: item.DepartmentStockSupply
-      ? item.DepartmentStockSupply.map((ds: any) => ({ id: ds.departmentId, departmentId: ds.departmentId }))
+      ? item.DepartmentStockSupply.map((ds: any) => ({ id: ds.department?.id ?? ds.departmentId, name: ds.department?.name ?? "Unknown" }))
       : item.departments,
   };
 }
@@ -85,6 +85,11 @@ router.get("/", async (req, res) => {
 
   const items = await prisma.stockSupply.findMany({
     where: { isActive: true },
+    include: {
+      DepartmentStockSupply: {
+        include: { department: true },
+      },
+    },
     orderBy: { name: "asc" },
   });
   res.json(items.map(serializeStockSupply));
@@ -146,7 +151,7 @@ router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const item = await prisma.stockSupply.findUnique({
     where: { id },
-    include: { DepartmentStockSupply: true },
+    include: { DepartmentStockSupply: { include: { department: true } } },
   });
   if (!item) return res.status(404).json({ error: "Item not found" });
   res.json(serializeStockSupply(item));
@@ -252,7 +257,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
           },
         }),
       },
-      include: { DepartmentStockSupply: true },
+    include: { DepartmentStockSupply: { include: { department: true } } },
     });
     res.json(serializeStockSupply(item));
   } catch (e: any) {

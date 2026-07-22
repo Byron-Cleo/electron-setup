@@ -303,6 +303,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     { label: "Stock Status", key: "stockStatus" },
     { label: "Reorder Level", key: "reorderLevel" },
     { label: "Menu Item", key: "menuItem" },
+    { label: "Assigned Departments", key: "departments" },
           { label: "Actions", key: "actions", isAction: true },
   ]
 
@@ -360,6 +361,18 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500 text-white">
             No
           </span>
+        )
+      case "departments":
+        return item.departments && item.departments.length > 0 ? (
+          <div className="flex flex-wrap gap-1 justify-center">
+            {item.departments.map((dept) => (
+              <span key={dept.id} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                {dept.name}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="text-admin-header-text/40 text-xs">—</span>
         )
       case "actions":
         return (
