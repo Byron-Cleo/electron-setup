@@ -27,7 +27,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form"
-import { X, Package } from "lucide-react"
+import { X, Package, Check } from "lucide-react"
 import {
   getStockSupplyById,
   updateStockSupply,
@@ -40,9 +40,9 @@ const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   unit: z.enum(["KG", "PKT", "L", "ML", "PCS"], { required_error: "Unit is required" }),
-  currentStock: z.coerce.number().min(0).optional(),
-  reorderLevel: z.coerce.number().min(0).optional(),
-  isMenuStock: z.boolean().optional(),
+  currentStock: z.coerce.number().min(0, "Stock item count is required"),
+  reorderLevel: z.coerce.number().min(0, "Reorder level count is required"),
+  isMenuStock: z.boolean(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -110,7 +110,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
           })
           setExistingImage(supply.image)
           if (supply.departments) {
-            setSelectedDepts(new Set(supply.departments.map((d) => d.departmentId)))
+            setSelectedDepts(new Set(supply.departments.map((d) => d.id)))
           }
         }
       })
@@ -121,8 +121,14 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
   async function onSubmit(values: FormValues) {
     if (!supplyId) return
     form.clearErrors("root")
+
+    if (selectedDepts.size === 0) {
+      form.setError("root", { message: "At least one department must be assigned" })
+      return
+    }
+
     try {
-      await updateStockSupply(supplyId, values, imageFile ?? undefined)
+      await updateStockSupply(supplyId, { ...values, departmentIds: Array.from(selectedDepts) }, imageFile ?? undefined)
       onSaved()
       onClose()
     } catch (e: any) {
@@ -173,7 +179,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
               )}
 
               {showPreview && (
-                <p className="text-xs text-admin-header-text/60">
+                <p className="text-lg text-admin-header-text/60 text-center font-medium">
                   {formatSupplyDescription({ name: previewName, unit: previewUnit, currentStock: previewStock })}
                 </p>
               )}
@@ -183,23 +189,9 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name *</FormLabel>
+                    <FormLabel>Name <span className="text-red-500 text-base font-bold">*</span></FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Supply name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} placeholder="Optional description" rows={2} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -209,10 +201,40 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
+                  name="currentStock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Stock Item Count <span className="text-red-500 text-base font-bold">*</span></FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" step="0.01" min="0" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="reorderLevel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reorder Level Count <span className="text-red-500 text-base font-bold">*</span></FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" step="0.01" min="0" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
                   name="unit"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Unit *</FormLabel>
+                      <FormLabel>Stock Unit <span className="text-red-500 text-base font-bold">*</span></FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -231,60 +253,35 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
                     </FormItem>
                   )}
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="currentStock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Current Stock</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="number" step="0.01" min="0" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
                 <FormField
                   control={form.control}
-                  name="reorderLevel"
+                  name="isMenuStock"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reorder Level</FormLabel>
+                    <FormItem className="flex flex-row items-center gap-3 space-y-0 rounded-lg border p-3 mt-7">
                       <FormControl>
-                        <Input {...field} type="number" step="0.01" min="0" />
+                        <label className="relative cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={field.value ?? false}
+                            onChange={field.onChange}
+                          />
+                          <div className="h-5 w-5 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
+                            {field.value && <Check className="h-3 w-3 text-white" />}
+                          </div>
+                        </label>
                       </FormControl>
-                      <FormMessage />
+                      <div className="space-y-0.5">
+                        <FormLabel>Is Menu Item?</FormLabel>
+                        <p className="text-xs text-admin-header-text/50">
+                          Mark this item as a menu ingredient (used for cooking)
+                        </p>
+                      </div>
                     </FormItem>
                   )}
                 />
               </div>
-
-              <FormField
-                control={form.control}
-                name="isMenuStock"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center gap-3 space-y-0 rounded-lg border p-3">
-                    <FormControl>
-                      <input
-                        type="checkbox"
-                        className="rounded border-admin-card-border"
-                        checked={field.value ?? false}
-                        onChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-0.5">
-                      <FormLabel>Menu Stock Item</FormLabel>
-                      <p className="text-xs text-admin-header-text/50">
-                        Mark this item as a menu ingredient (used for cooking)
-                      </p>
-                    </div>
-                  </FormItem>
-                )}
-              />
 
               <div>
                 <label className="text-sm font-medium text-admin-header-text">Image</label>
@@ -331,38 +328,60 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
 
               {departments.length > 0 && (
                 <div>
-                  <label className="text-sm font-medium text-admin-header-text">Access Departments</label>
+                  <label className="text-sm font-medium text-admin-header-text">Assigned Departments <span className="text-red-500 text-base font-bold">*</span></label>
                   <p className="text-xs text-admin-header-text/50 mb-2">Which departments can order this item?</p>
                   <div className="flex flex-wrap gap-3">
-                    {departments.map((dept) => (
-                      <label
-                        key={dept.id}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-colors ${
-                          selectedDepts.has(dept.id)
-                            ? "bg-admin-accent/10 border-admin-accent text-admin-header-text"
-                            : "border-admin-card-border text-admin-header-text/60 hover:bg-admin-content/50"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="rounded border-admin-card-border"
-                          checked={selectedDepts.has(dept.id)}
-                          onChange={(e) => {
-                            const next = new Set(selectedDepts)
-                            if (e.target.checked) {
-                              next.add(dept.id)
-                            } else {
-                              next.delete(dept.id)
-                            }
-                            setSelectedDepts(next)
-                          }}
-                        />
-                        {dept.name}
-                      </label>
-                    ))}
+                    {departments.map((dept) => {
+                      const isSelected = selectedDepts.has(dept.id)
+                      return (
+                        <label
+                          key={dept.id}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-admin-accent/10 border-admin-accent text-admin-header-text"
+                              : "border-admin-card-border text-admin-header-text/60 hover:bg-admin-content/50"
+                          }`}
+                        >
+                          <label className="relative cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const next = new Set(selectedDepts)
+                                if (e.target.checked) {
+                                  next.add(dept.id)
+                                } else {
+                                  next.delete(dept.id)
+                                }
+                                setSelectedDepts(next)
+                              }}
+                            />
+                            <div className="h-4 w-4 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
+                              {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
+                            </div>
+                          </label>
+                          {dept.name}
+                        </label>
+                      )
+                    })}
                   </div>
                 </div>
               )}
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} placeholder="Optional description" rows={2} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <DialogFooter>
                 <Button variant="outline" type="button" onClick={onClose} disabled={form.formState.isSubmitting}>

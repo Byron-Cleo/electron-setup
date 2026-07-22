@@ -43,6 +43,9 @@ function serializeStockSupply(item: any) {
     reorderLevel: item.reorderLevel != null ? Number(item.reorderLevel) : null,
     isMenuStock: item.isMenuStock ?? false,
     platesPerUnit: item.platesPerUnit != null ? Number(item.platesPerUnit) : null,
+    departments: item.DepartmentStockSupply
+      ? item.DepartmentStockSupply.map((ds: any) => ({ id: ds.departmentId, departmentId: ds.departmentId }))
+      : item.departments,
   };
 }
 
@@ -143,6 +146,7 @@ router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const item = await prisma.stockSupply.findUnique({
     where: { id },
+    include: { DepartmentStockSupply: true },
   });
   if (!item) return res.status(404).json({ error: "Item not found" });
   res.json(serializeStockSupply(item));
@@ -150,7 +154,7 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/stock-supplies - Create item
 router.post("/", upload.single("image"), async (req, res) => {
-  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock, departmentIds } = req.body;
   const image = req.file ? `/uploads/stock-supplies/${req.file.filename}` : null;
   
   if (!name || !unit || !image) {
@@ -160,6 +164,16 @@ router.post("/", upload.single("image"), async (req, res) => {
   if (!VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
   }
+
+  const parsedDeptIds = (() => {
+    if (!departmentIds) return [];
+    try {
+      const parsed = typeof departmentIds === "string" ? JSON.parse(departmentIds) : departmentIds;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
   
   const generatedSlug = slug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   
@@ -174,6 +188,11 @@ router.post("/", upload.single("image"), async (req, res) => {
         reorderLevel,
         isMenuStock: isMenuStock === "true" || isMenuStock === true,
         image,
+        ...(parsedDeptIds.length > 0 && {
+          departments: {
+            create: parsedDeptIds.map((deptId: string) => ({ departmentId: deptId })),
+          },
+        }),
       },
     });
     res.status(201).json(serializeStockSupply(item));
@@ -186,7 +205,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 // PUT /api/stock-supplies/:id - Update item
 router.put("/:id", upload.single("image"), async (req, res) => {
   const { id } = req.params;
-  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock, departmentIds } = req.body;
   
   if (unit && !VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
@@ -195,16 +214,24 @@ router.put("/:id", upload.single("image"), async (req, res) => {
   const existing = await prisma.stockSupply.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: "Item not found" });
   
-  if (!req.file) {
-    return res.status(400).json({ error: "Image file is required" });
+  let newImage = existing.image;
+  
+  if (req.file) {
+    const uploaded = `/uploads/stock-supplies/${req.file.filename}`;
+    if (existing.image) deleteImageFile(existing.image);
+    newImage = uploaded;
   }
   
-  const newImage = `/uploads/stock-supplies/${req.file.filename}`;
-  
-  if (newImage && existing.image) {
-    deleteImageFile(existing.image);
-  }
-  
+  const parsedDeptIds = (() => {
+    if (!departmentIds) return null;
+    try {
+      const parsed = typeof departmentIds === "string" ? JSON.parse(departmentIds) : departmentIds;
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  })();
+
   try {
     const item = await prisma.stockSupply.update({
       where: { id },
@@ -218,7 +245,14 @@ router.put("/:id", upload.single("image"), async (req, res) => {
         ...(isActive !== undefined && { isActive }),
         ...(isMenuStock !== undefined && { isMenuStock: isMenuStock === "true" || isMenuStock === true }),
         image: newImage,
+        ...(parsedDeptIds !== null && {
+          DepartmentStockSupply: {
+            deleteMany: {},
+            create: parsedDeptIds.map((deptId: string) => ({ departmentId: deptId })),
+          },
+        }),
       },
+      include: { DepartmentStockSupply: true },
     });
     res.json(serializeStockSupply(item));
   } catch (e: any) {

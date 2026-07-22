@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Package, ShoppingBasket, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X, Eye } from "lucide-react"
+import { Package, ShoppingBasket, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X, Eye, Check } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit } from "@/lib/api"
+import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit, getDepartments } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
@@ -193,8 +193,11 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   const [formUnit, setFormUnit] = useState("")
   const [formCurrentStock, setFormCurrentStock] = useState("")
   const [formReorderLevel, setFormReorderLevel] = useState("")
+  const [formIsMenuStock, setFormIsMenuStock] = useState(false)
   const [formImageFile, setFormImageFile] = useState<File | null>(null)
   const [formImagePreview, setFormImagePreview] = useState<string | null>(null)
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
 
   function resetForm() {
     setFormName("")
@@ -202,14 +205,21 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     setFormUnit("")
     setFormCurrentStock("")
     setFormReorderLevel("")
+    setFormIsMenuStock(false)
     setFormImageFile(null)
     setFormImagePreview(null)
+    setSelectedDepts(new Set())
     setSaveError("")
   }
 
   async function handleAddItem() {
     if (!formName || !formUnit) {
       setSaveError("Name and unit are required")
+      return
+    }
+
+    if (selectedDepts.size === 0) {
+      setSaveError("At least one department must be assigned")
       return
     }
 
@@ -222,6 +232,8 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         unit: formUnit as "KG" | "PKT" | "L" | "ML" | "PCS",
         currentStock: formCurrentStock ? Number(formCurrentStock) : 0,
         reorderLevel: formReorderLevel ? Number(formReorderLevel) : undefined,
+        isMenuStock: formIsMenuStock,
+        departmentIds: Array.from(selectedDepts),
       }, formImageFile ?? undefined)
       setShowAddModal(false)
       await loadStock()
@@ -263,6 +275,12 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     loadStock()
   }, [])
 
+  useEffect(() => {
+    if (showAddModal) {
+      getDepartments().then(setDepartments).catch(() => {})
+    }
+  }, [showAddModal])
+
   const filtered = items.filter((item) => {
     return item.name.toLowerCase().includes(search.toLowerCase())
   })
@@ -284,6 +302,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     { label: "Stock", key: "stock" },
     { label: "Stock Status", key: "stockStatus" },
     { label: "Reorder Level", key: "reorderLevel" },
+    { label: "Menu Item", key: "menuItem" },
           { label: "Actions", key: "actions", isAction: true },
   ]
 
@@ -319,7 +338,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
             stockStatus === "Available"
               ? "bg-green-100 text-green-700"
               : stockStatus === "Restock"
-              ? "bg-amber-100 text-amber-700"
+              ? "bg-red-100 text-red-700"
               : "bg-red-100 text-red-700"
           }`}>
             {stockStatus}
@@ -328,8 +347,18 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
       }
       case "reorderLevel":
         return (
-          <span className="text-admin-muted">
+          <span className="text-status-partial-text">
             {item.reorderLevel != null ? formatQuantityWithUnit(item.reorderLevel, item.unit) : "—"}
+          </span>
+        )
+      case "menuItem":
+        return item.isMenuStock ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-800 text-white">
+            Yes
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500 text-white">
+            No
           </span>
         )
       case "actions":
@@ -381,14 +410,14 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
       />
 
       <Dialog open={showAddModal} onOpenChange={(open) => !open && setShowAddModal(false)}>
-        <DialogContent className="min-h-[400px]">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base uppercase text-center">Add Stock Item</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-1">
-              <Label className="text-xs">Name *</Label>
+              <Label className="text-xs">Name <span className="text-red-500 text-base font-bold">*</span></Label>
               <Input
                 placeholder="Stock item name"
                 value={formName}
@@ -396,19 +425,35 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
               />
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs">Description</Label>
-              <Textarea
-                placeholder="Optional description"
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                rows={2}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs">Stock Item Count <span className="text-red-500 text-base font-bold">*</span></Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="0"
+                  value={formCurrentStock}
+                  onChange={(e) => setFormCurrentStock(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Reorder Level Count <span className="text-red-500 text-base font-bold">*</span></Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="Optional"
+                  value={formReorderLevel}
+                  onChange={(e) => setFormReorderLevel(e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label className="text-xs">Unit *</Label>
+                <Label className="text-xs">Stock Unit <span className="text-red-500 text-base font-bold">*</span></Label>
                 <Select value={formUnit} onValueChange={setFormUnit}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select unit" />
@@ -422,31 +467,25 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-xs">Current Stock</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder="0"
-                  value={formCurrentStock}
-                  onChange={(e) => setFormCurrentStock(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">Reorder Level</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder="Optional"
-                  value={formReorderLevel}
-                  onChange={(e) => setFormReorderLevel(e.target.value)}
-                />
+              <div className="flex items-center gap-3 rounded-lg border p-3 mt-6">
+                <label className="relative cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={formIsMenuStock}
+                    onChange={(e) => setFormIsMenuStock(e.target.checked)}
+                  />
+                  <div className="h-5 w-5 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
+                    {formIsMenuStock && <Check className="h-3 w-3 text-white" />}
+                  </div>
+                </label>
+                <div className="space-y-0.5">
+                  <span className="text-sm font-medium">Is Menu Item?</span>
+                  <p className="text-xs text-admin-muted">
+                    Mark this item as a menu ingredient (used for cooking)
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -497,6 +536,59 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                   )}
                 </div>
               </div>
+            </div>
+
+            {departments.length > 0 && (
+              <div>
+                <Label className="text-xs">Assigned Departments <span className="text-red-500 text-base font-bold">*</span></Label>
+                <p className="text-xs text-admin-muted mb-2">Which departments can order this item?</p>
+                <div className="flex flex-wrap gap-3">
+                  {departments.map((dept) => {
+                    const isSelected = selectedDepts.has(dept.id)
+                    return (
+                      <label
+                        key={dept.id}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-colors ${
+                          isSelected
+                            ? "bg-admin-accent/10 border-admin-accent text-admin-header-text"
+                            : "border-admin-card-border text-admin-header-text/60 hover:bg-admin-content/50"
+                        }`}
+                      >
+                        <label className="relative cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              const next = new Set(selectedDepts)
+                              if (e.target.checked) {
+                                next.add(dept.id)
+                              } else {
+                                next.delete(dept.id)
+                              }
+                              setSelectedDepts(next)
+                            }}
+                          />
+                          <div className="h-4 w-4 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
+                            {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
+                          </div>
+                        </label>
+                        {dept.name}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Label className="text-xs">Description</Label>
+              <Textarea
+                placeholder="Optional description"
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                rows={2}
+              />
             </div>
 
             {saveError && (
@@ -655,7 +747,7 @@ function RestockView() {
             stockStatus === "Available"
               ? "bg-green-100 text-green-700"
               : stockStatus === "Restock"
-              ? "bg-amber-100 text-amber-700"
+              ? "bg-red-100 text-red-700"
               : "bg-red-100 text-red-700"
           }`}>
             {stockStatus}

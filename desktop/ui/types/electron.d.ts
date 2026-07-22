@@ -93,6 +93,7 @@ interface StockSupplyCreateData {
   currentStock?: number;
   reorderLevel?: number;
   isMenuStock?: boolean;
+  departmentIds?: string[];
 }
 
 interface StockSupplyUpdateData {
@@ -104,6 +105,7 @@ interface StockSupplyUpdateData {
   reorderLevel?: number;
   isActive?: boolean;
   isMenuStock?: boolean;
+  departmentIds?: string[];
 }
 
 type StockRequestStatus = "PENDING" | "PARTIAL" | "COMPLETED";

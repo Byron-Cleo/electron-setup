@@ -95,6 +95,7 @@ export default function StockSupplies() {
     { label: "Description", key: "description" },
     { label: "Stock Status", key: "stockStatus" },
     { label: "Reorder", key: "reorder" },
+    { label: "Menu Item", key: "menuItem" },
     { label: "Actions", key: "actions", isAction: true },
   ]
 
@@ -139,6 +140,16 @@ export default function StockSupplies() {
         return (
           <span className="text-admin-header-text/60">
             {reorder ? formatQuantityWithUnit(reorder, supply.unit) : "—"}
+          </span>
+        )
+      case "menuItem":
+        return supply.isMenuItem ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-800 text-white">
+            Yes
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500 text-white">
+            No
           </span>
         )
       case "actions":
