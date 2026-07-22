@@ -3,6 +3,71 @@ import prisma from "../db/db";
 
 const router = Router();
 
+// GET /api/cooking-records/carry-over - Raw stock carry over (PENDING COOK)
+router.get("/carry-over", async (_req, res) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Get all fulfilled items before today
+  const allFulfilled = await prisma.stockFulfillmentItem.findMany({
+    where: {
+      stockFulfillment: { createdAt: { lt: today } },
+    },
+    include: {
+      stockRequestItem: { select: { stockSupplyId: true, stockSupply: { select: { name: true, platesPerUnit: true } } } },
+    },
+  });
+
+  // Get all cooking records before today
+  const allRecords = await prisma.cookingRecord.findMany({
+    where: { cookedDate: { lt: today } },
+    include: { stockSupply: { select: { id: true, name: true, platesPerUnit: true } } },
+  });
+
+  // Aggregate by stock supply
+  const carryOverMap = new Map<string, { name: string; ordered: number; cooked: number }>();
+
+  for (const item of allFulfilled) {
+    const stockSupplyId = item.stockRequestItem.stockSupplyId;
+    const qty = Number(item.quantityDelivered);
+    const existing = carryOverMap.get(stockSupplyId);
+    if (existing) {
+      existing.ordered += qty;
+    } else {
+      carryOverMap.set(stockSupplyId, {
+        name: item.stockRequestItem.stockSupply.name,
+        ordered: qty,
+        cooked: 0,
+      });
+    }
+  }
+
+  for (const record of allRecords) {
+    const stockSupplyId = record.stockSupplyId;
+    const qty = Number(record.quantityCooked);
+    const existing = carryOverMap.get(stockSupplyId);
+    if (existing) {
+      existing.cooked += qty;
+    } else {
+      carryOverMap.set(stockSupplyId, {
+        name: record.stockSupply.name,
+        ordered: 0,
+        cooked: qty,
+      });
+    }
+  }
+
+  const carryOver = Array.from(carryOverMap.entries())
+    .map(([id, data]) => ({
+      id,
+      name: data.name,
+      quantity: data.ordered - data.cooked,
+    }))
+    .filter((item) => item.quantity > 0);
+
+  res.json(carryOver);
+});
+
 // GET /api/cooking-records - List cooking records (optional ?date=YYYY-MM-DD, ?stockSupplyId filter)
 router.get("/", async (req, res) => {
   const { stockSupplyId, date } = req.query;

@@ -3,6 +3,67 @@ import prisma from "../db/db";
 
 const router = Router();
 
+// GET /api/cooking-assignments/carry-over - Cooked plates carry over (unsold)
+router.get("/carry-over", async (_req, res) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Get all cooking records before today with assignments
+  const records = await prisma.cookingRecord.findMany({
+    where: { cookedDate: { lt: today } },
+    include: {
+      stockSupply: { select: { id: true, name: true } },
+      assignments: {
+        include: {
+          menu: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  // Aggregate by menu variant: produced vs sold
+  const carryOverMap = new Map<string, { name: string; produced: number; sold: number }>();
+
+  for (const record of records) {
+    const plates = Number(record.platesActual ?? record.platesExpected);
+    const totalAssigned = record.assignments.reduce(
+      (sum, a) => sum + Number(a.quantityPlates),
+      0
+    );
+
+    // Add proportional plates produced per menu variant
+    if (totalAssigned > 0) {
+      for (const assignment of record.assignments) {
+        const menuId = assignment.menuId;
+        const proportion = Number(assignment.quantityPlates) / totalAssigned;
+        const platesForVariant = plates * proportion;
+        const qtyAssigned = Number(assignment.quantityPlates);
+
+        const existing = carryOverMap.get(menuId);
+        if (existing) {
+          existing.produced += platesForVariant;
+          existing.sold += qtyAssigned;
+        } else {
+          carryOverMap.set(menuId, {
+            name: assignment.menu.name,
+            produced: platesForVariant,
+            sold: qtyAssigned,
+          });
+        }
+      }
+    }
+  }
+
+  const carryOver = Array.from(carryOverMap.values())
+    .map((data) => ({
+      name: data.name,
+      plates: Math.round(data.produced) - data.sold,
+    }))
+    .filter((item) => item.plates > 0);
+
+  res.json(carryOver);
+});
+
 // GET /api/cooking-assignments/available?date=YYYY-MM-DD
 // Returns available plates per cooking record for a given date
 router.get("/available", async (req, res) => {

@@ -1,14 +1,24 @@
 # Current Feature
 
 ## Platform
-Not Specified
+backend
 
 ## Status
-Not Started
+In Progress — Branch: feature/backend/kitchen-cooking-phase-5-daily-report
 
 ## Goals
+- Create daily report endpoint for end-of-day summaries
+- Implement carry over logic for raw stock (PENDING COOK)
+- Implement carry over logic for cooked plates (unsold)
+- Add date-based filtering to support daily operations
 
 ## Notes
+- Raw stock (PENDING COOK) carries to tomorrow if not cooked
+- Cooked plates (unsold) carry to tomorrow if not sold
+- Daily report shows: cooked, remaining, carry over
+- This phase depends on Phase 1 (schema and base routes must exist)
+- Uses CookingRecord model with cookedDate
+- Uses CookingRecordAssignment model
 
 ## History
 
