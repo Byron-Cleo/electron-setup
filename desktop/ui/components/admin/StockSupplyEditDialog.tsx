@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
@@ -32,9 +32,11 @@ import {
   getStockSupplyById,
   updateStockSupply,
   getDepartments,
+  getMenus,
   formatSupplyDescription,
   stockSupplyImageUrl,
 } from "@/lib/api"
+import SearchableSelect from "@/components/shared/SearchableSelect"
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -43,6 +45,7 @@ const formSchema = z.object({
   currentStock: z.coerce.number().min(0, "Stock item count is required"),
   reorderLevel: z.coerce.number().min(0, "Reorder level count is required"),
   isMenuStock: z.boolean(),
+  menuId: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -65,6 +68,7 @@ interface Props {
 export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved }: Props) {
   const [departments, setDepartments] = useState<Department[]>([])
   const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
+  const [menus, setMenus] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -79,6 +83,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
       currentStock: 0,
       reorderLevel: 0,
       isMenuStock: false,
+      menuId: undefined,
     },
   })
 
@@ -91,9 +96,10 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
     setExistingImage(null)
     setLoading(true)
 
-    Promise.all([getDepartments()])
-      .then(([depts]) => {
+    Promise.all([getDepartments(), getMenus()])
+      .then(([depts, menuItems]) => {
         setDepartments(depts)
+        setMenus(menuItems)
         if (supplyId) {
           return getStockSupplyById(supplyId)
         }
@@ -107,6 +113,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
             currentStock: supply.currentStock,
             reorderLevel: supply.reorderLevel ?? 0,
             isMenuStock: supply.isMenuStock,
+            menuId: supply.menuId ?? undefined,
           })
           setExistingImage(supply.image)
           if (supply.departments) {
@@ -117,6 +124,14 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
       .catch((e) => form.setError("root", { message: e.message }))
       .finally(() => setLoading(false))
   }, [open, supplyId, form])
+
+  const watchedIsMenuStock = useWatch({ control: form.control, name: "isMenuStock" })
+
+  useEffect(() => {
+    if (!watchedIsMenuStock) {
+      form.setValue("menuId", undefined)
+    }
+  }, [watchedIsMenuStock, form])
 
   async function onSubmit(values: FormValues) {
     if (!supplyId) return
@@ -282,6 +297,28 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
                   )}
                 />
               </div>
+
+              {watchedIsMenuStock && (
+                <FormField
+                  control={form.control}
+                  name="menuId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Menu Item</FormLabel>
+                      <FormControl>
+                        <SearchableSelect
+                          options={menus.map((m) => ({ value: m.id, label: m.name }))}
+                          value={field.value ?? null}
+                          onChange={(val) => field.onChange(val ?? undefined)}
+                          placeholder="Select menu item"
+                          searchPlaceholder="Search menus..."
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div>
                 <label className="text-sm font-medium text-admin-header-text">Image</label>

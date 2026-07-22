@@ -93,6 +93,7 @@ interface StockSupplyCreateData {
   currentStock?: number;
   reorderLevel?: number;
   isMenuStock?: boolean;
+  menuId?: string | null;
   departmentIds?: string[];
 }
 
@@ -105,6 +106,7 @@ interface StockSupplyUpdateData {
   reorderLevel?: number;
   isActive?: boolean;
   isMenuStock?: boolean;
+  menuId?: string | null;
   departmentIds?: string[];
 }
 

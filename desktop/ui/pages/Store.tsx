@@ -21,11 +21,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit, getDepartments } from "@/lib/api"
+import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit, getDepartments, getMenus } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
+import SearchableSelect from "@/components/shared/SearchableSelect"
 
 type StoreView = "dashboard" | "requests" | "stock" | "restock"
 
@@ -194,6 +195,8 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   const [formCurrentStock, setFormCurrentStock] = useState("")
   const [formReorderLevel, setFormReorderLevel] = useState("")
   const [formIsMenuStock, setFormIsMenuStock] = useState(false)
+  const [formMenuId, setFormMenuId] = useState<string | null>(null)
+  const [menus, setMenus] = useState<MenuItem[]>([])
   const [formImageFile, setFormImageFile] = useState<File | null>(null)
   const [formImagePreview, setFormImagePreview] = useState<string | null>(null)
   const [departments, setDepartments] = useState<Department[]>([])
@@ -206,6 +209,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     setFormCurrentStock("")
     setFormReorderLevel("")
     setFormIsMenuStock(false)
+    setFormMenuId(null)
     setFormImageFile(null)
     setFormImagePreview(null)
     setSelectedDepts(new Set())
@@ -233,6 +237,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         currentStock: formCurrentStock ? Number(formCurrentStock) : 0,
         reorderLevel: formReorderLevel ? Number(formReorderLevel) : undefined,
         isMenuStock: formIsMenuStock,
+        menuId: formMenuId,
         departmentIds: Array.from(selectedDepts),
       }, formImageFile ?? undefined)
       setShowAddModal(false)
@@ -278,6 +283,9 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   useEffect(() => {
     if (showAddModal) {
       getDepartments().then(setDepartments).catch(() => {})
+      if (menus.length === 0) {
+        getMenus().then(setMenus).catch(() => {})
+      }
     }
   }, [showAddModal])
 
@@ -501,6 +509,19 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                 </div>
               </div>
             </div>
+
+            {formIsMenuStock && (
+              <div className="space-y-1">
+                <Label className="text-xs">Menu Item</Label>
+                <SearchableSelect
+                  options={menus.map((m) => ({ value: m.id, label: m.name }))}
+                  value={formMenuId}
+                  onChange={setFormMenuId}
+                  placeholder="Select menu item"
+                  searchPlaceholder="Search menus..."
+                />
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label className="text-xs">Image</Label>

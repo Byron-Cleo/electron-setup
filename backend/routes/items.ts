@@ -159,7 +159,7 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/stock-supplies - Create item
 router.post("/", upload.single("image"), async (req, res) => {
-  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock, departmentIds } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock, departmentIds, menuId } = req.body;
   const image = req.file ? `/uploads/stock-supplies/${req.file.filename}` : null;
   
   if (!name || !unit || !image) {
@@ -192,6 +192,7 @@ router.post("/", upload.single("image"), async (req, res) => {
         currentStock: currentStock ?? 0,
         reorderLevel,
         isMenuStock: isMenuStock === "true" || isMenuStock === true,
+        ...(menuId && { menuId }),
         image,
         ...(parsedDeptIds.length > 0 && {
           departments: {
@@ -210,7 +211,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 // PUT /api/stock-supplies/:id - Update item
 router.put("/:id", upload.single("image"), async (req, res) => {
   const { id } = req.params;
-  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock, departmentIds } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock, departmentIds, menuId } = req.body;
   
   if (unit && !VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
@@ -249,6 +250,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
         ...(reorderLevel !== undefined && { reorderLevel }),
         ...(isActive !== undefined && { isActive }),
         ...(isMenuStock !== undefined && { isMenuStock: isMenuStock === "true" || isMenuStock === true }),
+        ...(menuId !== undefined && { menuId: menuId || null }),
         image: newImage,
         ...(parsedDeptIds !== null && {
           DepartmentStockSupply: {

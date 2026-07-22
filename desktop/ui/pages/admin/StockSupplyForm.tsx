@@ -29,9 +29,11 @@ import {
   createStockSupply,
   updateStockSupply,
   getDepartments,
+  getMenus,
   formatSupplyDescription,
   stockSupplyImageUrl,
 } from "@/lib/api"
+import SearchableSelect from "@/components/shared/SearchableSelect"
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -40,6 +42,7 @@ const formSchema = z.object({
   currentStock: z.coerce.number().min(0, "Stock item count is required"),
   reorderLevel: z.coerce.number().min(0, "Reorder level count is required"),
   isMenuStock: z.boolean(),
+  menuId: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -58,6 +61,7 @@ export default function StockSupplyForm() {
   const isEdit = Boolean(id)
   const [departments, setDepartments] = useState<Department[]>([])
   const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
+  const [menus, setMenus] = useState<MenuItem[]>([])
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [existingImage, setExistingImage] = useState<string | null>(null)
@@ -71,6 +75,7 @@ export default function StockSupplyForm() {
       currentStock: 0,
       reorderLevel: 0,
       isMenuStock: false,
+      menuId: undefined,
     },
   })
 
@@ -78,7 +83,16 @@ export default function StockSupplyForm() {
     getDepartments()
       .then(setDepartments)
       .catch((e) => form.setError("root", { message: e.message }))
+    getMenus()
+      .then(setMenus)
+      .catch(() => {})
   }, [form])
+
+  useEffect(() => {
+    if (!watchedIsMenuStock) {
+      form.setValue("menuId", undefined)
+    }
+  }, [watchedIsMenuStock, form])
 
   useEffect(() => {
     if (!id) return
@@ -91,6 +105,7 @@ export default function StockSupplyForm() {
           currentStock: supply.currentStock,
           reorderLevel: supply.reorderLevel ?? 0,
           isMenuStock: supply.isMenuStock,
+          menuId: supply.menuId ?? undefined,
         })
         setExistingImage(supply.image)
       })
@@ -132,6 +147,7 @@ export default function StockSupplyForm() {
   const watchedName = useWatch({ control: form.control, name: "name" })
   const watchedUnit = useWatch({ control: form.control, name: "unit" })
   const watchedStock = useWatch({ control: form.control, name: "currentStock" })
+  const watchedIsMenuStock = useWatch({ control: form.control, name: "isMenuStock" })
 
   const previewName = watchedName || ""
   const previewUnit = watchedUnit || "PCS"
@@ -265,6 +281,28 @@ export default function StockSupplyForm() {
                   )}
                 />
               </div>
+
+              {watchedIsMenuStock && (
+                <FormField
+                  control={form.control}
+                  name="menuId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Menu Item</FormLabel>
+                      <FormControl>
+                        <SearchableSelect
+                          options={menus.map((m) => ({ value: m.id, label: m.name }))}
+                          value={field.value ?? null}
+                          onChange={(val) => field.onChange(val ?? undefined)}
+                          placeholder="Select menu item"
+                          searchPlaceholder="Search menus..."
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div>
                 <label className="text-sm font-medium text-admin-header-text">Image</label>
