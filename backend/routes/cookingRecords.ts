@@ -115,15 +115,15 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "platesActual must be greater than 0" });
   }
 
-  // Verify stock supply exists and has platesPerUnit configured
+  // Verify stock supply exists and has isMenuStock = true
   const stockSupply = await prisma.stockSupply.findUnique({
     where: { id: stockSupplyId },
     include: { menu: { select: { id: true, stock: true } } },
   });
   if (!stockSupply) return res.status(404).json({ error: "Stock supply not found" });
 
-  if (!stockSupply.platesPerUnit || Number(stockSupply.platesPerUnit) <= 0) {
-    return res.status(400).json({ error: "platesPerUnit must be configured to cook this item" });
+  if (!stockSupply.isMenuStock) {
+    return res.status(400).json({ error: "This stock item is not configured for menu use" });
   }
 
   // Verify cook exists

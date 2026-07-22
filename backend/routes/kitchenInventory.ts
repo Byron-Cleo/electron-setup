@@ -3,12 +3,12 @@ import prisma from "../db/db";
 
 const router = Router();
 
-// GET /api/kitchen/inventory - Kitchen inventory with PENDING stock items (platesPerUnit > 0)
+// GET /api/kitchen/inventory - Kitchen inventory with PENDING stock items (isMenuStock = true)
 router.get("/", async (_req, res) => {
-  // Get all stock supplies with platesPerUnit > 0
+  // Get all stock supplies with isMenuStock = true
   const stockSupplies = await prisma.stockSupply.findMany({
     where: {
-      platesPerUnit: { not: null },
+      isMenuStock: true,
       isActive: true,
     },
     include: {
@@ -17,14 +17,9 @@ router.get("/", async (_req, res) => {
     orderBy: { name: "asc" },
   });
 
-  // Filter where platesPerUnit > 0
-  const filtered = stockSupplies.filter(
-    (s) => s.platesPerUnit && Number(s.platesPerUnit) > 0
-  );
-
   // For each item, calculate inventory metrics
   const inventory = await Promise.all(
-    filtered.map(async (item) => {
+    stockSupplies.map(async (item) => {
       // Total fulfilled (received from store)
       const totalFulfilled = await prisma.stockFulfillmentItem.aggregate({
         _sum: { quantityDelivered: true },

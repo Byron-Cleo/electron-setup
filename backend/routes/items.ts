@@ -41,6 +41,7 @@ function serializeStockSupply(item: any) {
     ...item,
     currentStock: Number(item.currentStock),
     reorderLevel: item.reorderLevel != null ? Number(item.reorderLevel) : null,
+    isMenuStock: item.isMenuStock ?? false,
     platesPerUnit: item.platesPerUnit != null ? Number(item.platesPerUnit) : null,
   };
 }
@@ -149,7 +150,7 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/stock-supplies - Create item
 router.post("/", upload.single("image"), async (req, res) => {
-  const { name, slug, description, unit, currentStock, reorderLevel } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock } = req.body;
   const image = req.file ? `/uploads/stock-supplies/${req.file.filename}` : null;
   
   if (!name || !unit || !image) {
@@ -171,6 +172,7 @@ router.post("/", upload.single("image"), async (req, res) => {
         unit,
         currentStock: currentStock ?? 0,
         reorderLevel,
+        isMenuStock: isMenuStock === "true" || isMenuStock === true,
         image,
       },
     });
@@ -184,7 +186,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 // PUT /api/stock-supplies/:id - Update item
 router.put("/:id", upload.single("image"), async (req, res) => {
   const { id } = req.params;
-  const { name, slug, description, unit, currentStock, reorderLevel, isActive } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock } = req.body;
   
   if (unit && !VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
@@ -214,6 +216,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
         ...(currentStock !== undefined && { currentStock }),
         ...(reorderLevel !== undefined && { reorderLevel }),
         ...(isActive !== undefined && { isActive }),
+        ...(isMenuStock !== undefined && { isMenuStock: isMenuStock === "true" || isMenuStock === true }),
         image: newImage,
       },
     });

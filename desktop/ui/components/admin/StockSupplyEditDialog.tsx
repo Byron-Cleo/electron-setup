@@ -42,6 +42,7 @@ const formSchema = z.object({
   unit: z.enum(["KG", "PKT", "L", "ML", "PCS"], { required_error: "Unit is required" }),
   currentStock: z.coerce.number().min(0).optional(),
   reorderLevel: z.coerce.number().min(0).optional(),
+  isMenuStock: z.boolean().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -77,6 +78,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
       unit: undefined,
       currentStock: 0,
       reorderLevel: 0,
+      isMenuStock: false,
     },
   })
 
@@ -104,6 +106,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
             unit: supply.unit,
             currentStock: supply.currentStock,
             reorderLevel: supply.reorderLevel ?? 0,
+            isMenuStock: supply.isMenuStock,
           })
           setExistingImage(supply.image)
           if (supply.departments) {
@@ -259,6 +262,29 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="isMenuStock"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center gap-3 space-y-0 rounded-lg border p-3">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        className="rounded border-admin-card-border"
+                        checked={field.value ?? false}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-0.5">
+                      <FormLabel>Menu Stock Item</FormLabel>
+                      <p className="text-xs text-admin-header-text/50">
+                        Mark this item as a menu ingredient (used for cooking)
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
 
               <div>
                 <label className="text-sm font-medium text-admin-header-text">Image</label>

@@ -83,7 +83,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
 
   useEffect(() => {
     getStockSupplies()
-      .then((items) => setStockSupplies(items.filter((s) => s.platesPerUnit && Number(s.platesPerUnit) > 0)))
+      .then((items) => setStockSupplies(items.filter((s) => s.isMenuStock)))
       .catch(() => {})
   }, []);
 

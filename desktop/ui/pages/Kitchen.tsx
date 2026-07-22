@@ -572,7 +572,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
             variant="outline"
             className="text-green-600 border-green-200 hover:bg-green-50"
             onClick={() => openCookDialog(item)}
-            disabled={!item.platesPerUnit || item.rawStockPending <= 0}
+            disabled={!item.isMenuStock || item.rawStockPending <= 0}
           >
             <ChefHat size={14} className="mr-1" />
             Cook More

@@ -97,7 +97,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
   }
 
   const configuredIds = new Set(configItems.map((c) => c.id))
-  const unconfiguredSupplies = allSupplies.filter((s) => !configuredIds.has(s.id))
+  const unconfiguredSupplies = allSupplies.filter((s) => s.isMenuStock && !configuredIds.has(s.id))
 
   const {
     currentPage,

@@ -1,14 +1,21 @@
 # Current Feature
 
 ## Platform
-Not Specified
+full-stack
 
 ## Status
-Not Started
+In Progress — Branch: feature/admin/is-menu-stock-flag
 
 ## Goals
+- Replace `platesPerUnit > 0` check with dedicated `isMenuStock` boolean
+- Add `isMenuStock` toggle to stock supply create/edit forms
+- Filter kitchen inventory and menu form by `isMenuStock`
+- Validate cooking records using `isMenuStock`
 
 ## Notes
+- `isMenuStock` = "is this stock used for menu items?"
+- `platesPerUnit` = "how many plates does one unit produce?"
+- Database, backend routes, and frontend types all need updates
 
 ## History
 

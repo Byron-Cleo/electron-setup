@@ -125,6 +125,17 @@ export default function StockSupplyDetailDialog({ open, onClose, supplyId }: Pro
                 <span className="text-sm text-admin-header-text">{supply.reorderLevel ?? "—"}</span>
               </div>
 
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-admin-header-text/60">Menu Stock</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  supply.isMenuStock
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gray-100 text-gray-600"
+                }`}>
+                  {supply.isMenuStock ? "Yes" : "No"}
+                </span>
+              </div>
+
               {supply.platesPerUnit != null && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-admin-header-text/60">Plates Per Unit</span>

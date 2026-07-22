@@ -75,6 +75,7 @@ interface StockSupply {
   currentStock: number;
   reorderLevel: number | null;
   image: string | null;
+  isMenuStock: boolean;
   platesPerUnit: number | null;
   menuId: string | null;
   isActive: boolean;
@@ -91,6 +92,7 @@ interface StockSupplyCreateData {
   unit: "KG" | "PKT" | "L" | "ML" | "PCS";
   currentStock?: number;
   reorderLevel?: number;
+  isMenuStock?: boolean;
 }
 
 interface StockSupplyUpdateData {
@@ -101,6 +103,7 @@ interface StockSupplyUpdateData {
   currentStock?: number;
   reorderLevel?: number;
   isActive?: boolean;
+  isMenuStock?: boolean;
 }
 
 type StockRequestStatus = "PENDING" | "PARTIAL" | "COMPLETED";
@@ -227,6 +230,7 @@ interface KitchenStockItem {
   name: string;
   slug: string;
   unit: string;
+  isMenuStock: boolean;
   platesPerUnit: number | null;
   image: string | null;
   menu: { id: string; name: string; slug: string; images: string[] } | null;
@@ -240,6 +244,7 @@ interface KitchenInventory {
   id: string;
   name: string;
   unit: string;
+  isMenuStock: boolean;
   platesPerUnit: number | null;
   menuId: string | null;
   totalReceived: number;
@@ -254,6 +259,7 @@ interface KitchenConfigItem {
   image: string | null;
   currentStock: number;
   reorderLevel: number | null;
+  isMenuStock: boolean;
   platesPerUnit: number | null;
   menuId: string | null;
   menu?: { id: string; name: string } | null;
