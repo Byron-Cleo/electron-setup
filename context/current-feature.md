@@ -1,9 +1,11 @@
 # Current Feature
 
 ## Platform
+
 Not Specified
 
 ## Status
+
 Not Started
 
 ## Goals
@@ -11,6 +13,14 @@ Not Started
 ## Notes
 
 ## History
+
+### backend - 2026-07-22 — Menu Cooked Food Variants Phase 1: Schema + Backend API
+- Added `isAvailable` Boolean field (default `true`) to Menu model in Prisma schema
+- Synced database via `prisma db push`
+- Created `GET /api/menu/cooked` endpoint returning menus with cooked StockSupply and cooking aggregates
+- Created `PUT /api/menu/:id/availability` endpoint for soft-delete/restore toggle
+- Modified `GET /api/menu` to filter by `isAvailable = true` when `mealType` query param is present
+- Branch: feature/backend/menu-cooked-food-phase-1
 
 ### backend - 2026-07-22 — Add isMenuStock Flag to StockSupply
 - Added isMenuStock Boolean field to StockSupply model (Prisma schema)

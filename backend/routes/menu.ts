@@ -6,6 +6,76 @@ const router = Router();
 
 const VALID_MEAL_TYPES = Object.values(ServiceTime) as string[];
 
+router.get("/cooked", async (_req, res) => {
+  try {
+    const menus = await prisma.menu.findMany({
+      where: {
+        StockSupply: {
+          some: {
+            isMenuStock: true,
+            CookingRecord: { some: {} },
+          },
+        },
+      },
+      include: {
+        StockSupply: {
+          where: { isMenuStock: true },
+          select: { id: true, name: true, unit: true, platesPerUnit: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const result = await Promise.all(
+      menus.map(async (menu) => {
+        const stockSupplyIds = menu.StockSupply.map((s) => s.id);
+
+        const cookingRecords = await prisma.cookingRecord.findMany({
+          where: { stockSupplyId: { in: stockSupplyIds } },
+          include: {
+            assignments: { select: { quantityPlates: true } },
+          },
+        });
+
+        let totalProduced = 0;
+        let totalAssigned = 0;
+
+        for (const record of cookingRecords) {
+          const produced = Number(record.platesActual ?? record.platesExpected);
+          const assigned = record.assignments.reduce(
+            (sum, a) => sum + Number(a.quantityPlates),
+            0
+          );
+          totalProduced += produced;
+          totalAssigned += assigned;
+        }
+
+        return {
+          id: menu.id,
+          name: menu.name,
+          slug: menu.slug,
+          category: menu.category,
+          price: Number(menu.price),
+          stock: menu.stock,
+          isAvailable: menu.isAvailable,
+          images: menu.images,
+          stockSupply: menu.StockSupply[0] ?? null,
+          cooking: {
+            totalProduced,
+            totalAssigned,
+            totalAvailable: totalProduced - totalAssigned,
+          },
+        };
+      })
+    );
+
+    res.json(result);
+  } catch (e) {
+    console.error("Error fetching cooked menus:", e);
+    res.status(500).json({ error: "Failed to fetch cooked menus" });
+  }
+});
+
 router.get("/", async (req, res) => {
   const { mealType } = req.query;
 
@@ -16,6 +86,7 @@ router.get("/", async (req, res) => {
       return;
     }
     where.stock = { gt: 0 };
+    where.isAvailable = true;
     where.MenuMealType = { some: { mealType: mealType as string } };
   }
 
@@ -92,6 +163,24 @@ router.put("/:id", async (req, res) => {
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Not found" });
     if (e.code === "P2002") return res.status(409).json({ error: "Slug already exists" });
+    throw e;
+  }
+});
+
+router.put("/:id/availability", async (req, res) => {
+  const { id } = req.params;
+  const { isAvailable } = req.body;
+  if (typeof isAvailable !== "boolean") {
+    return res.status(400).json({ error: "isAvailable must be a boolean" });
+  }
+  try {
+    const item = await prisma.menu.update({
+      where: { id },
+      data: { isAvailable },
+    });
+    res.json(item);
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Not found" });
     throw e;
   }
 });
