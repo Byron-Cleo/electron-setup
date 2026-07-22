@@ -1,26 +1,29 @@
 # Current Feature
 
 ## Platform
-backend
+frontend
 
 ## Status
-In Progress — Branch: feature/backend/kitchen-cooking-phase-5-daily-report
+In Progress — Branch: feature/waiter/kitchen-cooking-phase-6-waiter-display
 
 ## Goals
-- Create daily report endpoint for end-of-day summaries
-- Implement carry over logic for raw stock (PENDING COOK)
-- Implement carry over logic for cooked plates (unsold)
-- Add date-based filtering to support daily operations
+- Update waiter menu to show available plates for each menu item
+- Disable Add to Cart button when item is sold out (0 plates)
+- Show prominent "Sold Out" indicator
 
 ## Notes
-- Raw stock (PENDING COOK) carries to tomorrow if not cooked
-- Cooked plates (unsold) carry to tomorrow if not sold
-- Daily report shows: cooked, remaining, carry over
-- This phase depends on Phase 1 (schema and base routes must exist)
-- Uses CookingRecord model with cookedDate
-- Uses CookingRecordAssignment model
+- This is a small update to existing `WaiterMenu.tsx` file
+- Changes: use `availablePlates` field, disable ordering when 0, improve sold out visibility
+- Waiters do NOT see plate counts — just "In Stock" / "Sold Out"
+- This phase can be done anytime after Phase 1 (backend must return availablePlates)
 
 ## History
+
+### backend - 2026-07-22 — Kitchen Cooking Production Phase 5: Daily Report + Carry Over
+- Created dailyReport.ts with GET /api/reports/daily endpoint
+- Added carry over endpoint to cookingRecords.ts (raw stock PENDING COOK)
+- Added carry over endpoint to cookingAssignments.ts (unsold cooked plates)
+- Registered dailyReport route in app.ts
 
 ### frontend - 2026-07-21 — Kitchen Cooking Production Phase 4: Menu Tab — Plate Assignment
 - Created AssignmentModal with summary, current assignments, add/edit/remove

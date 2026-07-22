@@ -133,9 +133,9 @@ export function WaiterMenu() {
     return orderItems.reduce((sum, oi) => sum + oi.menuItem.price * oi.quantity, 0)
   }, [orderItems])
 
-  function stockBadgeClass(stock: number) {
-    if (stock > 5) return "bg-brand-green/10 text-brand-green"
-    if (stock > 0) return "bg-amber-100 text-amber-700"
+  function stockBadgeClass(plates: number) {
+    if (plates > 5) return "bg-brand-green/10 text-brand-green"
+    if (plates > 0) return "bg-amber-100 text-amber-700"
     return "bg-red-100 text-red-600"
   }
 
@@ -241,10 +241,10 @@ export function WaiterMenu() {
                         <span
                           className={cn(
                             "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
-                            stockBadgeClass(item.stock),
+                            stockBadgeClass(item.availablePlates),
                           )}
                         >
-                          {item.stock}
+                          {item.availablePlates > 0 ? item.availablePlates : "0"}
                         </span>
                       </div>
                     </div>
@@ -297,8 +297,10 @@ export function WaiterMenu() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-lg font-bold text-brand-maroon">{formatPrice(selectedItem.price)}</p>
-                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", stockBadgeClass(selectedItem.stock))}>
-                      {selectedItem.stock > 0 ? "In Stock" : "Out of Stock"}
+                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", stockBadgeClass(selectedItem.availablePlates))}>
+                      {selectedItem.availablePlates > 0 
+                        ? `${selectedItem.availablePlates} plates available` 
+                        : "Sold Out"}
                     </span>
                   </div>
                 </div>
@@ -373,8 +375,9 @@ export function WaiterMenu() {
                 <Button
                   className="w-full bg-brand-maroon hover:bg-brand-maroon/90 text-white"
                   onClick={() => addToOrder(selectedItem)}
+                  disabled={selectedItem.availablePlates === 0}
                 >
-                  Add to Cart
+                  {selectedItem.availablePlates === 0 ? "Sold Out" : "Add to Cart"}
                 </Button>
               </div>
             </div>
