@@ -1,28 +1,14 @@
 # Current Feature
 
 ## Platform
-backend
+Not Specified
 
 ## Status
-In Progress
+Not Started
 
 ## Goals
-- Add `isMenuStock Boolean @default(false)` to `StockSupply` in Prisma schema
-- Replace `platesPerUnit > 0` proxy checks with `isMenuStock: true` in backend routes
-- Update `kitchenInventory.ts`, `cookingRecords.ts`, `items.ts`, `kitchenConfig.ts` to use `isMenuStock`
-- Add `isMenuStock: boolean` to frontend types (`StockSupply`, `KitchenStockItem`, `KitchenConfigItem`, `KitchenInventory`)
-- Update frontend components (`MenuForm.tsx`, `Kitchen.tsx`, `StockSupplyForm.tsx`, `StockSupplyEditDialog.tsx`, `StockSupplyDetailDialog.tsx`) to use `isMenuStock`
-- Filter `KitchenStockConfig.tsx` dropdown to `isMenuStock: true` only
-- Run `npx prisma db push` + `npx prisma generate`
-- Pass `tsc --noEmit` and `npm run lint`
 
 ## Notes
-- `isMenuStock` = "is this stock used for menu items?", `platesPerUnit` = "how many plates does one unit produce?"
-- Separates concerns: flag vs. value
-- `StockSupplyForm.tsx` and `StockSupplyEditDialog.tsx` need a toggle field for `isMenuStock`
-- `StockSupplyDetailDialog.tsx` should display `isMenuStock` status
-- KitchenStockConfig dropdown filters to `isMenuStock: true` items only
-- Branch naming: `feature/<layer>/<task-kebab-case>`
 
 ## History
 
