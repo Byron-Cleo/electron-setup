@@ -14,6 +14,11 @@ Not Started
 
 ## History
 
+### frontend - 2026-07-22 — Menu Cooked Food Variants Phase 3: Waiter Menu Filter
+- Verified backend `GET /api/menu?mealType=X` filters by `isAvailable = true`
+- Verified WaiterMenu.tsx uses the correct endpoint
+- No code changes needed — backend filter sufficient
+
 ### frontend - 2026-07-22 — Menu Cooked Food Variants Phase 2: Frontend CookedFoodTable
 - Added `CookedMenuItem` type to electron.d.ts
 - Added `getCookedMenus()`, `updateMenu()`, `updateMenuAvailability()` API functions
