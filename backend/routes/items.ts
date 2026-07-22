@@ -46,6 +46,9 @@ function serializeStockSupply(item: any) {
     departments: item.DepartmentStockSupply
       ? item.DepartmentStockSupply.map((ds: any) => ({ id: ds.department?.id ?? ds.departmentId, name: ds.department?.name ?? "Unknown" }))
       : item.departments,
+    menus: item.menus
+      ? item.menus.map((sm: any) => ({ id: sm.menu?.id ?? sm.menuId, name: sm.menu?.name ?? "Unknown" }))
+      : [],
   };
 }
 
@@ -77,7 +80,9 @@ router.get("/", async (req, res) => {
         isActive: true,
         DepartmentStockSupply: { some: { departmentId: departmentId as string } },
       },
-      include: { },
+      include: {
+        menus: { include: { menu: { select: { id: true, name: true } } } },
+      },
       orderBy: { name: "asc" },
     });
       return res.json(items.map(serializeStockSupply));
@@ -89,6 +94,7 @@ router.get("/", async (req, res) => {
       DepartmentStockSupply: {
         include: { department: true },
       },
+      menus: { include: { menu: { select: { id: true, name: true } } } },
     },
     orderBy: { name: "asc" },
   });
@@ -118,7 +124,7 @@ router.get("/:id/kitchen-inventory", async (req, res) => {
 
   const stockSupply = await prisma.stockSupply.findUnique({
     where: { id },
-    select: { id: true, name: true, unit: true, platesPerUnit: true, menuId: true },
+    select: { id: true, name: true, unit: true, platesPerUnit: true },
   });
   if (!stockSupply) return res.status(404).json({ error: "Stock supply not found" });
 
@@ -151,7 +157,10 @@ router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const item = await prisma.stockSupply.findUnique({
     where: { id },
-    include: { DepartmentStockSupply: { include: { department: true } } },
+    include: {
+      DepartmentStockSupply: { include: { department: true } },
+      menus: { include: { menu: { select: { id: true, name: true } } } },
+    },
   });
   if (!item) return res.status(404).json({ error: "Item not found" });
   res.json(serializeStockSupply(item));
@@ -159,7 +168,7 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/stock-supplies - Create item
 router.post("/", upload.single("image"), async (req, res) => {
-  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock, departmentIds, menuId } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock, departmentIds, menuIds } = req.body;
   const image = req.file ? `/uploads/stock-supplies/${req.file.filename}` : null;
   
   if (!name || !unit || !image) {
@@ -179,6 +188,16 @@ router.post("/", upload.single("image"), async (req, res) => {
       return [];
     }
   })();
+
+  const parsedMenuIds = (() => {
+    if (!menuIds) return [];
+    try {
+      const parsed = typeof menuIds === "string" ? JSON.parse(menuIds) : menuIds;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
   
   const generatedSlug = slug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   
@@ -192,13 +211,20 @@ router.post("/", upload.single("image"), async (req, res) => {
         currentStock: currentStock ?? 0,
         reorderLevel,
         isMenuStock: isMenuStock === "true" || isMenuStock === true,
-        ...(menuId && { menuId }),
         image,
         ...(parsedDeptIds.length > 0 && {
           departments: {
             create: parsedDeptIds.map((deptId: string) => ({ departmentId: deptId })),
           },
         }),
+        ...(parsedMenuIds.length > 0 && {
+          menus: {
+            create: parsedMenuIds.map((menuId: string) => ({ menuId })),
+          },
+        }),
+      },
+      include: {
+        menus: { include: { menu: { select: { id: true, name: true } } } },
       },
     });
     res.status(201).json(serializeStockSupply(item));
@@ -211,7 +237,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 // PUT /api/stock-supplies/:id - Update item
 router.put("/:id", upload.single("image"), async (req, res) => {
   const { id } = req.params;
-  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock, departmentIds, menuId } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock, departmentIds, menuIds } = req.body;
   
   if (unit && !VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
@@ -238,28 +264,59 @@ router.put("/:id", upload.single("image"), async (req, res) => {
     }
   })();
 
+  const parsedMenuIds = (() => {
+    if (!menuIds) return null;
+    try {
+      const parsed = typeof menuIds === "string" ? JSON.parse(menuIds) : menuIds;
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  })();
+
   try {
-    const item = await prisma.stockSupply.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(slug !== undefined && { slug }),
-        ...(description !== undefined && { description }),
-        ...(unit !== undefined && { unit }),
-        ...(currentStock !== undefined && { currentStock }),
-        ...(reorderLevel !== undefined && { reorderLevel }),
-        ...(isActive !== undefined && { isActive }),
-        ...(isMenuStock !== undefined && { isMenuStock: isMenuStock === "true" || isMenuStock === true }),
-        ...(menuId !== undefined && { menuId: menuId || null }),
-        image: newImage,
-        ...(parsedDeptIds !== null && {
-          DepartmentStockSupply: {
-            deleteMany: {},
-            create: parsedDeptIds.map((deptId: string) => ({ departmentId: deptId })),
-          },
-        }),
-      },
-    include: { DepartmentStockSupply: { include: { department: true } } },
+    const item = await prisma.$transaction(async (tx) => {
+      const updated = await tx.stockSupply.update({
+        where: { id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(slug !== undefined && { slug }),
+          ...(description !== undefined && { description }),
+          ...(unit !== undefined && { unit }),
+          ...(currentStock !== undefined && { currentStock }),
+          ...(reorderLevel !== undefined && { reorderLevel }),
+          ...(isActive !== undefined && { isActive }),
+          ...(isMenuStock !== undefined && { isMenuStock: isMenuStock === "true" || isMenuStock === true }),
+          image: newImage,
+          ...(parsedDeptIds !== null && {
+            DepartmentStockSupply: {
+              deleteMany: {},
+              create: parsedDeptIds.map((deptId: string) => ({ departmentId: deptId })),
+            },
+          }),
+        },
+        include: {
+          DepartmentStockSupply: { include: { department: true } },
+          menus: { include: { menu: { select: { id: true, name: true } } } },
+        },
+      });
+
+      if (parsedMenuIds !== null) {
+        await tx.stockSupplyMenu.deleteMany({ where: { stockSupplyId: id } });
+        if (parsedMenuIds.length > 0) {
+          await tx.stockSupplyMenu.createMany({
+            data: parsedMenuIds.map((menuId: string) => ({ stockSupplyId: id, menuId })),
+          });
+        }
+      }
+
+      return tx.stockSupply.findUnique({
+        where: { id },
+        include: {
+          DepartmentStockSupply: { include: { department: true } },
+          menus: { include: { menu: { select: { id: true, name: true } } } },
+        },
+      });
     });
     res.json(serializeStockSupply(item));
   } catch (e: any) {

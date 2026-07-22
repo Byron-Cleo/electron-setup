@@ -6,21 +6,22 @@ backend
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Add `StockSupplyMenu` junction table to Prisma schema
-- Remove single `menuId` column from `StockSupply` model
-- Add `menus` relation to `StockSupply` and `Menu` models
-- Run migration to sync database
+- Update `POST /api/stock-supplies` to accept `menuIds: string[]` and create junction rows
+- Update `PUT /api/stock-supplies/:id` to accept `menuIds: string[]` and replace junction rows
+- Update serialize function to return `menus: [{ id, name }]` from junction relation
+- Remove `menuId` auto-update logic from cooking records route
+- Update `GET /api/menu/cooked` query to join through junction table
 
 ## Notes
 
-- This is a **breaking schema change** — `menuId` is removed, routes will break until Phase 2
-- The junction table enables many-to-many: one stock supply ↔ many menus
-- Use `onDelete: Cascade` so deleting a stock supply or menu cleans up the junction
-- Existing `menuId` data will be LOST during migration — acceptable since this is a new feature with minimal production data
+- `menuIds` is sent as a JSON string (like `departmentIds`) because the route uses `multipart/form-data` for image upload
+- Parse with: `JSON.parse(menuIds)` — same pattern as `departmentIds`
+- Empty array or omitted = no menu links
+- The cooking records auto-update of `Menu.stock` (lines 177-183, 234-240 in cookingRecords.ts) must be REMOVED — plate allocation is handled by `CookingRecordAssignment`, not by stock supply links
 
 ## History
 

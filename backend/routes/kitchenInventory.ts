@@ -12,7 +12,7 @@ router.get("/", async (_req, res) => {
       isActive: true,
     },
     include: {
-      menu: { select: { id: true, name: true, slug: true, images: true } },
+      menus: { include: { menu: { select: { id: true, name: true, slug: true, images: true } } } },
     },
     orderBy: { name: "asc" },
   });
@@ -53,7 +53,7 @@ router.get("/", async (_req, res) => {
         unit: item.unit,
         platesPerUnit: item.platesPerUnit,
         image: item.image,
-        menu: item.menu,
+        menus: item.menus.map((sm) => sm.menu),
         totalOrdered: received,
         totalCooked: cooked,
         rawStockPending,

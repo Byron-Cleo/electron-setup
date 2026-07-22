@@ -86,7 +86,15 @@ router.get("/", async (req, res) => {
   const records = await prisma.cookingRecord.findMany({
     where,
     include: {
-      stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true, menuId: true } },
+      stockSupply: {
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          platesPerUnit: true,
+          menus: { include: { menu: { select: { id: true, name: true } } } },
+        },
+      },
       cookedBy: { select: { id: true, name: true } },
       assignments: {
         include: {
@@ -118,7 +126,6 @@ router.post("/", async (req, res) => {
   // Verify stock supply exists and has isMenuStock = true
   const stockSupply = await prisma.stockSupply.findUnique({
     where: { id: stockSupplyId },
-    include: { menu: { select: { id: true, stock: true } } },
   });
   if (!stockSupply) return res.status(404).json({ error: "Stock supply not found" });
 
@@ -164,7 +171,15 @@ router.post("/", async (req, res) => {
         notes,
       },
       include: {
-        stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true, menuId: true } },
+        stockSupply: {
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+            platesPerUnit: true,
+            menus: { include: { menu: { select: { id: true, name: true } } } },
+          },
+        },
         cookedBy: { select: { id: true, name: true } },
         assignments: {
           include: {
@@ -173,14 +188,6 @@ router.post("/", async (req, res) => {
         },
       },
     });
-
-    // Auto-update menu stock if menuId is set
-    if (stockSupply.menuId && stockSupply.menu) {
-      await tx.menu.update({
-        where: { id: stockSupply.menuId },
-        data: { stock: { increment: Math.round(platesExpected) } },
-      });
-    }
 
     return record;
   });
@@ -207,7 +214,15 @@ router.put("/:id", async (req, res) => {
       notes: notes !== undefined ? notes : existing.notes,
     },
     include: {
-      stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true, menuId: true } },
+      stockSupply: {
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          platesPerUnit: true,
+          menus: { include: { menu: { select: { id: true, name: true } } } },
+        },
+      },
       cookedBy: { select: { id: true, name: true } },
       assignments: {
         include: {
@@ -220,27 +235,16 @@ router.put("/:id", async (req, res) => {
   res.json(record);
 });
 
-// DELETE /api/cooking-records/:id - Delete cooking record (reverse menu stock)
+// DELETE /api/cooking-records/:id - Delete cooking record
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
 
   const record = await prisma.cookingRecord.findUnique({
     where: { id },
-    include: { stockSupply: { select: { id: true, menuId: true } } },
   });
   if (!record) return res.status(404).json({ error: "Cooking record not found" });
 
-  await prisma.$transaction(async (tx) => {
-    // Reverse menu stock if menuId was set
-    if (record.stockSupply.menuId) {
-      await tx.menu.update({
-        where: { id: record.stockSupply.menuId },
-        data: { stock: { decrement: Math.round(Number(record.platesExpected)) } },
-      });
-    }
-
-    await tx.cookingRecord.delete({ where: { id } });
-  });
+  await prisma.cookingRecord.delete({ where: { id } });
 
   res.json({ message: "Cooking record deleted" });
 });

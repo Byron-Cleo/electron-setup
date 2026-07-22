@@ -10,17 +10,21 @@ router.get("/cooked", async (_req, res) => {
   try {
     const menus = await prisma.menu.findMany({
       where: {
-        StockSupply: {
+        stockSupplyMenus: {
           some: {
-            isMenuStock: true,
-            CookingRecord: { some: {} },
+            stockSupply: {
+              isMenuStock: true,
+              CookingRecord: { some: {} },
+            },
           },
         },
       },
       include: {
-        StockSupply: {
-          where: { isMenuStock: true },
-          select: { id: true, name: true, unit: true, platesPerUnit: true },
+        stockSupplyMenus: {
+          where: { stockSupply: { isMenuStock: true } },
+          include: {
+            stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true } },
+          },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -28,7 +32,7 @@ router.get("/cooked", async (_req, res) => {
 
     const result = await Promise.all(
       menus.map(async (menu) => {
-        const stockSupplyIds = menu.StockSupply.map((s) => s.id);
+        const stockSupplyIds = menu.stockSupplyMenus.map((sm) => sm.stockSupply.id);
 
         const cookingRecords = await prisma.cookingRecord.findMany({
           where: { stockSupplyId: { in: stockSupplyIds } },
@@ -59,7 +63,7 @@ router.get("/cooked", async (_req, res) => {
           stock: menu.stock,
           isAvailable: menu.isAvailable,
           images: menu.images,
-          stockSupply: menu.StockSupply[0] ?? null,
+          stockSupply: menu.stockSupplyMenus[0]?.stockSupply ?? null,
           cooking: {
             totalProduced,
             totalAssigned,
