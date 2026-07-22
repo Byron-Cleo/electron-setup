@@ -2,17 +2,57 @@
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
+- Create a reusable `SearchableSelect` component in `desktop/ui/components/shared/`
+- Shows ALL dropdown options by default when opened
+- Filters options in real-time as user types to search
+- Allows selecting an option to populate the input field
+- Pure Tailwind + React — no new packages
+
 ## Notes
 
+- This phase depends on Phase 1 (backend accepts menuId) — DONE
+- Component goes in `shared/` folder for reuse across the app
+- Label only shows menu item name (e.g. "Beef Fry"), not IDs or extra details
+- The internal value is the ID, but user only sees the name
+
 ## History
+
+### frontend - 2026-07-22 — Menu-StockSupply Link Phase 3: Form Integration
+- Added `menuId` to `StockSupplyCreateData` and `StockSupplyUpdateData` types
+- Added `menuId` field to `StockSupplyForm.tsx` with SearchableSelect (visible when isMenuStock checked)
+- Added `menuId` field to `StockSupplyEditDialog.tsx` with SearchableSelect (pre-populated in edit mode)
+- Added `menuId` field to `Store.tsx` Add Stock Item modal with SearchableSelect
+- SearchableSelect shows all menu items, filters as user types
+- Clears menuId when isMenuStock is unchecked
+
+### frontend - 2026-07-22 — Menu-StockSupply Link Phase 2: SearchableSelect Component
+- Created reusable `SearchableSelect` component in `desktop/ui/components/shared/`
+- Shows ALL dropdown options by default when opened
+- Filters options in real-time as user types (case-insensitive)
+- Click to select, X button to clear
+- Pure Tailwind + React, no new packages
+
+### backend - 2026-07-22 — Menu-StockSupply Link Phase 1: Accept menuId
+- Added `menuId` to POST `/api/stock-supplies` create endpoint destructuring and Prisma data
+- Added `menuId` to PUT `/api/stock-supplies/:id` update endpoint destructuring and Prisma data
+- `menuId` is optional — omit or null means no menu link
+- Empty string treated as null (unlink)
+- No schema change needed — `menuId` already existed on StockSupply model
+
+### backend - 2026-07-22 — Menu-StockSupply Link Phase 1: Accept menuId
+- Added `menuId` to POST `/api/stock-supplies` create endpoint destructuring and Prisma data
+- Added `menuId` to PUT `/api/stock-supplies/:id` update endpoint destructuring and Prisma data
+- `menuId` is optional — omit or null means no menu link
+- Empty string treated as null (unlink)
+- No schema change needed — `menuId` already existed on StockSupply model
 
 ### frontend - 2026-07-22 — Menu Cooked Food Variants Phase 3: Waiter Menu Filter
 - Verified backend `GET /api/menu?mealType=X` filters by `isAvailable = true`
@@ -306,7 +346,7 @@ Not Started
 - Fixed type mismatch: accompanyId → starchId in electron.d.ts
 - Added starch/vegetable accompaniment objects to MenuItem type
 - Updated backend Prisma query to include MenuAccompaniment relations
-- Loading/error/empty states preserved
+- Loading/error/empty/success states preserved
 - Build and lint clean
 
 ### frontend - 2026-07-01 — Waiter Menu — Fetch by Meal Period
