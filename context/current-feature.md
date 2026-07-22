@@ -1,23 +1,22 @@
 # Current Feature
 
 ## Platform
-frontend
+Not Specified
 
 ## Status
-In Progress — Branch: feature/waiter/kitchen-cooking-phase-6-waiter-display
+Not Started
 
 ## Goals
-- Update waiter menu to show available plates for each menu item
-- Disable Add to Cart button when item is sold out (0 plates)
-- Show prominent "Sold Out" indicator
 
 ## Notes
-- This is a small update to existing `WaiterMenu.tsx` file
-- Changes: use `availablePlates` field, disable ordering when 0, improve sold out visibility
-- Waiters do NOT see plate counts — just "In Stock" / "Sold Out"
-- This phase can be done anytime after Phase 1 (backend must return availablePlates)
 
 ## History
+
+### frontend - 2026-07-22 — Kitchen Cooking Production Phase 6: Waiter Availability Display
+- Replaced item.stock with item.availablePlates in WaiterMenu.tsx
+- Disabled Add to Cart button when sold out (0 plates)
+- Changed "Out of Stock" to "Sold Out" badge
+- Shows "X plates available" when in stock
 
 ### backend - 2026-07-22 — Kitchen Cooking Production Phase 5: Daily Report + Carry Over
 - Created dailyReport.ts with GET /api/reports/daily endpoint
