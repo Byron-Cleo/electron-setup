@@ -276,7 +276,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
 
   try {
     const item = await prisma.$transaction(async (tx) => {
-      const updated = await tx.stockSupply.update({
+      await tx.stockSupply.update({
         where: { id },
         data: {
           ...(name !== undefined && { name }),

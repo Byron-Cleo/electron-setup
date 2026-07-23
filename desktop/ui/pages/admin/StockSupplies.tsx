@@ -100,7 +100,6 @@ export default function StockSupplies() {
   ]
 
   function renderCell(supply: StockSupply, column: Column) {
-    const stock = Number(supply.currentStock)
     const reorder = Number(supply.reorderLevel ?? 0)
 
     switch (column.key) {
