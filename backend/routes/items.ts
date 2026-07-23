@@ -171,8 +171,8 @@ router.post("/", upload.single("image"), async (req, res) => {
   const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock, departmentIds, menuIds } = req.body;
   const image = req.file ? `/uploads/stock-supplies/${req.file.filename}` : null;
   
-  if (!name || !unit || !image) {
-    return res.status(400).json({ error: "name, unit, and image are required" });
+  if (!name || !unit) {
+    return res.status(400).json({ error: "name and unit are required" });
   }
   
   if (!VALID_UNITS.includes(unit)) {
@@ -213,7 +213,7 @@ router.post("/", upload.single("image"), async (req, res) => {
         isMenuStock: isMenuStock === "true" || isMenuStock === true,
         image,
         ...(parsedDeptIds.length > 0 && {
-          departments: {
+          DepartmentStockSupply: {
             create: parsedDeptIds.map((deptId: string) => ({ departmentId: deptId })),
           },
         }),
@@ -224,13 +224,15 @@ router.post("/", upload.single("image"), async (req, res) => {
         }),
       },
       include: {
+        DepartmentStockSupply: { include: { department: true } },
         menus: { include: { menu: { select: { id: true, name: true } } } },
       },
     });
     res.status(201).json(serializeStockSupply(item));
   } catch (e: any) {
     if (e.code === "P2002") return res.status(409).json({ error: "Item slug already exists" });
-    throw e;
+    console.error("Failed to create stock supply:", e);
+    return res.status(500).json({ error: "Failed to create stock item" });
   }
 });
 
@@ -322,7 +324,8 @@ router.put("/:id", upload.single("image"), async (req, res) => {
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Item not found" });
     if (e.code === "P2002") return res.status(409).json({ error: "Item slug already exists" });
-    throw e;
+    console.error("Failed to update stock supply:", e);
+    return res.status(500).json({ error: "Failed to update stock item" });
   }
 });
 

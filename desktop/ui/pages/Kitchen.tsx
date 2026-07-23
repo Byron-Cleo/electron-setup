@@ -26,6 +26,7 @@ import {
   createCookingRecord,
   stockSupplyImageUrl,
   formatQuantityWithUnit,
+  getDepartments,
 } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
@@ -191,6 +192,7 @@ function Kitchen() {
 }
 
 function CurrentStockView({ userId }: { userId: string }) {
+  const user = useAuthStore((s) => s.user)
   const [items, setItems] = useState<StockSupply[]>([])
   const [requests, setRequests] = useState<StockRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -208,8 +210,12 @@ function CurrentStockView({ userId }: { userId: string }) {
   async function loadStock() {
     try {
       setLoading(true)
+      const departments = await getDepartments()
+      const roleDept = departments.find(
+        (d) => d.name.toLowerCase() === (user?.role ?? "").toLowerCase()
+      )
       const [stockData, requestData] = await Promise.all([
-        getStockSupplies(),
+        getStockSupplies(roleDept?.id),
         getStockRequests(),
       ])
       setItems(stockData)
