@@ -152,10 +152,16 @@ export default function StockSupplyDetailDialog({ open, onClose, supplyId }: Pro
                   </>
                 )}
 
-                {supply.menu && (
+                {supply.menus && supply.menus.length > 0 && (
                   <>
-                    <span className="text-sm text-admin-header-text/60 text-right">Linked Menu Item</span>
-                    <span className="text-sm text-admin-header-text">{supply.menu.name}</span>
+                    <span className="text-sm text-admin-header-text/60 text-right">Linked Menu Items</span>
+                    <div className="flex flex-wrap gap-1">
+                      {supply.menus.map((m) => (
+                        <span key={m.id} className="text-xs px-2 py-0.5 rounded bg-admin-content text-admin-header-text/70 border border-admin-card-border">
+                          {m.name}
+                        </span>
+                      ))}
+                    </div>
                   </>
                 )}
 

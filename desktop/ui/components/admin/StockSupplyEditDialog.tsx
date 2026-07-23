@@ -36,7 +36,7 @@ import {
   formatSupplyDescription,
   stockSupplyImageUrl,
 } from "@/lib/api"
-import SearchableSelect from "@/components/shared/SearchableSelect"
+import MultiSearchableSelect from "@/components/shared/MultiSearchableSelect"
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -45,7 +45,7 @@ const formSchema = z.object({
   currentStock: z.coerce.number().min(0, "Stock item count is required"),
   reorderLevel: z.coerce.number().min(0, "Reorder level count is required"),
   isMenuStock: z.boolean(),
-  menuId: z.string().optional(),
+  menuIds: z.array(z.string()).optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -83,7 +83,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
       currentStock: 0,
       reorderLevel: 0,
       isMenuStock: false,
-      menuId: undefined,
+      menuIds: [],
     },
   })
 
@@ -113,7 +113,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
             currentStock: supply.currentStock,
             reorderLevel: supply.reorderLevel ?? 0,
             isMenuStock: supply.isMenuStock,
-            menuId: supply.menuId ?? undefined,
+            menuIds: supply.menus?.map((m) => m.id) ?? [],
           })
           setExistingImage(supply.image)
           if (supply.departments) {
@@ -129,7 +129,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
 
   useEffect(() => {
     if (!watchedIsMenuStock) {
-      form.setValue("menuId", undefined)
+      form.setValue("menuIds", [])
     }
   }, [watchedIsMenuStock, form])
 
@@ -301,16 +301,16 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
               {watchedIsMenuStock && (
                 <FormField
                   control={form.control}
-                  name="menuId"
+                  name="menuIds"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Menu Item</FormLabel>
+                      <FormLabel>Menu Items</FormLabel>
                       <FormControl>
-                        <SearchableSelect
+                        <MultiSearchableSelect
                           options={menus.map((m) => ({ value: m.id, label: m.name }))}
-                          value={field.value ?? null}
-                          onChange={(val) => field.onChange(val ?? undefined)}
-                          placeholder="Select menu item"
+                          value={field.value ?? []}
+                          onChange={(val) => field.onChange(val)}
+                          placeholder="Select menu items"
                           searchPlaceholder="Search menus..."
                         />
                       </FormControl>

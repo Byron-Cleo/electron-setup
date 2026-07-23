@@ -136,7 +136,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
           columns={[
             { label: "Stock Item", key: "name" },
             { label: "Plates per Unit", key: "platesPerUnit" },
-            { label: "Menu Item", key: "menu" },
+            { label: "Menu Items", key: "menu" },
             { label: "Actions", key: "actions", isAction: true },
           ]}
           data={paginatedItems}
@@ -147,7 +147,17 @@ export default function KitchenStockConfig({ onBack }: Props) {
               case "platesPerUnit":
                 return <span className="text-admin-header-text">{item.platesPerUnit ?? "—"}</span>
               case "menu":
-                return <span className="text-admin-header-text/60">{item.menu?.name ?? "—"}</span>
+                return item.menus && item.menus.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {item.menus.map((m) => (
+                      <span key={m.id} className="text-xs px-2 py-0.5 rounded bg-admin-content text-admin-header-text/70 border border-admin-card-border">
+                        {m.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-admin-header-text/60">—</span>
+                )
               case "actions":
                 return (
                   <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>

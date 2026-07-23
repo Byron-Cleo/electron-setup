@@ -26,7 +26,7 @@ import { usePagination } from "@/hooks/usePagination"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
-import SearchableSelect from "@/components/shared/SearchableSelect"
+import MultiSearchableSelect from "@/components/shared/MultiSearchableSelect"
 
 type StoreView = "dashboard" | "requests" | "stock" | "restock"
 
@@ -195,7 +195,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   const [formCurrentStock, setFormCurrentStock] = useState("")
   const [formReorderLevel, setFormReorderLevel] = useState("")
   const [formIsMenuStock, setFormIsMenuStock] = useState(false)
-  const [formMenuId, setFormMenuId] = useState<string | null>(null)
+  const [formMenuIds, setFormMenuIds] = useState<string[]>([])
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [formImageFile, setFormImageFile] = useState<File | null>(null)
   const [formImagePreview, setFormImagePreview] = useState<string | null>(null)
@@ -209,7 +209,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     setFormCurrentStock("")
     setFormReorderLevel("")
     setFormIsMenuStock(false)
-    setFormMenuId(null)
+    setFormMenuIds([])
     setFormImageFile(null)
     setFormImagePreview(null)
     setSelectedDepts(new Set())
@@ -237,7 +237,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         currentStock: formCurrentStock ? Number(formCurrentStock) : 0,
         reorderLevel: formReorderLevel ? Number(formReorderLevel) : undefined,
         isMenuStock: formIsMenuStock,
-        menuId: formMenuId,
+        menuIds: formMenuIds,
         departmentIds: Array.from(selectedDepts),
       }, formImageFile ?? undefined)
       setShowAddModal(false)
@@ -512,12 +512,12 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
 
             {formIsMenuStock && (
               <div className="space-y-1">
-                <Label className="text-xs">Menu Item</Label>
-                <SearchableSelect
+                <Label className="text-xs">Menu Items</Label>
+                <MultiSearchableSelect
                   options={menus.map((m) => ({ value: m.id, label: m.name }))}
-                  value={formMenuId}
-                  onChange={setFormMenuId}
-                  placeholder="Select menu item"
+                  value={formMenuIds}
+                  onChange={setFormMenuIds}
+                  placeholder="Select menu items"
                   searchPlaceholder="Search menus..."
                 />
               </div>

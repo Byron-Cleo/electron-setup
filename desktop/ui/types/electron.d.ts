@@ -77,11 +77,10 @@ interface StockSupply {
   image: string | null;
   isMenuStock: boolean;
   platesPerUnit: number | null;
-  menuId: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  menu?: { id: string; name: string } | null;
+  menus?: { id: string; name: string }[];
   departments?: Department[];
 }
 
@@ -93,7 +92,7 @@ interface StockSupplyCreateData {
   currentStock?: number;
   reorderLevel?: number;
   isMenuStock?: boolean;
-  menuId?: string | null;
+  menuIds?: string[];
   departmentIds?: string[];
 }
 
@@ -106,7 +105,7 @@ interface StockSupplyUpdateData {
   reorderLevel?: number;
   isActive?: boolean;
   isMenuStock?: boolean;
-  menuId?: string | null;
+  menuIds?: string[];
   departmentIds?: string[];
 }
 
@@ -201,7 +200,7 @@ interface CookingRecord {
   cookedById: string;
   notes: string | null;
   createdAt: string;
-  stockSupply: { id: string; name: string; unit: string; platesPerUnit: number | null; menuId: string | null };
+  stockSupply: { id: string; name: string; unit: string; platesPerUnit: number | null; menus: { id: string; name: string }[] };
   cookedBy: { id: string; name: string };
   assignments: CookingRecordAssignment[];
   availablePlates?: number;
@@ -272,7 +271,7 @@ interface KitchenInventory {
   unit: string;
   isMenuStock: boolean;
   platesPerUnit: number | null;
-  menuId: string | null;
+  menus: { id: string; name: string }[];
   totalReceived: number;
   totalCooked: number;
   kitchenInventory: number;
@@ -287,13 +286,12 @@ interface KitchenConfigItem {
   reorderLevel: number | null;
   isMenuStock: boolean;
   platesPerUnit: number | null;
-  menuId: string | null;
-  menu?: { id: string; name: string } | null;
+  menus: { id: string; name: string }[];
 }
 
 interface KitchenConfigData {
   platesPerUnit?: number;
-  menuId?: string | null;
+  menuIds?: string[];
 }
 
 interface ElectronAPI {

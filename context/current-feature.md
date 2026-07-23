@@ -2,19 +2,19 @@
 
 ## Platform
 
-backend
+frontend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-- Update `POST /api/stock-supplies` to accept `menuIds: string[]` and create junction rows
-- Update `PUT /api/stock-supplies/:id` to accept `menuIds: string[]` and replace junction rows
-- Update serialize function to return `menus: [{ id, name }]` from junction relation
-- Remove `menuId` auto-update logic from cooking records route
-- Update `GET /api/menu/cooked` query to join through junction table
+- Add `MultiSearchableSelect` component (multi-select dropdown for menu items)
+- Update `StockSupplyForm` to use `MultiSearchableSelect` for menuIds
+- Update `StockSupplyEditDialog` to use `MultiSearchableSelect` for menuIds
+- Update `Store.tsx` Add Stock Item modal to use `MultiSearchableSelect` for menuIds
+- Display linked menus in StockSupplyDetailDialog
 
 ## Notes
 
@@ -24,6 +24,23 @@ Not Started
 - The cooking records auto-update of `Menu.stock` (lines 177-183, 234-240 in cookingRecords.ts) must be REMOVED — plate allocation is handled by `CookingRecordAssignment`, not by stock supply links
 
 ## History
+
+### frontend - 2026-07-23 — Multi-Select Menu Phase 3: Frontend Component + Forms
+- Created `MultiSearchableSelect` component with checkboxes, removable tags, "+N more"
+- Updated `StockSupplyForm` to use `MultiSearchableSelect` for `menuIds`
+- Updated `StockSupplyEditDialog` to use `MultiSearchableSelect` for `menuIds`
+- Updated `Store.tsx` Add Stock Item modal to use `MultiSearchableSelect` for `menuIds`
+- Updated `StockSupplyDetailDialog` to display linked menus as tag badges
+- Updated `KitchenStockConfig` to display linked menus as tag badges
+- Updated `electron.d.ts` types: StockSupply.menus, StockSupplyCreateData/UpdateData.menuIds, KitchenInventory.menus, KitchenConfigItem.menus, KitchenConfigData.menuIds
+- Branch: feature/frontend/multi-select-menu-phase-3
+
+### backend - 2026-07-22 — Multi-Select Menu Phase 2: Routes Update
+- Updated items.ts: POST/PUT accept menuIds[], serialize returns menus from junction
+- Updated cookingRecords.ts: removed menuId auto-update, updated includes to use menus
+- Updated kitchenInventory.ts: updated include and return menus from junction
+- Updated menu.ts: cooked query joins through stockSupplyMenus junction table
+- Branch: feature/backend/multi-select-menu-routes (merged to main)
 
 ### backend - 2026-07-22 — Multi-Select Menu Phase 1: Schema + Migration
 - Added `StockSupplyMenu` junction table (stockSupplyId + menuId composite PK)
