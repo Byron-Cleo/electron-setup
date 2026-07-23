@@ -202,20 +202,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   const [departments, setDepartments] = useState<Department[]>([])
   const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
 
-  function resetForm() {
-    setFormName("")
-    setFormDescription("")
-    setFormUnit("")
-    setFormCurrentStock("")
-    setFormReorderLevel("")
-    setFormIsMenuStock(false)
-    setFormMenuIds([])
-    setFormImageFile(null)
-    setFormImagePreview(null)
-    setSelectedDepts(new Set())
-    setSaveError("")
-  }
-
   async function handleAddItem() {
     if (!formName || !formUnit) {
       setSaveError("Name and unit are required")
@@ -437,13 +423,31 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Name <span className="text-red-500 text-base font-bold">*</span></Label>
-              <Input
-                placeholder="Stock item name"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs">Name <span className="text-red-500 text-base font-bold">*</span></Label>
+                <Input
+                  placeholder="Stock item name"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Stock Unit <span className="text-red-500 text-base font-bold">*</span></Label>
+                <Select value={formUnit} onValueChange={setFormUnit}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="KG">Kilogram (KG)</SelectItem>
+                    <SelectItem value="PKT">Packets (Pkt)</SelectItem>
+                    <SelectItem value="L">Liter (L)</SelectItem>
+                    <SelectItem value="ML">Milliliter (ML)</SelectItem>
+                    <SelectItem value="PCS">Pieces (PCS)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -472,41 +476,23 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-xs">Stock Unit <span className="text-red-500 text-base font-bold">*</span></Label>
-                <Select value={formUnit} onValueChange={setFormUnit}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="KG">Kilogram (KG)</SelectItem>
-                    <SelectItem value="PKT">Packets (Pkt)</SelectItem>
-                    <SelectItem value="L">Liter (L)</SelectItem>
-                    <SelectItem value="ML">Milliliter (ML)</SelectItem>
-                    <SelectItem value="PCS">Pieces (PCS)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-lg border p-3 mt-6">
-                <label className="relative cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={formIsMenuStock}
-                    onChange={(e) => setFormIsMenuStock(e.target.checked)}
-                  />
-                  <div className="h-5 w-5 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
-                    {formIsMenuStock && <Check className="h-3 w-3 text-white" />}
-                  </div>
-                </label>
-                <div className="space-y-0.5">
-                  <span className="text-sm font-medium">Is Menu Item?</span>
-                  <p className="text-xs text-admin-muted">
-                    Mark this item as a menu ingredient (used for cooking)
-                  </p>
+            <div className="flex items-center gap-3 rounded-lg border p-3">
+              <label className="relative cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={formIsMenuStock}
+                  onChange={(e) => setFormIsMenuStock(e.target.checked)}
+                />
+                <div className="h-5 w-5 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
+                  {formIsMenuStock && <Check className="h-3 w-3 text-white" />}
                 </div>
+              </label>
+              <div className="space-y-0.5">
+                <span className="text-sm font-medium">Is Menu Item?</span>
+                <p className="text-xs text-admin-muted">
+                  Mark this item as a menu ingredient
+                </p>
               </div>
             </div>
 

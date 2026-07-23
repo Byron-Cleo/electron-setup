@@ -183,19 +183,46 @@ export default function StockSupplyForm() {
                 </p>
               )}
 
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name <span className="text-red-500 text-base font-bold">*</span></FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Supply name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name <span className="text-red-500 text-base font-bold">*</span></FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Supply name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="unit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Stock Unit <span className="text-red-500 text-base font-bold">*</span></FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select unit" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {UNIT_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
@@ -227,60 +254,33 @@ export default function StockSupplyForm() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="unit"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stock Unit <span className="text-red-500 text-base font-bold">*</span></FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select unit" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {UNIT_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="isMenuStock"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-3 space-y-0 rounded-lg border p-3 mt-7">
-                      <FormControl>
-                        <label className="relative cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={field.value ?? false}
-                            onChange={field.onChange}
-                          />
-                          <div className="h-5 w-5 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
-                            {field.value && <Check className="h-3 w-3 text-white" />}
-                          </div>
-                        </label>
-                      </FormControl>
-                      <div className="space-y-0.5">
-                        <FormLabel>Is Menu Item?</FormLabel>
-                        <p className="text-xs text-admin-header-text/50">
-                          Mark this item as a menu ingredient (used for cooking)
-                        </p>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="isMenuStock"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center gap-3 space-y-0 rounded-lg border p-3">
+                    <FormControl>
+                      <label className="relative cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={field.value ?? false}
+                          onChange={field.onChange}
+                        />
+                        <div className="h-5 w-5 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
+                          {field.value && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                      </label>
+                    </FormControl>
+                    <div className="space-y-0.5">
+                      <FormLabel>Is Menu Item?</FormLabel>
+                      <p className="text-xs text-admin-header-text/50">
+                        Mark this item as a menu ingredient
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
 
               {watchedIsMenuStock && (
                 <FormField
