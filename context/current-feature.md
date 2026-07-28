@@ -1,4 +1,4 @@
-# Current Feature
+# Current Feature — Menu Tab Redesign
 
 ## Platform
 
@@ -10,18 +10,23 @@ In Progress
 
 ## Goals
 
-- Add `MultiSearchableSelect` component (multi-select dropdown for menu items)
-- Update `StockSupplyForm` to use `MultiSearchableSelect` for menuIds
-- Update `StockSupplyEditDialog` to use `MultiSearchableSelect` for menuIds
-- Update `Store.tsx` Add Stock Item modal to use `MultiSearchableSelect` for menuIds
-- Display linked menus in StockSupplyDetailDialog
+- Replace the current tab-based Menu page (Cooked Food | Create Menu Item) with a dashboard layout featuring two clickable cards, a top-right Create button, and sub-views
+- Create `AllMenuTable` component with search, pagination, detail/edit/hide actions
+- Create `MenuDetailDialog` component showing full menu item information
+- Create `CreateMenuDialog` wrapper that reuses existing `MenuForm` inside a shadcn Dialog
+- Reuse existing `CookedFoodTable` and `MenuForm` components without modification
 
 ## Notes
 
-- `menuIds` is sent as a JSON string (like `departmentIds`) because the route uses `multipart/form-data` for image upload
-- Parse with: `JSON.parse(menuIds)` — same pattern as `departmentIds`
-- Empty array or omitted = no menu links
-- The cooking records auto-update of `Menu.stock` (lines 177-183, 234-240 in cookingRecords.ts) must be REMOVED — plate allocation is handled by `CookingRecordAssignment`, not by stock supply links
+- Backend spec exists at `context/features/backend/menu-tab-redesign.md` — no backend changes needed, existing APIs cover everything
+- `isAvailable` already added to `MenuItem` type in prior work
+- `CookedFoodTable`, `MenuForm`, `EditMenuDialog` are reused as-is
+- New state type: `type MenuView = "dashboard" | "cooked-food" | "all-menu"` — default `"dashboard"`
+- Dashboard cards match Kitchen dashboard pattern: clickable, hover effects, transitions
+- AllMenuTable columns: Details, Name, Category, Price, Stock, Rating, Status, Actions
+- Hide action uses `updateMenuAvailability(id, false)` with confirmation dialog
+- MenuDetailDialog shows all fields in a two-column grid layout
+- CreateMenuDialog wraps MenuForm inside DialogContent (no Card wrapper)
 
 ## History
 

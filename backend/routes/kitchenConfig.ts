@@ -16,33 +16,32 @@ router.get("/", async (_req, res) => {
       reorderLevel: true,
       isMenuStock: true,
       platesPerUnit: true,
-      menuId: true,
-      menu: { select: { id: true, name: true } },
+      menus: {
+        select: { menu: { select: { id: true, name: true } } },
+      },
     },
     orderBy: { name: "asc" },
   });
-  res.json(items);
+  const flattened = items.map(({ menus, ...rest }) => ({
+    ...rest,
+    menus: menus.map((m) => m.menu),
+  }));
+  res.json(flattened);
 });
 
-// PUT /api/kitchen-config/:id - Update kitchen config for a stock supply
+// PUT /api/kitchen-config/:id - Update plates per unit for a stock supply
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { platesPerUnit, menuId } = req.body;
+  const { platesPerUnit } = req.body;
 
   const stockSupply = await prisma.stockSupply.findUnique({ where: { id } });
   if (!stockSupply) return res.status(404).json({ error: "Stock supply not found" });
-
-  if (menuId) {
-    const menu = await prisma.menu.findUnique({ where: { id: menuId } });
-    if (!menu) return res.status(400).json({ error: "Menu item not found" });
-  }
 
   try {
     const updated = await prisma.stockSupply.update({
       where: { id },
       data: {
         ...(platesPerUnit !== undefined && { platesPerUnit }),
-        ...(menuId !== undefined && { menuId: menuId || null }),
       },
       select: {
         id: true,
@@ -50,11 +49,12 @@ router.put("/:id", async (req, res) => {
         unit: true,
         isMenuStock: true,
         platesPerUnit: true,
-        menuId: true,
-        menu: { select: { id: true, name: true } },
+        menus: {
+          select: { menu: { select: { id: true, name: true } } },
+        },
       },
     });
-    res.json(updated);
+    res.json({ ...updated, menus: updated.menus.map((m) => m.menu) });
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Stock supply not found" });
     throw e;

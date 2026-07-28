@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import BackButton from "@/components/shared/BackButton"
 import { Heading } from "@/components/ui/heading"
+
+const UNIT_LABELS: Record<string, string> = {
+  KG: "Kilogram",
+  PKT: "Packet",
+  L: "Litre",
+  ML: "Millilitre",
+  PCS: "Pieces",
+}
 import { DataTable } from "@/components/ui/data-table"
 import {
   Select,
@@ -17,7 +26,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, ArrowLeft } from "lucide-react"
+import { Plus, Pencil } from "lucide-react"
 import { getKitchenConfig, saveKitchenConfig, getStockSupplies } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 
@@ -112,10 +121,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <Button onClick={onBack} className="px-6 py-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
+        <BackButton onClick={onBack} />
         <Button onClick={openCreate} className="px-6 py-6 bg-brand-green hover:bg-brand-green/90">
           <Plus className="h-4 w-4 mr-2" />
           Add Configuration
@@ -135,6 +141,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
         <DataTable
           columns={[
             { label: "Stock Item", key: "name" },
+            { label: "Unit", key: "unit" },
             { label: "Plates per Unit", key: "platesPerUnit" },
             { label: "Menu Items", key: "menu" },
             { label: "Actions", key: "actions", isAction: true },
@@ -144,6 +151,8 @@ export default function KitchenStockConfig({ onBack }: Props) {
             switch (column.key) {
               case "name":
                 return <span className="font-medium text-admin-header-text">{item.name}</span>
+              case "unit":
+                return <span className="text-admin-header-text">{item.unit} <span className="text-admin-header-text/50">({UNIT_LABELS[item.unit] ?? item.unit})</span></span>
               case "platesPerUnit":
                 return <span className="text-admin-header-text">{item.platesPerUnit ?? "—"}</span>
               case "menu":

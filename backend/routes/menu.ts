@@ -6,15 +6,27 @@ const router = Router();
 
 const VALID_MEAL_TYPES = Object.values(ServiceTime) as string[];
 
-router.get("/cooked", async (_req, res) => {
+router.get("/cooked", async (req, res) => {
   try {
+    const { date } = req.query;
+    let dateFilter: Record<string, unknown> = {}
+    if (date) {
+      const d = new Date(date as string)
+      if (isNaN(d.getTime())) {
+        return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" })
+      }
+      const nextDay = new Date(d)
+      nextDay.setDate(nextDay.getDate() + 1)
+      dateFilter.cookedDate = { gte: d, lt: nextDay }
+    }
+
     const menus = await prisma.menu.findMany({
       where: {
         stockSupplyMenus: {
           some: {
             stockSupply: {
               isMenuStock: true,
-              CookingRecord: { some: {} },
+              CookingRecord: date ? { some: dateFilter } : { some: {} },
             },
           },
         },
@@ -35,7 +47,7 @@ router.get("/cooked", async (_req, res) => {
         const stockSupplyIds = menu.stockSupplyMenus.map((sm) => sm.stockSupply.id);
 
         const cookingRecords = await prisma.cookingRecord.findMany({
-          where: { stockSupplyId: { in: stockSupplyIds } },
+          where: { stockSupplyId: { in: stockSupplyIds }, ...dateFilter },
           include: {
             assignments: { select: { quantityPlates: true } },
           },

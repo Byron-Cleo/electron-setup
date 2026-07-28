@@ -75,7 +75,9 @@ router.get("/available", async (req, res) => {
     if (isNaN(d.getTime())) {
       return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
     }
-    where.cookedDate = d;
+    const nextDay = new Date(d);
+    nextDay.setDate(nextDay.getDate() + 1);
+    where.cookedDate = { gte: d, lt: nextDay };
   }
 
   const records = await prisma.cookingRecord.findMany({

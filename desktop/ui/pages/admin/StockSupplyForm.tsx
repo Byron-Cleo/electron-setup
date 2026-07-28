@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import BackButton from "@/components/shared/BackButton"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
@@ -15,7 +16,7 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft, X, Package, Check } from "lucide-react"
+import { X, Package, Check } from "lucide-react"
 import {
   Form,
   FormField,
@@ -161,10 +162,7 @@ export default function StockSupplyForm() {
       </Heading>
 
       <div className="mb-4">
-        <Button onClick={() => navigate("/admin/store/stock-supplies")} className="px-6 py-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
+        <BackButton onClick={() => navigate("/admin/store/stock-supplies")} />
       </div>
 
       {showPreview && (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
+import BackButton from "@/components/shared/BackButton"
 import { Input } from "@/components/ui/input"
 import { Heading } from "@/components/ui/heading"
 import { DataTable, type Column } from "@/components/ui/data-table"
@@ -11,7 +12,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, ArrowLeft, Package, Eye } from "lucide-react"
+import { Plus, Pencil, Trash2, Package, Eye } from "lucide-react"
 import {
   getStockSupplies,
   deleteStockSupply,
@@ -182,10 +183,7 @@ export default function StockSupplies() {
       <Heading as="h1" className="mb-6 text-admin-header-text">Stock Supplies</Heading>
 
       <div className="flex items-center justify-between mb-4">
-        <Button onClick={() => navigate("/admin/store")} className="px-6 py-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
+        <BackButton onClick={() => navigate("/admin/store")} />
         <Button onClick={() => navigate("/admin/store/stock-supplies/new")} className="px-6 py-6 bg-red-500 hover:bg-red-500/90">
           <Plus className="h-4 w-4 mr-2" />
           Add New Supply

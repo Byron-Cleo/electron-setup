@@ -17,6 +17,9 @@ export default function CookedFoodTable({ onRefresh }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
+  const [selectedDate, setSelectedDate] = useState(() => {
+    return new Date().toISOString().split("T")[0]
+  })
   const [editDialog, setEditDialog] = useState<{ open: boolean; item: CookedMenuItem | null }>({
     open: false,
     item: null,
@@ -31,14 +34,14 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     try {
       setLoading(true)
       setError("")
-      const data = await getCookedMenus()
+      const data = await getCookedMenus(selectedDate)
       setItems(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cooked menus")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedDate])
 
   useEffect(() => {
     loadData()
@@ -58,6 +61,15 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         item.stockSupply?.name.toLowerCase().includes(q)
     )
   }, [items, search])
+
+  function formatDateOption(daysOffset: number): { label: string; value: string } {
+    const d = new Date()
+    d.setDate(d.getDate() + daysOffset)
+    return {
+      label: daysOffset === 0 ? "Today" : daysOffset === -1 ? "Yesterday" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+      value: d.toISOString().split("T")[0],
+    }
+  }
 
   const {
     currentPage,
@@ -145,20 +157,9 @@ export default function CookedFoodTable({ onRefresh }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Heading as="h2" className="text-admin-header-text">
-          Today&apos;s Cooked Food — Menu Variants
-        </Heading>
-        <div className="relative w-64">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-muted" />
-          <Input
-            placeholder="Search by name, category, stock..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </div>
+      <Heading as="h2" className="text-admin-header-text text-center uppercase">
+        Cooked Food — Menu Variants
+      </Heading>
 
       <DataTable
         columns={columns}
@@ -178,6 +179,36 @@ export default function CookedFoodTable({ onRefresh }: Props) {
           canPrev,
           canNext,
         }}
+        header={
+          <div className="flex items-center gap-4 w-full">
+            <div className="relative w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-muted" />
+              <Input
+                placeholder="Search by name, category, stock..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <label htmlFor="cooked-date" className="text-sm text-admin-muted">Date:</label>
+              <select
+                id="cooked-date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="border border-input bg-background rounded-md px-3 py-1.5 text-sm"
+              >
+                <option value={formatDateOption(0).value}>{formatDateOption(0).label}</option>
+                <option value={formatDateOption(-1).value}>{formatDateOption(-1).label}</option>
+                <option value={formatDateOption(-2).value}>{formatDateOption(-2).label}</option>
+                <option value={formatDateOption(-3).value}>{formatDateOption(-3).label}</option>
+                <option value={formatDateOption(-4).value}>{formatDateOption(-4).label}</option>
+                <option value={formatDateOption(-5).value}>{formatDateOption(-5).label}</option>
+                <option value={formatDateOption(-6).value}>{formatDateOption(-6).label}</option>
+              </select>
+            </div>
+          </div>
+        }
       />
 
       <EditMenuDialog

@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
 import { DataTable } from "@/components/ui/data-table"
-import { ArrowLeft, AlertTriangle } from "lucide-react"
+import BackButton from "@/components/shared/BackButton"
+import { AlertTriangle } from "lucide-react"
 import { fulfillStockRequest } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { usePagination } from "@/hooks/usePagination"
@@ -97,9 +98,7 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft size={18} />
-        </Button>
+        <BackButton onClick={onBack} />
         <div>
           <Heading as="h2" className="text-admin-header-text">
             Fulfill Request

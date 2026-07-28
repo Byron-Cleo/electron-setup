@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import BackButton from "@/components/shared/BackButton"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
 import { DataTable } from "@/components/ui/data-table"
@@ -11,7 +12,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Pencil, Trash2 } from "lucide-react"
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 
@@ -123,10 +124,7 @@ export default function DepartmentManager({ onBack }: Props) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <Button onClick={onBack} className="px-6 py-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
+        <BackButton onClick={onBack} />
         <Button onClick={openCreate} className="px-6 py-6 bg-brand-green hover:bg-brand-green/90">
           <Plus className="h-4 w-4 mr-2" />
           Add Department

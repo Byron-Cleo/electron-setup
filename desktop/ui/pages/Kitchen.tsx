@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Package, Send, Clock, ArrowLeft, UtensilsCrossed, ChefHat, History, Eye } from "lucide-react"
+import { Package, Send, Clock, UtensilsCrossed, ChefHat, History, Eye } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import BackButton from "@/components/shared/BackButton"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -87,10 +88,7 @@ function Kitchen() {
 
       {view !== "dashboard" && (
         <div className="flex items-center justify-between mb-4">
-          <Button onClick={() => setView("dashboard")} className="px-6 py-6">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+          <BackButton onClick={() => setView("dashboard")} />
         </div>
       )}
 
@@ -470,6 +468,9 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   const [items, setItems] = useState<KitchenStockItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [selectedDate, setSelectedDate] = useState(() => {
+    return new Date().toISOString().split("T")[0]
+  })
   const [cookDialog, setCookDialog] = useState<{ open: boolean; item: KitchenStockItem | null }>({
     open: false,
     item: null,
@@ -483,7 +484,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   async function loadInventory() {
     try {
       setLoading(true)
-      const data = await getKitchenInventoryList()
+      const data = await getKitchenInventoryList(selectedDate)
       setItems(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load kitchen inventory")
@@ -494,7 +495,16 @@ function KitchenInventoryView({ userId }: { userId: string }) {
 
   useEffect(() => {
     loadInventory()
-  }, [])
+  }, [selectedDate])
+
+  function formatDateOption(daysOffset: number): { label: string; value: string } {
+    const d = new Date()
+    d.setDate(d.getDate() + daysOffset)
+    return {
+      label: daysOffset === 0 ? "Today" : daysOffset === -1 ? "Yesterday" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+      value: d.toISOString().split("T")[0],
+    }
+  }
 
   function openCookDialog(item: KitchenStockItem) {
     setCookDialog({ open: true, item })
@@ -593,7 +603,26 @@ function KitchenInventoryView({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text">Today's Cooked Food — Kitchen Production</Heading>
+      <div className="flex items-center justify-between">
+        <Heading as="h2" className="text-admin-header-text">Cooked Food — Kitchen Production</Heading>
+        <div className="flex items-center gap-2">
+          <label htmlFor="inv-date" className="text-sm text-admin-muted">Date:</label>
+          <select
+            id="inv-date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="border border-input bg-background rounded-md px-3 py-1.5 text-sm"
+          >
+            <option value={formatDateOption(0).value}>{formatDateOption(0).label}</option>
+            <option value={formatDateOption(-1).value}>{formatDateOption(-1).label}</option>
+            <option value={formatDateOption(-2).value}>{formatDateOption(-2).label}</option>
+            <option value={formatDateOption(-3).value}>{formatDateOption(-3).label}</option>
+            <option value={formatDateOption(-4).value}>{formatDateOption(-4).label}</option>
+            <option value={formatDateOption(-5).value}>{formatDateOption(-5).label}</option>
+            <option value={formatDateOption(-6).value}>{formatDateOption(-6).label}</option>
+          </select>
+        </div>
+      </div>
       <p className="text-sm text-admin-muted">
         PENDING = Ordered but not yet cooked (carries to tomorrow)
       </p>

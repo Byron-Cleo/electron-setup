@@ -4,7 +4,20 @@ import prisma from "../db/db";
 const router = Router();
 
 // GET /api/kitchen/inventory - Kitchen inventory with PENDING stock items (isMenuStock = true)
-router.get("/", async (_req, res) => {
+// Optional ?date=YYYY-MM-DD to filter cooking records to a specific date
+router.get("/", async (req, res) => {
+  const { date } = req.query;
+  let dateFilter: Record<string, unknown> = {}
+  if (date) {
+    const d = new Date(date as string)
+    if (isNaN(d.getTime())) {
+      return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" })
+    }
+    const nextDay = new Date(d)
+    nextDay.setDate(nextDay.getDate() + 1)
+    dateFilter.cookedDate = { gte: d, lt: nextDay }
+  }
+
   // Get all stock supplies with isMenuStock = true
   const stockSupplies = await prisma.stockSupply.findMany({
     where: {
@@ -26,15 +39,19 @@ router.get("/", async (_req, res) => {
         where: { stockRequestItem: { stockSupplyId: item.id } },
       });
 
-      // Total cooked (consumed in kitchen)
+      // Total cooked (consumed in kitchen) — filtered by date if provided
+      const cookingWhere: Record<string, unknown> = { stockSupplyId: item.id }
+      if (date) {
+        cookingWhere.cookedDate = dateFilter.cookedDate
+      }
       const totalCooked = await prisma.cookingRecord.aggregate({
         _sum: { quantityCooked: true },
-        where: { stockSupplyId: item.id },
+        where: cookingWhere,
       });
 
-      // Total plates produced (actual or expected)
+      // Total plates produced (actual or expected) — filtered by date if provided
       const records = await prisma.cookingRecord.findMany({
-        where: { stockSupplyId: item.id },
+        where: cookingWhere,
         select: { platesActual: true, platesExpected: true },
       });
       const totalPlatesProduced = records.reduce(

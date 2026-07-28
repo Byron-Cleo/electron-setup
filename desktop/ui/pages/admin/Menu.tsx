@@ -1,53 +1,76 @@
 import { useState } from "react"
-import { UtensilsCrossed, Plus } from "lucide-react"
+import { UtensilsCrossed, List, Plus } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import BackButton from "@/components/shared/BackButton"
 import CookedFoodTable from "@/components/menu/CookedFoodTable"
-import MenuForm from "@/components/MenuForm"
+import AllMenuTable from "@/components/menu/AllMenuTable"
+import CreateMenuDialog from "@/components/menu/CreateMenuDialog"
 
-type MenuTab = "cooked-food" | "create"
+type MenuView = "dashboard" | "cooked-food" | "all-menu"
 
 function Menu() {
-  const [tab, setTab] = useState<MenuTab>("cooked-food")
-  const [editingId, setEditingId] = useState<string | null>(null)
-
-  function handleSaved() {
-    setTab("cooked-food")
-    setEditingId(null)
-  }
+  const [view, setView] = useState<MenuView>("dashboard")
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogEditId, setDialogEditId] = useState<string | null>(null)
 
   return (
     <div className="space-y-6">
       <Heading as="h1" className="text-admin-header-text">Menu</Heading>
 
-      <div className="flex gap-1 border-b border-admin-card-border">
-        {([
-          { key: "cooked-food" as const, label: "Cooked Food", icon: UtensilsCrossed },
-          { key: "create" as const, label: editingId ? "Edit Menu Item" : "Create Menu Item", icon: Plus },
-        ]).map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => { setTab(key); if (key === "create") setEditingId(null) }}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-              tab === key
-                ? "border-b-2 border-admin-accent text-admin-accent"
-                : "text-admin-muted hover:text-admin-header-text"
-            }`}
+      {view === "dashboard" && (
+        <div className="grid grid-cols-2 gap-6">
+          <Card
+            className="cursor-pointer rounded-xl p-6 bg-admin-card border border-admin-card-border hover:shadow-lg hover:-translate-y-0.5 transition-all"
+            onClick={() => setView("cooked-food")}
           >
-            <Icon size={16} />
-            {label}
-          </button>
-        ))}
-      </div>
+            <UtensilsCrossed size={32} className="text-admin-accent mb-3" />
+            <Heading as="h2" className="text-lg text-admin-header-text">
+              Today&apos;s Cooked Food
+            </Heading>
+            <p className="text-sm text-admin-muted mt-1">View cooked menu items</p>
+          </Card>
 
-      {tab === "cooked-food" && <CookedFoodTable />}
-
-      {tab === "create" && (
-        <MenuForm
-          editId={editingId}
-          onSaved={handleSaved}
-          onCancel={() => { setTab("cooked-food"); setEditingId(null) }}
-        />
+          <Card
+            className="cursor-pointer rounded-xl p-6 bg-admin-card border border-admin-card-border hover:shadow-lg hover:-translate-y-0.5 transition-all"
+            onClick={() => setView("all-menu")}
+          >
+            <List size={32} className="text-admin-accent mb-3" />
+            <Heading as="h2" className="text-lg text-admin-header-text">
+              All Restaurant Menu
+            </Heading>
+            <p className="text-sm text-admin-muted mt-1">View all menu items</p>
+          </Card>
+        </div>
       )}
+
+      {view === "cooked-food" && (
+        <div className="space-y-4">
+          <BackButton onClick={() => setView("dashboard")} />
+          <CookedFoodTable />
+        </div>
+      )}
+
+      {view === "all-menu" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <BackButton onClick={() => setView("dashboard")} />
+            <Button onClick={() => { setDialogEditId(null); setDialogOpen(true) }}>
+              <Plus size={16} className="mr-1" />
+              Create Menu Item
+            </Button>
+          </div>
+          <AllMenuTable />
+        </div>
+      )}
+
+      <CreateMenuDialog
+        open={dialogOpen}
+        onClose={() => { setDialogOpen(false); setDialogEditId(null) }}
+        editId={dialogEditId}
+        onSaved={() => {}}
+      />
     </div>
   )
 }

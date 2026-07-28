@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react"
-import { Package, ShoppingBasket, ArrowLeft, Plus, Pencil, Trash2, RefreshCw, X, Eye, Check } from "lucide-react"
+import { Package, ShoppingBasket, Plus, Pencil, Trash2, RefreshCw, X, Eye, Check } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import BackButton from "@/components/shared/BackButton"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Heading } from "@/components/ui/heading"
@@ -74,10 +75,7 @@ function Store() {
 
       {view !== "dashboard" && (
         <div className="flex items-center justify-between mb-4">
-          <Button onClick={() => setView("dashboard")} className="px-6 py-6">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+          <BackButton onClick={() => setView("dashboard")} />
           {view === "stock" && (
             <Button onClick={() => setShowAddModal(true)} className="px-6 py-6 bg-red-500 hover:bg-red-500/90">
               <Plus className="h-4 w-4 mr-2" />

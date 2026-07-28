@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, Loader2, AlertCircle, Package, Plus, Minus, X, Star } from "lucide-react"
+import BackButton from "@/components/shared/BackButton"
+import { Loader2, AlertCircle, Package, Plus, Minus, X, Star } from "lucide-react"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
@@ -153,10 +154,7 @@ export function WaiterMenu() {
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <AlertCircle className="h-10 w-10 text-red-500" />
         <p className="text-red-500 font-medium">{error}</p>
-        <Button variant="outline" onClick={() => navigate("/waiter")}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Periods
-        </Button>
+        <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
       </div>
     )
   }
@@ -168,10 +166,7 @@ export function WaiterMenu() {
         <p className="text-brand-ebony/60 text-lg font-medium">
           No items available for {mealPeriod}
         </p>
-        <Button variant="outline" onClick={() => navigate("/waiter")}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Periods
-        </Button>
+        <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
       </div>
     )
   }
@@ -179,9 +174,7 @@ export function WaiterMenu() {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center gap-4 shrink-0 pb-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/waiter")}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+        <BackButton onClick={() => navigate("/waiter")} />
         <Heading as="h2" className="text-brand-ebony">{mealPeriod} Menu</Heading>
       </div>
 

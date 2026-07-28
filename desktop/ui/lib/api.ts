@@ -208,8 +208,9 @@ export async function deleteCookingRecord(id: string): Promise<void> {
 
 // ─── Kitchen Inventory (new endpoint) ───────────────────────────────────────
 
-export async function getKitchenInventoryList(): Promise<KitchenStockItem[]> {
-  return apiFetch("/kitchen/inventory")
+export async function getKitchenInventoryList(date?: string): Promise<KitchenStockItem[]> {
+  const query = date ? `?date=${encodeURIComponent(date)}` : ""
+  return apiFetch(`/kitchen/inventory${query}`)
 }
 
 // ─── Cooking Assignments ────────────────────────────────────────────────────
@@ -240,8 +241,9 @@ export async function getMenuById(id: string): Promise<MenuItem> {
   return apiFetch(`/menu/${id}`)
 }
 
-export async function getCookedMenus(): Promise<CookedMenuItem[]> {
-  return apiFetch("/menu/cooked")
+export async function getCookedMenus(date?: string): Promise<CookedMenuItem[]> {
+  const query = date ? `?date=${encodeURIComponent(date)}` : ""
+  return apiFetch(`/menu/cooked${query}`)
 }
 
 export async function updateMenu(id: string, data: Partial<MenuCreateData>): Promise<MenuItem> {
