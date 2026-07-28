@@ -25,6 +25,7 @@ interface MenuItem {
   rating: number;
   numReviews: number;
   isFeatured: boolean;
+  isAvailable: boolean;
   banner: string | null;
   createdAt: string;
   starchId: string | null;
