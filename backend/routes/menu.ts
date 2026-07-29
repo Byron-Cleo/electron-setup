@@ -133,26 +133,43 @@ router.get("/", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
-  const item = await prisma.menu.findUnique({ where: { id } });
+  const item = await prisma.menu.findUnique({
+    where: { id },
+    include: {
+      MenuMealType: { select: { mealType: true } },
+      MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
+      MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
+    },
+  });
   if (!item) return res.status(404).json({ error: "Not found" });
-  res.json(item);
+
+  const {
+    MenuMealType,
+    MenuAccompaniment_Menu_starchIdToMenuAccompaniment: starchRel,
+    MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: vegetableRel,
+    ...menu
+  } = item;
+
+  res.json({
+    ...menu,
+    mealTypes: MenuMealType.map((mt) => mt.mealType),
+    starch: starchRel,
+    vegetable: vegetableRel,
+  });
 });
 
 router.post("/", async (req, res) => {
-  const { name, slug, category, brand, description, stock, price, isFeatured } = req.body;
-  if (!name || !category || !brand || !description) {
-    return res.status(400).json({ error: "name, category, brand, description are required" });
+  const { name, slug, category, stock, price } = req.body;
+  if (!name || !category) {
+    return res.status(400).json({ error: "name, category are required" });
   }
   const item = await prisma.menu.create({
     data: {
       name,
       slug: slug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
       category,
-      brand,
-      description,
-      stock: stock ?? 0,
+      stock: stock ?? undefined,
       price: price ?? 0,
-      isFeatured: isFeatured ?? false,
     },
   });
   res.status(201).json(item);
@@ -160,20 +177,21 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, slug, category, brand, description, stock, price, isFeatured } = req.body;
+  const { name, slug, category, stock, price } = req.body;
   try {
+    const data: Record<string, unknown> = {
+      ...(name !== undefined && { name }),
+      ...(slug !== undefined && { slug }),
+      ...(category !== undefined && { category }),
+      ...(price !== undefined && { price }),
+    };
+    if (stock !== undefined) {
+      data.stock = stock;
+      data.isAvailable = Number(stock) > 0;
+    }
     const item = await prisma.menu.update({
       where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(slug !== undefined && { slug }),
-        ...(category !== undefined && { category }),
-        ...(brand !== undefined && { brand }),
-        ...(description !== undefined && { description }),
-        ...(stock !== undefined && { stock }),
-        ...(price !== undefined && { price }),
-        ...(isFeatured !== undefined && { isFeatured }),
-      },
+      data,
     });
     res.json(item);
   } catch (e: any) {

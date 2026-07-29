@@ -1,0 +1,84 @@
+import { Router } from "express";
+import prisma from "../db/db";
+import { ServiceTime } from "../db/generated/prisma/client";
+
+const router = Router();
+
+router.post("/", async (req, res) => {
+  const { userId, items, mealType } = req.body;
+
+  if (!userId || !items?.length || !mealType) {
+    return res.status(400).json({ error: "userId, items, and mealType are required" });
+  }
+
+  if (!Object.values(ServiceTime).includes(mealType)) {
+    return res.status(400).json({ error: `Invalid mealType. Must be one of: ${Object.values(ServiceTime).join(", ")}` });
+  }
+
+  const itemsPrice = items.reduce(
+    (sum: number, item: { price: number; qty: number }) => sum + Number(item.price) * item.qty,
+    0,
+  );
+  const shippingPrice = 0;
+  const taxPrice = 0;
+  const totalPrice = itemsPrice + shippingPrice + taxPrice;
+
+  try {
+    const order = await prisma.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          userId,
+          shippingAddress: {},
+          paymentMethod: "cash",
+          itemsPrice,
+          shippingPrice,
+          taxPrice,
+          totalPrice,
+          mealType,
+        },
+      });
+
+      for (const item of items) {
+        await tx.orderItem.create({
+          data: {
+            orderId: created.id,
+            menuId: item.menuId,
+            qty: item.qty,
+            price: item.price,
+            name: item.name,
+            slug: item.slug,
+            image: item.image,
+            starchId: item.starchId ?? null,
+            vegetableId: item.vegetableId ?? null,
+          },
+        });
+
+        const menu = await tx.menu.findUniqueOrThrow({ where: { id: item.menuId } });
+        const currentStock = menu.stock ?? 0;
+        const remaining = Math.max(0, currentStock - item.qty);
+        await tx.menu.update({
+          where: { id: item.menuId },
+          data: {
+            stock: remaining,
+            isAvailable: remaining > 0,
+          },
+        });
+      }
+
+      return tx.order.findUnique({
+        where: { id: created.id },
+        include: { OrderItem: true },
+      });
+    });
+
+    res.status(201).json(order);
+  } catch (e: any) {
+    if (e.code === "P2025") {
+      return res.status(404).json({ error: "Menu item not found" });
+    }
+    console.error("Error creating order:", e);
+    res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
+export default router;

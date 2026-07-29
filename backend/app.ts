@@ -14,6 +14,7 @@ import cookingAssignmentsRouter from "./routes/cookingAssignments";
 import kitchenInventoryRouter from "./routes/kitchenInventory";
 import kitchenConfigRouter from "./routes/kitchenConfig";
 import dailyReportRouter from "./routes/dailyReport";
+import ordersRouter from "./routes/orders";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -40,5 +41,6 @@ app.use("/api/cooking-assignments", cookingAssignmentsRouter);
 app.use("/api/kitchen/inventory", kitchenInventoryRouter);
 app.use("/api/kitchen-config", kitchenConfigRouter);
 app.use("/api/reports", dailyReportRouter);
+app.use("/api/orders", ordersRouter);
 
 export default app;
