@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Package, Send, Clock, ChefHat, History, Eye, Flame } from "lucide-react"
+import { Package, Send, Clock, ChefHat, History, Eye, Flame, Pencil } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import BackButton from "@/components/shared/BackButton"
@@ -28,6 +28,7 @@ import {
   stockSupplyImageUrl,
   formatQuantityWithUnit,
   getDepartments,
+  updateCookingRecord,
 } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
@@ -164,7 +165,7 @@ function Kitchen() {
         <div className="space-y-6">
           <div className="flex gap-1 border-b border-admin-card-border">
             {([
-              { key: "inventory", label: "Kitchen Inventory", icon: ChefHat },
+              { key: "inventory", label: "Kitchen Production", icon: Flame },
               { key: "cooking-history", label: "Cooking History", icon: History },
             ] as const).map(({ key, label, icon: Icon }) => (
               <button
@@ -516,6 +517,62 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [search, setSearch] = useState("")
 
+  const [editDialog, setEditDialog] = useState<{ open: boolean; item: KitchenStockItem | null }>({
+    open: false,
+    item: null,
+  })
+  const [editRecord, setEditRecord] = useState<CookingRecord | null>(null)
+  const [editQty, setEditQty] = useState(0)
+  const [editPlatesActual, setEditPlatesActual] = useState<number | "">("")
+  const [editNotes, setEditNotes] = useState("")
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editSuccess, setEditSuccess] = useState(false)
+  const [editError, setEditError] = useState("")
+  const [editLoadingRecord, setEditLoadingRecord] = useState(false)
+
+  async function openEditDialog(item: KitchenStockItem) {
+    setEditDialog({ open: true, item })
+    setEditSuccess(false)
+    setEditError("")
+    setEditRecord(null)
+    setEditLoadingRecord(true)
+    try {
+      const records = await getCookingRecords(item.id)
+      const latest = records.length > 0 ? records[0] : null
+      setEditRecord(latest)
+      setEditQty(latest?.quantityCooked ?? 0)
+      setEditPlatesActual(latest?.platesActual ?? "")
+      setEditNotes(latest?.notes ?? "")
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to load cooking record")
+    } finally {
+      setEditLoadingRecord(false)
+    }
+  }
+
+  async function handleEditSubmit() {
+    if (!editRecord) return
+    try {
+      setEditSubmitting(true)
+      setEditError("")
+      await updateCookingRecord(editRecord.id, {
+        quantityCooked: editQty > 0 ? editQty : undefined,
+        platesActual: editPlatesActual !== "" ? Number(editPlatesActual) : undefined,
+        notes: editNotes || undefined,
+      })
+      setEditSuccess(true)
+      setTimeout(() => {
+        setEditDialog({ open: false, item: null })
+        setEditRecord(null)
+        loadInventory()
+      }, 1500)
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update cooking record")
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
   async function loadInventory() {
     try {
       setLoading(true)
@@ -659,17 +716,28 @@ function KitchenInventoryView({ userId }: { userId: string }) {
         return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass}`}>{item.totalPlatesProduced} Plates</span>
       }
       case "action":
-        if (item.rawStockPending <= 0) return null
         return (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-green-600 border-green-200 hover:bg-green-50"
-            onClick={() => openCookDialog(item)}
-          >
-            <ChefHat size={14} className="mr-1" />
-            Cook More
-          </Button>
+          <div className="flex items-center justify-center gap-1.5">
+            {item.rawStockPending > 0 && (
+              <Button
+                size="xs"
+                variant="outline"
+                className="text-green-600 border-green-200 hover:bg-green-50"
+                onClick={() => openCookDialog(item)}
+              >
+                <ChefHat />
+                Cook More
+              </Button>
+            )}
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => openEditDialog(item)}
+            >
+              <Pencil />
+              Edit
+            </Button>
+          </div>
         )
       default:
         return null
@@ -789,6 +857,103 @@ function KitchenInventoryView({ userId }: { userId: string }) {
                 </DialogClose>
                 <Button onClick={handleCookSubmit} disabled={submitting || cookQty <= 0}>
                   {submitting ? "Recording..." : "Record Cooking"}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editDialog.open}
+        onOpenChange={(open) => setEditDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit: {editDialog.item?.name}</DialogTitle>
+            <DialogDescription>
+              Update cooking record for this item
+            </DialogDescription>
+          </DialogHeader>
+
+          {editLoadingRecord ? (
+            <div className="py-8 text-center text-admin-muted">
+              Loading cooking record...
+            </div>
+          ) : editSuccess ? (
+            <div className="py-4 text-center text-green-600 font-medium">
+              Cooking record updated successfully!
+            </div>
+          ) : !editRecord ? (
+            <div className="py-8 text-center text-amber-600 font-medium">
+              No cooking record found for this item. Cook some stock first.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-md bg-muted p-3 text-sm space-y-1">
+                <div>Stock Ordered: <span className="font-medium">{editDialog.item?.totalOrdered} {editDialog.item?.unit}</span></div>
+                <div>Already Cooked: <span className="font-medium">{editDialog.item?.totalCooked} {editDialog.item?.unit}</span></div>
+                <div className="text-amber-600 font-medium">Remaining (PENDING): {editDialog.item?.rawStockPending} {editDialog.item?.unit}</div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="editQty">Quantity to Cook</Label>
+                <Input
+                  id="editQty"
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  value={editQty}
+                  onChange={(e) => setEditQty(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+
+              <div className="rounded-md bg-muted p-3 text-sm space-y-1">
+                <div>Configured Rate: <span className="font-medium">{editDialog.item?.platesPerUnit} plates per {editDialog.item?.unit?.toLowerCase()}</span></div>
+                <div>Expected Plates: <span className="font-medium">{editQty * Number(editDialog.item?.platesPerUnit ?? 0)} (= {editQty} × {editDialog.item?.platesPerUnit})</span></div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="editPlatesActual">Actual Plates Produced</Label>
+                <Input
+                  id="editPlatesActual"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder={`Expected: ${editQty * Number(editDialog.item?.platesPerUnit ?? 0)}`}
+                  value={editPlatesActual}
+                  onChange={(e) => setEditPlatesActual(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+                />
+                <p className="text-xs text-admin-muted">
+                  Kitchen inputs what was actually produced (may differ from expected)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="editNotes">Notes (optional)</Label>
+                <Textarea
+                  id="editNotes"
+                  placeholder="e.g., Batch for lunch service"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+
+              {editError && (
+                <p className="text-sm text-red-500">{editError}</p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            {!editLoadingRecord && !editSuccess && editRecord && (
+              <>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={handleEditSubmit} disabled={editSubmitting}>
+                  {editSubmitting ? "Saving..." : "Save Changes"}
                 </Button>
               </>
             )}

@@ -218,6 +218,7 @@ interface CreateCookingRecordData {
 }
 
 interface UpdateCookingRecordData {
+  quantityCooked?: number;
   platesActual?: number;
   notes?: string;
 }

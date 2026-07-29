@@ -293,7 +293,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   } = usePagination(filtered)
 
   const columns: Column[] = [
-          { label: "Details", key: "details" },
     { label: "Image", key: "image", align: "center" },
     { label: "Name", key: "name" },
     { label: "Stock", key: "stock" },
@@ -301,18 +300,11 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     { label: "Reorder Level", key: "reorderLevel" },
     { label: "Menu Item", key: "menuItem" },
     { label: "Assigned Departments", key: "departments" },
-          { label: "Actions", key: "actions", isAction: true },
+    { label: "Actions", key: "actions", isAction: true },
   ]
 
   function renderCell(item: StockSupply, column: Column) {
     switch (column.key) {
-      case "details":
-        return (
-          <Button variant="ghost" size="sm" onClick={() => setDetailTarget(item)}>
-            <Eye className="h-4 w-4 mr-1" />
-            Details
-          </Button>
-        )
       case "image":
         return item.image ? (
           <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover mx-auto" />
@@ -373,13 +365,17 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
         )
       case "actions":
         return (
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setEditTarget(item)}>
-              <Pencil className="h-4 w-4 mr-1" />
+          <div className="flex gap-1.5">
+            <Button variant="ghost" size="xs" onClick={() => setDetailTarget(item)}>
+              <Eye />
+              Details
+            </Button>
+            <Button variant="ghost" size="xs" onClick={() => setEditTarget(item)}>
+              <Pencil />
               Edit
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => { setDeleteTarget(item); setDeleteError("") }}>
-              <Trash2 className="h-4 w-4 mr-1 text-red-500" />
+            <Button variant="ghost" size="xs" onClick={() => { setDeleteTarget(item); setDeleteError("") }}>
+              <Trash2 className="text-red-500" />
               Delete
             </Button>
           </div>
@@ -731,7 +727,6 @@ function RestockView() {
   }
 
   const columns: Column[] = [
-    { label: "Details", key: "details" },
     { label: "Image", key: "image" },
     { label: "Name", key: "name" },
     { label: "Stock", key: "stock" },
@@ -742,13 +737,6 @@ function RestockView() {
 
   function renderCell(item: StockSupply, column: Column) {
     switch (column.key) {
-      case "details":
-        return (
-          <Button variant="ghost" size="sm" onClick={() => setDetailTarget(item)}>
-            <Eye className="h-4 w-4 mr-1" />
-            Details
-          </Button>
-        )
       case "image":
         return item.image ? (
           <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover mx-auto" />
@@ -789,18 +777,24 @@ function RestockView() {
       }
       case "actions":
         return (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setRestockTarget(item)
-              setRestockQuantity(String(getRestockQuantity(item)))
-            }}
-            className="bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
-          >
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Restock
-          </Button>
+          <div className="flex gap-1.5">
+            <Button variant="ghost" size="xs" onClick={() => setDetailTarget(item)}>
+              <Eye />
+              Details
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => {
+                setRestockTarget(item)
+                setRestockQuantity(String(getRestockQuantity(item)))
+              }}
+              className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
+            >
+              <RefreshCw />
+              Restock
+            </Button>
+          </div>
         )
       default:
         return null
