@@ -68,21 +68,12 @@ router.get("/carry-over", async (_req, res) => {
   res.json(carryOver);
 });
 
-// GET /api/cooking-records - List cooking records (optional ?date=YYYY-MM-DD, ?stockSupplyId filter)
+// GET /api/cooking-records - List cooking records (optional ?stockSupplyId filter)
 router.get("/", async (req, res) => {
-  const { stockSupplyId, date } = req.query;
+  const { stockSupplyId } = req.query;
   const where: Record<string, unknown> = {};
   if (stockSupplyId) {
     where.stockSupplyId = stockSupplyId;
-  }
-  if (date) {
-    const d = new Date(date as string);
-    if (isNaN(d.getTime())) {
-      return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
-    }
-    const nextDay = new Date(d);
-    nextDay.setDate(nextDay.getDate() + 1);
-    where.cookedDate = { gte: d, lt: nextDay };
   }
 
   const records = await prisma.cookingRecord.findMany({

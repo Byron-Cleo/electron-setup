@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { ShoppingBasket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -40,8 +41,7 @@ export function FulfillItemDialog({ flatItem, open, onClose, onFulfilled }: Prop
   const available = Number(item.stockSupply.currentStock)
   const isZeroOrLess = quantity <= 0
   const isOverRemaining = quantity > remaining
-  const isOverAvailable = quantity > available
-  const hasError = isZeroOrLess || isOverRemaining || isOverAvailable
+  const hasError = isZeroOrLess || isOverRemaining
 
   function handleClose() {
     setQuantity(0)
@@ -61,7 +61,7 @@ export function FulfillItemDialog({ flatItem, open, onClose, onFulfilled }: Prop
         stockRequestItemId: ri.id,
         quantityDelivered:
           ri.id === item.id
-            ? alreadyDelivered + quantity
+            ? quantity
             : Number(ri.quantityDelivered),
       }))
 
@@ -125,7 +125,7 @@ export function FulfillItemDialog({ flatItem, open, onClose, onFulfilled }: Prop
             id="fulfillQty"
             type="number"
             min={0.01}
-            max={Math.min(remaining, available)}
+            max={remaining}
             step="0.01"
             value={quantity || ""}
             onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
@@ -139,14 +139,10 @@ export function FulfillItemDialog({ flatItem, open, onClose, onFulfilled }: Prop
           )}
           {isOverRemaining && (
             <p className="text-xs text-red-500">
-              Cannot exceed remaining: {remaining} {item.stockSupply.unit}
+              Amount to be delivered cannot exceed requested amount
             </p>
           )}
-          {isOverAvailable && (
-            <p className="text-xs text-red-500">
-              Insufficient stock (available: {available} {item.stockSupply.unit})
-            </p>
-          )}
+
         </div>
 
         <div className="space-y-2">
@@ -164,7 +160,12 @@ export function FulfillItemDialog({ flatItem, open, onClose, onFulfilled }: Prop
           <Button variant="outline" onClick={handleClose} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saving || hasError}>
+          <Button
+            onClick={handleSave}
+            disabled={saving || hasError}
+            className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
+          >
+            <ShoppingBasket size={14} className="mr-1" />
             Fulfill
           </Button>
         </DialogFooter>

@@ -26,7 +26,7 @@ router.get("/cooked", async (req, res) => {
           some: {
             stockSupply: {
               isMenuStock: true,
-              CookingRecord: date ? { some: dateFilter } : { some: {} },
+              CookingRecord: { some: {} },
             },
           },
         },

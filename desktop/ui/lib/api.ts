@@ -177,12 +177,11 @@ export async function deleteDepartment(id: string): Promise<void> {
 
 // ─── Cooking Records ────────────────────────────────────────────────────────
 
-export async function getCookingRecords(date?: string, stockSupplyId?: string): Promise<CookingRecord[]> {
+export async function getCookingRecords(stockSupplyId?: string): Promise<CookingRecord[]> {
   if (window.electron?.cookingRecord?.getAll) {
     return window.electron.cookingRecord.getAll(stockSupplyId)
   }
   const params = new URLSearchParams()
-  if (date) params.set("date", date)
   if (stockSupplyId) params.set("stockSupplyId", stockSupplyId)
   const query = params.toString() ? `?${params.toString()}` : ""
   return apiFetch(`/cooking-records${query}`)
@@ -208,9 +207,8 @@ export async function deleteCookingRecord(id: string): Promise<void> {
 
 // ─── Kitchen Inventory (new endpoint) ───────────────────────────────────────
 
-export async function getKitchenInventoryList(date?: string): Promise<KitchenStockItem[]> {
-  const query = date ? `?date=${encodeURIComponent(date)}` : ""
-  return apiFetch(`/kitchen/inventory${query}`)
+export async function getKitchenInventoryList(): Promise<KitchenStockItem[]> {
+  return apiFetch("/kitchen/inventory")
 }
 
 // ─── Cooking Assignments ────────────────────────────────────────────────────

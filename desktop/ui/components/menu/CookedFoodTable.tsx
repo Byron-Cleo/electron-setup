@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Pencil, Trash2, Search } from "lucide-react"
+import { Pencil, Trash2 } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
 import { getCookedMenus, updateMenuAvailability } from "@/lib/api"
@@ -157,9 +158,28 @@ export default function CookedFoodTable({ onRefresh }: Props) {
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center uppercase">
-        Cooked Food — Menu Variants
-      </Heading>
+      <div className="flex items-center justify-between">
+        <Heading as="h2" className="text-admin-header-text text-center uppercase">
+          Cooked Food — Menu Variants
+        </Heading>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="cooked-date" className="text-sm text-admin-muted whitespace-nowrap">Date:</Label>
+          <select
+            id="cooked-date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="border border-input bg-background rounded-md px-3 py-1.5 text-sm"
+          >
+            <option value={formatDateOption(0).value}>{formatDateOption(0).label}</option>
+            <option value={formatDateOption(-1).value}>{formatDateOption(-1).label}</option>
+            <option value={formatDateOption(-2).value}>{formatDateOption(-2).label}</option>
+            <option value={formatDateOption(-3).value}>{formatDateOption(-3).label}</option>
+            <option value={formatDateOption(-4).value}>{formatDateOption(-4).label}</option>
+            <option value={formatDateOption(-5).value}>{formatDateOption(-5).label}</option>
+            <option value={formatDateOption(-6).value}>{formatDateOption(-6).label}</option>
+          </select>
+        </div>
+      </div>
 
       <DataTable
         columns={columns}
@@ -180,34 +200,12 @@ export default function CookedFoodTable({ onRefresh }: Props) {
           canNext,
         }}
         header={
-          <div className="flex items-center gap-4 w-full">
-            <div className="relative w-64">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-muted" />
-              <Input
-                placeholder="Search by name, category, stock..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <label htmlFor="cooked-date" className="text-sm text-admin-muted">Date:</label>
-              <select
-                id="cooked-date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="border border-input bg-background rounded-md px-3 py-1.5 text-sm"
-              >
-                <option value={formatDateOption(0).value}>{formatDateOption(0).label}</option>
-                <option value={formatDateOption(-1).value}>{formatDateOption(-1).label}</option>
-                <option value={formatDateOption(-2).value}>{formatDateOption(-2).label}</option>
-                <option value={formatDateOption(-3).value}>{formatDateOption(-3).label}</option>
-                <option value={formatDateOption(-4).value}>{formatDateOption(-4).label}</option>
-                <option value={formatDateOption(-5).value}>{formatDateOption(-5).label}</option>
-                <option value={formatDateOption(-6).value}>{formatDateOption(-6).label}</option>
-              </select>
-            </div>
-          </div>
+          <Input
+            placeholder="Search cooked menu items..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+          />
         }
       />
 

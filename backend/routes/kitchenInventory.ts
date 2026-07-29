@@ -4,20 +4,7 @@ import prisma from "../db/db";
 const router = Router();
 
 // GET /api/kitchen/inventory - Kitchen inventory with PENDING stock items (isMenuStock = true)
-// Optional ?date=YYYY-MM-DD to filter cooking records to a specific date
 router.get("/", async (req, res) => {
-  const { date } = req.query;
-  let dateFilter: Record<string, unknown> = {}
-  if (date) {
-    const d = new Date(date as string)
-    if (isNaN(d.getTime())) {
-      return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" })
-    }
-    const nextDay = new Date(d)
-    nextDay.setDate(nextDay.getDate() + 1)
-    dateFilter.cookedDate = { gte: d, lt: nextDay }
-  }
-
   // Get all stock supplies with isMenuStock = true
   const stockSupplies = await prisma.stockSupply.findMany({
     where: {
@@ -33,46 +20,61 @@ router.get("/", async (req, res) => {
   // For each item, calculate inventory metrics
   const inventory = await Promise.all(
     stockSupplies.map(async (item) => {
-      // Total fulfilled (received from store)
-      const totalFulfilled = await prisma.stockFulfillmentItem.aggregate({
-        _sum: { quantityDelivered: true },
+      // All fulfillments for this stock supply, oldest first
+      const fulfillments = await prisma.stockFulfillmentItem.findMany({
         where: { stockRequestItem: { stockSupplyId: item.id } },
+        orderBy: { createdAt: "asc" },
+        select: { quantityDelivered: true },
       });
 
-      // Total cooked (consumed in kitchen) — filtered by date if provided
-      const cookingWhere: Record<string, unknown> = { stockSupplyId: item.id }
-      if (date) {
-        cookingWhere.cookedDate = dateFilter.cookedDate
-      }
-      const totalCooked = await prisma.cookingRecord.aggregate({
+      // Total all-time cooked
+      const totalCookedAllTime = await prisma.cookingRecord.aggregate({
         _sum: { quantityCooked: true },
-        where: cookingWhere,
+        where: { stockSupplyId: item.id },
       });
 
-      // Total plates produced (actual or expected) — filtered by date if provided
-      const records = await prisma.cookingRecord.findMany({
-        where: cookingWhere,
-        select: { platesActual: true, platesExpected: true },
-      });
-      const totalPlatesProduced = records.reduce(
-        (sum, r) => sum + Number(r.platesActual ?? r.platesExpected),
-        0
-      );
+      // Walk through fulfillments oldest-first, consuming them against cooked amount
+      let remainingToConsume = Number(totalCookedAllTime._sum.quantityCooked ?? 0)
+      let activeOrdered = 0
+      let activeCooked = 0
 
-      const received = Number(totalFulfilled._sum.quantityDelivered ?? 0);
-      const cooked = Number(totalCooked._sum.quantityCooked ?? 0);
-      const rawStockPending = received - cooked;
+      for (const f of fulfillments) {
+        const qty = Number(f.quantityDelivered)
+        if (remainingToConsume >= qty) {
+          // This fulfillment is fully consumed by cooking
+          remainingToConsume -= qty
+        } else {
+          // This fulfillment is partially or not yet consumed — it's the active batch
+          const consumedFromThis = remainingToConsume
+          activeOrdered += qty
+          activeCooked += consumedFromThis
+          remainingToConsume = 0
+        }
+      }
+
+      // Plates made = activeCooked × platesPerUnit (configured yield)
+      const totalPlatesProduced = Number(item.platesPerUnit ?? 0) * activeCooked
+
+      const rawStockPending = activeOrdered - activeCooked
+
+      // Get the latest cooking record date for this item
+      const latestRecord = await prisma.cookingRecord.findFirst({
+        where: { stockSupplyId: item.id },
+        orderBy: { cookedDate: "desc" },
+        select: { cookedDate: true },
+      });
 
       return {
         id: item.id,
         name: item.name,
         slug: item.slug,
         unit: item.unit,
+        lastCookedDate: latestRecord?.cookedDate.toISOString() ?? null,
         platesPerUnit: item.platesPerUnit,
         image: item.image,
         menus: item.menus.map((sm) => sm.menu),
-        totalOrdered: received,
-        totalCooked: cooked,
+        totalOrdered: activeOrdered,
+        totalCooked: activeCooked,
         rawStockPending,
         totalPlatesProduced,
       };

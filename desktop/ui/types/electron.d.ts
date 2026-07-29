@@ -264,6 +264,7 @@ interface KitchenStockItem {
   totalCooked: number;
   rawStockPending: number;
   totalPlatesProduced: number;
+  lastCookedDate: string | null;
 }
 
 interface KitchenInventory {

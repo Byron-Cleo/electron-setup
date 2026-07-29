@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Heading } from "@/components/ui/heading"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { stockSupplyImageUrl, formatQuantityWithUnit } from "@/lib/api"
@@ -25,6 +26,8 @@ interface RequestStockDesignProps {
   showActionColumn?: boolean
   /** Callback when a request is fulfilled */
   onRequestFulfilled?: () => void
+  /** Table title */
+  title?: string
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -56,11 +59,13 @@ export function RequestStockDesign({
   showDepartmentColumn = true,
   showActionColumn = true,
   onRequestFulfilled,
+  title = "Stock Requests",
 }: RequestStockDesignProps) {
   const [activeTab, setActiveTab] = useState<TabStatus>("ALL")
   const [requests, setRequests] = useState<StockRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [search, setSearch] = useState("")
   const [fulfillingItem, setFulfillingItem] = useState<FlatItem | null>(null)
 
   useEffect(() => {
@@ -87,10 +92,14 @@ export function RequestStockDesign({
     if (activeTab !== "ALL") {
       source = source.filter((r) => r.status === activeTab)
     }
-    return source.flatMap((request) =>
+    const flat = source.flatMap((request) =>
       request.items.map((item) => ({ item, request }))
     )
-  }, [requests, activeTab, department])
+    if (!search) return flat
+    return flat.filter((fi) =>
+      fi.item.stockSupply.name.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [requests, activeTab, department, search])
 
   const counts = useMemo(() => {
     const base = department
@@ -208,7 +217,7 @@ export function RequestStockDesign({
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text">Stock Requests</Heading>
+      <Heading as="h2" className="text-admin-header-text text-center text-xl">{title}</Heading>
 
       <div className="flex gap-1 border-b border-admin-card-border">
         {(["ALL", "PENDING", "PARTIAL", "COMPLETED"] as TabStatus[]).map((tab) => (
@@ -237,6 +246,14 @@ export function RequestStockDesign({
           keyExtractor={(fi) => fi.item.id}
           emptyMessage="No stock request items found"
           renderCell={renderCell}
+          header={
+            <Input
+              placeholder="Search stock items..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+          }
           pagination={{
             currentPage,
             totalPages,

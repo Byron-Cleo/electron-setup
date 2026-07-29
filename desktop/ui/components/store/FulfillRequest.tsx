@@ -40,13 +40,9 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
     const errors: string[] = []
     for (const item of request.items) {
       const requested = Number(item.quantityRequested)
-      const available = Number(item.stockSupply.currentStock)
       const delivered = deliveries[item.id] ?? 0
       if (delivered > requested) {
         errors.push(`${item.stockSupply.name}: Cannot deliver ${delivered} (requested: ${requested})`)
-      }
-      if (delivered > available) {
-        errors.push(`${item.stockSupply.name}: Insufficient stock (available: ${available})`)
       }
     }
     return errors
@@ -142,8 +138,6 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
           const available = Number(item.stockSupply.currentStock)
           const delivered = deliveries[item.id] ?? 0
           const isOverDelivered = delivered > requested
-          const isOverAvailable = delivered > available
-
           switch (column.key) {
             case "item":
               return (
@@ -161,11 +155,11 @@ export function FulfillRequest({ request, onBack, onFulfilled }: Props) {
                 <Input
                   type="number"
                   min={0}
-                  max={Math.min(requested, available)}
+                  max={requested}
                   step="0.01"
                   value={delivered}
                   onChange={(e) => updateDelivery(item.id, e.target.value)}
-                  className={`w-24 text-right ${isOverDelivered || isOverAvailable ? "border-red-500" : ""}`}
+                  className={`w-24 text-right ${isOverDelivered ? "border-red-500" : ""}`}
                 />
               )
             default:

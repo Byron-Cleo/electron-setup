@@ -2,33 +2,31 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Replace the current tab-based Menu page (Cooked Food | Create Menu Item) with a dashboard layout featuring two clickable cards, a top-right Create button, and sub-views
-- Create `AllMenuTable` component with search, pagination, detail/edit/hide actions
-- Create `MenuDetailDialog` component showing full menu item information
-- Create `CreateMenuDialog` wrapper that reuses existing `MenuForm` inside a shadcn Dialog
-- Reuse existing `CookedFoodTable` and `MenuForm` components without modification
+- (none)
 
 ## Notes
 
-- Backend spec exists at `context/features/backend/menu-tab-redesign.md` — no backend changes needed, existing APIs cover everything
-- `isAvailable` already added to `MenuItem` type in prior work
-- `CookedFoodTable`, `MenuForm`, `EditMenuDialog` are reused as-is
-- New state type: `type MenuView = "dashboard" | "cooked-food" | "all-menu"` — default `"dashboard"`
-- Dashboard cards match Kitchen dashboard pattern: clickable, hover effects, transitions
-- AllMenuTable columns: Details, Name, Category, Price, Stock, Rating, Status, Actions
-- Hide action uses `updateMenuAvailability(id, false)` with confirmation dialog
-- MenuDetailDialog shows all fields in a two-column grid layout
-- CreateMenuDialog wraps MenuForm inside DialogContent (no Card wrapper)
+- (none)
 
 ## History
+
+### frontend - 2026-07-29 — Menu Tab Redesign
+- Replaced tab-based Menu page with dashboard layout featuring two clickable cards
+- Created `AllMenuTable` with search, pagination, detail/edit/hide actions
+- Created `MenuDetailDialog` showing full menu item info in two-column grid
+- Created `CreateMenuDialog` wrapping `MenuForm` inside shadcn Dialog
+- Created `BackButton` component for sub-view navigation
+- Reused existing `CookedFoodTable` and `MenuForm` unchanged
+- Added confirmation dialog for Hide action using `updateMenuAvailability`
+- Branch: feature/admin/menu-tab-redesign (merged to main)
 
 ### frontend - 2026-07-23 — Multi-Select Menu Phase 3: Frontend Component + Forms
 - Created `MultiSearchableSelect` component with checkboxes, removable tags, "+N more"
