@@ -56,7 +56,7 @@ function Menu() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <BackButton onClick={() => setView("dashboard")} />
-            <Button onClick={() => { setDialogEditId(null); setDialogOpen(true) }}>
+            <Button onClick={() => { setDialogEditId(null); setDialogOpen(true) }} className="px-6 py-6">
               <Plus size={16} className="mr-1" />
               Create Menu Item
             </Button>

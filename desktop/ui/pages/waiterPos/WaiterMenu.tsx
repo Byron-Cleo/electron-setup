@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import BackButton from "@/components/shared/BackButton"
-import { Loader2, AlertCircle, Package, Plus, Minus, X, Star } from "lucide-react"
+import { Loader2, AlertCircle, Package, Plus, Minus, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
@@ -280,13 +280,10 @@ export function WaiterMenu() {
 
               {/* Right — Details (3/4) */}
               <div className="space-y-3">
-                {/* Name, Price, Stock, Description */}
+                {/* Name, Price, Stock */}
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <Heading as="h3" className="text-lg text-brand-ebony">{selectedItem.name}</Heading>
-                    <p className="text-sm text-brand-ebony/60 leading-relaxed mt-0.5">
-                      {selectedItem.description}
-                    </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-lg font-bold text-brand-maroon">{formatPrice(selectedItem.price)}</p>
@@ -356,13 +353,6 @@ export function WaiterMenu() {
                         </button>
                       ))}
                   </div>
-                </div>
-
-                {/* Rating & Add to Cart */}
-                <div className="flex items-center gap-1.5 text-sm text-brand-ebony/60">
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                  <span className="font-medium text-brand-ebony">{selectedItem.rating}</span>
-                  <span>({selectedItem.numReviews})</span>
                 </div>
 
                 <Button

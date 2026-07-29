@@ -18,13 +18,9 @@ interface MenuItem {
   slug: string;
   category: string;
   images: string[];
-  brand: string;
-  description: string;
   stock: number;
   price: number;
-  rating: number;
   numReviews: number;
-  isFeatured: boolean;
   isAvailable: boolean;
   banner: string | null;
   createdAt: string;
@@ -39,11 +35,8 @@ interface MenuCreateData {
   name: string;
   slug?: string;
   category: string;
-  brand: string;
-  description: string;
-  stock: number;
+  stock?: number;
   price: number;
-  isFeatured?: boolean;
 }
 
 type MenuUpdateData = Partial<MenuCreateData>;

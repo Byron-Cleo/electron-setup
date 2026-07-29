@@ -56,18 +56,8 @@ export default function MenuDetailDialog({ open, onClose, menuId }: Props) {
               ["Name", item.name],
               ["Slug", item.slug],
               ["Category", item.category],
-              ["Brand", item.brand],
               ["Price", `KSh ${item.price}`],
               ["Stock", String(item.stock)],
-              ["Rating", `${item.rating} / 5`],
-              ["Num Reviews", String(item.numReviews)],
-              ["Description", item.description],
-              [
-                "Is Featured",
-                item.isFeatured
-                  ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Yes</span>
-                  : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">No</span>,
-              ],
               [
                 "Is Available",
                 item.isAvailable
@@ -76,7 +66,7 @@ export default function MenuDetailDialog({ open, onClose, menuId }: Props) {
               ],
               [
                 "Meal Types",
-                item.mealTypes.length > 0
+                (item.mealTypes?.length ?? 0) > 0
                   ? <div className="flex flex-wrap gap-1">{item.mealTypes.map((mt) => (
                       <span key={mt} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{mt}</span>
                     ))}</div>

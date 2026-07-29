@@ -206,6 +206,11 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
       return
     }
 
+    if (formIsMenuStock && formMenuIds.length === 0) {
+      setSaveError("At least one menu item must be selected when marked as menu stock")
+      return
+    }
+
     if (selectedDepts.size === 0) {
       setSaveError("At least one department must be assigned")
       return
@@ -496,7 +501,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
 
             {formIsMenuStock && (
               <div className="space-y-1">
-                <Label className="text-xs">Menu Items</Label>
+                <Label className="text-xs">Menu Items <span className="text-red-500">*</span></Label>
                 <MultiSearchableSelect
                   options={menus.map((m) => ({ value: m.id, label: m.name }))}
                   value={formMenuIds}
@@ -556,10 +561,10 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
               </div>
             </div>
 
-            {departments.length > 0 && (
-              <div>
-                <Label className="text-xs">Assigned Departments <span className="text-red-500 text-base font-bold">*</span></Label>
-                <p className="text-xs text-admin-muted mb-2">Which departments can order this item?</p>
+            <div>
+              <Label className="text-xs">Assigned Departments <span className="text-red-500 text-base font-bold">*</span></Label>
+              <p className="text-xs text-admin-muted mb-2">Which departments can order this item?</p>
+              {departments.length > 0 ? (
                 <div className="flex flex-wrap gap-3">
                   {departments.map((dept) => {
                     const isSelected = selectedDepts.has(dept.id)
@@ -596,8 +601,10 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
                     )
                   })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-admin-muted italic">No departments available. Create departments first.</p>
+              )}
+            </div>
 
             <div className="space-y-1">
               <Label className="text-xs">Description</Label>

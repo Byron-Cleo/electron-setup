@@ -89,7 +89,11 @@ export async function updateStockSupply(id: string, data: StockSupplyUpdateData,
   if (imageFile) {
     const formData = new FormData()
     Object.entries(data).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) formData.append(key, String(value))
+      if (key === "departmentIds" && Array.isArray(value)) {
+        formData.append(key, JSON.stringify(value))
+      } else if (value !== undefined && value !== null) {
+        formData.append(key, String(value))
+      }
     })
     formData.append("image", imageFile)
     return apiFetch(`/stock-supplies/${id}`, { method: "PUT", body: formData })
@@ -232,11 +236,24 @@ export async function deleteCookingAssignment(id: string) {
 // ─── Menu ───────────────────────────────────────────────────────────────────
 
 export async function getMenus(): Promise<MenuItem[]> {
+  if (window.electron?.menu?.getAll) {
+    return window.electron.menu.getAll()
+  }
   return apiFetch("/menu")
 }
 
 export async function getMenuById(id: string): Promise<MenuItem> {
+  if (window.electron?.menu?.getById) {
+    return window.electron.menu.getById(id)
+  }
   return apiFetch(`/menu/${id}`)
+}
+
+export async function createMenu(data: MenuCreateData): Promise<MenuItem> {
+  if (window.electron?.menu?.create) {
+    return window.electron.menu.create(data)
+  }
+  return apiFetch("/menu", { method: "POST", body: JSON.stringify(data) })
 }
 
 export async function getCookedMenus(date?: string): Promise<CookedMenuItem[]> {

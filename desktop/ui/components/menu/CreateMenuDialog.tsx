@@ -11,7 +11,7 @@ interface Props {
 export default function CreateMenuDialog({ open, onClose, editId, onSaved }: Props) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg" showCloseButton={false}>
+      <DialogContent className="sm:max-w-lg">
         <MenuForm
           editId={editId}
           onSaved={() => {

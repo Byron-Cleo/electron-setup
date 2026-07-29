@@ -48,8 +48,7 @@ export default function AllMenuTable() {
     return items.filter(
       (item) =>
         item.name.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q) ||
-        item.brand.toLowerCase().includes(q)
+        item.category.toLowerCase().includes(q)
     )
   }, [items, search])
 
@@ -79,11 +78,11 @@ export default function AllMenuTable() {
 
   const columns: Column[] = [
     { label: "Details", key: "details" },
+    { label: "Image", key: "image" },
     { label: "Name", key: "name" },
     { label: "Category", key: "category" },
     { label: "Price", key: "price" },
     { label: "Stock", key: "stock" },
-    { label: "Rating", key: "rating" },
     { label: "Status", key: "status" },
     { label: "Actions", key: "actions", isAction: true, align: "right" },
   ]
@@ -97,8 +96,21 @@ export default function AllMenuTable() {
             variant="ghost"
             onClick={() => setDetailTarget(row)}
           >
-            <Eye size={14} />
+            <Eye size={14} className="mr-1" />
+            Menu Details
           </Button>
+        )
+      case "image":
+        return row.images.length > 0 ? (
+          <img
+            src={row.images[0]}
+            alt={row.name}
+            className="w-10 h-10 rounded object-cover mx-auto"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded bg-admin-card-border mx-auto flex items-center justify-center text-admin-muted text-xs">
+            N/A
+          </div>
         )
       case "name":
         return <span className="font-medium">{row.name}</span>
@@ -108,8 +120,6 @@ export default function AllMenuTable() {
         return <span>KSh {row.price}</span>
       case "stock":
         return <span>{row.stock}</span>
-      case "rating":
-        return <span>{row.rating} / 5</span>
       case "status":
         return row.isAvailable ? (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
@@ -152,19 +162,9 @@ export default function AllMenuTable() {
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text">
+      <Heading as="h2" className="text-admin-header-text text-center">
         All Restaurant Menu
       </Heading>
-
-      <div className="relative w-64">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-muted" />
-        <Input
-          placeholder="Search by name, category, brand..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
 
       <DataTable
         columns={columns}
@@ -175,6 +175,17 @@ export default function AllMenuTable() {
           search
             ? "No menu items match your search."
             : "No menu items found."
+        }
+        header={
+          <div className="relative w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-muted" />
+            <Input
+              placeholder="Search by name, category..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         }
         pagination={{
           currentPage,

@@ -22,7 +22,6 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
   const [name, setName] = useState("")
   const [category, setCategory] = useState("")
   const [price, setPrice] = useState("")
-  const [description, setDescription] = useState("")
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -31,7 +30,6 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
       setName(item.name)
       setCategory(item.category)
       setPrice(String(item.price))
-      setDescription("")
       setError("")
     }
   }, [item])
@@ -55,7 +53,6 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
         name: name.trim(),
         category: category.trim(),
         price: priceNum,
-        description: description.trim(),
       })
       onSaved()
       onClose()
@@ -103,16 +100,6 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               placeholder="0"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="edit-description">Description</Label>
-            <Input
-              id="edit-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description"
             />
           </div>
 

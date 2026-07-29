@@ -44,6 +44,15 @@ const formSchema = z.object({
   reorderLevel: z.coerce.number().min(0, "Reorder level count is required"),
   isMenuStock: z.boolean(),
   menuIds: z.array(z.string()).optional(),
+  departmentIds: z.array(z.string()).optional(),
+}).superRefine((data, ctx) => {
+  if (data.isMenuStock && (!data.menuIds || data.menuIds.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "At least one menu item must be selected",
+      path: ["menuIds"],
+    })
+  }
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -61,7 +70,6 @@ export default function StockSupplyForm() {
   const { id } = useParams<{ id: string }>()
   const isEdit = Boolean(id)
   const [departments, setDepartments] = useState<Department[]>([])
-  const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set())
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -77,6 +85,7 @@ export default function StockSupplyForm() {
       reorderLevel: 0,
       isMenuStock: false,
       menuIds: [],
+      departmentIds: [],
     },
   })
 
@@ -107,8 +116,10 @@ export default function StockSupplyForm() {
           reorderLevel: supply.reorderLevel ?? 0,
           isMenuStock: supply.isMenuStock,
           menuIds: supply.menus?.map((m) => m.id) ?? [],
+          departmentIds: supply.departments?.map((d: Department) => d.id) ?? [],
         })
         setExistingImage(supply.image)
+        setSelectedDepts(new Set(supply.departments?.map((d: Department) => d.id) ?? []))
       })
       .catch((e) => form.setError("root", { message: e.message }))
   }, [id, form])
@@ -286,7 +297,7 @@ export default function StockSupplyForm() {
                   name="menuIds"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Menu Items</FormLabel>
+                      <FormLabel>Menu Items <span className="text-red-500 text-base font-bold">*</span></FormLabel>
                       <FormControl>
                         <MultiSearchableSelect
                           options={menus.map((m) => ({ value: m.id, label: m.name }))}
@@ -345,48 +356,56 @@ export default function StockSupplyForm() {
                 </div>
               </div>
 
-              {departments.length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-admin-header-text">Assigned Departments</label>
-                  <p className="text-xs text-admin-header-text/50 mb-2">Which departments can order this item?</p>
-                  <div className="flex flex-wrap gap-3">
-                    {departments.map((dept) => {
-                      const isSelected = selectedDepts.has(dept.id)
-                      return (
-                        <label
-                          key={dept.id}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-colors ${
-                            isSelected
-                              ? "bg-admin-accent/10 border-admin-accent text-admin-header-text"
-                              : "border-admin-card-border text-admin-header-text/60 hover:bg-admin-content/50"
-                          }`}
-                        >
-                          <label className="relative cursor-pointer">
-                            <input
-                              type="checkbox"
-                              className="sr-only peer"
-                              checked={isSelected}
-                              onChange={(e) => {
-                                const next = new Set(selectedDepts)
-                                if (e.target.checked) {
-                                  next.add(dept.id)
-                                } else {
-                                  next.delete(dept.id)
-                                }
-                                setSelectedDepts(next)
-                              }}
-                            />
-                            <div className="h-4 w-4 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
-                              {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
-                            </div>
+              <FormField
+                control={form.control}
+                name="departmentIds"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assigned Departments</FormLabel>
+                    <p className="text-xs text-admin-header-text/50 mb-2">Which departments can order this item?</p>
+                    {departments.length > 0 ? (
+                      <div className="flex flex-wrap gap-3">
+                      {departments.map((dept) => {
+                        const isSelected = (field.value ?? []).includes(dept.id)
+                        return (
+                          <label
+                            key={dept.id}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-colors ${
+                              isSelected
+                                ? "bg-admin-accent/10 border-admin-accent text-admin-header-text"
+                                : "border-admin-card-border text-admin-header-text/60 hover:bg-admin-content/50"
+                            }`}
+                          >
+                            <label className="relative cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={isSelected}
+                                onChange={() => {
+                                  const next = field.value ?? []
+                                  field.onChange(
+                                    isSelected
+                                      ? next.filter((id) => id !== dept.id)
+                                      : [...next, dept.id],
+                                  )
+                                }}
+                              />
+                              <div className="h-4 w-4 rounded border-2 border-admin-card-border peer-checked:bg-brand-green peer-checked:border-brand-green transition-colors flex items-center justify-center">
+                                {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
+                              </div>
+                            </label>
+                            {dept.name}
                           </label>
-                          {dept.name}
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
+                        )
+                      })}
+                    </div>
+                    ) : (
+                      <p className="text-sm text-admin-header-text/50 italic">No departments available. Create departments first.</p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

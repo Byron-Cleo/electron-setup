@@ -46,6 +46,14 @@ const formSchema = z.object({
   reorderLevel: z.coerce.number().min(0, "Reorder level count is required"),
   isMenuStock: z.boolean(),
   menuIds: z.array(z.string()).optional(),
+}).superRefine((data, ctx) => {
+  if (data.isMenuStock && (!data.menuIds || data.menuIds.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "At least one menu item must be selected",
+      path: ["menuIds"],
+    })
+  }
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -304,7 +312,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
                   name="menuIds"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Menu Items</FormLabel>
+                      <FormLabel>Menu Items <span className="text-red-500 text-base font-bold">*</span></FormLabel>
                       <FormControl>
                         <MultiSearchableSelect
                           options={menus.map((m) => ({ value: m.id, label: m.name }))}
@@ -363,10 +371,10 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
                 </div>
               </div>
 
-              {departments.length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-admin-header-text">Assigned Departments <span className="text-red-500 text-base font-bold">*</span></label>
-                  <p className="text-xs text-admin-header-text/50 mb-2">Which departments can order this item?</p>
+              <div>
+                <label className="text-sm font-medium text-admin-header-text">Assigned Departments <span className="text-red-500 text-base font-bold">*</span></label>
+                <p className="text-xs text-admin-header-text/50 mb-2">Which departments can order this item?</p>
+                {departments.length > 0 ? (
                   <div className="flex flex-wrap gap-3">
                     {departments.map((dept) => {
                       const isSelected = selectedDepts.has(dept.id)
@@ -403,8 +411,10 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
                       )
                     })}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm text-admin-header-text/50 italic">No departments available. Create departments first.</p>
+                )}
+              </div>
 
               <FormField
                 control={form.control}
