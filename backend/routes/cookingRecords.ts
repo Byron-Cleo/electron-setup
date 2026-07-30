@@ -191,18 +191,26 @@ router.post("/", async (req, res) => {
 // PUT /api/cooking-records/:id - Update cooking record
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { platesActual, notes } = req.body;
+  const { quantityCooked, platesActual, notes } = req.body;
 
-  const existing = await prisma.cookingRecord.findUnique({ where: { id } });
+  const existing = await prisma.cookingRecord.findUnique({
+    where: { id },
+    include: { stockSupply: { select: { platesPerUnit: true } } },
+  });
   if (!existing) return res.status(404).json({ error: "Cooking record not found" });
 
   if (platesActual !== undefined && platesActual !== null && Number(platesActual) <= 0) {
     return res.status(400).json({ error: "platesActual must be greater than 0" });
   }
 
+  const newQuantityCooked = quantityCooked !== undefined ? Number(quantityCooked) : existing.quantityCooked;
+  const platesExpected = newQuantityCooked * Number(existing.stockSupply.platesPerUnit ?? 0);
+
   const record = await prisma.cookingRecord.update({
     where: { id },
     data: {
+      quantityCooked: newQuantityCooked,
+      platesExpected,
       platesActual: platesActual !== undefined ? Number(platesActual) : existing.platesActual,
       notes: notes !== undefined ? notes : existing.notes,
     },

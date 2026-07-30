@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Pencil, Trash2 } from "lucide-react"
+import { ClipboardPlus, Trash2 } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
 import { getCookedMenus, updateMenuAvailability } from "@/lib/api"
@@ -18,9 +17,6 @@ export default function CookedFoodTable({ onRefresh }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
-  const [selectedDate, setSelectedDate] = useState(() => {
-    return new Date().toISOString().split("T")[0]
-  })
   const [editDialog, setEditDialog] = useState<{ open: boolean; item: CookedMenuItem | null }>({
     open: false,
     item: null,
@@ -35,14 +31,14 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     try {
       setLoading(true)
       setError("")
-      const data = await getCookedMenus(selectedDate)
+      const data = await getCookedMenus()
       setItems(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cooked menus")
     } finally {
       setLoading(false)
     }
-  }, [selectedDate])
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -62,15 +58,6 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         item.stockSupply?.name.toLowerCase().includes(q)
     )
   }, [items, search])
-
-  function formatDateOption(daysOffset: number): { label: string; value: string } {
-    const d = new Date()
-    d.setDate(d.getDate() + daysOffset)
-    return {
-      label: daysOffset === 0 ? "Today" : daysOffset === -1 ? "Yesterday" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-      value: d.toISOString().split("T")[0],
-    }
-  }
 
   const {
     currentPage,
@@ -98,7 +85,6 @@ export default function CookedFoodTable({ onRefresh }: Props) {
 
   const columns: Column[] = [
     { label: "Name", key: "name" },
-    { label: "Category", key: "category" },
     { label: "Stock Item", key: "stockItem" },
     { label: "Produced", key: "produced" },
     { label: "Assigned", key: "assigned" },
@@ -134,8 +120,8 @@ export default function CookedFoodTable({ onRefresh }: Props) {
               variant="outline"
               onClick={() => setEditDialog({ open: true, item: row })}
             >
-              <Pencil size={14} className="mr-1" />
-              Edit
+              <ClipboardPlus size={14} className="mr-1" />
+              Assign
             </Button>
             <Button
               size="sm"
@@ -158,28 +144,9 @@ export default function CookedFoodTable({ onRefresh }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Heading as="h2" className="text-admin-header-text text-center uppercase">
-          Cooked Food — Menu Variants
-        </Heading>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="cooked-date" className="text-sm text-admin-muted whitespace-nowrap">Date:</Label>
-          <select
-            id="cooked-date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-input bg-background rounded-md px-3 py-1.5 text-sm"
-          >
-            <option value={formatDateOption(0).value}>{formatDateOption(0).label}</option>
-            <option value={formatDateOption(-1).value}>{formatDateOption(-1).label}</option>
-            <option value={formatDateOption(-2).value}>{formatDateOption(-2).label}</option>
-            <option value={formatDateOption(-3).value}>{formatDateOption(-3).label}</option>
-            <option value={formatDateOption(-4).value}>{formatDateOption(-4).label}</option>
-            <option value={formatDateOption(-5).value}>{formatDateOption(-5).label}</option>
-            <option value={formatDateOption(-6).value}>{formatDateOption(-6).label}</option>
-          </select>
-        </div>
-      </div>
+      <Heading as="h2" className="text-admin-header-text text-center">
+        Today&apos;s Cooked Food
+      </Heading>
 
       <DataTable
         columns={columns}
