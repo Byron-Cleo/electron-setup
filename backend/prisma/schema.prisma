@@ -53,7 +53,7 @@ model Menu {
   createdAt                                             DateTime                  @default(now()) @db.Timestamp(6)
   starchId                                              String?                   @db.Uuid
   vegetableId                                           String?                   @db.Uuid
-  isAvailable                                           Boolean                   @default(false)
+  isAvailable                                           Boolean                   @default(true)
   CookingRecordAssignment                               CookingRecordAssignment[]
   MenuAccompaniment_Menu_starchIdToMenuAccompaniment    MenuAccompaniment?        @relation("Menu_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
   MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment?        @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])

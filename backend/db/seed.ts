@@ -11,6 +11,14 @@ async function main() {
   const prisma = new PrismaClient({ adapter });
 
   // ── Wipe in reverse-FK order so constraints are never violated ────────────
+  await prisma.stockFulfillmentItem.deleteMany();
+  await prisma.stockFulfillment.deleteMany();
+  await prisma.stockRequestItem.deleteMany();
+  await prisma.stockRequest.deleteMany();
+  await prisma.cookingRecordAssignment.deleteMany();
+  await prisma.cookingRecord.deleteMany();
+  await prisma.departmentStockSupply.deleteMany();
+  await prisma.stockSupplyMenu.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.review.deleteMany();
