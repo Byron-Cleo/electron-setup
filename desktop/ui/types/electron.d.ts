@@ -40,6 +40,9 @@ interface MenuCreateData {
   category: string;
   stock?: number;
   price: number;
+  mealTypes: string[];
+  starchId?: string | null;
+  vegetableId?: string | null;
 }
 
 type MenuUpdateData = Partial<MenuCreateData>;

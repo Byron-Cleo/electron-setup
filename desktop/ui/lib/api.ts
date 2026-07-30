@@ -300,6 +300,13 @@ export async function getAccompaniments(): Promise<Accompaniment[]> {
   return apiFetch("/accompaniments")
 }
 
+export async function getMealTypes(): Promise<MealType[]> {
+  if (window.electron?.mealType?.getAll) {
+    return window.electron.mealType.getAll()
+  }
+  return apiFetch("/meal-types")
+}
+
 // ─── Kitchen Config ─────────────────────────────────────────────────────────
 
 export async function getKitchenConfig(): Promise<KitchenConfigItem[]> {

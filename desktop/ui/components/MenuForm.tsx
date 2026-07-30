@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -22,7 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createMenu, getMenuById, updateMenu } from "@/lib/api"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { createMenu, getMenuById, getAccompaniments, getMealTypes, updateMenu } from "@/lib/api"
 
 interface Props {
   editId: string | null
@@ -48,6 +50,9 @@ const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   category: z.string().min(1, "Category is required"),
   price: z.coerce.number().min(0, "Price must be 0 or more"),
+  mealTypes: z.array(z.string()).min(1, "Select at least one meal period"),
+  starchId: z.string().optional(),
+  vegetableId: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -57,14 +62,29 @@ function slugify(text: string) {
 }
 
 export default function MenuForm({ editId, onSaved, onCancel }: Props) {
+  const [mealTypeOptions, setMealTypeOptions] = useState<MealType[]>([])
+  const [starchOptions, setStarchOptions] = useState<Accompaniment[]>([])
+  const [vegetableOptions, setVegetableOptions] = useState<Accompaniment[]>([])
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as any,
     defaultValues: {
       name: "",
       category: "",
       price: 0,
+      mealTypes: [],
     },
   })
+
+  useEffect(() => {
+    async function load() {
+      const [mealTypes, accs] = await Promise.all([getMealTypes(), getAccompaniments()])
+      setMealTypeOptions(mealTypes)
+      setStarchOptions(accs.filter((a) => a.category === "STARCH"))
+      setVegetableOptions(accs.filter((a) => a.category === "VEGETABLE"))
+    }
+    load()
+  }, [])
 
   useEffect(() => {
     if (!editId) return
@@ -74,6 +94,9 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
           name: item.name,
           category: item.category,
           price: Number(item.price),
+          mealTypes: item.mealTypes ?? [],
+          starchId: item.starchId ?? undefined,
+          vegetableId: item.vegetableId ?? undefined,
         })
       })
       .catch((err) => {
@@ -88,6 +111,9 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
         slug: slugify(data.name),
         category: data.category,
         price: data.price,
+        mealTypes: data.mealTypes,
+        starchId: data.starchId || null,
+        vegetableId: data.vegetableId || null,
       }
       if (editId) {
         await updateMenu(editId, payload)
@@ -171,6 +197,96 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                           placeholder="0.00"
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="mealTypes"
+                render={() => (
+                  <FormItem>
+                    <FormLabel>Meal Periods <span className="text-red-500 text-base font-bold">*</span></FormLabel>
+                    <div className="grid grid-cols-2 gap-2 border rounded-md p-3">
+                      {mealTypeOptions
+                        .sort((a, b) => a.sortOrder - b.sortOrder)
+                        .map((mt) => (
+                          <FormField
+                            key={mt.id}
+                            control={form.control}
+                            name="mealTypes"
+                            render={({ field }) => (
+                              <FormItem className="flex items-center gap-2 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(mt.id)}
+                                    onCheckedChange={(checked) => {
+                                      const current = field.value ?? []
+                                      if (checked) {
+                                        field.onChange([...current, mt.id])
+                                      } else {
+                                        field.onChange(current.filter((v: string) => v !== mt.id))
+                                      }
+                                    }}
+                                  />
+                                </FormControl>
+                                <Label className="text-sm font-normal cursor-pointer">{mt.name}</Label>
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="starchId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Starch Accompaniment</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select starch" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {starchOptions.map((acc) => (
+                            <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="vegetableId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vegetable Accompaniment</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select vegetable" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {vegetableOptions.map((acc) => (
+                            <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
