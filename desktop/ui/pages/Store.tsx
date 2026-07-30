@@ -97,7 +97,12 @@ function Store() {
               </div>
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">All Current Stock Items</Heading>
-                <p className="text-sm text-admin-muted">{stockCount} items</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+                    {stockCount} items
+                  </span>
+                </div>
                 <p className="text-xs text-admin-muted mt-1">View current stock levels for all items across the store.</p>
               </div>
             </div>
