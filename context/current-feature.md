@@ -1,4 +1,4 @@
-# Current Feature — Menu Status Tabs — Status Badges + Filter Tabs
+# Current Feature — Meal Period Time-Based Filter for All Restaurant Menu
 
 ## Platform
 
@@ -6,18 +6,22 @@ frontend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-- Replace binary Available/Unavailable badge with 3 computed statuses (Unavailable/Available/Sold Out)
-- Add filter tabs (All / Unavailable / Available / Sold Out) with count badges at top of table
+- Create shared `lib/mealPeriod.ts` utility with time-slot logic + dev toggle
+- Refactor `WaiterPOS.tsx` to use the shared utility
+- Add meal period filter bar (Now Serving / Closed) to `AllMenuTable.tsx`
+- Filter menu items by selected period's `mealTypes`
+- Live clock updates every 60s
+- Dev toggle (`TIME_FILTER_ENABLED`) to bypass time restrictions during development 
 
 ## Notes
 
-- Single file: `desktop/ui/components/menu/AllMenuTable.tsx`
-- Depends on backend fix (already merged to main)
-- No type changes, no new files, no new dependencies
+- 3 files: create `lib/mealPeriod.ts`, refactor `WaiterPOS.tsx`, update `AllMenuTable.tsx`
+- No backend, schema, or type changes needed
+- `MenuItem.mealTypes` already exists on the type
 
 ## History
 
