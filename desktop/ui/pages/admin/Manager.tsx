@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { Building2, ChefHat } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
@@ -38,22 +38,22 @@ function Manager() {
       )}
 
       {!activeView && (
-        <div className="flex gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {cards.map((card) => (
             <Card
               key={card.view}
-              className="w-[300px] bg-admin-card border-admin-card-border rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+              className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
               onClick={() => setActiveView(card.view)}
             >
-              <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
-                <div className="h-14 w-14 rounded-full bg-admin-accent/10 flex items-center justify-center">
-                  <card.icon className="h-7 w-7 text-admin-accent" />
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                  <card.icon size={24} className="text-green-600" />
                 </div>
-                <div>
-                  <Heading as="h3" className="text-admin-header-text">{card.title}</Heading>
-                  <p className="text-sm text-admin-header-text/60 mt-1">{card.description}</p>
+                <div className="min-w-0">
+                  <Heading as="h3" className="text-lg text-admin-header-text">{card.title}</Heading>
+                  <p className="text-sm text-admin-muted">{card.description}</p>
                 </div>
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>

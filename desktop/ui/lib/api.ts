@@ -294,6 +294,12 @@ export async function getLowStockCount(): Promise<{ count: number }> {
   return apiFetch("/stock-supplies/low-stock-count")
 }
 
+// ─── Accompaniments ─────────────────────────────────────────────────────────
+
+export async function getAccompaniments(): Promise<Accompaniment[]> {
+  return apiFetch("/accompaniments")
+}
+
 // ─── Kitchen Config ─────────────────────────────────────────────────────────
 
 export async function getKitchenConfig(): Promise<KitchenConfigItem[]> {
