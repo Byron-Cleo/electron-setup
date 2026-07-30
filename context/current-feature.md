@@ -1,26 +1,32 @@
-# Current Feature — Menu Status — Remove Auto-Set of `isAvailable` on Stock Update
+# Current Feature — Menu Status Tabs — Status Badges + Filter Tabs
 
 ## Platform
 
-backend
+frontend
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Remove `data.isAvailable = Number(stock) > 0;` from PUT `/api/menu/:id`
-- `isAvailable` remains a purely manual toggle (via Hide/Unhide)
-- Stock-driven Sold Out status is derived frontend-only
+- Replace binary Available/Unavailable badge with 3 computed statuses (Unavailable/Available/Sold Out)
+- Add filter tabs (All / Unavailable / Available / Sold Out) with count badges at top of table
 
 ## Notes
 
-- Single line deletion in `backend/routes/menu.ts`
-- Waiter screen already filters by `stock > 0` in `GET /api/menu?mealType=X`
-- No migration, no schema changes
+- Single file: `desktop/ui/components/menu/AllMenuTable.tsx`
+- Depends on backend fix (already merged to main)
+- No type changes, no new files, no new dependencies
 
 ## History
+
+### frontend - 2026-07-30 — Menu Status Badges + Filter Tabs
+- Added computed status column (Unavailable / Selling Now / Sold Out) in AllMenuTable
+- Added 4 filter tabs (All / Unavailable / Selling Now / Sold Out) with count badges
+- Tabs right-aligned with "All" on the left; per-status border and background colors
+- Changed Unavailable color to amber/brown; all active backgrounds at /60 opacity
+- Branch: feature/admin/menu-status-tabs (merged to main)
 
 ### backend - 2026-07-30 — Menu Status Auto-Availability Fix
 - Removed `data.isAvailable = Number(stock) > 0` from menu.ts PUT route

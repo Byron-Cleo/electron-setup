@@ -6,14 +6,31 @@ import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
 import { getMenus, updateMenuAvailability } from "@/lib/api"
+import { cn } from "@/lib/utils"
 import CreateMenuDialog from "./CreateMenuDialog"
 import MenuDetailDialog from "./MenuDetailDialog"
+
+type StatusTab = "all" | "unavailable" | "available" | "soldout"
+
+const TABS: { key: StatusTab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "unavailable", label: "Unavailable" },
+  { key: "available", label: "Selling Now" },
+  { key: "soldout", label: "Sold Out" },
+]
+
+function getMenuStatus(item: MenuItem): { label: string; className: string } {
+  if (!item.isAvailable) return { label: "Unavailable", className: "bg-red-100 text-red-700" }
+  if ((item.stock ?? 0) > 0) return { label: "Selling Now", className: "bg-green-100 text-green-700" }
+  return { label: "Sold Out", className: "bg-orange-100 text-orange-700" }
+}
 
 export default function AllMenuTable() {
   const [items, setItems] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
+  const [statusTab, setStatusTab] = useState<StatusTab>("all")
   const [detailTarget, setDetailTarget] = useState<MenuItem | null>(null)
   const [editDialog, setEditDialog] = useState<{ open: boolean; editId: string | null }>({
     open: false,
@@ -42,15 +59,37 @@ export default function AllMenuTable() {
     loadData()
   }, [loadData])
 
-  const filteredItems = useMemo(() => {
-    if (!search) return items
+  const counts = useMemo(() => ({
+    all: items.length,
+    unavailable: items.filter((i) => !i.isAvailable).length,
+    available: items.filter((i) => i.isAvailable && (i.stock ?? 0) > 0).length,
+    soldout: items.filter((i) => i.isAvailable && (i.stock ?? 0) <= 0).length,
+  }), [items])
+
+  const statusFiltered = useMemo(() => {
+    if (statusTab === "all") return items
+    return items.filter((item) => {
+      const isUnavailable = !item.isAvailable
+      const isAvailable = item.isAvailable && (item.stock ?? 0) > 0
+      const isSoldOut = item.isAvailable && (item.stock ?? 0) <= 0
+      switch (statusTab) {
+        case "unavailable": return isUnavailable
+        case "available": return isAvailable
+        case "soldout": return isSoldOut
+        default: return true
+      }
+    })
+  }, [items, statusTab])
+
+  const searchedItems = useMemo(() => {
+    if (!search) return statusFiltered
     const q = search.toLowerCase()
-    return items.filter(
+    return statusFiltered.filter(
       (item) =>
         item.name.toLowerCase().includes(q) ||
         item.category.toLowerCase().includes(q)
     )
-  }, [items, search])
+  }, [statusFiltered, search])
 
   const {
     currentPage,
@@ -60,7 +99,7 @@ export default function AllMenuTable() {
     prevPage,
     canNext,
     canPrev,
-  } = usePagination(filteredItems)
+  } = usePagination(searchedItems)
 
   async function handleHide() {
     if (!hideDialog.item) return
@@ -120,16 +159,14 @@ export default function AllMenuTable() {
         return <span>KSh {row.price}</span>
       case "stock":
         return <span>{row.stock}</span>
-      case "status":
-        return row.isAvailable ? (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            Available
-          </span>
-        ) : (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-            Unavailable
+      case "status": {
+        const { label, className } = getMenuStatus(row)
+        return (
+          <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", className)}>
+            {label}
           </span>
         )
+      }
       case "actions":
         return (
           <div className="flex items-center justify-end gap-1">
@@ -165,6 +202,42 @@ export default function AllMenuTable() {
       <Heading as="h2" className="text-admin-header-text text-center">
         All Restaurant Menu
       </Heading>
+
+      <div className="flex gap-2">
+        {TABS.map(({ key, label }) => {
+          const isActive = statusTab === key
+          return (
+            <button
+              key={key}
+              onClick={() => setStatusTab(key)}
+              className={cn(
+                "flex flex-col items-center px-4 py-3 h-auto rounded-lg cursor-pointer transition-colors",
+                key === "all" && "mr-auto",
+                isActive && key === "all" && "bg-admin-accent/60 text-white",
+                isActive && key === "unavailable" && "bg-amber-600/60 text-white",
+                isActive && key === "available" && "bg-green-500/60 text-white",
+                isActive && key === "soldout" && "bg-red-500/60 text-white",
+                !isActive && key === "all" && "border-4 border-admin-accent/40 text-admin-accent",
+                !isActive && key === "unavailable" && "border-4 border-amber-500/60 text-amber-700",
+                !isActive && key === "available" && "border-4 border-green-400 text-green-600",
+                !isActive && key === "soldout" && "border-4 border-red-400 text-red-500",
+              )}
+            >
+              <span className="text-sm font-bold leading-tight">{label}</span>
+              <span className={cn(
+                "mt-0.5 text-xs font-bold rounded-full px-2 py-0.5",
+                isActive && "bg-white/20 text-white",
+                !isActive && key === "all" && "bg-admin-accent/10 text-admin-accent",
+                !isActive && key === "unavailable" && "bg-amber-100 text-amber-700",
+                !isActive && key === "available" && "bg-green-100 text-green-600",
+                !isActive && key === "soldout" && "bg-red-100 text-red-500",
+              )}>
+                {counts[key]}
+              </span>
+            </button>
+          )
+        })}
+      </div>
 
       <DataTable
         columns={columns}
