@@ -1,18 +1,21 @@
 import { useState, useEffect } from "react"
-import { UtensilsCrossed, List, Plus } from "lucide-react"
+import { UtensilsCrossed, List, Plus, Beef } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import BackButton from "@/components/shared/BackButton"
 import CookedFoodTable from "@/components/menu/CookedFoodTable"
 import AllMenuTable from "@/components/menu/AllMenuTable"
+import AccompanimentsTable from "@/components/menu/AccompanimentsTable"
 import CreateMenuDialog from "@/components/menu/CreateMenuDialog"
 import { getCookedMenus } from "@/lib/api"
 
 type MenuView = "dashboard" | "cooked-food" | "all-menu"
+type MenuSubView = "list" | "accompaniments" | null
 
 function Menu() {
   const [view, setView] = useState<MenuView>("dashboard")
+  const [subView, setSubView] = useState<MenuSubView>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogEditId, setDialogEditId] = useState<string | null>(null)
   const [readyCount, setReadyCount] = useState(0)
@@ -27,8 +30,13 @@ function Menu() {
     loadReadyCount()
   }, [])
 
+  function handleBackFromSub() {
+    setSubView(null)
+  }
+
   function handleBackToDashboard() {
     setView("dashboard")
+    setSubView(null)
     loadReadyCount()
   }
 
@@ -67,7 +75,7 @@ function Menu() {
 
           <Card
             className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
-            onClick={() => setView("all-menu")}
+            onClick={() => { setView("all-menu"); setSubView(null) }}
           >
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
@@ -92,16 +100,60 @@ function Menu() {
         </div>
       )}
 
-      {view === "all-menu" && (
+      {view === "all-menu" && !subView && (
+        <div className="space-y-4">
+          <BackButton onClick={handleBackToDashboard} />
+          <Heading as="h2" className="text-admin-header-text text-center">All Restaurant Menu</Heading>
+          <div className="grid grid-cols-2 gap-6 max-w-2xl mx-auto">
+            <Card
+              className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+              onClick={() => setSubView("list")}
+            >
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <List size={24} className="text-green-600" />
+                </div>
+                <div>
+                  <Heading as="h3" className="text-lg text-admin-header-text">Menus</Heading>
+                  <p className="text-sm text-admin-muted">Manage menu dishes and stock assignments</p>
+                </div>
+              </div>
+            </Card>
+            <Card
+              className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+              onClick={() => setSubView("accompaniments")}
+            >
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <Beef size={24} className="text-green-600" />
+                </div>
+                <div>
+                  <Heading as="h3" className="text-lg text-admin-header-text">Menu Accompaniments</Heading>
+                  <p className="text-sm text-admin-muted">Manage side dishes served with menu items</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {view === "all-menu" && subView === "list" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <BackButton onClick={() => setView("dashboard")} />
+            <BackButton onClick={handleBackFromSub} />
             <Button onClick={() => { setDialogEditId(null); setDialogOpen(true) }} className="px-6 py-6">
               <Plus size={16} className="mr-1" />
               Create Menu Item
             </Button>
           </div>
           <AllMenuTable />
+        </div>
+      )}
+
+      {view === "all-menu" && subView === "accompaniments" && (
+        <div className="space-y-4">
+          <BackButton onClick={handleBackFromSub} />
+          <AccompanimentsTable />
         </div>
       )}
 

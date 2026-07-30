@@ -35,7 +35,7 @@ router.get("/cooked", async (req, res) => {
         stockSupplyMenus: {
           where: { stockSupply: { isMenuStock: true } },
           include: {
-            stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true } },
+            stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true, image: true } },
           },
         },
       },
@@ -48,23 +48,27 @@ router.get("/cooked", async (req, res) => {
 
         const cookingRecords = await prisma.cookingRecord.findMany({
           where: { stockSupplyId: { in: stockSupplyIds }, ...dateFilter },
-          include: {
-            assignments: { select: { quantityPlates: true } },
-          },
+          select: { platesActual: true, platesExpected: true },
         });
 
         let totalProduced = 0;
-        let totalAssigned = 0;
-
         for (const record of cookingRecords) {
-          const produced = Number(record.platesActual ?? record.platesExpected);
-          const assigned = record.assignments.reduce(
-            (sum, a) => sum + Number(a.quantityPlates),
-            0
-          );
-          totalProduced += produced;
-          totalAssigned += assigned;
+          totalProduced += Number(record.platesActual ?? record.platesExpected);
         }
+
+        const relatedMenus = await prisma.menu.findMany({
+          where: {
+            stockSupplyMenus: {
+              some: { stockSupplyId: { in: stockSupplyIds } },
+            },
+          },
+          select: { stock: true },
+        });
+
+        const totalAssigned = relatedMenus.reduce(
+          (sum, m) => sum + (m.stock ?? 0),
+          0
+        );
 
         return {
           id: menu.id,
@@ -183,11 +187,9 @@ router.put("/:id", async (req, res) => {
       ...(name !== undefined && { name }),
       ...(slug !== undefined && { slug }),
       ...(category !== undefined && { category }),
+      ...(stock !== undefined && { stock }),
       ...(price !== undefined && { price }),
     };
-    if (stock !== undefined) {
-      data.stock = stock;
-    }
     const item = await prisma.menu.update({
       where: { id },
       data,

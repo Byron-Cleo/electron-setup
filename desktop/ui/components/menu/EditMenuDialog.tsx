@@ -19,41 +19,30 @@ interface Props {
 }
 
 export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) {
-  const [name, setName] = useState("")
-  const [category, setCategory] = useState("")
-  const [price, setPrice] = useState("")
+  const [stock, setStock] = useState("")
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (item) {
-      setName(item.name)
-      setCategory(item.category)
-      setPrice(String(item.price))
+      setStock(String(item.stock ?? ""))
       setError("")
     }
   }, [item])
 
+  const totalProduced = item?.cooking.totalProduced ?? 0
+  const stockNum = stock === "" ? 0 : Number(stock)
+  const currentStock = item?.stock ?? 0
+  const maxStock = item ? item.cooking.totalAvailable + currentStock : 0
+  const canSave = stockNum > 0 && stockNum <= maxStock
+
   async function handleSave() {
-    if (!item) return
-    if (!name.trim()) {
-      setError("Name is required")
-      return
-    }
-    const priceNum = Number(price)
-    if (isNaN(priceNum) || priceNum < 0) {
-      setError("Price must be 0 or greater")
-      return
-    }
+    if (!item || !canSave) return
 
     try {
       setSaving(true)
       setError("")
-      await updateMenu(item.id, {
-        name: name.trim(),
-        category: category.trim(),
-        price: priceNum,
-      })
+      await updateMenu(item.id, { stock: stockNum })
       onSaved()
       onClose()
     } catch (err) {
@@ -67,50 +56,47 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit Menu Item</DialogTitle>
+          <DialogTitle>
+            <span className="bg-green-200 px-2 py-0.5 rounded">{item?.name ?? "MenuDish"}</span> Plate Assignment
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-name">Name</Label>
-            <Input
-              id="edit-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Menu item name"
-            />
-          </div>
+          {totalProduced > 0 ? (
+            <div className="space-y-2 bg-gray-100 p-4 rounded-lg">
+              <Label htmlFor="edit-stock">Stock (Plates)</Label>
+              <Input
+                id="edit-stock"
+                type="number"
+                min="0"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                placeholder="0"
+              />
+              {stockNum > 0 && stockNum > maxStock ? (
+                <p className="text-[11px] text-red-500 font-semibold uppercase">
+                  Only {maxStock} plates remaining after other menu assignments
+                </p>
+              ) : (
+                <p className="text-[11px] text-yellow-600">
+                  Sets the quantity of plates waiters can bill through the POS
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-admin-muted text-center py-4">
+              No kitchen production recorded yet for this item
+            </p>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="edit-category">Category</Label>
-            <Input
-              id="edit-category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="e.g. Chicken, Beef, Fish"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="edit-price">Price</Label>
-            <Input
-              id="edit-price"
-              type="number"
-              min="0"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="0"
-            />
-          </div>
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-sm text-red-500 font-semibold uppercase">{error}</p>}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={!canSave || saving}>
             {saving ? "Saving..." : "Save Changes"}
           </Button>
         </DialogFooter>
