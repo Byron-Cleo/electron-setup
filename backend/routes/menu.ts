@@ -6,6 +6,21 @@ const router = Router();
 
 const VALID_MEAL_TYPES = Object.values(ServiceTime) as string[];
 
+function serializeMenu(menu: any) {
+  const {
+    MenuMealType,
+    MenuAccompaniment_Menu_starchIdToMenuAccompaniment: starchRel,
+    MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: vegetableRel,
+    ...rest
+  } = menu
+  return {
+    ...rest,
+    mealTypes: MenuMealType.map((mt: any) => mt.mealType),
+    starch: starchRel,
+    vegetable: vegetableRel,
+  }
+}
+
 router.get("/cooked", async (req, res) => {
   try {
     const { date } = req.query;
@@ -146,55 +161,120 @@ router.get("/:id", async (req, res) => {
     },
   });
   if (!item) return res.status(404).json({ error: "Not found" });
-
-  const {
-    MenuMealType,
-    MenuAccompaniment_Menu_starchIdToMenuAccompaniment: starchRel,
-    MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: vegetableRel,
-    ...menu
-  } = item;
-
-  res.json({
-    ...menu,
-    mealTypes: MenuMealType.map((mt) => mt.mealType),
-    starch: starchRel,
-    vegetable: vegetableRel,
-  });
+  res.json(serializeMenu(item));
 });
 
 router.post("/", async (req, res) => {
-  const { name, slug, category, stock, price } = req.body;
+  const { name, slug, category, stock, price, mealTypes, starchId, vegetableId } = req.body;
   if (!name || !category) {
     return res.status(400).json({ error: "name, category are required" });
   }
-  const item = await prisma.menu.create({
-    data: {
-      name,
-      slug: slug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
-      category,
-      stock: stock ?? undefined,
-      price: price ?? 0,
-    },
-  });
-  res.status(201).json(item);
+
+  if (mealTypes) {
+    if (!Array.isArray(mealTypes)) {
+      return res.status(400).json({ error: "mealTypes must be an array" });
+    }
+    for (const mt of mealTypes) {
+      if (!VALID_MEAL_TYPES.includes(mt)) {
+        return res.status(400).json({ error: `Invalid mealType: ${mt}. Must be one of: ${VALID_MEAL_TYPES.join(", ")}` });
+      }
+    }
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const menu = await tx.menu.create({
+        data: {
+          name,
+          slug: slug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+          category,
+          stock: stock ?? undefined,
+          price: price ?? 0,
+          starchId: starchId ?? null,
+          vegetableId: vegetableId ?? null,
+        },
+      });
+
+      if (mealTypes?.length > 0) {
+        await tx.menuMealType.createMany({
+          data: mealTypes.map((mt: string) => ({
+            menuId: menu.id,
+            mealType: mt,
+          })),
+        });
+      }
+
+      return tx.menu.findUnique({
+        where: { id: menu.id },
+        include: {
+          MenuMealType: { select: { mealType: true } },
+          MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
+          MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
+        },
+      });
+    });
+
+    res.status(201).json(serializeMenu(result));
+  } catch (e: any) {
+    if (e.code === "P2002") return res.status(409).json({ error: "Slug already exists" });
+    throw e;
+  }
 });
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, slug, category, stock, price } = req.body;
+  const { name, slug, category, stock, price, mealTypes, starchId, vegetableId } = req.body;
+
+  if (mealTypes) {
+    if (!Array.isArray(mealTypes)) {
+      return res.status(400).json({ error: "mealTypes must be an array" });
+    }
+    for (const mt of mealTypes) {
+      if (!VALID_MEAL_TYPES.includes(mt)) {
+        return res.status(400).json({ error: `Invalid mealType: ${mt}. Must be one of: ${VALID_MEAL_TYPES.join(", ")}` });
+      }
+    }
+  }
+
   try {
-    const data: Record<string, unknown> = {
-      ...(name !== undefined && { name }),
-      ...(slug !== undefined && { slug }),
-      ...(category !== undefined && { category }),
-      ...(stock !== undefined && { stock }),
-      ...(price !== undefined && { price }),
-    };
-    const item = await prisma.menu.update({
-      where: { id },
-      data,
+    const result = await prisma.$transaction(async (tx) => {
+      const data: Record<string, unknown> = {
+        ...(name !== undefined && { name }),
+        ...(slug !== undefined && { slug }),
+        ...(category !== undefined && { category }),
+        ...(stock !== undefined && { stock }),
+        ...(price !== undefined && { price }),
+        ...(starchId !== undefined && { starchId: starchId ?? null }),
+        ...(vegetableId !== undefined && { vegetableId: vegetableId ?? null }),
+      };
+
+      await tx.menu.update({
+        where: { id },
+        data,
+      });
+
+      await tx.menuMealType.deleteMany({ where: { menuId: id } });
+
+      if (mealTypes?.length > 0) {
+        await tx.menuMealType.createMany({
+          data: mealTypes.map((mt: string) => ({
+            menuId: id,
+            mealType: mt,
+          })),
+        });
+      }
+
+      return tx.menu.findUnique({
+        where: { id },
+        include: {
+          MenuMealType: { select: { mealType: true } },
+          MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
+          MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
+        },
+      });
     });
-    res.json(item);
+
+    res.json(serializeMenu(result));
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Not found" });
     if (e.code === "P2002") return res.status(409).json({ error: "Slug already exists" });
