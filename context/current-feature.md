@@ -1,22 +1,30 @@
-# Current Feature — Menu Tab Redesign
+# Current Feature — Menu Status — Remove Auto-Set of `isAvailable` on Stock Update
 
 ## Platform
 
-Not Specified
+backend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-- (none)
+- Remove `data.isAvailable = Number(stock) > 0;` from PUT `/api/menu/:id`
+- `isAvailable` remains a purely manual toggle (via Hide/Unhide)
+- Stock-driven Sold Out status is derived frontend-only
 
 ## Notes
 
-- (none)
+- Single line deletion in `backend/routes/menu.ts`
+- Waiter screen already filters by `stock > 0` in `GET /api/menu?mealType=X`
+- No migration, no schema changes
 
 ## History
+
+### backend - 2026-07-30 — Menu Status Auto-Availability Fix
+- Removed `data.isAvailable = Number(stock) > 0` from menu.ts PUT route
+- isAvailable now purely manual toggle
 
 ### frontend - 2026-07-29 — Menu Tab Redesign
 - Replaced tab-based Menu page with dashboard layout featuring two clickable cards

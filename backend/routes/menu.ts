@@ -187,7 +187,6 @@ router.put("/:id", async (req, res) => {
     };
     if (stock !== undefined) {
       data.stock = stock;
-      data.isAvailable = Number(stock) > 0;
     }
     const item = await prisma.menu.update({
       where: { id },
