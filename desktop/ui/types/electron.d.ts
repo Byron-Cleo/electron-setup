@@ -2,8 +2,11 @@ interface Accompaniment {
   id: string
   name: string
   category: string
+  description: string | null
   price: number | null
-  image: string | null
+  image: string
+  isDefault: boolean
+  createdAt: string
 }
 
 interface MealType {
@@ -237,6 +240,7 @@ interface CookedMenuItem {
     name: string;
     unit: string;
     platesPerUnit: number | null;
+    image: string | null;
   } | null;
   cooking: {
     totalProduced: number;

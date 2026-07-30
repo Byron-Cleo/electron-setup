@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { ClipboardPlus, Trash2 } from "lucide-react"
+import { Utensils, Trash2 } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
-import { getCookedMenus, updateMenuAvailability } from "@/lib/api"
+import { getCookedMenus, updateMenuAvailability, stockSupplyImageUrl } from "@/lib/api"
 import EditMenuDialog from "./EditMenuDialog"
 
 interface Props {
@@ -84,10 +84,11 @@ export default function CookedFoodTable({ onRefresh }: Props) {
   }
 
   const columns: Column[] = [
-    { label: "Name", key: "name" },
+    { label: "Stock Image", key: "stockImage" },
     { label: "Stock Item", key: "stockItem" },
-    { label: "Produced", key: "produced" },
-    { label: "Assigned", key: "assigned" },
+    { label: "Kitchen Produced Plates", key: "produced" },
+    { label: "Stock Menu", key: "name" },
+    { label: "Assigned Menu Plates", key: "assigned" },
     { label: "Available", key: "available" },
     { label: "Actions", key: "actions", isAction: true, align: "right" },
   ]
@@ -100,18 +101,44 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         return <span>{row.category}</span>
       case "stockItem":
         return <span>{row.stockSupply?.name ?? "—"}</span>
+      case "stockImage": {
+        const url = stockSupplyImageUrl(row.stockSupply?.image ?? null)
+        return (
+          <div className="flex items-center justify-center">
+            {url ? (
+              <img src={url} alt={row.stockSupply?.name ?? ""} className="h-10 w-10 rounded-md object-cover" />
+            ) : (
+              <span className="text-admin-muted text-xs">—</span>
+            )}
+          </div>
+        )
+      }
       case "produced":
-        return <span>{row.cooking.totalProduced}</span>
-      case "assigned":
-        return <span>{row.cooking.totalAssigned}</span>
-      case "available":
-        return row.cooking.totalAvailable <= 0 ? (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+        return <span>{row.cooking.totalProduced} plates</span>
+      case "assigned": {
+        const assigned = row.stock ?? 0
+        return assigned === 0 ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+            {assigned} plates
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+            {assigned} plates
+          </span>
+        )
+      }
+      case "available": {
+        const available = row.cooking.totalAvailable
+        return available <= 0 ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
             SOLD OUT
           </span>
         ) : (
-          <span className="font-medium text-green-600">{row.cooking.totalAvailable}</span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+            {available} plates
+          </span>
         )
+      }
       case "actions":
         return (
           <div className="flex items-center justify-end gap-1">
@@ -120,8 +147,8 @@ export default function CookedFoodTable({ onRefresh }: Props) {
               variant="outline"
               onClick={() => setEditDialog({ open: true, item: row })}
             >
-              <ClipboardPlus size={14} className="mr-1" />
-              Assign
+              <Utensils size={14} className="mr-1" />
+              Assign Plates
             </Button>
             <Button
               size="sm"

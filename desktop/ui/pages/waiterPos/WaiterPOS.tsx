@@ -4,51 +4,17 @@ import { Sunrise, Sun, Moon, CakeSlice, CupSoda } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
+import { getActiveMealPeriods, type ActiveMealPeriod, type MealPeriodLabel } from "@/lib/mealPeriod"
 
-type MealPeriod = {
-  period: string
-  icon: typeof Sunrise
-  description: string
+const PERIOD_META: Record<MealPeriodLabel, { icon: typeof Sunrise; description: string }> = {
+  BREAKFAST: { icon: Sunrise, description: "Morning meals" },
+  LUNCH: { icon: Sun, description: "Midday meals" },
+  DINNER: { icon: Moon, description: "Evening meals" },
+  DESSERT: { icon: CakeSlice, description: "Sweet treats" },
+  BEVERAGE: { icon: CupSoda, description: "Drinks" },
 }
 
-type EnrichedPeriod = MealPeriod & {
-  isActive: boolean
-  servingHours: string
-  badgeLabel: string
-}
-
-const mealPeriods: MealPeriod[] = [
-  { period: "BREAKFAST", icon: Sunrise, description: "Morning meals" },
-  { period: "LUNCH", icon: Sun, description: "Midday meals" },
-  { period: "DINNER", icon: Moon, description: "Evening meals" },
-  { period: "DESSERT", icon: CakeSlice, description: "Sweet treats" },
-  { period: "BEVERAGE", icon: CupSoda, description: "Drinks" },
-]
-
-function getActiveMealPeriods(hour: number, periods: MealPeriod[]): EnrichedPeriod[] {
-  return periods.map((p) => {
-    switch (p.period) {
-      case "BREAKFAST": {
-        const active = hour >= 6 && hour < 12
-        return { ...p, isActive: active, servingHours: "6:00 AM - 11:59 AM", badgeLabel: active ? "Now Serving" : "Closed" }
-      }
-      case "LUNCH": {
-        const active = hour >= 12 && hour < 18
-        return { ...p, isActive: active, servingHours: "12:00 PM - 5:59 PM", badgeLabel: active ? "Now Serving" : "Closed" }
-      }
-      case "DINNER": {
-        const active = hour >= 18 || hour < 6
-        return { ...p, isActive: active, servingHours: "6:00 PM - 5:59 AM", badgeLabel: active ? "Now Serving" : "Closed" }
-      }
-      case "DESSERT":
-        return { ...p, isActive: true, servingHours: "Always Available", badgeLabel: "Always Available" }
-      case "BEVERAGE":
-        return { ...p, isActive: true, servingHours: "Always Available", badgeLabel: "Always Available" }
-      default:
-        return { ...p, isActive: false, servingHours: "", badgeLabel: "Closed" }
-    }
-  })
-}
+type CardPeriod = ActiveMealPeriod & { icon: typeof Sunrise; description: string }
 
 export function WaiterPOS() {
   const navigate = useNavigate()
@@ -59,11 +25,15 @@ export function WaiterPOS() {
     return () => clearInterval(id)
   }, [])
 
-  const periods = getActiveMealPeriods(hour, mealPeriods)
+  const periods: CardPeriod[] = getActiveMealPeriods(hour).map((p) => ({
+    ...p,
+    icon: PERIOD_META[p.period].icon,
+    description: PERIOD_META[p.period].description,
+  }))
   const activePeriods = periods.filter((p) => p.isActive)
   const closedPeriods = periods.filter((p) => !p.isActive)
 
-  function renderCard({ period, icon: Icon, description, isActive, servingHours, badgeLabel }: EnrichedPeriod) {
+  function renderCard({ period, icon: Icon, description, isActive, servingHours, badgeLabel }: CardPeriod) {
     return (
       <Card
         key={period}
