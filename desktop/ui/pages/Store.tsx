@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit, getDepartments, getMenus } from "@/lib/api"
+import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit, getDepartments, getMenus } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
@@ -52,15 +52,21 @@ function Store() {
     loadCounts()
   }, [])
 
+  useEffect(() => {
+    if (view === "dashboard") {
+      loadCounts()
+    }
+  }, [view])
+
   async function loadCounts() {
     try {
-      const [supplies, pending, partial, lowStock] = await Promise.all([
-        getStockSupplies(),
+      const [stockCount, pending, partial, lowStock] = await Promise.all([
+        getStockCount(),
         getStockRequests("PENDING"),
         getStockRequests("PARTIAL"),
         getLowStockCount(),
       ])
-      setStockCount(supplies.length)
+      setStockCount(stockCount.count)
       setPendingCount(pending.length)
       setPartialCount(partial.length)
       setLowStockCount(lowStock.count)
@@ -77,7 +83,7 @@ function Store() {
         <div className="flex items-center justify-between mb-4">
           <BackButton onClick={() => setView("dashboard")} />
           {view === "stock" && (
-            <Button onClick={() => setShowAddModal(true)} className="px-6 py-6 bg-red-500 hover:bg-red-500/90">
+            <Button onClick={() => setShowAddModal(true)} className="px-6 py-6">
               <Plus className="h-4 w-4 mr-2" />
               Add Stock Item
             </Button>
@@ -298,6 +304,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   } = usePagination(filtered)
 
   const columns: Column[] = [
+    { label: "Details", key: "details" },
     { label: "Image", key: "image", align: "center" },
     { label: "Name", key: "name" },
     { label: "Stock", key: "stock" },
@@ -310,6 +317,13 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
 
   function renderCell(item: StockSupply, column: Column) {
     switch (column.key) {
+      case "details":
+        return (
+          <Button variant="ghost" size="xs" onClick={() => setDetailTarget(item)}>
+            <Eye />
+            Details
+          </Button>
+        )
       case "image":
         return item.image ? (
           <img src={stockSupplyImageUrl(item.image) ?? ""} alt="" className="h-10 w-10 rounded object-cover mx-auto" />
@@ -371,10 +385,6 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
       case "actions":
         return (
           <div className="flex gap-1.5">
-            <Button variant="ghost" size="xs" onClick={() => setDetailTarget(item)}>
-              <Eye />
-              Details
-            </Button>
             <Button variant="ghost" size="xs" onClick={() => setEditTarget(item)}>
               <Pencil />
               Edit
@@ -395,7 +405,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center uppercase">All Current Stock Items</Heading>
+      <Heading as="h2" className="text-admin-header-text text-center">All Current Stock Items</Heading>
       <DataTable
         columns={columns}
         data={paginatedItems}

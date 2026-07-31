@@ -173,7 +173,7 @@ export function WaiterMenu() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center gap-4 shrink-0 pb-4">
+      <div className="flex items-center gap-4 shrink-0 mb-12">
         <BackButton onClick={() => navigate("/waiter")} />
         <Heading as="h2" className="text-brand-ebony">{mealPeriod} Menu</Heading>
       </div>

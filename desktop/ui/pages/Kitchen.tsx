@@ -222,7 +222,6 @@ function Kitchen() {
 }
 
 function CurrentStockView({ userId }: { userId: string }) {
-  const user = useAuthStore((s) => s.user)
   const [items, setItems] = useState<StockSupply[]>([])
   const [requests, setRequests] = useState<StockRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -242,11 +241,11 @@ function CurrentStockView({ userId }: { userId: string }) {
     try {
       setLoading(true)
       const departments = await getDepartments()
-      const roleDept = departments.find(
-        (d) => d.name.toLowerCase() === (user?.role ?? "").toLowerCase()
+      const kitchenDept = departments.find(
+        (d) => d.name.toLowerCase() === "kitchen"
       )
       const [stockData, requestData] = await Promise.all([
-        getStockSupplies(roleDept?.id),
+        getStockSupplies(kitchenDept?.id),
         getStockRequests(),
       ])
       setItems(stockData)
@@ -331,7 +330,7 @@ function CurrentStockView({ userId }: { userId: string }) {
     { label: "Stock", key: "stock" },
     { label: "Stock Status", key: "stockStatus" },
     { label: "Last Request", key: "lastRequest" },
-    { label: "Request Status", key: "requestStatus" },
+    { label: "Last Request Status", key: "requestStatus" },
     { label: "Actions", key: "actions", isAction: true },
   ]
 
@@ -356,7 +355,7 @@ function CurrentStockView({ userId }: { userId: string }) {
         return <span className="font-medium">{item.name}</span>
       case "stock":
         return (
-          <span className="font-medium">
+          <span className="font-medium text-green-600">
             {formatQuantityWithUnit(item.currentStock, item.unit)}
           </span>
         )
@@ -633,6 +632,11 @@ function KitchenInventoryView({ userId }: { userId: string }) {
 
   async function handleCookSubmit() {
     if (!cookDialog.item || cookQty <= 0) return
+    const maxQty = cookDialog.item.rawStockPending
+    if (cookQty > maxQty) {
+      setError(`Cannot cook more than the delivered amount. Max: ${maxQty} ${cookDialog.item.unit}`)
+      return
+    }
 
     try {
       setSubmitting(true)
@@ -838,7 +842,12 @@ function KitchenInventoryView({ userId }: { userId: string }) {
                   step="0.01"
                   max={cookDialog.item?.rawStockPending ?? 0}
                   value={cookQty}
-                  onChange={(e) => setCookQty(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const entered = parseFloat(e.target.value) || 0
+                    const max = cookDialog.item?.rawStockPending ?? 0
+                    setCookQty(Math.min(entered, max))
+                  }}
+                  className={cookQty > (cookDialog.item?.rawStockPending ?? 0) ? "border-red-500" : ""}
                 />
                 <p className="text-xs text-admin-muted">
                   Max: {cookDialog.item?.rawStockPending} {cookDialog.item?.unit}
@@ -887,8 +896,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
                 </DialogClose>
                 <Button onClick={handleCookSubmit} disabled={submitting || cookQty <= 0}>
                   {submitting ? "Recording..." : "Record Cooking"}
-                </Button>
-              </>
+                </Button>              </>
             )}
           </DialogFooter>
         </DialogContent>

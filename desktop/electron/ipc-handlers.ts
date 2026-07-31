@@ -64,7 +64,10 @@ export function registerStockSupplyCategoryHandlers() {
 }
 
 export function registerStockSupplyHandlers() {
-  ipcMain.handle("stock-supply:get-all", async () => apiFetch("/stock-supplies"));
+  ipcMain.handle("stock-supply:get-all", async (_event, departmentId?: string) => {
+    const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : "";
+    return apiFetch(`/stock-supplies${query}`);
+  });
   ipcMain.handle("stock-supply:get-by-id", async (_event, id: string) => apiFetch(`/stock-supplies/${id}`));
   ipcMain.handle("stock-supply:create", async (_event, data) =>
     apiFetch("/stock-supplies", { method: "POST", body: JSON.stringify(data) })
@@ -75,6 +78,7 @@ export function registerStockSupplyHandlers() {
   ipcMain.handle("stock-supply:delete", async (_event, id: string) =>
     apiFetch(`/stock-supplies/${id}`, { method: "DELETE" })
   );
+  ipcMain.handle("stock-supply:get-count", async () => apiFetch("/stock-supplies/count"));
 }
 
 export function registerStockRequestHandlers() {

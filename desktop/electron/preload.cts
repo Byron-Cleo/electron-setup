@@ -35,13 +35,14 @@ electron.contextBridge.exposeInMainWorld("electron", {
     delete: (id: string) => electron.ipcRenderer.invoke("stock-supply-category:delete", id),
   },
   stockSupply: {
-    getAll: (departmentId?: string) => electron.ipcRenderer.invoke("stock-supply:get-all-with-department", departmentId),
+    getAll: (departmentId?: string) => electron.ipcRenderer.invoke("stock-supply:get-all", departmentId),
     getById: (id: string) => electron.ipcRenderer.invoke("stock-supply:get-by-id", id),
     create: (data: any) => electron.ipcRenderer.invoke("stock-supply:create", data),
     update: (id: string, data: any) =>
       electron.ipcRenderer.invoke("stock-supply:update", id, data),
     delete: (id: string) => electron.ipcRenderer.invoke("stock-supply:delete", id),
     getLowStockCount: () => electron.ipcRenderer.invoke("stock-supply:get-low-stock-count"),
+    getStockCount: () => electron.ipcRenderer.invoke("stock-supply:get-count"),
     getKitchenInventory: (id: string) => electron.ipcRenderer.invoke("stock-supply:get-kitchen-inventory", id),
   },
   stockRequest: {

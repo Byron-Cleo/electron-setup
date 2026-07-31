@@ -70,7 +70,7 @@ export async function createStockSupply(data: StockSupplyCreateData, imageFile?:
   if (imageFile) {
     const formData = new FormData()
     Object.entries(data).forEach(([key, value]) => {
-      if (key === "departmentIds" && Array.isArray(value)) {
+      if ((key === "departmentIds" || key === "menuIds") && Array.isArray(value)) {
         formData.append(key, JSON.stringify(value))
       } else if (value !== undefined && value !== null) {
         formData.append(key, String(value))
@@ -89,7 +89,7 @@ export async function updateStockSupply(id: string, data: StockSupplyUpdateData,
   if (imageFile) {
     const formData = new FormData()
     Object.entries(data).forEach(([key, value]) => {
-      if (key === "departmentIds" && Array.isArray(value)) {
+      if ((key === "departmentIds" || key === "menuIds") && Array.isArray(value)) {
         formData.append(key, JSON.stringify(value))
       } else if (value !== undefined && value !== null) {
         formData.append(key, String(value))
@@ -294,10 +294,25 @@ export async function getLowStockCount(): Promise<{ count: number }> {
   return apiFetch("/stock-supplies/low-stock-count")
 }
 
+export async function getStockCount(): Promise<{ count: number }> {
+  if (window.electron?.stockSupply?.getStockCount) {
+    return window.electron.stockSupply.getStockCount()
+  }
+  return apiFetch("/stock-supplies/count")
+}
+
 // ─── Accompaniments ─────────────────────────────────────────────────────────
 
 export async function getAccompaniments(): Promise<Accompaniment[]> {
   return apiFetch("/accompaniments")
+}
+
+export async function createAccompaniment(data: AccompanimentCreateData): Promise<Accompaniment> {
+  return apiFetch("/accompaniments", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function updateAccompaniment(id: string, data: AccompanimentUpdateData): Promise<Accompaniment> {
+  return apiFetch(`/accompaniments/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
 export async function getMealTypes(): Promise<MealType[]> {

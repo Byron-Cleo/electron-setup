@@ -122,15 +122,15 @@ export default function KitchenStockConfig({ onBack }: Props) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <BackButton onClick={onBack} />
-        <Button onClick={openCreate} className="px-6 py-6 bg-brand-green hover:bg-brand-green/90">
+        <Button onClick={openCreate} className="px-6 py-6">
           <Plus className="h-4 w-4 mr-2" />
           Add Configuration
         </Button>
       </div>
 
-      <Heading as="h2" className="mb-6 text-admin-header-text text-center uppercase">Kitchen Stock Configuration</Heading>
+      <Heading as="h2" className="mb-6 text-admin-header-text text-center">Kitchen Stock Configuration</Heading>
 
-      <p className="text-sm text-admin-header-text/60 mb-4">
+      <p className="text-sm text-red-500 mb-4">
         Configure how stock items convert to menu plates. Set the plates per unit for each ingredient.
       </p>
 

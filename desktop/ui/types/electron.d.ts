@@ -9,6 +9,17 @@ interface Accompaniment {
   createdAt: string
 }
 
+interface AccompanimentCreateData {
+  name: string
+  category: string
+  description?: string
+  price?: number
+  image?: string
+  isDefault?: boolean
+}
+
+type AccompanimentUpdateData = Partial<AccompanimentCreateData>;
+
 interface MealType {
   id: string;
   name: string;
@@ -326,6 +337,7 @@ interface ElectronAPI {
     update: (id: string, data: StockSupplyUpdateData) => Promise<StockSupply>;
     delete: (id: string) => Promise<{ message: string; id: string }>;
     getLowStockCount: () => Promise<{ count: number }>;
+    getStockCount: () => Promise<{ count: number }>;
     getKitchenInventory: (id: string) => Promise<KitchenInventory>;
   };
   stockRequest: {

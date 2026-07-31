@@ -47,6 +47,7 @@ const ALL_COLUMNS: Column[] = [
   { label: "Name", key: "name", align: "left" },
   { label: "Requested", key: "requested", align: "center" },
   { label: "Delivered", key: "delivered", align: "center" },
+  { label: "Remaining", key: "remaining", align: "center" },
   { label: "Request Status", key: "status", align: "center" },
   { label: "Department", key: "department", align: "left" },
   { label: "Requested By", key: "requestedBy", align: "left" },
@@ -186,6 +187,12 @@ export function RequestStockDesign({
         return (
           <span className={STATUS_TEXT_COLOR[request.status]}>
             {formatQuantityWithUnit(delivered, item.stockSupply.unit)}
+          </span>
+        )
+      case "remaining":
+        return (
+          <span className={requested - delivered > 0 ? "font-medium text-amber-600" : "text-admin-muted"}>
+            {formatQuantityWithUnit(requested - delivered, item.stockSupply.unit)}
           </span>
         )
       case "status": {

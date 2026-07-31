@@ -44,7 +44,11 @@ function App() {
           <Route path="store/stock-supplies/:id" element={<StockSupplyForm />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="menu" element={<AdminMenu />} />
-          <Route path="kitchen" element={<AdminKitchen />} />
+          <Route path="kitchen" element={
+            <ProtectedRoute role={["admin", "kitchen"]}>
+              <AdminKitchen />
+            </ProtectedRoute>
+          } />
           <Route path="cashier" element={<AdminCashier />} />
         </Route>
         <Route

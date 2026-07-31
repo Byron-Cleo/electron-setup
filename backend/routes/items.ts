@@ -69,6 +69,14 @@ router.get("/low-stock-count", async (_req, res) => {
   res.json({ count: lowStockCount });
 });
 
+// GET /api/stock-supplies/count - Total number of active stock supplies
+router.get("/count", async (_req, res) => {
+  const count = await prisma.stockSupply.count({
+    where: { isActive: true },
+  });
+  res.json({ count });
+});
+
 // GET /api/stock-supplies - List all items (optional ?departmentId filter)
 router.get("/", async (req, res) => {
   const { departmentId } = req.query;

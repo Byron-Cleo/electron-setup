@@ -2,6 +2,7 @@ import { LogOut, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
 import { useAuthStore } from "@/stores/auth"
+import { WaiterDateTime } from "./WaiterDateTime"
 
 export function WaiterHeader() {
   const user = useAuthStore((s) => s.user)
@@ -19,6 +20,8 @@ export function WaiterHeader() {
         </div>
         <div className="h-6 w-px bg-brand-ebony/20 mx-2" />
         <Heading as="h1" className="text-xl text-brand-maroon">Waiter POS</Heading>
+        <div className="h-6 w-px bg-brand-ebony/20 mx-2" />
+        <WaiterDateTime />
       </div>
 
       <div className="flex items-center gap-3">

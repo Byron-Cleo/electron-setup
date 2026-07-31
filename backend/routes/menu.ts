@@ -253,15 +253,17 @@ router.put("/:id", async (req, res) => {
         data,
       });
 
-      await tx.menuMealType.deleteMany({ where: { menuId: id } });
+      if (mealTypes !== undefined) {
+        await tx.menuMealType.deleteMany({ where: { menuId: id } });
 
-      if (mealTypes?.length > 0) {
-        await tx.menuMealType.createMany({
-          data: mealTypes.map((mt: string) => ({
-            menuId: id,
-            mealType: mt,
-          })),
-        });
+        if (mealTypes.length > 0) {
+          await tx.menuMealType.createMany({
+            data: mealTypes.map((mt: string) => ({
+              menuId: id,
+              mealType: mt,
+            })),
+          });
+        }
       }
 
       return tx.menu.findUnique({
