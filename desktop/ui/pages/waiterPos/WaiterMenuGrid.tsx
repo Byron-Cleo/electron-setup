@@ -1,0 +1,616 @@
+import { useState, useEffect, useMemo, type ReactNode } from "react"
+import { useNavigate } from "react-router-dom"
+import BackButton from "@/components/shared/BackButton"
+import { Loader2, AlertCircle, Package, Plus, Minus, X } from "lucide-react"
+import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Heading } from "@/components/ui/heading"
+import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { cn } from "@/lib/utils"
+import { getAccompaniments } from "@/lib/api"
+import { useWaiterOrder } from "./WaiterOrderContext"
+
+interface Props {
+  mealPeriod: string
+  items: MenuItem[]
+  loading: boolean
+  error: string | null
+  onPlaceOrder: () => void
+}
+
+function platesFor(item: MenuItem): number {
+  return item.availablePlates ?? item.stock
+}
+
+function isFreeAccompaniment(a: OrderAccompaniment): boolean {
+  return a.price == null || a.price <= 0
+}
+
+function linePrice(item: OrderLineItem): number {
+  return (Number(item.menuItem.price) + Number(item.starch?.price ?? 0) + Number(item.vegetable?.price ?? 0)) * item.quantity
+}
+
+function formatPrice(price: number) {
+  return `KSH ${price.toLocaleString()}`
+}
+
+function imageBaseName(url: string): string {
+  const base = url.split("/").pop() ?? url
+  return base.replace(/\.[a-zA-Z0-9]+$/, "").toLowerCase().replace(/[-_\s]+/g, " ").trim()
+}
+
+function matchAccompanimentForImage(url: string, accs: Accompaniment[]): Accompaniment | null {
+  const norm = imageBaseName(url)
+  if (!norm) return null
+  for (const acc of accs) {
+    const name = acc.name.toLowerCase().trim()
+    if (norm === name || norm.endsWith(` ${name}`)) return acc
+  }
+  return null
+}
+
+function platesBadgeClass(plates: number) {
+  if (plates > 5) return "bg-brand-green/10 text-brand-green"
+  if (plates > 0) return "bg-amber-100 text-amber-700"
+  return "bg-red-100 text-red-600"
+}
+
+function AccompanyRow({ label, accompany }: { label: string; accompany: OrderAccompaniment }) {
+  return (
+    <p className="text-xs text-brand-ebony/60">
+      <span className="mr-1">•</span>
+      <span className="text-brand-ebony/80">{label}:</span> {accompany.name}
+      {isFreeAccompaniment(accompany) ? (
+        <span className="ml-1.5 rounded-full bg-green-100 px-1.5 py-px text-[10px] font-semibold text-green-700">
+          Free
+        </span>
+      ) : (
+        <span className="ml-1.5 rounded-full bg-brand-maroon/10 px-1.5 py-px text-[10px] font-semibold text-brand-maroon">
+          +{formatPrice(accompany.price ?? 0)}
+        </span>
+      )}
+    </p>
+  )
+}
+
+function AccompanyRadioCard({
+  value,
+  name,
+  image,
+  badge,
+}: {
+  value: string
+  name: string
+  image: string
+  badge?: ReactNode
+}) {
+  return (
+    <Label
+      className="flex w-fit max-w-[130px] flex-col items-center gap-1.5 rounded-lg border p-2 cursor-pointer transition-colors has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5"
+    >
+      <div className="flex items-center gap-1.5">
+        <RadioGroupItem value={value} />
+        {image ? (
+          <img src={image} alt={name} className="h-10 w-10 rounded-md object-cover" />
+        ) : (
+          <div className="h-10 w-10 rounded-md bg-gray-100" />
+        )}
+      </div>
+      <span className="max-w-full text-center text-xs font-medium leading-tight text-brand-ebony/80">{name}</span>
+      {badge}
+    </Label>
+  )
+}
+
+function ImageGallery({
+  images,
+  active,
+  onActiveChange,
+  onImageSelect,
+}: {
+  images: string[]
+  active: number
+  onActiveChange: (index: number) => void
+  onImageSelect?: (url: string) => void
+}) {
+  const current = images[active] ?? images[0]
+
+  return (
+    <div className="flex flex-col h-full gap-2">
+      <div className="flex-1 min-h-0 overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+        {current ? (
+          <img src={current} alt="Selected item" className="h-full w-full object-contain p-2" />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <Package size={48} className="text-gray-300" />
+          </div>
+        )}
+      </div>
+      {images.length > 1 && (
+        <div className="flex gap-2 shrink-0">
+          {images.map((img, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                onActiveChange(index)
+                onImageSelect?.(img)
+              }}
+              className={cn(
+                "flex-1 aspect-square overflow-hidden rounded-lg cursor-pointer transition-opacity",
+                index === active ? "ring-2 ring-brand-red" : "opacity-60 hover:opacity-100",
+              )}
+            >
+              <img src={img} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function WaiterMenuGrid({ mealPeriod, items, loading, error, onPlaceOrder }: Props) {
+  const navigate = useNavigate()
+  const { items: orderItems, addToOrder, updateAccompaniments, updateQuantity, removeItem, totalPrice } = useWaiterOrder()
+
+  const [selectedCategory, setSelectedCategory] = useState("")
+  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
+  const [processedItems, setProcessedItems] = useState<MenuItem[]>([])
+  const [accompaniments, setAccompaniments] = useState<Accompaniment[]>([])
+  const [selectedStarch, setSelectedStarch] = useState<Accompaniment | null>(null)
+  const [selectedVegetable, setSelectedVegetable] = useState<Accompaniment | null>(null)
+  const [galleryActive, setGalleryActive] = useState(0)
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+
+  if (processedItems !== items) {
+    setProcessedItems(items)
+    setSelectedItem(null)
+    setSelectedCategory("")
+    if (items.length > 0) {
+      const cats = [...new Set(items.map((i) => i.category))]
+      setSelectedCategory(cats[0])
+      const firstItems = items.filter((i) => i.category === cats[0])
+      if (firstItems.length > 0) setSelectedItem(firstItems[0])
+    }
+  }
+
+  useEffect(() => {
+    getAccompaniments()
+      .then((data) => {
+        setAccompaniments(data)
+        const starches = data.filter((a) => a.category === "STARCH")
+        if (starches.length > 0) setSelectedStarch(starches[0])
+        const vegs = data.filter((a) => a.category === "VEGETABLE")
+        const freeVeg = vegs.find((v) => v.isDefault)
+        if (freeVeg) setSelectedVegetable(freeVeg)
+      })
+      .catch(() => {})
+  }, [])
+
+  const categories = useMemo(() => [...new Set(items.map((i) => i.category))], [items])
+
+  const itemsByCategory = useMemo(() => {
+    const grouped: Record<string, MenuItem[]> = {}
+    items.forEach((item) => {
+      if (!grouped[item.category]) grouped[item.category] = []
+      grouped[item.category].push(item)
+    })
+    return grouped
+  }, [items])
+
+  const starches = useMemo(() => accompaniments.filter((a) => a.category === "STARCH"), [accompaniments])
+  const vegetables = useMemo(() => accompaniments.filter((a) => a.category === "VEGETABLE"), [accompaniments])
+  const freeVegetables = useMemo(
+    () => vegetables.filter((v) => v.price == null || v.price <= 0),
+    [vegetables],
+  )
+  const chargedVegetables = useMemo(
+    () => vegetables.filter((v) => v.price != null && v.price > 0),
+    [vegetables],
+  )
+
+  const galleryLinks = useMemo(() => {
+    if (!selectedItem) return []
+    return selectedItem.images.map((url) => ({
+      url,
+      starch: matchAccompanimentForImage(url, starches),
+      vegetable: matchAccompanimentForImage(url, vegetables),
+    }))
+  }, [selectedItem, starches, vegetables])
+
+  if (selectedItem && selectedItem.id !== activeMenuId) {
+    setActiveMenuId(selectedItem.id)
+    const stored = orderItems.find((oi) => oi.menuItem.id === selectedItem.id)
+    let nextStarch: Accompaniment | null = null
+    let nextVegetable: Accompaniment | null = null
+    if (stored) {
+      nextStarch = starches.find((s) => s.id === stored.starch?.id) ?? null
+      nextVegetable = vegetables.find((v) => v.id === stored.vegetable?.id) ?? null
+    } else {
+      const first = galleryLinks[0]
+      nextStarch = first?.starch ?? null
+      nextVegetable = first?.vegetable ?? null
+    }
+    setSelectedStarch(nextStarch)
+    setSelectedVegetable(nextVegetable)
+    const matchIdx = galleryLinks.findIndex(
+      (l) =>
+        (nextStarch && l.starch?.id === nextStarch.id) ||
+        (nextVegetable && l.vegetable?.id === nextVegetable.id),
+    )
+    setGalleryActive(matchIdx >= 0 ? matchIdx : 0)
+  }
+
+  const syncSelection = (starch: Accompaniment | null, vegetable: Accompaniment | null) => {
+    if (!selectedItem) return
+    if (orderItems.some((oi) => oi.menuItem.id === selectedItem.id)) {
+      updateAccompaniments(selectedItem.id, starch, vegetable)
+    }
+  }
+
+  const handleImageSelect = (url: string) => {
+    const link = galleryLinks.find((l) => l.url === url)
+    if (!link) return
+    const nextStarch = link.starch ?? selectedStarch
+    const nextVegetable = link.vegetable ?? selectedVegetable
+    if (link.starch) setSelectedStarch(link.starch)
+    if (link.vegetable) setSelectedVegetable(link.vegetable)
+    syncSelection(nextStarch, nextVegetable)
+  }
+
+  const selectStarch = (starch: Accompaniment | null) => {
+    setSelectedStarch(starch)
+    if (starch) {
+      const idx = galleryLinks.findIndex((l) => l.starch?.id === starch.id)
+      if (idx >= 0) setGalleryActive(idx)
+    }
+    syncSelection(starch, selectedVegetable)
+  }
+
+  const selectVegetable = (vegetable: Accompaniment | null) => {
+    setSelectedVegetable(vegetable)
+    if (vegetable) {
+      const idx = galleryLinks.findIndex((l) => l.vegetable?.id === vegetable.id)
+      if (idx >= 0) setGalleryActive(idx)
+    }
+    syncSelection(selectedStarch, vegetable)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-brand-maroon" />
+        <p className="text-brand-ebony/60">Loading menu...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <AlertCircle className="h-10 w-10 text-red-500" />
+        <p className="text-red-500 font-medium">{error}</p>
+        <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
+      </div>
+    )
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <Package className="h-10 w-10 text-brand-ebony/30" />
+        <p className="text-brand-ebony/60 text-lg font-medium">No items available for {mealPeriod}</p>
+        <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex items-center shrink-0 mb-4">
+        <BackButton onClick={() => navigate("/waiter")} />
+      </div>
+
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Column 1 — Categories with expandable items + plates badge */}
+        <div className="w-[240px] shrink-0 space-y-1 overflow-y-auto">
+          {categories.map((cat) => (
+            <div key={cat}>
+              <div
+                onClick={() => {
+                  if (selectedCategory === cat) {
+                    setSelectedCategory("")
+                    setSelectedItem(null)
+                  } else {
+                    setSelectedCategory(cat)
+                    const first = itemsByCategory[cat]?.find((i) => platesFor(i) > 0) ?? itemsByCategory[cat]?.[0]
+                    setSelectedItem(first ?? null)
+                  }
+                }}
+                className={cn(
+                  "flex items-center justify-between rounded-lg p-3 cursor-pointer transition-colors",
+                  selectedCategory === cat
+                    ? "bg-brand-maroon text-white"
+                    : "hover:bg-gray-100 text-brand-ebony",
+                )}
+              >
+                <span className="font-medium">{cat}</span>
+                <span
+                  className={cn(
+                    "text-xs font-semibold px-2 py-0.5 rounded-full",
+                    selectedCategory === cat ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700",
+                  )}
+                >
+                  {itemsByCategory[cat]?.length ?? 0}
+                </span>
+              </div>
+              {selectedCategory === cat && (
+                <div className="ml-2 mt-1 space-y-0.5 border-l-2 border-brand-maroon/30 pl-2">
+                  {itemsByCategory[cat]?.map((item) => {
+                    const plates = platesFor(item)
+                    const soldOut = plates <= 0
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => !soldOut && setSelectedItem(item)}
+                        className={cn(
+                          "flex items-center justify-between rounded-md p-2 cursor-pointer transition-colors text-sm",
+                          soldOut
+                            ? "opacity-50 cursor-not-allowed"
+                            : selectedItem?.id === item.id
+                              ? "bg-brand-maroon/10 text-brand-maroon font-medium"
+                              : "hover:bg-gray-50 text-brand-ebony/80",
+                        )}
+                      >
+                        <span className="truncate">{item.name}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-xs font-semibold">{formatPrice(item.price)}</span>
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", platesBadgeClass(plates))}>
+                            {soldOut ? "Sold Out" : `${plates} plates`}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Column 2 — Detail */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+          {selectedItem ? (
+            <div>
+              {/* Header — menu name centered, price beside it, spanning full width */}
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-gray-100 pb-3">
+                <Heading as="h3" className="text-xl font-semibold text-brand-ebony">{selectedItem.name}</Heading>
+                <p className="text-xl font-bold text-brand-maroon">{formatPrice(selectedItem.price)}</p>
+                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", platesBadgeClass(platesFor(selectedItem)))}>
+                  {platesFor(selectedItem) > 0 ? `${platesFor(selectedItem)} plates available` : "Sold Out"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-[2fr_3fr] gap-4 pt-4">
+                {/* Left — Image gallery (40%) */}
+                <div className="h-full min-h-0 p-2">
+                  <ImageGallery
+                    images={selectedItem.images}
+                    active={galleryActive}
+                    onActiveChange={setGalleryActive}
+                    onImageSelect={handleImageSelect}
+                  />
+                </div>
+
+                {/* Right — Details */}
+                <div className="space-y-3">
+
+                {selectedItem.starchId && starches.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-ebony/50 mb-2">Served With</p>
+                    <RadioGroup
+                      className="flex flex-wrap gap-2"
+                      value={selectedStarch?.id ?? ""}
+                      onValueChange={(value) => {
+                        const next = starches.find((s) => s.id === value)
+                        if (next) selectStarch(next)
+                      }}
+                    >
+                      {starches.map((starch) => (
+                        <AccompanyRadioCard
+                          key={starch.id}
+                          value={starch.id}
+                          name={starch.name}
+                          image={starch.image}
+                        />
+                      ))}
+                    </RadioGroup>
+                  </div>
+                )}
+
+                {selectedItem.vegetableId && vegetables.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-ebony/50 mb-2">Vegetable Options</p>
+                    <RadioGroup
+                      value={selectedVegetable?.id ?? ""}
+                      onValueChange={(value) => {
+                        const next = vegetables.find((v) => v.id === value)
+                        if (next) selectVegetable(next)
+                      }}
+                    >
+                      {freeVegetables.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-brand-green mb-2">Free</p>
+                          <div className="flex flex-wrap gap-2">
+                            {freeVegetables.map((veg) => (
+                              <AccompanyRadioCard
+                                key={veg.id}
+                                value={veg.id}
+                                name={veg.name}
+                                image={veg.image}
+                                badge={
+                                  <span className="rounded-full bg-green-100 px-1.5 text-[10px] font-semibold text-green-700">
+                                    Free
+                                  </span>
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {chargedVegetables.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-brand-maroon/60 mb-2">Charged</p>
+                          <div className="flex flex-wrap gap-2">
+                            {chargedVegetables.map((veg) => (
+                              <AccompanyRadioCard
+                                key={veg.id}
+                                value={veg.id}
+                                name={veg.name}
+                                image={veg.image}
+                                badge={
+                                  <span className="text-[10px] font-semibold text-brand-maroon">
+                                    Extra +{formatPrice(veg.price ?? 0)}
+                                  </span>
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </RadioGroup>
+                  </div>
+                )}
+
+                </div>
+            </div>
+
+              <div className="flex justify-center mt-6">
+                <Button
+                  size="lg"
+                  className="w-[28%] h-12 text-base bg-brand-red hover:bg-brand-red/90 text-white"
+                  onClick={() => addToOrder(selectedItem, selectedStarch, selectedVegetable)}
+                  disabled={platesFor(selectedItem) === 0}
+                >
+                  {platesFor(selectedItem) === 0 ? "Sold Out" : "Add to Order"}
+                </Button>
+              </div>
+          </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full py-20 text-brand-ebony/40">
+              <Package size={48} />
+              <p className="mt-2">Select an item to view details</p>
+            </div>
+          )}
+          </div>
+        </div>
+
+        {/* Column 3 — Order Summary (persists across serving times) */}
+        <div className="w-[400px] shrink-0 flex flex-col">
+          <Card className="flex-1 flex flex-col min-h-0">
+            <CardHeader className="pb-3 shrink-0">
+              <div className="flex items-center justify-between">
+                <Heading as="h3" className="text-brand-ebony">Current Order</Heading>
+                {orderItems.length > 0 && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-maroon text-white">
+                    {orderItems.length}
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 flex-1 overflow-y-auto">
+              {orderItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-brand-ebony/40">
+                  <Package size={36} />
+                  <p className="mt-2 text-sm">No Food Ordered Yet</p>
+                </div>
+              ) : (
+                orderItems.map((oi) => {
+                  const isActive = oi.menuItem.id === selectedItem?.id
+                  return (
+                    <div
+                      key={oi.menuItem.id}
+                      onClick={() => {
+                        setSelectedItem(oi.menuItem)
+                        setSelectedCategory(oi.menuItem.category)
+                      }}
+                      className={cn(
+                        "border-b border-gray-100 pb-3 -mx-4 px-4 rounded-lg cursor-pointer transition-colors",
+                        isActive ? "bg-brand-red/5" : "hover:bg-gray-50",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium leading-snug">{oi.menuItem.name}</p>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 p-0 shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeItem(oi.menuItem.id)
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      {(oi.starch || oi.vegetable) && (
+                        <div className="mt-1.5 space-y-0.5">
+                          {oi.starch && <AccompanyRow label="Starch" accompany={oi.starch} />}
+                          {oi.vegetable && <AccompanyRow label="Vegetable" accompany={oi.vegetable} />}
+                        </div>
+                      )}
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              updateQuantity(oi.menuItem.id, -1)
+                            }}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="text-sm font-medium w-6 text-center">{oi.quantity}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              updateQuantity(oi.menuItem.id, 1)
+                            }}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <p className="text-sm font-semibold text-brand-maroon">{formatPrice(linePrice(oi))}</p>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </CardContent>
+            {orderItems.length > 0 && (
+              <CardFooter className="flex-col gap-3 pt-3 shrink-0">
+                <div className="w-full border-t border-gray-200" />
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-semibold text-brand-ebony">Total:</span>
+                  <span className="font-bold text-brand-maroon text-lg">{formatPrice(totalPrice)}</span>
+                </div>
+                <Button className="w-full" onClick={onPlaceOrder}>
+                  Place Order
+                </Button>
+              </CardFooter>
+            )}
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default WaiterMenuGrid

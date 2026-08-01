@@ -1,4 +1,4 @@
-# Current Feature — Menu Accompaniments Create/Edit Modal Forms
+# Current Feature — Waiter Order Cart Persistence
 
 ## Platform
 
@@ -6,24 +6,41 @@ frontend
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Create Menu Accompaniment button above the accompaniments table opens a modal form
-- Action column on the table with an Edit button opens the same modal pre-filled, in the request 
-- Modal form creates and updates accompaniments (name, category, price, description, isDefault)
-- Table refreshes after save
-- Backend endpoints for create/update added (POST /api/accompaniments, PUT /api/accompaniments/:id)
+- Order cart (Column 3) persists across serving-time pages via a Context provider in `WaiterLayout`
+- Cart persists across app restarts via `localStorage` (keyed by waiter id)
+- 3-column layout extracted into a reusable `WaiterMenuGrid` component
+- Order lines capture free + paid accompaniments — free/default shown unpriced (accountability), paid added to the line total
+- Remaining plates shown beside every menu item in Column 1; quantity capped at plates; Sold Out at 0
+- Placing an order deducts plates locally (Phase 1) and clears the cart
+- Header cart-count badge so the waiter sees pending items on the landing page
 
 ## Notes
 
-- Frontend + backend feature. AccompanimentsTable is mounted in desktop/ui/pages/admin/Menu.tsx (subView "accompaniments")
-- Follow existing patterns: shadcn Dialog + react-hook-form + zod (see MenuForm.tsx, EditMenuDialog.tsx)
-- Category is a plain string on the model; table filters use "STARCH" / "VEGETABLE"
-- GET /api/accompaniments already exists; add POST, PUT, and GET /:id
+- Frontend-only feature. Real plate deduction + kitchen queue = separate Phase 2 backend feature (`feature/backend/pos-order-creation`)
+- `orderItems` currently lives in `WaiterMenu.tsx:39` local state → the bug this fixes (cart lost on navigation)
+- `MenuItem` type is missing `availablePlates`; add it to `types/electron.d.ts`
+- Move `WaiterMenu` inline `fetch()` to `getMenuByMealType()` in `@/lib/api.ts` (project convention)
+- localStorage key `eraeva.waiterOrder.v1`, payload `{ waiterId, items }`; ignore payload when waiter differs
+- Starch/vegetable selected in Column 2 saved per order line; free accompaniments tracked unpriced for kitchen accountability
+- Order line shape (`OrderLineItem` + `totalPrice`) is the future receipt-print data source
+- Full spec: `context/features/frontend/waiter-order-cart-persistence.md`; plan: `context/fix-plan/waiter-order-cart-persistence.md`
 
 ## History
+
+### frontend - 2026-07-31 — Waiter Order Cart Persistence
+- `WaiterOrderContext` (`WaiterOrderProvider` + `useWaiterOrder`) wraps the waiter outlet; cart survives navigation across periods and app restarts (localStorage `eraeva.waiterOrder.v1` keyed by `user.id`, invalid payload ignored)
+- Extracted reusable 3-column `WaiterMenuGrid` (category list with plates badges → item detail + STARCH/VEGETABLE accompaniment chips → order summary with per-line accomp sub-rows and Free/+KSH labels)
+- Order lines capture free + paid accompaniments; paid accompaniment adds to line price (Decimal prices from API are strings — coerced with `Number()` in `linePrice`)
+- Quantity capped at remaining plates; Sold Out at 0 (badge, detail text, disabled button); backend already filters `stock > 0`
+- `placeOrder()` decrements local stock per line (Phase 1) and clears the cart
+- Header cart-count badge shown when cart non-empty
+- `getMenuByMealType()` added to `@/lib/api.ts`; `MenuItem.availablePlates?` + `OrderAccompaniment`/`OrderLineItem` added to `electron.d.ts`
+- Bugs fixed during verification: Decimal-as-string price concatenation in `linePrice`; accompaniment clobbering when re-adding an existing line
+- Branch: feature/waiter/order-cart-persistence
 
 ### frontend - 2026-07-31 — Menu Create/Edit — Meal Type + Accompaniment
 - Updated `MenuCreateData` type with `mealTypes[]`, `starchId`, `vegetableId`

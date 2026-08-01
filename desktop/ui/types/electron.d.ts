@@ -34,6 +34,7 @@ interface MenuItem {
   images: string[];
   stock: number;
   price: number;
+  availablePlates?: number;
   numReviews: number;
   isAvailable: boolean;
   banner: string | null;
@@ -57,6 +58,21 @@ interface MenuCreateData {
 }
 
 type MenuUpdateData = Partial<MenuCreateData>;
+
+interface OrderAccompaniment {
+  id: string;
+  name: string;
+  category: string;
+  price: number | null;
+  isDefault: boolean;
+}
+
+interface OrderLineItem {
+  menuItem: MenuItem;
+  quantity: number;
+  starch: OrderAccompaniment | null;
+  vegetable: OrderAccompaniment | null;
+}
 
 interface User {
   id: string;

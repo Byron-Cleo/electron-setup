@@ -1,3 +1,4 @@
+@import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
@@ -97,8 +98,6 @@
 @custom-variant dark (&:is(.dark *));
 
 @media (prefers-color-scheme: dark) {
-@import "tailwindcss";
-
 :root {
     --text: #9ca3af;
     --text-h: #f3f4f6;

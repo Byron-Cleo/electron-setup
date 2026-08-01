@@ -242,6 +242,13 @@ export async function getMenus(): Promise<MenuItem[]> {
   return apiFetch("/menu")
 }
 
+export async function getMenuByMealType(mealPeriod: string): Promise<MenuItem[]> {
+  if (window.electron?.menu?.getByMealType) {
+    return window.electron.menu.getByMealType(mealPeriod)
+  }
+  return apiFetch(`/menu?mealType=${encodeURIComponent(mealPeriod)}`)
+}
+
 export async function getMenuById(id: string): Promise<MenuItem> {
   if (window.electron?.menu?.getById) {
     return window.electron.menu.getById(id)
