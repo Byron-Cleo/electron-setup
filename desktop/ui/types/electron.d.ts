@@ -448,6 +448,15 @@ interface PrinterStatus {
   reason: string;
 }
 
+interface ServerConfig {
+  serverUrl?: string;
+}
+
+interface ServerStatus {
+  online: boolean | null;
+  reason: string;
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: any) => void) => void;
   getStaticData: () => void;
@@ -507,6 +516,12 @@ interface ElectronAPI {
     saveConfig: (config: PosPrinterConfig) => Promise<PosPrinterConfig>;
     listDevices: () => Promise<string[]>;
     checkStatus: (printer: PosPrinter) => Promise<PrinterStatus>;
+  };
+  serverConfig: {
+    getConfig: () => Promise<ServerConfig>;
+    saveConfig: (config: ServerConfig) => Promise<ServerConfig>;
+    test: () => Promise<ServerStatus>;
+    getApiBase: () => Promise<string>;
   };
   order: {
     create: (data: CreateOrderData) => Promise<Order>;

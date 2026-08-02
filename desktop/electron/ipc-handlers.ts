@@ -1,9 +1,8 @@
 import { ipcMain } from "electron";
-
-const API_BASE = "http://localhost:3001/api";
+import { getApiBase } from "./server-config.ts";
 
 async function apiFetch(path: string, options?: RequestInit) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${getApiBase()}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });

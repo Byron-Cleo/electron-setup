@@ -1,5 +1,5 @@
-const API_BASE = "http://localhost:3001/api"
-const API_ORIGIN = "http://localhost:3001"
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? "http://localhost:3001"
 
 export function stockSupplyImageUrl(image: string | null): string | null {
   if (!image) return null
@@ -414,4 +414,42 @@ export async function checkPrinterStatus(printer: PosPrinter): Promise<PrinterSt
     return window.electron.printer.checkStatus(printer)
   }
   return { online: null, reason: "Status unavailable in browser mode" }
+}
+
+// ─── Server Config ───────────────────────────────────────────────────────────
+
+const SERVER_STORAGE_KEY = "eraeva.server-config.v1"
+
+export async function getServerConfig(): Promise<ServerConfig> {
+  if (window.electron?.serverConfig?.getConfig) {
+    return window.electron.serverConfig.getConfig()
+  }
+  try {
+    const raw = localStorage.getItem(SERVER_STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as ServerConfig) : {}
+  } catch {
+    return {}
+  }
+}
+
+export async function saveServerConfig(config: ServerConfig): Promise<ServerConfig> {
+  if (window.electron?.serverConfig?.saveConfig) {
+    return window.electron.serverConfig.saveConfig(config)
+  }
+  localStorage.setItem(SERVER_STORAGE_KEY, JSON.stringify(config))
+  return config
+}
+
+export async function getServerApiBase(): Promise<string> {
+  if (window.electron?.serverConfig?.getApiBase) {
+    return window.electron.serverConfig.getApiBase()
+  }
+  return import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"
+}
+
+export async function testServerConnection(): Promise<ServerStatus> {
+  if (window.electron?.serverConfig?.test) {
+    return window.electron.serverConfig.test()
+  }
+  return { online: null, reason: "Unavailable in browser mode" }
 }
