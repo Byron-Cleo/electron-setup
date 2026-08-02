@@ -4,8 +4,9 @@ import { fileURLToPath } from "url";
 import { isDev } from "./utils.ts";
 const { app, BrowserWindow } = pkg;
 import { getPreloadPath } from "./pathResolver.ts";
-import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers, registerStockSupplyCategoryHandlers, registerStockSupplyHandlers, registerStockRequestHandlers, registerStockSupplyExtraHandlers, registerDepartmentHandlers, registerCookingRecordHandlers, registerKitchenConfigHandlers } from "./ipc-handlers.ts";
+import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers, registerStockSupplyCategoryHandlers, registerStockSupplyHandlers, registerStockRequestHandlers, registerStockSupplyExtraHandlers, registerDepartmentHandlers, registerCookingRecordHandlers, registerKitchenConfigHandlers, registerOrderHandlers } from "./ipc-handlers.ts";
 import { registerPrinterHandlers } from "./printers.ts";
+import { registerReceiptHandlers } from "./receipt.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,7 +31,9 @@ app.whenReady().then(() => {
   registerDepartmentHandlers();
   registerCookingRecordHandlers();
   registerKitchenConfigHandlers();
+  registerOrderHandlers();
   registerPrinterHandlers();
+  registerReceiptHandlers();
   const win = new BrowserWindow({
     show: false,
     webPreferences: {

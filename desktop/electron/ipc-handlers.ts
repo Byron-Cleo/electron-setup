@@ -7,7 +7,10 @@ async function apiFetch(path: string, options?: RequestInit) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const err = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(err?.error || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
@@ -137,5 +140,11 @@ export function registerKitchenConfigHandlers() {
   ipcMain.handle("kitchen-config:get", async () => apiFetch("/kitchen-config"));
   ipcMain.handle("kitchen-config:save", async (_event, id: string, data) =>
     apiFetch(`/kitchen-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  );
+}
+
+export function registerOrderHandlers() {
+  ipcMain.handle("order:create", async (_event, data) =>
+    apiFetch("/orders", { method: "POST", body: JSON.stringify(data) })
   );
 }

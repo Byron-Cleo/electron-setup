@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Plus, Pencil, Trash2, Usb, Network } from "lucide-react"
-import { getPrinterConfig, savePrinterConfig, listPrinterDevices } from "@/lib/api"
+import { getPrinterConfig, savePrinterConfig, listPrinterDevices, checkPrinterStatus } from "@/lib/api"
 
 interface Props {
   onBack: () => void
@@ -44,8 +44,51 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : "Something went wrong"
 }
 
+function StatusBadge({ status, checking }: { status: PrinterStatus | undefined; checking: boolean }) {
+  if (checking) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-admin-header-text/60">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-gray-400" />
+        Checking...
+      </span>
+    )
+  }
+  if (!status) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-admin-header-text/60">
+        <span className="h-2 w-2 rounded-full bg-gray-400" />
+        Unknown
+      </span>
+    )
+  }
+  if (status.online === null) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-admin-header-text/60" title={status.reason}>
+        <span className="h-2 w-2 rounded-full bg-gray-400" />
+        Unavailable
+      </span>
+    )
+  }
+  if (status.online) {
+    return (
+      <span className="inline-flex items-center gap-1.5 font-medium text-green-700" title={status?.reason}>
+        <span className="h-2 w-2 rounded-full bg-green-500" />
+        Online
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 font-medium text-red-600" title={status?.reason}>
+      <span className="h-2 w-2 rounded-full bg-red-500" />
+      Offline
+    </span>
+  )
+}
+
 export default function PrinterConfig({ onBack }: Props) {
   const [printers, setPrinters] = useState<PosPrinter[]>([])
+  const [statuses, setStatuses] = useState<Record<string, PrinterStatus>>({})
+  const [checking, setChecking] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -61,9 +104,26 @@ export default function PrinterConfig({ onBack }: Props) {
   const [formError, setFormError] = useState("")
   const [saving, setSaving] = useState(false)
 
+  async function refreshStatuses(list: PosPrinter[]) {
+    if (list.length === 0) {
+      setStatuses({})
+      setChecking(new Set())
+      return
+    }
+    setChecking(new Set(list.map((p) => p.id)))
+    const entries = await Promise.all(
+      list.map(async (p) => [p.id, await checkPrinterStatus(p)] as const),
+    )
+    setStatuses(Object.fromEntries(entries))
+    setChecking(new Set())
+  }
+
   async function fetchAll() {
     getPrinterConfig()
-      .then((config) => setPrinters(config.printers))
+      .then(async (config) => {
+        setPrinters(config.printers)
+        await refreshStatuses(config.printers)
+      })
       .catch((e: unknown) => setError(errMessage(e)))
       .finally(() => setLoading(false))
   }
@@ -141,6 +201,7 @@ export default function PrinterConfig({ onBack }: Props) {
         : [...printers, printer]
       setPrinters(next)
       await savePrinterConfig({ printers: next })
+      await refreshStatuses(next)
       setShowForm(false)
     } catch (e: unknown) {
       setFormError(errMessage(e))
@@ -155,6 +216,7 @@ export default function PrinterConfig({ onBack }: Props) {
     setPrinters(next)
     try {
       await savePrinterConfig({ printers: next })
+      await refreshStatuses(next)
     } catch (e: unknown) {
       setError(errMessage(e))
     }
@@ -191,6 +253,7 @@ export default function PrinterConfig({ onBack }: Props) {
             { label: "Name", key: "name" },
             { label: "Connection", key: "transport" },
             { label: "Target", key: "target" },
+            { label: "Status", key: "status" },
             { label: "Role", key: "role" },
             { label: "Actions", key: "actions", isAction: true },
           ]}
@@ -214,6 +277,8 @@ export default function PrinterConfig({ onBack }: Props) {
                 )
               case "target":
                 return <span className="text-admin-header-text font-mono text-sm">{targetLabel(item)}</span>
+              case "status":
+                return <StatusBadge status={statuses[item.id]} checking={checking.has(item.id)} />
               case "role":
                 return <span className="text-admin-header-text">{ROLE_LABELS[item.role]}</span>
               case "actions":

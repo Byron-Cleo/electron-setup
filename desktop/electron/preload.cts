@@ -74,5 +74,13 @@ electron.contextBridge.exposeInMainWorld("electron", {
     saveConfig: (config: any) =>
       electron.ipcRenderer.invoke("printer:save-config", config),
     listDevices: () => electron.ipcRenderer.invoke("printer:list-devices"),
+    checkStatus: (printer: any) =>
+      electron.ipcRenderer.invoke("printer:check-status", printer),
+  },
+  order: {
+    create: (data: any) => electron.ipcRenderer.invoke("order:create", data),
+  },
+  print: {
+    receipt: (data: any) => electron.ipcRenderer.invoke("printer:print-receipt", data),
   },
 });

@@ -74,6 +74,97 @@ interface OrderLineItem {
   vegetable: OrderAccompaniment | null;
 }
 
+interface OrderItem {
+  orderId: string;
+  menuId: string;
+  qty: number;
+  price: number;
+  name: string;
+  slug: string;
+  image: string;
+  starchId: string | null;
+  vegetableId: string | null;
+}
+
+interface Order {
+  id: string;
+  orderNumber: number;
+  userId: string;
+  paymentMethod: string;
+  itemsPrice: number;
+  shippingPrice: number;
+  taxPrice: number;
+  totalPrice: number;
+  isPaid: boolean;
+  paidAt: string | null;
+  isDelivered: boolean;
+  deliveredAt: string | null;
+  createdAt: string;
+  mealType: string;
+  OrderItem: OrderItem[];
+}
+
+interface CreateOrderItemData {
+  menuId: string;
+  qty: number;
+  price: number;
+  name: string;
+  slug: string;
+  image: string;
+  starchId?: string | null;
+  vegetableId?: string | null;
+}
+
+interface CreateOrderData {
+  userId: string;
+  items: CreateOrderItemData[];
+  mealType: string;
+}
+
+interface ReceiptAccompaniment {
+  name: string;
+  charged: boolean;
+  price: number;
+}
+
+interface ReceiptItem {
+  name: string;
+  accompaniments: ReceiptAccompaniment[];
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+interface ReceiptOrderInfo {
+  id: string;
+  number: number;
+  mealType: string;
+  createdAt: string;
+  paymentMethod: string;
+}
+
+interface ReceiptTotals {
+  itemsPrice: number;
+  shippingPrice: number;
+  taxPrice: number;
+  totalPrice: number;
+}
+
+interface ReceiptData {
+  ticket: "customer" | "kitchen" | "bar";
+  order: ReceiptOrderInfo;
+  restaurant: { name: string; address?: string; phone?: string };
+  waiter: { name: string };
+  items: ReceiptItem[];
+  totals: ReceiptTotals;
+  barcode: string;
+}
+
+interface PrintResult {
+  ok: boolean;
+  error?: string;
+}
+
 interface User {
   id: string;
   name: string;
@@ -341,6 +432,11 @@ interface PosPrinterConfig {
   printers: PosPrinter[];
 }
 
+interface PrinterStatus {
+  online: boolean | null;
+  reason: string;
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: any) => void) => void;
   getStaticData: () => void;
@@ -399,6 +495,13 @@ interface ElectronAPI {
     getConfig: () => Promise<PosPrinterConfig>;
     saveConfig: (config: PosPrinterConfig) => Promise<PosPrinterConfig>;
     listDevices: () => Promise<string[]>;
+    checkStatus: (printer: PosPrinter) => Promise<PrinterStatus>;
+  };
+  order: {
+    create: (data: CreateOrderData) => Promise<Order>;
+  };
+  print: {
+    receipt: (data: ReceiptData) => Promise<PrintResult>;
   };
 }
 

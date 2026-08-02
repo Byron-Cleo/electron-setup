@@ -345,6 +345,22 @@ export async function saveKitchenConfig(id: string, data: KitchenConfigData): Pr
   return apiFetch(`/kitchen-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
+// ─── Orders ──────────────────────────────────────────────────────────────────
+
+export async function createOrder(data: CreateOrderData): Promise<Order> {
+  if (window.electron?.order?.create) {
+    return window.electron.order.create(data)
+  }
+  return apiFetch("/orders", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function printReceipt(data: ReceiptData): Promise<PrintResult> {
+  if (window.electron?.print?.receipt) {
+    return window.electron.print.receipt(data)
+  }
+  return { ok: true }
+}
+
 // ─── POS Printer Config ──────────────────────────────────────────────────────
 
 const PRINTER_STORAGE_KEY = "eraeva.printers.v1"
@@ -374,4 +390,11 @@ export async function listPrinterDevices(): Promise<string[]> {
     return window.electron.printer.listDevices()
   }
   return []
+}
+
+export async function checkPrinterStatus(printer: PosPrinter): Promise<PrinterStatus> {
+  if (window.electron?.printer?.checkStatus) {
+    return window.electron.printer.checkStatus(printer)
+  }
+  return { online: null, reason: "Status unavailable in browser mode" }
 }

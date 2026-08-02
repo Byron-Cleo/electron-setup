@@ -16,6 +16,8 @@ interface Props {
   items: MenuItem[]
   loading: boolean
   error: string | null
+  placing: boolean
+  placeError: string | null
   onPlaceOrder: () => void
 }
 
@@ -150,7 +152,7 @@ function ImageGallery({
   )
 }
 
-export function WaiterMenuGrid({ mealPeriod, items, loading, error, onPlaceOrder }: Props) {
+export function WaiterMenuGrid({ mealPeriod, items, loading, error, placing, placeError, onPlaceOrder }: Props) {
   const navigate = useNavigate()
   const { items: orderItems, addToOrder, updateAccompaniments, updateQuantity, removeItem, totalPrice } = useWaiterOrder()
 
@@ -601,8 +603,11 @@ export function WaiterMenuGrid({ mealPeriod, items, loading, error, onPlaceOrder
                   <span className="font-semibold text-brand-ebony">Total:</span>
                   <span className="font-bold text-brand-maroon text-lg">{formatPrice(totalPrice)}</span>
                 </div>
-                <Button className="w-full" onClick={onPlaceOrder}>
-                  Place Order
+                {placeError && (
+                  <p className="w-full text-center text-sm font-medium text-red-600">{placeError}</p>
+                )}
+                <Button className="w-full" onClick={onPlaceOrder} disabled={placing}>
+                  {placing ? "Placing Order..." : "Place Order"}
                 </Button>
               </CardFooter>
             )}
