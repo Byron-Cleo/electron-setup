@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Search, Eye, Pencil, EyeOff, Sunrise, Sun, Moon, CakeSlice, CupSoda, RotateCcw } from "lucide-react"
+import { Search, Eye, Pencil, EyeOff, Sunrise, Sun, Moon, CakeSlice, CupSoda } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
 import { getMenus, updateMenuAvailability } from "@/lib/api"
@@ -57,11 +56,6 @@ export default function AllMenuTable() {
     item: null,
   })
   const [hiding, setHiding] = useState(false)
-  const [restoreDialog, setRestoreDialog] = useState<{ open: boolean; item: MenuItem | null }>({
-    open: false,
-    item: null,
-  })
-  const [restoring, setRestoring] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -91,7 +85,6 @@ export default function AllMenuTable() {
   const closedPeriods = mealPeriods.filter((p) => !p.isActive)
 
   const activeItems = useMemo(() => items.filter((i) => i.isAvailable), [items])
-  const discontinuedItems = useMemo(() => items.filter((i) => !i.isAvailable), [items])
 
   const periodFiltered = useMemo(() => {
     if (!selectedPeriod) return activeItems
@@ -150,22 +143,6 @@ export default function AllMenuTable() {
       setError(err instanceof Error ? err.message : "Failed to hide menu")
     } finally {
       setHiding(false)
-    }
-  }
-
-  async function handleRestore() {
-    if (!restoreDialog.item) return
-    try {
-      setRestoring(true)
-      await updateMenuAvailability(restoreDialog.item.id, true)
-      setItems((prev) => prev.map((i) =>
-        i.id === restoreDialog.item!.id ? { ...i, isAvailable: true } : i
-      ))
-      setRestoreDialog({ open: false, item: null })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to restore menu")
-    } finally {
-      setRestoring(false)
     }
   }
 
@@ -240,50 +217,6 @@ export default function AllMenuTable() {
             >
               <EyeOff size={14} className="mr-1" />
               Hide
-            </Button>
-          </div>
-        )
-      default:
-        return null
-    }
-  }
-
-  const disconColumns: Column[] = [
-    { label: "Image", key: "image" },
-    { label: "Name", key: "name" },
-    { label: "Category", key: "category" },
-    { label: "Actions", key: "actions", isAction: true, align: "right" },
-  ]
-
-  function renderDisconCell(row: MenuItem, column: Column) {
-    switch (column.key) {
-      case "image":
-        return row.images.length > 0 ? (
-          <img
-            src={row.images[0]}
-            alt={row.name}
-            className="w-10 h-10 rounded object-cover mx-auto"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded bg-admin-card-border mx-auto flex items-center justify-center text-admin-muted text-xs">
-            N/A
-          </div>
-        )
-      case "name":
-        return <span className="font-medium">{row.name}</span>
-      case "category":
-        return <span>{row.category}</span>
-      case "actions":
-        return (
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-green-600 border-green-200 hover:bg-green-50"
-              onClick={() => setRestoreDialog({ open: true, item: row })}
-            >
-              <RotateCcw size={14} className="mr-1" />
-              Restore
             </Button>
           </div>
         )
@@ -418,23 +351,6 @@ export default function AllMenuTable() {
         }}
       />
 
-      {discontinuedItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Discontinued Menus</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={disconColumns}
-              data={discontinuedItems}
-              renderCell={renderDisconCell}
-              keyExtractor={(row) => row.id}
-              emptyMessage="No discontinued menus."
-            />
-          </CardContent>
-        </Card>
-      )}
-
       <MenuDetailDialog
         open={detailTarget !== null}
         onClose={() => setDetailTarget(null)}
@@ -473,36 +389,6 @@ export default function AllMenuTable() {
                 disabled={hiding}
               >
                 {hiding ? "Hiding..." : "Hide"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {restoreDialog.open && restoreDialog.item && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
-          <div className="bg-popover rounded-xl p-6 shadow-lg ring-1 ring-foreground/10 w-full max-w-sm space-y-4">
-            <Heading as="h3" className="text-admin-header-text">
-              Restore Menu Item
-            </Heading>
-            <p className="text-sm text-admin-muted">
-              Restore &quot;{restoreDialog.item.name}&quot; to the active menu?
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setRestoreDialog({ open: false, item: null })}
-                disabled={restoring}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                className="text-green-600 border-green-200 hover:bg-green-50"
-                onClick={handleRestore}
-                disabled={restoring}
-              >
-                {restoring ? "Restoring..." : "Restore"}
               </Button>
             </div>
           </div>
