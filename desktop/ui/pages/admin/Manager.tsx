@@ -1,11 +1,12 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat } from "lucide-react"
+import { Building2, ChefHat, Printer } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
+import PrinterConfig from "@/components/admin/PrinterConfig"
 
-type ActiveView = "departments" | "kitchen-config" | null
+type ActiveView = "departments" | "kitchen-config" | "pos-printer" | null
 
 const cards: { title: string; description: string; icon: typeof Building2; view: NonNullable<ActiveView> }[] = [
   {
@@ -19,6 +20,12 @@ const cards: { title: string; description: string; icon: typeof Building2; view:
     description: "Configure how stock items convert to menu plates",
     icon: ChefHat,
     view: "kitchen-config",
+  },
+  {
+    title: "POS Printer Config",
+    description: "Configure USB and LAN receipt printers",
+    icon: Printer,
+    view: "pos-printer",
   },
 ]
 
@@ -35,6 +42,10 @@ function Manager() {
 
       {activeView === "kitchen-config" && (
         <KitchenStockConfig onBack={() => setActiveView(null)} />
+      )}
+
+      {activeView === "pos-printer" && (
+        <PrinterConfig onBack={() => setActiveView(null)} />
       )}
 
       {!activeView && (

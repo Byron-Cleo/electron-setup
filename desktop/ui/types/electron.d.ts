@@ -324,6 +324,23 @@ interface KitchenConfigData {
   menuIds?: string[];
 }
 
+type PosPrinterTransport = "usb" | "lan";
+type PosPrinterRole = "customer" | "kitchen" | "bar";
+
+interface PosPrinter {
+  id: string;
+  name: string;
+  transport: PosPrinterTransport;
+  role: PosPrinterRole;
+  deviceName?: string;
+  host?: string;
+  port?: number;
+}
+
+interface PosPrinterConfig {
+  printers: PosPrinter[];
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: any) => void) => void;
   getStaticData: () => void;
@@ -377,6 +394,11 @@ interface ElectronAPI {
   kitchen: {
     getConfig: () => Promise<KitchenConfigItem[]>;
     saveConfig: (id: string, data: KitchenConfigData) => Promise<KitchenConfigItem>;
+  };
+  printer: {
+    getConfig: () => Promise<PosPrinterConfig>;
+    saveConfig: (config: PosPrinterConfig) => Promise<PosPrinterConfig>;
+    listDevices: () => Promise<string[]>;
   };
 }
 

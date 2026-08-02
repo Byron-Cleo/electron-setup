@@ -344,3 +344,34 @@ export async function saveKitchenConfig(id: string, data: KitchenConfigData): Pr
   }
   return apiFetch(`/kitchen-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
+
+// ─── POS Printer Config ──────────────────────────────────────────────────────
+
+const PRINTER_STORAGE_KEY = "eraeva.printers.v1"
+
+export async function getPrinterConfig(): Promise<PosPrinterConfig> {
+  if (window.electron?.printer?.getConfig) {
+    return window.electron.printer.getConfig()
+  }
+  try {
+    const raw = localStorage.getItem(PRINTER_STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as PosPrinterConfig) : { printers: [] }
+  } catch {
+    return { printers: [] }
+  }
+}
+
+export async function savePrinterConfig(config: PosPrinterConfig): Promise<PosPrinterConfig> {
+  if (window.electron?.printer?.saveConfig) {
+    return window.electron.printer.saveConfig(config)
+  }
+  localStorage.setItem(PRINTER_STORAGE_KEY, JSON.stringify(config))
+  return config
+}
+
+export async function listPrinterDevices(): Promise<string[]> {
+  if (window.electron?.printer?.listDevices) {
+    return window.electron.printer.listDevices()
+  }
+  return []
+}

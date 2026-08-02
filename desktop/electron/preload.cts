@@ -69,4 +69,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
     saveConfig: (id: string, data: any) =>
       electron.ipcRenderer.invoke("kitchen-config:save", id, data),
   },
+  printer: {
+    getConfig: () => electron.ipcRenderer.invoke("printer:get-config"),
+    saveConfig: (config: any) =>
+      electron.ipcRenderer.invoke("printer:save-config", config),
+    listDevices: () => electron.ipcRenderer.invoke("printer:list-devices"),
+  },
 });
