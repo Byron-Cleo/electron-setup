@@ -1,30 +1,41 @@
-# Current Feature — POS Order Printing (Phase 2: USB customer receipt)
+# Current Feature — POS Order Printing (Phase 3: Receipt Preview)
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Wire `placeOrder()` in WaiterMenu to save the order via `POST /api/orders`, print a customer receipt, clear cart, logout
-- Add `createOrder()` to `@/lib/api.ts` + `window.electron.order.*` IPC; `Order`/`OrderItem` types in `electron.d.ts`
-- Print via Electron `webContents.print` (or direct HTML print) using a receipt template with hardcoded restaurant header
-- After successful order: clear cart → logout → redirect to login; waiter automatically logged out
+
 
 ## Notes
 
-- Phase 1 complete: `orderNumber Int @unique @default(autoincrement())` on Order model, migration `20260802120000_add-order-number` applied, `POST /api/orders` verified returning `orderNumber`
-- Full 3-phase plan: `context/fix-plan/pos-order-printing.md`
-- Phase 3 = LAN scanner + ESC/POS kitchen/bar tickets
-- Restaurant header hardcoded in the receipt template (no config fetch)
-- DB `Menu.isAvailable` default drift fixed (DB synced to `true`); corrupted initial migration repaired
-- Order test rows cleaned; `Order_orderNumber_seq` reset so first real order is `#1`
+
 
 ## History
+
+### frontend - 2026-08-02 — POS Order Printing (Phase 3: Receipt Preview)
+- "Preview Receipt" button below "Place Order" in the waiter POS order summary; dialog renders the exact customer receipt HTML via iframe `srcDoc`
+- IPC `printer:preview` in `receipt.ts` returns the same `templateFor(data)(data)` HTML as `printer:print-receipt` — single source of truth, print == preview
+- `GET /api/orders/count` returns the next order number used by the preview; previews persist nothing (DB count verified unchanged)
+- Code 128 barcode (start 104 / checksum mod 103 / stop 106) as inline SVG encoding the order number; width computed from module count so bars are never clipped
+- Receipt header now shows "Branch: Airport" below the restaurant name; centered footer below the barcode: "POS Designed and Build: Apydy Technologies", "Tel: 0701315250", "Hotel Systems, Suparket Systems, Web Design, Mobile"
+- `ReceiptData.restaurant` extended with optional `branch`/`tel`/`poweredBy`/`services`; electron template and renderer (`electron.d.ts`) types kept in sync
+- Verified: Code 128 round-trip decode for 1/7/42/123456; live preview renders centered header/footer; electron `tsc -b` + eslint pass
+- Branch: feature/waiter/receipt-preview (merged to main, 2026-08-02)
+
+### frontend - 2026-08-02 — POS Order Printing (Phase 2: USB customer receipt + printer status)
+- `placeOrder()` in `WaiterMenu` creates the order via `POST /api/orders`, prints a customer receipt, clears the cart, and logs out
+- Receipt templates (customer/kitchen/bar, 80mm) in `desktop/electron/receiptTemplate.ts`; print handler in `receipt.ts` via hidden BrowserWindow silent `webContents.print`
+- Printer registry with USB/LAN transport + `printer:check-status` IPC: USB matched against OS printer list (`getPrintersAsync`), LAN probed with a TCP connect (default port 9100)
+- `PrinterConfig` table now has a live Status column: green Online / red Offline with reason; statuses refresh on load/add/delete
+- `createOrder`/`printReceipt`/`checkPrinterStatus` API helpers + ElectronAPI typing in `electron.d.ts`
+- Verified: LAN probe reachable/unreachable/timeout behavior; status column renders green/red via computed styles; E2E order #1 persisted and cleaned up
+- Branch: feature/waiter/printer-template (merged to main, 2026-08-02)
 
 ### backend - 2026-08-02 — POS Order Printing (Phase 1: orderNumber)
 - Added `orderNumber Int @unique @default(autoincrement())` to `Order` model; created + applied migration `20260802120000_add-order-number` (SERIAL column + unique index)
