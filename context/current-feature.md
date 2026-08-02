@@ -1,35 +1,44 @@
-# Current Feature — Waiter Order Cart Persistence
+# Current Feature — POS Order Printing (Phase 1: orderNumber)
 
 ## Platform
 
-frontend
+backend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-- Order cart (Column 3) persists across serving-time pages via a Context provider in `WaiterLayout`
-- Cart persists across app restarts via `localStorage` (keyed by waiter id)
-- 3-column layout extracted into a reusable `WaiterMenuGrid` component
-- Order lines capture free + paid accompaniments — free/default shown unpriced (accountability), paid added to the line total
-- Remaining plates shown beside every menu item in Column 1; quantity capped at plates; Sold Out at 0
-- Placing an order deducts plates locally (Phase 1) and clears the cart
-- Header cart-count badge so the waiter sees pending items on the landing page
+- Add sequential `orderNumber` to the `Order` model (auto-increment, unique) so receipts can show `#0042`
+- Migration + regenerate client; ensure `POST /api/orders` returns `orderNumber`
 
 ## Notes
 
-- Frontend-only feature. Real plate deduction + kitchen queue = separate Phase 2 backend feature (`feature/backend/pos-order-creation`)
-- `orderItems` currently lives in `WaiterMenu.tsx:39` local state → the bug this fixes (cart lost on navigation)
-- `MenuItem` type is missing `availablePlates`; add it to `types/electron.d.ts`
-- Move `WaiterMenu` inline `fetch()` to `getMenuByMealType()` in `@/lib/api.ts` (project convention)
-- localStorage key `eraeva.waiterOrder.v1`, payload `{ waiterId, items }`; ignore payload when waiter differs
-- Starch/vegetable selected in Column 2 saved per order line; free accompaniments tracked unpriced for kitchen accountability
-- Order line shape (`OrderLineItem` + `totalPrice`) is the future receipt-print data source
-- Full spec: `context/features/frontend/waiter-order-cart-persistence.md`; plan: `context/fix-plan/waiter-order-cart-persistence.md`
+- Full 3-phase plan: `context/fix-plan/pos-order-printing.md`
+- Phase 2 = USB customer receipt (HTML renderer + `webContents.print`); Phase 3 = LAN scanner + ESC/POS kitchen/bar tickets
+- Restaurant header hardcoded in the receipt template (no config fetch)
 
 ## History
+
+### frontend - 2026-08-02 — Admin POS Printer Config
+- Added "POS Printer Config" third card to Settings (`AdminManager`) opening a new `PrinterConfig` component
+- `PrinterConfig`: DataTable of configured printers + Add/Edit dialog with Name, Connection Type (USB/LAN radio), USB → detected-printers dropdown + Device Name, LAN → IP + Port (default 9100), Role (Customer/Kitchen/Bar); Delete with confirm
+- Electron main `printers.ts`: reads/writes `printers.json` in `app.getPath("userData")` (per-terminal config); IPC handlers `printer:get-config`, `printer:save-config`, `printer:list-devices` (via `webContents.getPrintersAsync()`)
+- Preload exposes `window.electron.printer.*`; `PosPrinter`/`PosPrinterConfig` types added to `electron.d.ts`
+- `lib/api.ts`: `getPrinterConfig`/`savePrinterConfig`/`listPrinterDevices` with localStorage fallback (`eraeva.printers.v1`) for browser dev mode
+- Branch: feature/admin/pos-printer-config
+
+### frontend - 2026-08-01 — Waiter Order Cart Persistence
+- Dynamic 3-column `WaiterMenuGrid`: category list → detail panel (image gallery + served-with/vegetable radio cards) → current order column
+- Image↔accompaniment matching by filename; gallery thumbnails drive selection and selection re-syncs the active gallery image
+- Starch/vegetable persisted per order line in localStorage (`eraeva.waiterOrder.v1`, keyed by waiter); order lines intact across menu switches and app restarts
+- Clicking an order line loads its stored config; editing an ordered item's accompaniments updates the stored line live via `updateAccompaniments`
+- Vegetable options split Free/Charged in one radio group; paid vegetable added to line total; live total in footer
+- shadcn `RadioGroup` primitive added with red checked indicator; selected accompaniment cards get red border/highlight
+- Add to Order button moved below the details as a centered red section (20% width); menu detail layout `2fr_3fr`; order column 400px
+- Meal period shown in nav bar near login time; removed content-area heading; trimmed layout padding
+- Branch: feature/waiter/order-cart-persistence (merged to main, 2026-08-01)
 
 ### frontend - 2026-07-31 — Waiter Order Cart Persistence
 - `WaiterOrderContext` (`WaiterOrderProvider` + `useWaiterOrder`) wraps the waiter outlet; cart survives navigation across periods and app restarts (localStorage `eraeva.waiterOrder.v1` keyed by `user.id`, invalid payload ignored)
