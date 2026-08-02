@@ -1,8 +1,8 @@
-# Current Feature — POS Order Printing (Phase 1: orderNumber)
+# Current Feature — POS Order Printing (Phase 2: USB customer receipt)
 
 ## Platform
 
-backend
+frontend
 
 ## Status
 
@@ -10,16 +10,27 @@ In Progress
 
 ## Goals
 
-- Add sequential `orderNumber` to the `Order` model (auto-increment, unique) so receipts can show `#0042`
-- Migration + regenerate client; ensure `POST /api/orders` returns `orderNumber`
+- Wire `placeOrder()` in WaiterMenu to save the order via `POST /api/orders`, print a customer receipt, clear cart, logout
+- Add `createOrder()` to `@/lib/api.ts` + `window.electron.order.*` IPC; `Order`/`OrderItem` types in `electron.d.ts`
+- Print via Electron `webContents.print` (or direct HTML print) using a receipt template with hardcoded restaurant header
+- After successful order: clear cart → logout → redirect to login; waiter automatically logged out
 
 ## Notes
 
+- Phase 1 complete: `orderNumber Int @unique @default(autoincrement())` on Order model, migration `20260802120000_add-order-number` applied, `POST /api/orders` verified returning `orderNumber`
 - Full 3-phase plan: `context/fix-plan/pos-order-printing.md`
-- Phase 2 = USB customer receipt (HTML renderer + `webContents.print`); Phase 3 = LAN scanner + ESC/POS kitchen/bar tickets
+- Phase 3 = LAN scanner + ESC/POS kitchen/bar tickets
 - Restaurant header hardcoded in the receipt template (no config fetch)
+- DB `Menu.isAvailable` default drift fixed (DB synced to `true`); corrupted initial migration repaired
+- Order test rows cleaned; `Order_orderNumber_seq` reset so first real order is `#1`
 
 ## History
+
+### backend - 2026-08-02 — POS Order Printing (Phase 1: orderNumber)
+- Added `orderNumber Int @unique @default(autoincrement())` to `Order` model; created + applied migration `20260802120000_add-order-number` (SERIAL column + unique index)
+- Repaired corrupted `20260729154800_initial_schema/migration.sql` (regenerated valid SQL via `prisma migrate diff --from-empty`), re-synced `_prisma_migrations` checksum, fixed pre-existing `Menu.isAvailable` default drift (DB → `true`) to unblock shadow-DB migration runs without reset
+- Regenerated Prisma client; verified `POST /api/orders` returns `orderNumber` (tested via curl + tsx script)
+- Branch: feature/waiter/pos-order-printing
 
 ### frontend - 2026-08-02 — Admin POS Printer Config
 - Added "POS Printer Config" third card to Settings (`AdminManager`) opening a new `PrinterConfig` component

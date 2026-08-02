@@ -80,6 +80,7 @@ model MenuAccompaniment {
 
 model Order {
   id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderNumber     Int         @unique @default(autoincrement())
   userId          String      @db.Uuid
   shippingAddress Json        @db.Json
   paymentMethod   String
