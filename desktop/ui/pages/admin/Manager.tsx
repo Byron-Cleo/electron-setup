@@ -1,12 +1,20 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, Printer } from "lucide-react"
+import { Building2, ChefHat, Printer, Server, BookOpen } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
 import PrinterConfig from "@/components/admin/PrinterConfig"
+import ServerConfig from "@/components/admin/ServerConfig"
+import ServerInstallationGuide from "@/components/admin/ServerInstallationGuide"
 
-type ActiveView = "departments" | "kitchen-config" | "pos-printer" | null
+type ActiveView =
+  | "departments"
+  | "kitchen-config"
+  | "pos-printer"
+  | "server-config"
+  | "server-guide"
+  | null
 
 const cards: { title: string; description: string; icon: typeof Building2; view: NonNullable<ActiveView> }[] = [
   {
@@ -27,6 +35,18 @@ const cards: { title: string; description: string; icon: typeof Building2; view:
     icon: Printer,
     view: "pos-printer",
   },
+  {
+    title: "Server Connection",
+    description: "Set the IP address of the backend server for this terminal",
+    icon: Server,
+    view: "server-config",
+  },
+  {
+    title: "Server & Installation Guide",
+    description: "Step-by-step setup for the server and each POS terminal",
+    icon: BookOpen,
+    view: "server-guide",
+  },
 ]
 
 function Manager() {
@@ -46,6 +66,14 @@ function Manager() {
 
       {activeView === "pos-printer" && (
         <PrinterConfig onBack={() => setActiveView(null)} />
+      )}
+
+      {activeView === "server-config" && (
+        <ServerConfig onBack={() => setActiveView(null)} />
+      )}
+
+      {activeView === "server-guide" && (
+        <ServerInstallationGuide onBack={() => setActiveView(null)} />
       )}
 
       {!activeView && (

@@ -7,6 +7,7 @@ import { getPreloadPath } from "./pathResolver.ts";
 import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers, registerStockSupplyCategoryHandlers, registerStockSupplyHandlers, registerStockRequestHandlers, registerStockSupplyExtraHandlers, registerDepartmentHandlers, registerCookingRecordHandlers, registerKitchenConfigHandlers, registerOrderHandlers } from "./ipc-handlers.ts";
 import { registerPrinterHandlers } from "./printers.ts";
 import { registerReceiptHandlers } from "./receipt.ts";
+import { registerServerConfigHandlers } from "./server-config.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +35,7 @@ app.whenReady().then(() => {
   registerOrderHandlers();
   registerPrinterHandlers();
   registerReceiptHandlers();
+  registerServerConfigHandlers();
   const win = new BrowserWindow({
     show: false,
     webPreferences: {

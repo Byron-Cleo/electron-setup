@@ -1,22 +1,40 @@
-# Current Feature — POS Order Printing (Phase 3: Receipt Preview)
+# Current Feature — Cashier Order List with Backend Search
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-
+- Cashier tab lists all orders in a `DataTable` (reusable `@/components/ui/data-table`)
+- Search input at the top searches by order number by hitting the backend (`GET /api/orders?orderNumber=X`) and displays the matched order(s) — not client-side filtering
+- Each row has a Details button opening a shadcn `Dialog` listing that order's items (name, qty, unit price, line total, accompaniments) plus an order summary (Order #, meal period, payment method, total, date, paid status)
 
 ## Notes
 
-
+- Placeholder lives at `desktop/ui/pages/admin/Cashier.tsx` (`<Heading>Cashier</Heading>` + "Coming soon")
+- Backend: add `GET /api/orders` in `backend/routes/orders.ts` with optional `?orderNumber=` query; include `OrderItem` (with `Starch`/`Vegetable`) and `User.name` as waiter
+- `@/lib/api.ts`: add `getOrders(orderNumber?: number)` using `apiFetch` (no `window.electron` fallback — same as `createOrder`/`getOrderCount`)
+- Extend `Order`/`OrderItem` types in `desktop/ui/types/electron.d.ts`: waiter name + starch/vegetable names on items
+- Clear search reloads all orders
+- Meal/payment/total values are Decimal from Prisma — already serialized to numbers by Express JSON
 
 ## History
+
+### frontend - 2026-08-03 — Server Config for Network Terminals
+- Electron main `server-config.ts`: reads/writes `server-config.json` in `app.getPath("userData")` (per-terminal, mirrors `printers.ts` pattern); `getApiBase()` precedence = config file → `API_BASE` env → baked default; `testServerConnection()` pings `/health` (5s timeout)
+- IPC handlers `server-config:get/save/test/get-api-base` registered in `main.ts`; preload exposes `window.electron.serverConfig.*`; `ServerConfig`/`ServerStatus` types added to `electron.d.ts`
+- `ipc-handlers.ts` apiFetch now resolves the base at runtime via `getApiBase()` instead of a module-level constant, so a saved config takes effect without rebuild
+- `lib/api.ts`: `getServerConfig`/`saveServerConfig`/`getServerApiBase`/`testServerConnection` with localStorage fallback (`eraeva.server-config.v1`) for browser dev mode
+- Settings → "Server Connection" card (`ServerConfig.tsx`): IP/URL input (accepts bare IP, IP:port, or full URL → normalized), live resolved API endpoint display, Test Connection with Connected/Unreachable status badge, Save
+- Settings → "Server & Installation Guide" card (`ServerInstallationGuide.tsx`): linear read-and-do flow — 1) start server (`npm run dev:backend`), 2) find IP (`ipconfig`), 3) build Windows installer the easy way (`npm run build:win:network -- --server http://IP:3001` → `release/`), 4) install on terminals, 5) connect via Settings → Server Connection, 6) set up printers (USB auto-detect / LAN by IP). Includes code blocks, "How it all works", and a can't-connect checklist (firewall port 3001, backend running, IP correct)
+- `scripts/build-network.mjs` now bakes the server URL into `dist-electron/server-config.js` (DEFAULT_API_BASE) instead of `ipc-handlers.js`; verified end-to-end (patch applied, artifacts restored to localhost)
+- Verified: `transpile:electron` + `vite build` pass, eslint clean on all touched files (pre-existing `main.ts:22` empty-catch warning left untouched)
+- Branch: feature/cashier/order-list (uncommitted)
 
 ### frontend - 2026-08-02 — POS Order Printing (Phase 3: Receipt Preview)
 - "Preview Receipt" button below "Place Order" in the waiter POS order summary; dialog renders the exact customer receipt HTML via iframe `srcDoc`

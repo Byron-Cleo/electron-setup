@@ -77,6 +77,13 @@ electron.contextBridge.exposeInMainWorld("electron", {
     checkStatus: (printer: any) =>
       electron.ipcRenderer.invoke("printer:check-status", printer),
   },
+  serverConfig: {
+    getConfig: () => electron.ipcRenderer.invoke("server-config:get"),
+    saveConfig: (config: any) =>
+      electron.ipcRenderer.invoke("server-config:save", config),
+    test: () => electron.ipcRenderer.invoke("server-config:test"),
+    getApiBase: () => electron.ipcRenderer.invoke("server-config:get-api-base"),
+  },
   order: {
     create: (data: any) => electron.ipcRenderer.invoke("order:create", data),
   },

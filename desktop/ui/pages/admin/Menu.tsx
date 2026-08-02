@@ -1,17 +1,50 @@
 import { useState, useEffect } from "react"
-import { UtensilsCrossed, List, Plus, Beef } from "lucide-react"
+import { UtensilsCrossed, List, Plus, Beef, Archive, type LucideIcon } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 import BackButton from "@/components/shared/BackButton"
 import CookedFoodTable from "@/components/menu/CookedFoodTable"
 import AllMenuTable from "@/components/menu/AllMenuTable"
+import DiscontinuedMenusTable from "@/components/menu/DiscontinuedMenusTable"
 import AccompanimentsTable from "@/components/menu/AccompanimentsTable"
 import CreateMenuDialog from "@/components/menu/CreateMenuDialog"
 import { getCookedMenus } from "@/lib/api"
 
 type MenuView = "dashboard" | "cooked-food" | "all-menu"
-type MenuSubView = "list" | "accompaniments" | null
+type MenuSubView = "list" | "discontinued" | "accompaniments" | null
+type MenuTableTab = "all" | "discontinued"
+
+const MENU_TABLE_TABS: { key: MenuTableTab; label: string; icon: LucideIcon }[] = [
+  { key: "all", label: "All Menus", icon: List },
+  { key: "discontinued", label: "Discontinued Menus", icon: Archive },
+]
+
+function MenuTableNav({ active, onSelect }: { active: MenuTableTab; onSelect: (tab: MenuTableTab) => void }) {
+  return (
+    <div className="flex gap-1 border-b border-admin-card-border">
+      {MENU_TABLE_TABS.map(({ key, label, icon: Icon }) => {
+        const isActive = active === key
+        return (
+          <button
+            key={key}
+            onClick={() => onSelect(key)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors cursor-pointer",
+              isActive
+                ? "border-b-2 border-primary text-primary font-semibold"
+                : "text-admin-muted hover:text-admin-header-text",
+            )}
+          >
+            <Icon size={16} />
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 function Menu() {
   const [view, setView] = useState<MenuView>("dashboard")
@@ -38,6 +71,10 @@ function Menu() {
     setView("dashboard")
     setSubView(null)
     loadReadyCount()
+  }
+
+  function handleMenuNavSelect(tab: MenuTableTab) {
+    setSubView(tab === "all" ? "list" : "discontinued")
   }
 
   return (
@@ -105,10 +142,7 @@ function Menu() {
           <BackButton onClick={handleBackToDashboard} />
           <Heading as="h2" className="text-admin-header-text text-center">All Restaurant Menu</Heading>
           <div className="grid grid-cols-2 gap-6 max-w-2xl mx-auto">
-            <Card
-              className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
-              onClick={() => setSubView("list")}
-            >
+            <Card className="p-6 hover:border-admin-accent transition-colors">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
                   <List size={24} className="text-green-600" />
@@ -117,6 +151,9 @@ function Menu() {
                   <Heading as="h3" className="text-lg text-admin-header-text">Menus</Heading>
                   <p className="text-sm text-admin-muted">Manage menu dishes and stock assignments</p>
                 </div>
+              </div>
+              <div className="mt-4">
+                <MenuTableNav active="all" onSelect={handleMenuNavSelect} />
               </div>
             </Card>
             <Card
@@ -146,7 +183,22 @@ function Menu() {
               Create Menu Item
             </Button>
           </div>
+          <MenuTableNav active="all" onSelect={handleMenuNavSelect} />
           <AllMenuTable />
+        </div>
+      )}
+
+      {view === "all-menu" && subView === "discontinued" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <BackButton onClick={handleBackFromSub} />
+            <Button onClick={() => { setDialogEditId(null); setDialogOpen(true) }} className="px-6 py-6">
+              <Plus size={16} className="mr-1" />
+              Create Menu Item
+            </Button>
+          </div>
+          <MenuTableNav active="discontinued" onSelect={handleMenuNavSelect} />
+          <DiscontinuedMenusTable />
         </div>
       )}
 
