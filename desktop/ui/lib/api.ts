@@ -359,6 +359,11 @@ export async function getOrderCount(): Promise<number> {
   return res.count
 }
 
+export async function getOrders(orderNumber?: number): Promise<Order[]> {
+  const query = orderNumber !== undefined ? `?orderNumber=${encodeURIComponent(orderNumber)}` : ""
+  return apiFetch(`/orders${query}`)
+}
+
 export async function previewReceipt(data: ReceiptData): Promise<string> {
   if (window.electron?.print?.preview) {
     return window.electron.print.preview(data)

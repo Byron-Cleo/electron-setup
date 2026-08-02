@@ -14,6 +14,32 @@ router.get("/count", async (_req, res) => {
   }
 });
 
+router.get("/", async (req, res) => {
+  let where: { orderNumber?: number } = {};
+  if (req.query.orderNumber !== undefined) {
+    const n = Number(req.query.orderNumber);
+    if (!Number.isInteger(n) || n < 1) {
+      return res.status(400).json({ error: "orderNumber must be a positive integer" });
+    }
+    where = { orderNumber: n };
+  }
+
+  try {
+    const orders = await prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        OrderItem: { include: { Starch: true, Vegetable: true } },
+        User: { select: { name: true } },
+      },
+    });
+    res.json(orders);
+  } catch (e) {
+    console.error("Error listing orders:", e);
+    res.status(500).json({ error: "Failed to list orders" });
+  }
+});
+
 router.post("/", async (req, res) => {
   const { userId, items, mealType } = req.body;
 
