@@ -84,6 +84,8 @@ interface OrderItem {
   image: string;
   starchId: string | null;
   vegetableId: string | null;
+  Starch?: { id: string; name: string } | null;
+  Vegetable?: { id: string; name: string } | null;
 }
 
 interface Order {
@@ -102,6 +104,7 @@ interface Order {
   createdAt: string;
   mealType: string;
   OrderItem: OrderItem[];
+  User?: { name: string } | null;
 }
 
 interface CreateOrderItemData {
