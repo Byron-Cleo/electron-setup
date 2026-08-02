@@ -1,9 +1,24 @@
 import { useState, useEffect } from "react"
 import { useParams } from "react-router-dom"
-import { getMenuByMealType, createOrder, printReceipt } from "@/lib/api"
+import { getMenuByMealType, createOrder, printReceipt, previewReceipt, getOrderCount } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { useWaiterOrder } from "./WaiterOrderContext"
 import WaiterMenuGrid from "./WaiterMenuGrid"
+
+function toReceiptItems(orderItems: OrderLineItem[]): ReceiptItem[] {
+  return orderItems.map((oi) => {
+    const starch = oi.starch
+    const vegetable = oi.vegetable
+    const accompaniments: ReceiptAccompaniment[] = [
+      ...(starch ? [{ name: starch.name, charged: Number(starch.price ?? 0) > 0, price: Number(starch.price ?? 0) }] : []),
+      ...(vegetable ? [{ name: vegetable.name, charged: Number(vegetable.price ?? 0) > 0, price: Number(vegetable.price ?? 0) }] : []),
+    ]
+    const unitPrice = Number(oi.menuItem.price)
+    const lineTotal =
+      (unitPrice + Number(starch?.price ?? 0) + Number(vegetable?.price ?? 0)) * oi.quantity
+    return { name: oi.menuItem.name, accompaniments, qty: oi.quantity, unitPrice, lineTotal }
+  })
+}
 
 function buildOrderItems(orderItems: OrderLineItem[]): CreateOrderItemData[] {
   return orderItems.map((oi) => ({
@@ -19,18 +34,7 @@ function buildOrderItems(orderItems: OrderLineItem[]): CreateOrderItemData[] {
 }
 
 function buildReceipt(order: Order, orderItems: OrderLineItem[], waiterName: string, mealType: string): ReceiptData {
-  const items: ReceiptItem[] = orderItems.map((oi) => {
-    const starch = oi.starch
-    const vegetable = oi.vegetable
-    const accompaniments: ReceiptAccompaniment[] = [
-      ...(starch ? [{ name: starch.name, charged: Number(starch.price ?? 0) > 0, price: Number(starch.price ?? 0) }] : []),
-      ...(vegetable ? [{ name: vegetable.name, charged: Number(vegetable.price ?? 0) > 0, price: Number(vegetable.price ?? 0) }] : []),
-    ]
-    const unitPrice = Number(oi.menuItem.price)
-    const lineTotal =
-      (unitPrice + Number(starch?.price ?? 0) + Number(vegetable?.price ?? 0)) * oi.quantity
-    return { name: oi.menuItem.name, accompaniments, qty: oi.quantity, unitPrice, lineTotal }
-  })
+  const items = toReceiptItems(orderItems)
 
   return {
     ticket: "customer",
@@ -41,7 +45,15 @@ function buildReceipt(order: Order, orderItems: OrderLineItem[], waiterName: str
       createdAt: order.createdAt,
       paymentMethod: order.paymentMethod,
     },
-    restaurant: { name: "Eraeva Catering Services" },
+    restaurant: {
+      name: "Eraeva Catering Services",
+      branch: "Airport",
+      address: "P.O BOX 12345-00100",
+      phone: "0712345678",
+      tel: "0701315250",
+      poweredBy: "POS Designed and Build: Apydy Technologies",
+      services: "Hotel Systems, Suparket Systems, Web Design, Mobile",
+    },
     waiter: { name: waiterName },
     items,
     totals: {
@@ -51,6 +63,45 @@ function buildReceipt(order: Order, orderItems: OrderLineItem[], waiterName: str
       totalPrice: Number(order.totalPrice),
     },
     barcode: String(order.orderNumber),
+  }
+}
+
+function buildPreviewReceipt(
+  orderItems: OrderLineItem[],
+  waiterName: string,
+  mealType: string,
+  nextNumber: number,
+): ReceiptData {
+  const items = toReceiptItems(orderItems)
+  const itemsPrice = items.reduce((sum, item) => sum + item.lineTotal, 0)
+
+  return {
+    ticket: "customer",
+    order: {
+      id: "preview",
+      number: nextNumber,
+      mealType,
+      createdAt: new Date().toISOString(),
+      paymentMethod: "Cash",
+    },
+    restaurant: {
+      name: "Eraeva Catering Services",
+      branch: "Airport",
+      address: "P.O BOX 12345-00100",
+      phone: "0712345678",
+      tel: "0701315250",
+      poweredBy: "POS Designed and Build: Apydy Technologies",
+      services: "Hotel Systems, Suparket Systems, Web Design, Mobile",
+    },
+    waiter: { name: waiterName },
+    items,
+    totals: {
+      itemsPrice,
+      shippingPrice: 0,
+      taxPrice: 0,
+      totalPrice: itemsPrice,
+    },
+    barcode: String(nextNumber),
   }
 }
 
@@ -65,12 +116,16 @@ export function WaiterMenu() {
   const [loadedPeriod, setLoadedPeriod] = useState<string | null>(null)
   const [placing, setPlacing] = useState(false)
   const [placeError, setPlaceError] = useState<string | null>(null)
+  const [previewing, setPreviewing] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
 
   if (loadedPeriod !== (mealPeriod ?? null)) {
     setLoadedPeriod(mealPeriod ?? null)
     setItems([])
     setError(null)
     setPlaceError(null)
+    setPreviewError(null)
     setLoading(true)
   }
 
@@ -116,6 +171,27 @@ export function WaiterMenu() {
     }
   }
 
+  async function handlePreview() {
+    if (!user || orderItems.length === 0) return
+    setPreviewing(true)
+    setPreviewError(null)
+    try {
+      const count = await getOrderCount()
+      const receipt = buildPreviewReceipt(orderItems, user.name, mealPeriod ?? "", count + 1)
+      const html = await previewReceipt(receipt)
+      setPreviewHtml(html)
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Failed to preview receipt")
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
+  function closePreview() {
+    setPreviewHtml(null)
+    setPreviewError(null)
+  }
+
   return (
     <WaiterMenuGrid
       mealPeriod={mealPeriod ?? ""}
@@ -125,6 +201,11 @@ export function WaiterMenu() {
       placing={placing}
       placeError={placeError}
       onPlaceOrder={placeOrder}
+      previewing={previewing}
+      previewHtml={previewHtml}
+      previewError={previewError}
+      onPreview={handlePreview}
+      onClosePreview={closePreview}
     />
   )
 }

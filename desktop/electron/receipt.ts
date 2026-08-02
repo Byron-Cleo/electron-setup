@@ -59,6 +59,10 @@ function printHtml(deviceName: string, html: string): Promise<PrintResult> {
 }
 
 export function registerReceiptHandlers(): void {
+  ipcMain.handle("printer:preview", async (_event, data: ReceiptData): Promise<string> => {
+    return templateFor(data)(data);
+  });
+
   ipcMain.handle("printer:print-receipt", async (_event, data: ReceiptData): Promise<PrintResult> => {
     const printer = findPrinterByRole("customer");
     if (!printer?.deviceName) {

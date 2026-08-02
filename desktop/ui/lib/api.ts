@@ -354,6 +354,18 @@ export async function createOrder(data: CreateOrderData): Promise<Order> {
   return apiFetch("/orders", { method: "POST", body: JSON.stringify(data) })
 }
 
+export async function getOrderCount(): Promise<number> {
+  const res = await apiFetch("/orders/count")
+  return res.count
+}
+
+export async function previewReceipt(data: ReceiptData): Promise<string> {
+  if (window.electron?.print?.preview) {
+    return window.electron.print.preview(data)
+  }
+  throw new Error("Receipt preview is only available in the desktop app")
+}
+
 export async function printReceipt(data: ReceiptData): Promise<PrintResult> {
   if (window.electron?.print?.receipt) {
     return window.electron.print.receipt(data)

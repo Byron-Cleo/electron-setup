@@ -81,6 +81,7 @@ electron.contextBridge.exposeInMainWorld("electron", {
     create: (data: any) => electron.ipcRenderer.invoke("order:create", data),
   },
   print: {
+    preview: (data: any) => electron.ipcRenderer.invoke("printer:preview", data),
     receipt: (data: any) => electron.ipcRenderer.invoke("printer:print-receipt", data),
   },
 });

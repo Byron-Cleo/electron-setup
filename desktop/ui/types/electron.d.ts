@@ -153,7 +153,15 @@ interface ReceiptTotals {
 interface ReceiptData {
   ticket: "customer" | "kitchen" | "bar";
   order: ReceiptOrderInfo;
-  restaurant: { name: string; address?: string; phone?: string };
+  restaurant: {
+    name: string;
+    branch?: string;
+    address?: string;
+    phone?: string;
+    tel?: string;
+    poweredBy?: string;
+    services?: string;
+  };
   waiter: { name: string };
   items: ReceiptItem[];
   totals: ReceiptTotals;
@@ -501,6 +509,7 @@ interface ElectronAPI {
     create: (data: CreateOrderData) => Promise<Order>;
   };
   print: {
+    preview: (data: ReceiptData) => Promise<string>;
     receipt: (data: ReceiptData) => Promise<PrintResult>;
   };
 }

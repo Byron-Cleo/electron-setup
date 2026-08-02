@@ -1,12 +1,20 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import BackButton from "@/components/shared/BackButton"
-import { Loader2, AlertCircle, Package, Plus, Minus, X } from "lucide-react"
+import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye } from "lucide-react"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { getAccompaniments } from "@/lib/api"
 import { useWaiterOrder } from "./WaiterOrderContext"
@@ -19,6 +27,11 @@ interface Props {
   placing: boolean
   placeError: string | null
   onPlaceOrder: () => void
+  previewing: boolean
+  previewHtml: string | null
+  previewError: string | null
+  onPreview: () => void
+  onClosePreview: () => void
 }
 
 function platesFor(item: MenuItem): number {
@@ -152,7 +165,20 @@ function ImageGallery({
   )
 }
 
-export function WaiterMenuGrid({ mealPeriod, items, loading, error, placing, placeError, onPlaceOrder }: Props) {
+export function WaiterMenuGrid({
+  mealPeriod,
+  items,
+  loading,
+  error,
+  placing,
+  placeError,
+  onPlaceOrder,
+  previewing,
+  previewHtml,
+  previewError,
+  onPreview,
+  onClosePreview,
+}: Props) {
   const navigate = useNavigate()
   const { items: orderItems, addToOrder, updateAccompaniments, updateQuantity, removeItem, totalPrice } = useWaiterOrder()
 
@@ -609,11 +635,44 @@ export function WaiterMenuGrid({ mealPeriod, items, loading, error, placing, pla
                 <Button className="w-full" onClick={onPlaceOrder} disabled={placing}>
                   {placing ? "Placing Order..." : "Place Order"}
                 </Button>
+                <Button variant="outline" className="w-full" onClick={onPreview} disabled={placing || previewing}>
+                  {previewing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating Preview...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4" />
+                      Preview Receipt
+                    </>
+                  )}
+                </Button>
               </CardFooter>
             )}
           </Card>
         </div>
       </div>
+
+      <Dialog open={previewHtml !== null || previewError !== null} onOpenChange={(open) => !open && onClosePreview()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Receipt Preview</DialogTitle>
+            <DialogDescription>
+              This is exactly what will be printed on the customer receipt.
+            </DialogDescription>
+          </DialogHeader>
+          {previewError && <p className="text-sm font-medium text-red-600">{previewError}</p>}
+          {previewHtml && (
+            <iframe
+              srcDoc={previewHtml}
+              title="Receipt preview"
+              className="h-[520px] w-full rounded-md border bg-white"
+            />
+          )}
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

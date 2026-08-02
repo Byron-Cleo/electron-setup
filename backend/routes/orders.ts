@@ -4,6 +4,16 @@ import { ServiceTime } from "../db/generated/prisma/client";
 
 const router = Router();
 
+router.get("/count", async (_req, res) => {
+  try {
+    const count = await prisma.order.count();
+    res.json({ count });
+  } catch (e) {
+    console.error("Error counting orders:", e);
+    res.status(500).json({ error: "Failed to count orders" });
+  }
+});
+
 router.post("/", async (req, res) => {
   const { userId, items, mealType } = req.body;
 
