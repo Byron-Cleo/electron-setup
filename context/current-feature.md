@@ -1,16 +1,23 @@
-# Current Feature — Waiter Order Cart Persistence
+# Current Feature — POS Order Printing (Phase 1: orderNumber)
 
 ## Platform
 
-Not Specified
+backend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
+- Add sequential `orderNumber` to the `Order` model (auto-increment, unique) so receipts can show `#0042`
+- Migration + regenerate client; ensure `POST /api/orders` returns `orderNumber`
+
 ## Notes
+
+- Full 3-phase plan: `context/fix-plan/pos-order-printing.md`
+- Phase 2 = USB customer receipt (HTML renderer + `webContents.print`); Phase 3 = LAN scanner + ESC/POS kitchen/bar tickets
+- Restaurant header hardcoded in the receipt template (no config fetch)
 
 ## History
 
