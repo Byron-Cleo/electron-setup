@@ -14,6 +14,13 @@ Not Started
 
 ## History
 
+### frontend - 2026-08-03 — Deployment setup guides + admin-only Settings
+- 5 new admin-only guide cards in Settings (`Manager.tsx`), in deployment order: Install Node.js (Server) (`NodeJsGuide.tsx`), Build the Windows Installer (`BuildInstallerGuide.tsx`), Enter Restaurant Data (`DataEntryGuide.tsx`), Install Printer Drivers (`PrinterDriversGuide.tsx`), Final Network Test (`NetworkTestGuide.tsx`) — each follows the existing SectionCard/StepList guide pattern with a "how it works" card + troubleshooting checklist
+- Cards restructured with an `adminOnly` flag; manager sees only the 3 config cards (Restaurant Departments, Kitchen Stock Config, POS Printer Config), all 9 server/guide items hidden; `resolvedView` guard prevents manager from opening an admin-only view
+- Route guard in `App.tsx`: `/admin/settings` wrapped in `ProtectedRoute role={["admin","manager"]}` — store/kitchen/waiter can no longer reach Settings even by typing the URL (redirect to login)
+- Verified in browser: admin sees all 12 cards in order, guides render, manager sees 3, store user direct-nav to /admin/settings is bounced
+- Branch: `feature/admin/setup-guides` (merged to main as `7109682`)
+
 ### backend - 2026-08-03 — Manager role with restricted Settings cards
 - New role `manager` added across the stack: `backend/routes/users.ts` `ALLOWED_ROLES`, `User`/`AdminUserRole` types in `electron.d.ts`, `Login.tsx` redirect, `/admin` + kitchen `ProtectedRoute` in `App.tsx`, `AdminLayout` nav items, `Users.tsx` role badge/label (teal "Manager"), and `db:create-admin` demo account (manager@eraeva.com, PIN 5555)
 - Manager has full admin access everywhere EXCEPT Settings: the four server-related cards (Server Connection, Server & Installation Guide, Web Interface Setup (WiFi), PostgreSQL Setup Guide) are hidden via `MANAGER_HIDDEN_VIEWS` filter in `Manager.tsx` (with `resolvedView` guard) — managers can still use Restaurant Departments, Kitchen Stock Config, POS Printer Config, and all other admin pages (Users, Menu, Cashier, Dashboard, Store, Kitchen)
