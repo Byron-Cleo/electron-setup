@@ -221,7 +221,7 @@ function Manager() {
               onClick={() => setActiveView(card.view)}
             >
               {card.step && (
-                <span className="absolute -top-3 -left-3 h-9 w-9 rounded-full bg-admin-accent text-white text-base font-bold flex items-center justify-center shadow-md">
+                <span className="absolute top-3 right-3 h-7 w-7 rounded-full bg-admin-accent text-white text-sm font-bold flex items-center justify-center">
                   {card.step}
                 </span>
               )}
