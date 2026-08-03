@@ -6,7 +6,7 @@ backend
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
@@ -27,6 +27,11 @@ In Progress
 - Branch: `feature/backend/web-interface-wifi` — **DO NOT delete this branch**
 
 ## History
+
+### frontend - 2026-08-03 — Web Interface Setup Guide in Settings
+- Settings → "Web Interface Setup (WiFi)" card (`WebInterfaceGuide.tsx`): read-and-do flow matching ServerInstallationGuide — 1) `npm run build:web -- --server http://<ip>:3001`, 2) start backend (`npm run dev:backend`), 3) find IP (`ipconfig`), 4) open `http://<ip>:3001` from any device + login, 5) what works in browser vs desktop-only (printing). Includes "How it all fits together" card + troubleshooting checklist (Windows firewall port 3001 inbound rule, backend running, exact URL with port)
+- Registered card in `Manager.tsx` (view `web-interface-guide`); verified in served web app — card renders on Settings and the full guide opens cleanly
+- Merged to main: `feature/admin/web-interface-guide` — **DO NOT DELETE this branch**
 
 ### backend - 2026-08-03 — Web Interface over WiFi (serve built frontend from backend)
 - `backend/app.ts` serves `dist-react` statically + SPA fallback (GET, excluding `/api/*` and `/uploads/*`) so the same UI as Electron runs in any browser at `http://<server-ip>:3001`
