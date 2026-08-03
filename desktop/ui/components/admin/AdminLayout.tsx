@@ -3,14 +3,20 @@ import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const allNavItems = [
-  { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin"] as const },
-  { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin"] as const },
-  { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "store"] as const },
-  { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "kitchen"] as const },
-  { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin"] as const },
-  { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin"] as const },
-  { label: "Users", path: "/admin/users", icon: Users, roles: ["admin"] as const },
+const allNavItems: {
+  label: string
+  path: string
+  icon: typeof LayoutDashboard
+  end?: boolean
+  roles: User["role"][]
+}[] = [
+  { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
+  { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
+  { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"] },
+  { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"] },
+  { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"] },
+  { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager"] },
+  { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
 ]
 
 function AdminLayout() {
@@ -18,7 +24,7 @@ function AdminLayout() {
   const logout = useAuthStore((s) => s.logout)
 
   const navItems = allNavItems.filter((item) =>
-    item.roles.includes(user?.role as "admin" | "store" | "kitchen")
+    item.roles.includes(user?.role as User["role"])
   )
 
   return (

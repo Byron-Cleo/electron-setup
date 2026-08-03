@@ -182,7 +182,7 @@ interface User {
   email: string;
   emailVerified: string | null;
   image: string | null;
-  role: "admin" | "waiter" | "store" | "kitchen";
+  role: "admin" | "manager" | "waiter" | "store" | "kitchen";
   isActive: boolean;
   platform: string | null;
   address: unknown;
@@ -195,7 +195,7 @@ interface LoginResponse {
   user: User;
 }
 
-type AdminUserRole = "admin" | "waiter" | "store" | "kitchen";
+type AdminUserRole = "admin" | "manager" | "waiter" | "store" | "kitchen";
 
 interface AdminUser {
   id: string;
