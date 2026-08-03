@@ -36,7 +36,11 @@ function App() {
           }
         >
           <Route index element={<AdminIndex />} />
-          <Route path="settings" element={<AdminManager />} />
+          <Route path="settings" element={
+            <ProtectedRoute role={["admin", "manager"]}>
+              <AdminManager />
+            </ProtectedRoute>
+          } />
           <Route path="store" element={<AdminStore />} />
           <Route path="store/stock-supplies" element={<StockSupplies />} />
           <Route path="store/stock-supplies/new" element={<StockSupplyForm />} />

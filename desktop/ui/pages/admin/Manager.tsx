@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, Printer, Server, BookOpen, Globe, Database } from "lucide-react"
+import { Building2, ChefHat, Printer, Server, BookOpen, Globe, Database, Terminal, PackageCheck, ListChecks, MonitorDown, Network } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
 import PrinterConfig from "@/components/admin/PrinterConfig"
@@ -9,6 +9,11 @@ import ServerConfig from "@/components/admin/ServerConfig"
 import ServerInstallationGuide from "@/components/admin/ServerInstallationGuide"
 import WebInterfaceGuide from "@/components/admin/WebInterfaceGuide"
 import PostgresGuide from "@/components/admin/PostgresGuide"
+import NodeJsGuide from "@/components/admin/NodeJsGuide"
+import BuildInstallerGuide from "@/components/admin/BuildInstallerGuide"
+import DataEntryGuide from "@/components/admin/DataEntryGuide"
+import PrinterDriversGuide from "@/components/admin/PrinterDriversGuide"
+import NetworkTestGuide from "@/components/admin/NetworkTestGuide"
 import { useAuthStore } from "@/stores/auth"
 
 type ActiveView =
@@ -19,71 +24,118 @@ type ActiveView =
   | "server-guide"
   | "web-interface-guide"
   | "postgres-guide"
+  | "nodejs-guide"
+  | "build-installer-guide"
+  | "data-entry-guide"
+  | "printer-drivers-guide"
+  | "network-test-guide"
   | null
 
-const cards: { title: string; description: string; icon: typeof Building2; view: NonNullable<ActiveView> }[] = [
+const cards: {
+  title: string
+  description: string
+  icon: typeof Building2
+  view: NonNullable<ActiveView>
+  adminOnly: boolean
+}[] = [
   {
     title: "Restaurant Departments",
     description: "Manage departments that can request stock",
     icon: Building2,
     view: "departments",
+    adminOnly: false,
   },
   {
     title: "Kitchen Stock Configuration",
     description: "Configure how stock items convert to menu plates",
     icon: ChefHat,
     view: "kitchen-config",
+    adminOnly: false,
   },
   {
     title: "POS Printer Config",
     description: "Configure USB and LAN receipt printers",
     icon: Printer,
     view: "pos-printer",
+    adminOnly: false,
   },
   {
     title: "Server Connection",
     description: "Set the IP address of the backend server for this terminal",
     icon: Server,
     view: "server-config",
+    adminOnly: true,
   },
   {
-    title: "Server & Installation Guide",
-    description: "Step-by-step setup for the server and each POS terminal",
-    icon: BookOpen,
-    view: "server-guide",
-  },
-  {
-    title: "Web Interface Setup (WiFi)",
-    description: "Serve the app over the network so any device can use it in a browser",
-    icon: Globe,
-    view: "web-interface-guide",
+    title: "Install Node.js (Server)",
+    description: "Install the runtime the backend runs on",
+    icon: Terminal,
+    view: "nodejs-guide",
+    adminOnly: true,
   },
   {
     title: "PostgreSQL Setup Guide",
     description: "Install the database, keep it running, and connect it to the backend",
     icon: Database,
     view: "postgres-guide",
+    adminOnly: true,
   },
-]
-
-const MANAGER_HIDDEN_VIEWS: ActiveView[] = [
-  "server-config",
-  "server-guide",
-  "web-interface-guide",
-  "postgres-guide",
+  {
+    title: "Server & Installation Guide",
+    description: "Step-by-step setup for the server and each POS terminal",
+    icon: BookOpen,
+    view: "server-guide",
+    adminOnly: true,
+  },
+  {
+    title: "Build the Windows Installer",
+    description: "Create the .exe that installs the app on every terminal",
+    icon: PackageCheck,
+    view: "build-installer-guide",
+    adminOnly: true,
+  },
+  {
+    title: "Enter Restaurant Data",
+    description: "Add your menu, stock, departments and staff accounts",
+    icon: ListChecks,
+    view: "data-entry-guide",
+    adminOnly: true,
+  },
+  {
+    title: "Install Printer Drivers",
+    description: "Set up receipt printers on each terminal",
+    icon: MonitorDown,
+    view: "printer-drivers-guide",
+    adminOnly: true,
+  },
+  {
+    title: "Final Network Test",
+    description: "Verify the whole system works before opening",
+    icon: Network,
+    view: "network-test-guide",
+    adminOnly: true,
+  },
+  {
+    title: "Web Interface Setup (WiFi)",
+    description: "Serve the app over the network so any device can use it in a browser",
+    icon: Globe,
+    view: "web-interface-guide",
+    adminOnly: true,
+  },
 ]
 
 function Manager() {
   const user = useAuthStore((s) => s.user)
   const [activeView, setActiveView] = useState<ActiveView>(null)
 
-  const visibleCards =
-    user?.role === "manager"
-      ? cards.filter((card) => !MANAGER_HIDDEN_VIEWS.includes(card.view))
-      : cards
+  const isManager = user?.role === "manager"
+
+  const visibleCards = isManager ? cards.filter((card) => !card.adminOnly) : cards
 
   const resolvedView =
-    user?.role === "manager" && MANAGER_HIDDEN_VIEWS.includes(activeView) ? null : activeView
+    isManager && activeView && cards.find((card) => card.view === activeView)?.adminOnly
+      ? null
+      : activeView
 
   return (
     <div>
@@ -115,6 +167,26 @@ function Manager() {
 
       {resolvedView === "postgres-guide" && (
         <PostgresGuide onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "nodejs-guide" && (
+        <NodeJsGuide onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "build-installer-guide" && (
+        <BuildInstallerGuide onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "data-entry-guide" && (
+        <DataEntryGuide onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "printer-drivers-guide" && (
+        <PrinterDriversGuide onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "network-test-guide" && (
+        <NetworkTestGuide onBack={() => setActiveView(null)} />
       )}
 
       {!resolvedView && (
