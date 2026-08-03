@@ -14,6 +14,12 @@ Not Started
 
 ## History
 
+### frontend - 2026-08-03 — PostgreSQL guide fresh-clone patch
+- `PostgresGuide.tsx` step 4 now covers a fresh clone: create `backend/.env` if missing (file is not in the repo — exact create steps), add `DATABASE_URL` with the postgres password, then run `npm run db:generate` BEFORE `npm run db:push` (generated Prisma client is not committed either)
+- Checklist updated to reference generate + push
+- Verified in browser: .env-create text and db:generate code block render
+- Branch: `fix/postgres-guide-fresh-clone` (merged to main as `73757b0`)
+
 ### frontend - 2026-08-03 — Deployment setup guides + admin-only Settings
 - 5 new admin-only guide cards in Settings (`Manager.tsx`), in deployment order: Install Node.js (Server) (`NodeJsGuide.tsx`), Build the Windows Installer (`BuildInstallerGuide.tsx`), Enter Restaurant Data (`DataEntryGuide.tsx`), Install Printer Drivers (`PrinterDriversGuide.tsx`), Final Network Test (`NetworkTestGuide.tsx`) — each follows the existing SectionCard/StepList guide pattern with a "how it works" card + troubleshooting checklist
 - Cards restructured with an `adminOnly` flag; manager sees only the 3 config cards (Restaurant Departments, Kitchen Stock Config, POS Printer Config), all 9 server/guide items hidden; `resolvedView` guard prevents manager from opening an admin-only view
