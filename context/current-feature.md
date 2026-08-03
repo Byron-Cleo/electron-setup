@@ -1,8 +1,8 @@
-# Current Feature — Cashier Order List with Backend Search
+# Current Feature — Web Interface over WiFi
 
 ## Platform
 
-frontend
+backend
 
 ## Status
 
@@ -10,20 +10,31 @@ In Progress
 
 ## Goals
 
-- Cashier tab lists all orders in a `DataTable` (reusable `@/components/ui/data-table`)
-- Search input at the top searches by order number by hitting the backend (`GET /api/orders?orderNumber=X`) and displays the matched order(s) — not client-side filtering
-- Each row has a Details button opening a shadcn `Dialog` listing that order's items (name, qty, unit price, line total, accompaniments) plus an order summary (Order #, meal period, payment method, total, date, paid status)
+- Backend serves the built React app (`dist-react`) as static files so the same UI as the Electron app is reachable in any browser over the LAN
+- Any device on the WiFi network opens `http://<server-ip>:3001`, logs in (PIN), views the menu, and updates stock when running low
+- SPA fallback serves `index.html` for browser routes (`/admin`, `/store`, `/waiter`) so refresh/deep-links don't 404
+- `build:web -- --server <ip>` produces a web bundle whose API base + image origin point at the server IP
+- `/api/*` and `/uploads/*` are never swallowed by the SPA fallback
 
 ## Notes
 
-- Placeholder lives at `desktop/ui/pages/admin/Cashier.tsx` (`<Heading>Cashier</Heading>` + "Coming soon")
-- Backend: add `GET /api/orders` in `backend/routes/orders.ts` with optional `?orderNumber=` query; include `OrderItem` (with `Starch`/`Vegetable`) and `User.name` as waiter
-- `@/lib/api.ts`: add `getOrders(orderNumber?: number)` using `apiFetch` (no `window.electron` fallback — same as `createOrder`/`getOrderCount`)
-- Extend `Order`/`OrderItem` types in `desktop/ui/types/electron.d.ts`: waiter name + starch/vegetable names on items
-- Clear search reloads all orders
-- Meal/payment/total values are Decimal from Prisma — already serialized to numbers by Express JSON
+- Backend: ESM Express 4 (`backend/app.ts`), binds `0.0.0.0:3001`, open CORS — already network-ready
+- Serve `dist-react` statically in `backend/app.ts` after API routes; resolve path robustly (dev cwd = `backend/`, compiled cwd = root)
+- `lib/api.ts` already uses `VITE_API_BASE`/`VITE_API_ORIGIN` — no change
+- **Critical**: `stores/auth.ts` hardcodes `API_BASE = "http://localhost:3001/api"` → change to `import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"` or browser login from other devices hits their own localhost
+- Electron-only features (printing, printer discovery, saved server-config) unavailable in browser — already guarded
+- Verification: `build:web` → start backend → curl `/` (index.html), `/admin` (SPA fallback), `/api/health`, asset path
+- Branch: `feature/backend/web-interface-wifi` — **DO NOT delete this branch**
 
 ## History
+
+### backend - 2026-08-03 — Web Interface over WiFi (serve built frontend from backend)
+- `backend/app.ts` serves `dist-react` statically + SPA fallback (GET, excluding `/api/*` and `/uploads/*`) so the same UI as Electron runs in any browser at `http://<server-ip>:3001`
+- Robust `dist-react` path resolution across run contexts (dev cwd = `backend/`, compiled cwd = root)
+- `scripts/build-web.mjs` + `build:web` npm script: `vite build --base=/` with `VITE_API_BASE`/`VITE_API_ORIGIN` baked to the server IP (absolute base so deep links resolve `/assets/*` from the server root)
+- Fixed `desktop/ui/stores/auth.ts` hardcoded `API_BASE` → `import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"` (browser login on other devices was hitting their own localhost)
+- Verified end-to-end via browser on `http://localhost:3001`: served app loads, PIN 1234 login → admin dashboard renders, deep link `/admin/menu` serves the app (no MIME/404), `/api/*` + `/health` + uploads untouched, `/admin` deep link via SPA fallback returns 200 text/html
+- Branch: `feature/backend/web-interface-wifi` — **DO NOT DELETE this branch**
 
 ### frontend - 2026-08-03 — Server Config for Network Terminals
 - Electron main `server-config.ts`: reads/writes `server-config.json` in `app.getPath("userData")` (per-terminal, mirrors `printers.ts` pattern); `getApiBase()` precedence = config file → `API_BASE` env → baked default; `testServerConnection()` pings `/health` (5s timeout)

@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import mealTypesRouter from "./routes/mealTypes";
 import menuRouter from "./routes/menu";
@@ -17,6 +18,22 @@ import dailyReportRouter from "./routes/dailyReport";
 import ordersRouter from "./routes/orders";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// The built React app lives at the repo root (dist-react). Resolve it across
+// run contexts: dev runs via `npm run dev --prefix backend` (cwd = backend/),
+// compiled runs via `node dist/index.js` (cwd = repo root).
+function resolveDistReact(): string | null {
+  const candidates = [
+    path.resolve(process.cwd(), "../dist-react"),
+    path.resolve(process.cwd(), "dist-react"),
+    path.resolve(__dirname, "../dist-react"),
+    path.resolve(__dirname, "../../dist-react"),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, "index.html"))) return dir;
+  }
+  return null;
+}
 
 const app = express();
 
@@ -42,5 +59,22 @@ app.use("/api/kitchen/inventory", kitchenInventoryRouter);
 app.use("/api/kitchen-config", kitchenConfigRouter);
 app.use("/api/reports", dailyReportRouter);
 app.use("/api/orders", ordersRouter);
+
+// Serve the built React app (web interface over WiFi) + SPA fallback.
+const distReact = resolveDistReact();
+if (distReact) {
+  app.use(express.static(distReact));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) {
+      next();
+      return;
+    }
+    res.sendFile(path.join(distReact, "index.html"), (err) => {
+      if (err) next();
+    });
+  });
+} else {
+  console.warn("dist-react not found — web interface over WiFi is disabled (build it with `npm run build:web`).");
+}
 
 export default app;

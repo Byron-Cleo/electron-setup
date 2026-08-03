@@ -22,7 +22,8 @@
     "build:all": "tsc -b && vite build && electron-builder --mac --win --linux --config electron-builder.json",
     "build:network": "node scripts/build-network.mjs",
     "build:win:network": "node scripts/build-network.mjs --platform win",
-    "build:mac:network": "node scripts/build-network.mjs --platform mac"
+    "build:mac:network": "node scripts/build-network.mjs --platform mac",
+    "build:web": "node scripts/build-web.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
