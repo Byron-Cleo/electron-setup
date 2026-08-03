@@ -39,6 +39,7 @@ const cards: {
   icon: typeof Building2
   view: NonNullable<ActiveView>
   adminOnly: boolean
+  step?: number
 }[] = [
   {
     title: "Restaurant Departments",
@@ -74,6 +75,7 @@ const cards: {
     icon: Luggage,
     view: "pre-deploy-guide",
     adminOnly: true,
+    step: 1,
   },
   {
     title: "Install Node.js (Server)",
@@ -81,6 +83,7 @@ const cards: {
     icon: Terminal,
     view: "nodejs-guide",
     adminOnly: true,
+    step: 2,
   },
   {
     title: "PostgreSQL Setup Guide",
@@ -88,6 +91,7 @@ const cards: {
     icon: Database,
     view: "postgres-guide",
     adminOnly: true,
+    step: 3,
   },
   {
     title: "Server & Installation Guide",
@@ -95,6 +99,7 @@ const cards: {
     icon: BookOpen,
     view: "server-guide",
     adminOnly: true,
+    step: 4,
   },
   {
     title: "Build the Windows Installer",
@@ -102,6 +107,7 @@ const cards: {
     icon: PackageCheck,
     view: "build-installer-guide",
     adminOnly: true,
+    step: 5,
   },
   {
     title: "Enter Restaurant Data",
@@ -109,6 +115,7 @@ const cards: {
     icon: ListChecks,
     view: "data-entry-guide",
     adminOnly: true,
+    step: 6,
   },
   {
     title: "Install Printer Drivers",
@@ -116,6 +123,7 @@ const cards: {
     icon: MonitorDown,
     view: "printer-drivers-guide",
     adminOnly: true,
+    step: 7,
   },
   {
     title: "Final Network Test",
@@ -123,6 +131,7 @@ const cards: {
     icon: Network,
     view: "network-test-guide",
     adminOnly: true,
+    step: 8,
   },
   {
     title: "Web Interface Setup (WiFi)",
@@ -130,6 +139,7 @@ const cards: {
     icon: Globe,
     view: "web-interface-guide",
     adminOnly: true,
+    step: 9,
   },
 ]
 
@@ -207,9 +217,14 @@ function Manager() {
           {visibleCards.map((card) => (
             <Card
               key={card.view}
-              className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+              className="relative p-6 cursor-pointer hover:border-admin-accent transition-colors"
               onClick={() => setActiveView(card.view)}
             >
+              {card.step && (
+                <span className="absolute -top-3 -left-3 h-9 w-9 rounded-full bg-admin-accent text-white text-base font-bold flex items-center justify-center shadow-md">
+                  {card.step}
+                </span>
+              )}
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
                   <card.icon size={24} className="text-green-600" />
