@@ -14,6 +14,18 @@ Not Started
 
 ## History
 
+### backend - 2026-08-03 — Manager role with restricted Settings cards
+- New role `manager` added across the stack: `backend/routes/users.ts` `ALLOWED_ROLES`, `User`/`AdminUserRole` types in `electron.d.ts`, `Login.tsx` redirect, `/admin` + kitchen `ProtectedRoute` in `App.tsx`, `AdminLayout` nav items, `Users.tsx` role badge/label (teal "Manager"), and `db:create-admin` demo account (manager@eraeva.com, PIN 5555)
+- Manager has full admin access everywhere EXCEPT Settings: the four server-related cards (Server Connection, Server & Installation Guide, Web Interface Setup (WiFi), PostgreSQL Setup Guide) are hidden via `MANAGER_HIDDEN_VIEWS` filter in `Manager.tsx` (with `resolvedView` guard) — managers can still use Restaurant Departments, Kitchen Stock Config, POS Printer Config, and all other admin pages (Users, Menu, Cashier, Dashboard, Store, Kitchen)
+- Verified in browser: admin sees all 7 Settings cards; manager sees 3 and still accesses Users; backend tsc + eslint clean
+- Branch: `feature/admin/postgres-guide` (merged to main as `940c535`)
+
+### frontend - 2026-08-03 — PostgreSQL Setup Guide in Settings
+- New Settings card `PostgresGuide.tsx` ("PostgreSQL Setup Guide", icon Database) registered in `Manager.tsx` — 5 read-and-do sections matching the Server Installation Guide style: 1) install PostgreSQL 13+ (17 recommended) from postgresql.org, keep port 5432, note the postgres password, 2) keep it running (services.msc → service Running, Startup type Automatic), 3) create `eraevadb` via pgAdmin or `psql -U postgres` + `CREATE DATABASE eraevadb`, 4) connect backend by setting `DATABASE_URL="postgresql://postgres:YOURPASSWORD@localhost:5432/eraevadb"` in `backend/.env` + `npm run db:push --prefix backend`, 5) verify with `npm run dev:backend` (connects, port 3001)
+- Includes "Why this matters" card (database stores all data, runs as background service, backup via pgAdmin) and troubleshooting checklist (service running, correct password/port/name, firewall TCP 5432, db:push run)
+- Verified in served web app: all 5 sections + code blocks render
+- Branch: `feature/admin/postgres-guide` (merged to main as `940c535`)
+
 ### backend - 2026-08-03 — User Management (CRUD)
 - `backend/routes/users.ts` mounted at `/api/users`: GET list (serialized without PIN hash; `hasPin` flag), POST create (name/email required, PIN ≥ 4 chars hashed with bcrypt, role whitelist, email uniqueness → 409), PUT update (optional PIN reset only re-hashes on change, role/name/email/isActive edits, last-active-admin guard), DELETE (409 guard on Order/StockRequest/StockFulfillment/CookingRecord history + last-admin guard)
 - `backend/package.json` `db:create-admin` script (was a bare script) — one-time bootstrap of the first admin + demo staff on a brand-new database
