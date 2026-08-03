@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, Printer, Server, BookOpen, Globe, Database, Terminal, PackageCheck, ListChecks, MonitorDown, Network } from "lucide-react"
+import { Building2, ChefHat, Printer, Server, BookOpen, Globe, Database, Terminal, PackageCheck, ListChecks, MonitorDown, Network, Luggage } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
 import PrinterConfig from "@/components/admin/PrinterConfig"
@@ -14,6 +14,7 @@ import BuildInstallerGuide from "@/components/admin/BuildInstallerGuide"
 import DataEntryGuide from "@/components/admin/DataEntryGuide"
 import PrinterDriversGuide from "@/components/admin/PrinterDriversGuide"
 import NetworkTestGuide from "@/components/admin/NetworkTestGuide"
+import PreDeploymentGuide from "@/components/admin/PreDeploymentGuide"
 import { useAuthStore } from "@/stores/auth"
 
 type ActiveView =
@@ -29,6 +30,7 @@ type ActiveView =
   | "data-entry-guide"
   | "printer-drivers-guide"
   | "network-test-guide"
+  | "pre-deploy-guide"
   | null
 
 const cards: {
@@ -64,6 +66,13 @@ const cards: {
     description: "Set the IP address of the backend server for this terminal",
     icon: Server,
     view: "server-config",
+    adminOnly: true,
+  },
+  {
+    title: "Pre-Deployment Checklist (Before You Travel)",
+    description: "Build, test and prepare everything at home first",
+    icon: Luggage,
+    view: "pre-deploy-guide",
     adminOnly: true,
   },
   {
@@ -187,6 +196,10 @@ function Manager() {
 
       {resolvedView === "network-test-guide" && (
         <NetworkTestGuide onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "pre-deploy-guide" && (
+        <PreDeploymentGuide onBack={() => setActiveView(null)} />
       )}
 
       {!resolvedView && (
