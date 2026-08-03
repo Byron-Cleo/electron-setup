@@ -129,21 +129,23 @@ exit`}</CodeBlock>
         <SectionCard title="4. Connect the backend to the database" icon={Plug}>
           <StepList
             steps={[
-              "Open the project folder and edit backend/.env with a text editor.",
-              "Set DATABASE_URL so it includes the postgres password from Step 1 (replace YOURPASSWORD):",
+              "Open the project folder. The file backend/.env is not included in the downloaded project, so create it if it is missing: right-click in the backend folder → New → Text Document → rename it to .env.",
+              "Open it with a text editor and add this line, using the postgres password from Step 1 (replace YOURPASSWORD):",
             ]}
           />
           <CodeBlock>DATABASE_URL="postgresql://postgres:YOURPASSWORD@localhost:5432/eraevadb"</CodeBlock>
           <StepList
             steps={[
               "If the server IP is not this computer (dev setup), replace localhost with that IP.",
-              "Create the app's tables — one-time command from the project root:",
+              "Save and close the file.",
+              "Generate the database client and create the app's tables — one-time commands from the project root, in this order:",
             ]}
           />
-          <CodeBlock>npm run db:push --prefix backend</CodeBlock>
+          <CodeBlock>{`npm run db:generate --prefix backend
+npm run db:push --prefix backend`}</CodeBlock>
           <StepList
             steps={[
-              "You should see it create the tables and finish with no errors.",
+              "Both should finish with no errors. The second one creates the tables.",
             ]}
           />
         </SectionCard>
@@ -211,7 +213,7 @@ exit`}</CodeBlock>
             </li>
             <li className="flex gap-2">
               <Terminal size={16} className="mt-0.5 shrink-0 text-green-600" />
-              Was npm run db:push run after creating the database?
+              Were npm run db:generate and npm run db:push run after creating the database?
             </li>
           </ul>
         </Card>
