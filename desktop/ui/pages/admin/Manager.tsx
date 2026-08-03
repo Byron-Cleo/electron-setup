@@ -1,12 +1,13 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, Printer, Server, BookOpen } from "lucide-react"
+import { Building2, ChefHat, Printer, Server, BookOpen, Globe } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
 import PrinterConfig from "@/components/admin/PrinterConfig"
 import ServerConfig from "@/components/admin/ServerConfig"
 import ServerInstallationGuide from "@/components/admin/ServerInstallationGuide"
+import WebInterfaceGuide from "@/components/admin/WebInterfaceGuide"
 
 type ActiveView =
   | "departments"
@@ -14,6 +15,7 @@ type ActiveView =
   | "pos-printer"
   | "server-config"
   | "server-guide"
+  | "web-interface-guide"
   | null
 
 const cards: { title: string; description: string; icon: typeof Building2; view: NonNullable<ActiveView> }[] = [
@@ -47,6 +49,12 @@ const cards: { title: string; description: string; icon: typeof Building2; view:
     icon: BookOpen,
     view: "server-guide",
   },
+  {
+    title: "Web Interface Setup (WiFi)",
+    description: "Serve the app over the network so any device can use it in a browser",
+    icon: Globe,
+    view: "web-interface-guide",
+  },
 ]
 
 function Manager() {
@@ -74,6 +82,10 @@ function Manager() {
 
       {activeView === "server-guide" && (
         <ServerInstallationGuide onBack={() => setActiveView(null)} />
+      )}
+
+      {activeView === "web-interface-guide" && (
+        <WebInterfaceGuide onBack={() => setActiveView(null)} />
       )}
 
       {!activeView && (
