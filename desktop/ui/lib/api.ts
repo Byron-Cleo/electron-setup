@@ -453,3 +453,21 @@ export async function testServerConnection(): Promise<ServerStatus> {
   }
   return { online: null, reason: "Unavailable in browser mode" }
 }
+
+// ─── User Management ────────────────────────────────────────────────────────
+
+export async function getUsers(): Promise<AdminUser[]> {
+  return apiFetch("/users")
+}
+
+export async function createUser(data: AdminUserCreateData): Promise<AdminUser> {
+  return apiFetch("/users", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function updateUser(id: string, data: AdminUserUpdateData): Promise<AdminUser> {
+  return apiFetch(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export async function deleteUser(id: string): Promise<{ message: string }> {
+  return apiFetch(`/users/${id}`, { method: "DELETE" })
+}
