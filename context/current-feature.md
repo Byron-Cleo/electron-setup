@@ -1,27 +1,16 @@
-# Current Feature — User Management (CRUD)
+# Current Feature
 
 ## Platform
 
-backend
+Not Specified
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Admin can create, edit, deactivate/activate, and delete staff accounts from the app (Admin → Users) — no scripts needed for day-to-day staff management
-- PIN-based login stays the source of truth: create requires a PIN, edit can reset a PIN, deactivated users cannot log in
-- Safety: cannot delete the last active admin; cannot delete users with order/stock/cooking history (deactivate instead); cannot deactivate/delete your own account
-- The very first admin on a brand-new database is created by a one-time script (`npm run db:create-admin`) — documented in the Server & Installation Guide
-
 ## Notes
-
-- Backend `routes/users.ts` (mounted at `/api/users`): GET list (never returns PIN hash, exposes `hasPin`), POST create (email uniqueness + role + PIN length validation, bcrypt hash), PUT update (optional PIN reset, re-hash only if changed; last-active-admin guard on deactivate), DELETE (history guard: Order / StockRequest / StockFulfillment / CookingRecord → 409; last-admin guard)
-- Roles: `admin | waiter | store | kitchen` (matches the app's `User["role"]` union and role-based routing)
-- Frontend `pages/admin/Users.tsx` replaces the "Coming soon" placeholder: DataTable (Name / Email / Role badge / PIN / Status / Actions), search, pagination, Add/Edit dialog (react-hook-free controlled state, matching DepartmentManager), Delete confirm, Deactivate/Activate toggle, "(you)" marker + self-protection via `useAuthStore`
-- `lib/api.ts` `getUsers/createUser/updateUser/deleteUser`; types `AdminUser` / `AdminUserCreateData` / `AdminUserUpdateData` in `electron.d.ts` (no Electron IPC — browser fetch fallback is the only path)
-- Branch: `feature/admin/user-management`
 
 ## History
 
