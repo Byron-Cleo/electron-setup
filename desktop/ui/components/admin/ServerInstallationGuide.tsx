@@ -12,6 +12,7 @@ import {
   Plug,
   ShieldAlert,
   Database,
+  UsersRound,
 } from "lucide-react"
 
 interface Props {
@@ -96,8 +97,24 @@ export default function ServerInstallationGuide({ onBack }: Props) {
           />
         </SectionCard>
 
-        {/* Step 2 — find the IP */}
-        <SectionCard title="2. Note the server's IP address" icon={Terminal}>
+        {/* Step 2 — create the first admin */}
+        <SectionCard title="2. Create the first admin (only on a brand-new database)" icon={UsersRound}>
+          <StepList
+            steps={[
+              "Before anyone can log in, the database needs at least one admin. On a new database there are no users yet, so this one-time script creates them (from the backend folder, or from the project root with --prefix backend):",
+            ]}
+          />
+          <CodeBlock>npm run db:create-admin --prefix backend</CodeBlock>
+          <StepList
+            steps={[
+              "It creates the admin (PIN 1234) plus one waiter, store and kitchen account for testing.",
+              "Run this once. After that, manage all staff from Admin → Users in the app — add, edit, reset PINs, deactivate or delete. This script is only for the very first admin.",
+            ]}
+          />
+        </SectionCard>
+
+        {/* Step 3 — find the IP */}
+        <SectionCard title="3. Note the server's IP address" icon={Terminal}>
           <StepList
             steps={[
               "On the server computer, open Command Prompt and run:",
@@ -107,13 +124,13 @@ export default function ServerInstallationGuide({ onBack }: Props) {
           <StepList
             steps={[
               "Look for the IPv4 Address of the active connection, e.g. 192.168.1.50.",
-              "Keep this IP handy — you will use it in Step 3.",
+              "Keep this IP handy — you will use it in Step 4.",
             ]}
           />
         </SectionCard>
 
-        {/* Step 3 — build the installer */}
-        <SectionCard title="3. Build the Windows installer — the easy way" icon={PackageCheck}>
+        {/* Step 4 — build the installer */}
+        <SectionCard title="4. Build the Windows installer — the easy way" icon={PackageCheck}>
           <StepList
             steps={[
               "Do this once, on any computer that has Node.js and the project installed.",
@@ -130,8 +147,8 @@ export default function ServerInstallationGuide({ onBack }: Props) {
           />
         </SectionCard>
 
-        {/* Step 4 — install */}
-        <SectionCard title="4. Install the app on each terminal" icon={MonitorDown}>
+        {/* Step 5 — install */}
+        <SectionCard title="5. Install the app on each terminal" icon={MonitorDown}>
           <StepList
             steps={[
               "Copy the installer to the terminal (USB drive or shared folder).",
@@ -141,20 +158,20 @@ export default function ServerInstallationGuide({ onBack }: Props) {
           />
         </SectionCard>
 
-        {/* Step 5 — connect */}
-        <SectionCard title="5. Connect the terminal to the server" icon={Wifi}>
+        {/* Step 6 — connect */}
+        <SectionCard title="6. Connect the terminal to the server" icon={Wifi}>
           <StepList
             steps={[
               "Open Settings → Server Connection.",
-              "The API endpoint shown should already be the server IP from Step 3. If the IP ever changes, just type the new one here.",
+              "The API endpoint shown should already be the server IP from Step 4. If the IP ever changes, just type the new one here.",
               "Click Test Connection — the badge should turn green (Connected).",
               "Click Save Server. The terminal is now connected — no rebuild or restart needed.",
             ]}
           />
         </SectionCard>
 
-        {/* Step 6 — printers */}
-        <SectionCard title="6. Set up printers" icon={Printer}>
+        {/* Step 7 — printers */}
+        <SectionCard title="7. Set up printers" icon={Printer}>
           <StepList
             steps={[
               "Open Settings → POS Printer Config.",

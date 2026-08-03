@@ -195,6 +195,36 @@ interface LoginResponse {
   user: User;
 }
 
+type AdminUserRole = "admin" | "waiter" | "store" | "kitchen";
+
+interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: AdminUserRole;
+  isActive: boolean;
+  hasPin: boolean;
+  platform: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AdminUserCreateData {
+  name: string;
+  email: string;
+  pin: string;
+  role: AdminUserRole;
+  isActive?: boolean;
+}
+
+interface AdminUserUpdateData {
+  name?: string;
+  email?: string;
+  pin?: string;
+  role?: AdminUserRole;
+  isActive?: boolean;
+}
+
 interface StockSupply {
   id: string;
   name: string;

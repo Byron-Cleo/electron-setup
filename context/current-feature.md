@@ -1,4 +1,4 @@
-# Current Feature — Web Interface over WiFi
+# Current Feature — User Management (CRUD)
 
 ## Platform
 
@@ -6,27 +6,33 @@ backend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-- Backend serves the built React app (`dist-react`) as static files so the same UI as the Electron app is reachable in any browser over the LAN
-- Any device on the WiFi network opens `http://<server-ip>:3001`, logs in (PIN), views the menu, and updates stock when running low
-- SPA fallback serves `index.html` for browser routes (`/admin`, `/store`, `/waiter`) so refresh/deep-links don't 404
-- `build:web -- --server <ip>` produces a web bundle whose API base + image origin point at the server IP
-- `/api/*` and `/uploads/*` are never swallowed by the SPA fallback
+- Admin can create, edit, deactivate/activate, and delete staff accounts from the app (Admin → Users) — no scripts needed for day-to-day staff management
+- PIN-based login stays the source of truth: create requires a PIN, edit can reset a PIN, deactivated users cannot log in
+- Safety: cannot delete the last active admin; cannot delete users with order/stock/cooking history (deactivate instead); cannot deactivate/delete your own account
+- The very first admin on a brand-new database is created by a one-time script (`npm run db:create-admin`) — documented in the Server & Installation Guide
 
 ## Notes
 
-- Backend: ESM Express 4 (`backend/app.ts`), binds `0.0.0.0:3001`, open CORS — already network-ready
-- Serve `dist-react` statically in `backend/app.ts` after API routes; resolve path robustly (dev cwd = `backend/`, compiled cwd = root)
-- `lib/api.ts` already uses `VITE_API_BASE`/`VITE_API_ORIGIN` — no change
-- **Critical**: `stores/auth.ts` hardcodes `API_BASE = "http://localhost:3001/api"` → change to `import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"` or browser login from other devices hits their own localhost
-- Electron-only features (printing, printer discovery, saved server-config) unavailable in browser — already guarded
-- Verification: `build:web` → start backend → curl `/` (index.html), `/admin` (SPA fallback), `/api/health`, asset path
-- Branch: `feature/backend/web-interface-wifi` — **DO NOT delete this branch**
+- Backend `routes/users.ts` (mounted at `/api/users`): GET list (never returns PIN hash, exposes `hasPin`), POST create (email uniqueness + role + PIN length validation, bcrypt hash), PUT update (optional PIN reset, re-hash only if changed; last-active-admin guard on deactivate), DELETE (history guard: Order / StockRequest / StockFulfillment / CookingRecord → 409; last-admin guard)
+- Roles: `admin | waiter | store | kitchen` (matches the app's `User["role"]` union and role-based routing)
+- Frontend `pages/admin/Users.tsx` replaces the "Coming soon" placeholder: DataTable (Name / Email / Role badge / PIN / Status / Actions), search, pagination, Add/Edit dialog (react-hook-free controlled state, matching DepartmentManager), Delete confirm, Deactivate/Activate toggle, "(you)" marker + self-protection via `useAuthStore`
+- `lib/api.ts` `getUsers/createUser/updateUser/deleteUser`; types `AdminUser` / `AdminUserCreateData` / `AdminUserUpdateData` in `electron.d.ts` (no Electron IPC — browser fetch fallback is the only path)
+- Branch: `feature/admin/user-management`
 
 ## History
+
+### backend - 2026-08-03 — User Management (CRUD)
+- `backend/routes/users.ts` mounted at `/api/users`: GET list (serialized without PIN hash; `hasPin` flag), POST create (name/email required, PIN ≥ 4 chars hashed with bcrypt, role whitelist, email uniqueness → 409), PUT update (optional PIN reset only re-hashes on change, role/name/email/isActive edits, last-active-admin guard), DELETE (409 guard on Order/StockRequest/StockFulfillment/CookingRecord history + last-admin guard)
+- `backend/package.json` `db:create-admin` script (was a bare script) — one-time bootstrap of the first admin + demo staff on a brand-new database
+- `lib/api.ts` `getUsers/createUser/updateUser/deleteUser`; `AdminUser`/`AdminUserCreateData`/`AdminUserUpdateData` types in `electron.d.ts`
+- `pages/admin/Users.tsx` full management page (was "Coming soon"): DataTable with search + pagination, role/status badges, PIN set indicator, Add/Edit dialog (role select, PIN reset, active checkbox), Delete confirm, Deactivate/Activate toggle, "(you)" self-marker with self-protection
+- Server & Installation Guide: new step 2 "Create the first admin" (`npm run db:create-admin --prefix backend`), steps renumbered
+- Verified end-to-end in browser: create → duplicate email blocked → edit (role + PIN reset) → login with new PIN ✓ / old PIN rejected ✓ → deactivate blocks login → delete; last-admin + delete guards via curl; eslint clean on new files, backend tsc + vite build pass
+- Branch: feature/admin/user-management
 
 ### frontend - 2026-08-03 — Web Interface Setup Guide in Settings
 - Settings → "Web Interface Setup (WiFi)" card (`WebInterfaceGuide.tsx`): read-and-do flow matching ServerInstallationGuide — 1) `npm run build:web -- --server http://<ip>:3001`, 2) start backend (`npm run dev:backend`), 3) find IP (`ipconfig`), 4) open `http://<ip>:3001` from any device + login, 5) what works in browser vs desktop-only (printing). Includes "How it all fits together" card + troubleshooting checklist (Windows firewall port 3001 inbound rule, backend running, exact URL with port)
