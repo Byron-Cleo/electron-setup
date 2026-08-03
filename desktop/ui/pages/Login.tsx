@@ -105,6 +105,7 @@ function Login() {
     if (user) {
       const paths: Record<string, string> = {
         admin: "/admin",
+        manager: "/admin",
         waiter: "/waiter",
         store: "/admin",
         kitchen: "/admin",

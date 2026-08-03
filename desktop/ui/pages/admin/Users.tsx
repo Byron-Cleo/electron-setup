@@ -26,6 +26,7 @@ import { useAuthStore } from "@/stores/auth"
 
 const ROLE_STYLES: Record<AdminUserRole, string> = {
   admin: "bg-green-500/15 text-green-600",
+  manager: "bg-teal-500/15 text-teal-600",
   waiter: "bg-blue-500/15 text-blue-600",
   store: "bg-amber-500/15 text-amber-600",
   kitchen: "bg-purple-500/15 text-purple-600",
@@ -33,6 +34,7 @@ const ROLE_STYLES: Record<AdminUserRole, string> = {
 
 const ROLE_LABELS: Record<AdminUserRole, string> = {
   admin: "Admin",
+  manager: "Manager",
   waiter: "Waiter",
   store: "Store",
   kitchen: "Kitchen",

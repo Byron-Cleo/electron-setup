@@ -22,7 +22,6 @@ function AdminIndex() {
   if (user?.role === "kitchen") return <Navigate to="/admin/kitchen" replace />
   return <Dashboard />
 }
-
 function App() {
   return (
     <BrowserRouter>
@@ -31,7 +30,7 @@ function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute role={["admin", "store", "kitchen"]}>
+            <ProtectedRoute role={["admin", "manager", "store", "kitchen"]}>
               <AdminLayout />
             </ProtectedRoute>
           }
@@ -45,7 +44,7 @@ function App() {
           <Route path="users" element={<AdminUsers />} />
           <Route path="menu" element={<AdminMenu />} />
           <Route path="kitchen" element={
-            <ProtectedRoute role={["admin", "kitchen"]}>
+            <ProtectedRoute role={["admin", "manager", "kitchen"]}>
               <AdminKitchen />
             </ProtectedRoute>
           } />

@@ -1,13 +1,15 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, Printer, Server, BookOpen, Globe } from "lucide-react"
+import { Building2, ChefHat, Printer, Server, BookOpen, Globe, Database } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
 import PrinterConfig from "@/components/admin/PrinterConfig"
 import ServerConfig from "@/components/admin/ServerConfig"
 import ServerInstallationGuide from "@/components/admin/ServerInstallationGuide"
 import WebInterfaceGuide from "@/components/admin/WebInterfaceGuide"
+import PostgresGuide from "@/components/admin/PostgresGuide"
+import { useAuthStore } from "@/stores/auth"
 
 type ActiveView =
   | "departments"
@@ -16,6 +18,7 @@ type ActiveView =
   | "server-config"
   | "server-guide"
   | "web-interface-guide"
+  | "postgres-guide"
   | null
 
 const cards: { title: string; description: string; icon: typeof Building2; view: NonNullable<ActiveView> }[] = [
@@ -55,42 +58,68 @@ const cards: { title: string; description: string; icon: typeof Building2; view:
     icon: Globe,
     view: "web-interface-guide",
   },
+  {
+    title: "PostgreSQL Setup Guide",
+    description: "Install the database, keep it running, and connect it to the backend",
+    icon: Database,
+    view: "postgres-guide",
+  },
+]
+
+const MANAGER_HIDDEN_VIEWS: ActiveView[] = [
+  "server-config",
+  "server-guide",
+  "web-interface-guide",
+  "postgres-guide",
 ]
 
 function Manager() {
+  const user = useAuthStore((s) => s.user)
   const [activeView, setActiveView] = useState<ActiveView>(null)
+
+  const visibleCards =
+    user?.role === "manager"
+      ? cards.filter((card) => !MANAGER_HIDDEN_VIEWS.includes(card.view))
+      : cards
+
+  const resolvedView =
+    user?.role === "manager" && MANAGER_HIDDEN_VIEWS.includes(activeView) ? null : activeView
 
   return (
     <div>
       <Heading as="h1" className="mb-6 text-admin-header-text">Settings</Heading>
 
-      {activeView === "departments" && (
+      {resolvedView === "departments" && (
         <DepartmentManager onBack={() => setActiveView(null)} />
       )}
 
-      {activeView === "kitchen-config" && (
+      {resolvedView === "kitchen-config" && (
         <KitchenStockConfig onBack={() => setActiveView(null)} />
       )}
 
-      {activeView === "pos-printer" && (
+      {resolvedView === "pos-printer" && (
         <PrinterConfig onBack={() => setActiveView(null)} />
       )}
 
-      {activeView === "server-config" && (
+      {resolvedView === "server-config" && (
         <ServerConfig onBack={() => setActiveView(null)} />
       )}
 
-      {activeView === "server-guide" && (
+      {resolvedView === "server-guide" && (
         <ServerInstallationGuide onBack={() => setActiveView(null)} />
       )}
 
-      {activeView === "web-interface-guide" && (
+      {resolvedView === "web-interface-guide" && (
         <WebInterfaceGuide onBack={() => setActiveView(null)} />
       )}
 
-      {!activeView && (
+      {resolvedView === "postgres-guide" && (
+        <PostgresGuide onBack={() => setActiveView(null)} />
+      )}
+
+      {!resolvedView && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {cards.map((card) => (
+          {visibleCards.map((card) => (
             <Card
               key={card.view}
               className="p-6 cursor-pointer hover:border-admin-accent transition-colors"

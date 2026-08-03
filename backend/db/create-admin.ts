@@ -11,6 +11,7 @@ async function main() {
 
   const staff = [
     { name: "Byron Ochara", email: "admin@eraeva.com", role: "admin", pin: "1234" },
+    { name: "Manager", email: "manager@eraeva.com", role: "manager", pin: "5555" },
     { name: "Waiter Jane", email: "waiter@eraeva.com", role: "waiter", pin: "1111" },
     { name: "Store Keeper", email: "store@eraeva.com", role: "store", pin: "2222" },
     { name: "Chef Bob", email: "kitchen@eraeva.com", role: "kitchen", pin: "3333" },
