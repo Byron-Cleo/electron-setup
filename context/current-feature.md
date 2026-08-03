@@ -14,6 +14,12 @@ Not Started
 
 ## History
 
+### frontend - 2026-08-03 — Pre-Deployment Checklist guide
+- New admin-only card "Pre-Deployment Checklist (Before You Travel)" (`PreDeploymentGuide.tsx`, icon Luggage) placed first among the setup guides in `Manager.tsx`
+- 6 sections: build & test the Windows installer, test printers on Windows, run one order end-to-end, download everything in advance, gather the hardware, prepare the restaurant data — plus a "Why it matters" and "Ready to travel when…" checklist
+- Verified in browser: card renders first among guides with all 6 sections
+- Branch: `feature/admin/pre-deploy-checklist` (merged to main as `7535ef7`)
+
 ### frontend - 2026-08-03 — PostgreSQL guide fresh-clone patch
 - `PostgresGuide.tsx` step 4 now covers a fresh clone: create `backend/.env` if missing (file is not in the repo — exact create steps), add `DATABASE_URL` with the postgres password, then run `npm run db:generate` BEFORE `npm run db:push` (generated Prisma client is not committed either)
 - Checklist updated to reference generate + push
