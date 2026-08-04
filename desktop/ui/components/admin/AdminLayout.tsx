@@ -31,7 +31,7 @@ function AdminLayout() {
     <div className="h-screen flex overflow-hidden bg-admin-content">
       <aside className="w-60 bg-admin-sidebar flex flex-col shrink-0 border-r border-admin-card-border">
         <div className="flex flex-col items-center gap-1 pt-4 pb-2 px-4">
-          <img src="/images/logo/eraeva-logo.png" alt="Eraeva Logo" className="h-20 w-20 object-contain" />
+          <img src="./images/logo/eraeva-logo.png" alt="Eraeva Logo" className="h-20 w-20 object-contain" />
           <span className="text-xs font-semibold text-admin-header-text text-center leading-tight">Eraeva<br />Catering Services</span>
         </div>
         <nav className="flex flex-col gap-1 p-3 flex-1">

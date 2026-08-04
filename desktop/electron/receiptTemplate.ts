@@ -110,8 +110,21 @@ function documentHtml(body: string): string {
 <head>
 <meta charset="utf-8">
 <title>Receipt</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  body {
+    margin: 0 auto;
+    padding: 0;
+    width: 72mm;
+    box-sizing: border-box;
+    font-family:'Courier New',Courier,monospace;
+    font-size:12px;
+    line-height:1.35;
+    color:#000;
+  }
+</style>
 </head>
-<body style="margin:0; padding:4mm; width:80mm; box-sizing:border-box; font-family:'Courier New',Courier,monospace; font-size:12px; line-height:1.35; color:#000;">
+<body>
 ${body}
 </body>
 </html>`;

@@ -1,8 +1,8 @@
 import "dotenv/config";
 import pg from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, AccompanimentType, ItemUnit } from "./generated/prisma/client";
-import sampleData from "./sample-data";
+import { PrismaClient, AccompanimentType, ItemUnit } from "./generated/prisma/client.js";
+import sampleData from "./sample-data.js";
 
 async function main() {
   const connectionString = `${process.env.DATABASE_URL}`;

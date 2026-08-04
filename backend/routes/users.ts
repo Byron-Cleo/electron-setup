@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { hash, compare } from "bcrypt-ts-edge";
-import prisma from "../db/db";
+import prisma from "../db/db.js";
 
 const router = Router();
 

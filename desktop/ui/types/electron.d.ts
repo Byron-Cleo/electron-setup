@@ -546,6 +546,7 @@ interface ElectronAPI {
     saveConfig: (config: PosPrinterConfig) => Promise<PosPrinterConfig>;
     listDevices: () => Promise<string[]>;
     checkStatus: (printer: PosPrinter) => Promise<PrinterStatus>;
+    test: (printer: PosPrinter) => Promise<PrintResult>;
   };
   serverConfig: {
     getConfig: () => Promise<ServerConfig>;

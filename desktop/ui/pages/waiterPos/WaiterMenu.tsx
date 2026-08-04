@@ -162,7 +162,12 @@ export function WaiterMenu() {
         mealType: mealPeriod,
       })
       const receipt = buildReceipt(order, orderItems, user.name, mealPeriod)
-      await printReceipt(receipt)
+      const printResult = await printReceipt(receipt)
+      if (!printResult.ok) {
+        window.alert(
+          `Order #${order.orderNumber} placed, but the receipt did not print.\n\n${printResult.error ?? "Unknown print error"}\n\nPlease check the printer config, then reprint the receipt for the order.`,
+        )
+      }
       clearOrder()
       await logout()
     } catch (err) {

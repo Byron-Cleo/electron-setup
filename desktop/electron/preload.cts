@@ -76,6 +76,7 @@ electron.contextBridge.exposeInMainWorld("electron", {
     listDevices: () => electron.ipcRenderer.invoke("printer:list-devices"),
     checkStatus: (printer: any) =>
       electron.ipcRenderer.invoke("printer:check-status", printer),
+    test: (printer: any) => electron.ipcRenderer.invoke("printer:test-print", printer),
   },
   serverConfig: {
     getConfig: () => electron.ipcRenderer.invoke("server-config:get"),

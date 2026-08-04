@@ -1,6 +1,6 @@
 import { Router } from "express"
-import prisma from "../db/db"
-import { AccompanimentType } from "../db/generated/prisma/client"
+import prisma from "../db/db.js"
+import { AccompanimentType } from "../db/generated/prisma/client.js"
 
 const router = Router()
 

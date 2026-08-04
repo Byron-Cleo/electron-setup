@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { ServiceTime } from "../db/generated/prisma/client";
+import { ServiceTime } from "../db/generated/prisma/client.js";
 
 const router = Router();
 

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import prisma from "../db/db";
+import prisma from "../db/db.js";
 
 const router = Router();
 
@@ -203,7 +203,7 @@ router.put("/:id", async (req, res) => {
     return res.status(400).json({ error: "platesActual must be greater than 0" });
   }
 
-  const newQuantityCooked = quantityCooked !== undefined ? Number(quantityCooked) : existing.quantityCooked;
+  const newQuantityCooked = quantityCooked !== undefined ? Number(quantityCooked) : Number(existing.quantityCooked);
   const platesExpected = newQuantityCooked * Number(existing.stockSupply.platesPerUnit ?? 0);
 
   const record = await prisma.cookingRecord.update({

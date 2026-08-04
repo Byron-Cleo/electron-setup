@@ -1,5 +1,5 @@
 import { hashSync } from "bcrypt-ts-edge";
-import { ServiceTime } from "./generated/prisma/client";
+import { ServiceTime } from "./generated/prisma/client.js";
 
 // Pre-defined UUIDs allow cross-referencing between seeded records
 // without querying the database between inserts (e.g. Menu.starchId → ID.ugali).

@@ -20,8 +20,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, Usb, Network } from "lucide-react"
-import { getPrinterConfig, savePrinterConfig, listPrinterDevices, checkPrinterStatus } from "@/lib/api"
+import { Plus, Pencil, Trash2, Usb, Network, Printer } from "lucide-react"
+import { getPrinterConfig, savePrinterConfig, listPrinterDevices, checkPrinterStatus, testPrinter } from "@/lib/api"
 
 interface Props {
   onBack: () => void
@@ -89,6 +89,7 @@ export default function PrinterConfig({ onBack }: Props) {
   const [printers, setPrinters] = useState<PosPrinter[]>([])
   const [statuses, setStatuses] = useState<Record<string, PrinterStatus>>({})
   const [checking, setChecking] = useState<Set<string>>(new Set())
+  const [testing, setTesting] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -103,6 +104,7 @@ export default function PrinterConfig({ onBack }: Props) {
   const [detectedDevices, setDetectedDevices] = useState<string[]>([])
   const [formError, setFormError] = useState("")
   const [saving, setSaving] = useState(false)
+  const [formTesting, setFormTesting] = useState(false)
 
   async function refreshStatuses(list: PosPrinter[]) {
     if (list.length === 0) {
@@ -222,6 +224,60 @@ export default function PrinterConfig({ onBack }: Props) {
     }
   }
 
+  async function handleTest(item: PosPrinter) {
+    setTesting((prev) => new Set(prev).add(item.id))
+    try {
+      const result = await testPrinter(item)
+      if (result.ok) {
+        window.alert(`Test print sent to "${item.name}". Check the printer.`)
+      } else {
+        window.alert(`Test print failed for "${item.name}".\n\n${result.error ?? "Unknown error"}`)
+      }
+    } catch (e: unknown) {
+      window.alert(`Test print failed for "${item.name}".\n\n${errMessage(e)}`)
+    } finally {
+      setTesting((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }
+
+  function formPrinter(): PosPrinter {
+    return {
+      id: editId ?? "unsaved",
+      name: name.trim(),
+      transport,
+      role,
+      ...(transport === "usb"
+        ? { deviceName: deviceName.trim() }
+        : { host: host.trim(), port: parseInt(port, 10) || DEFAULT_PORT }),
+    }
+  }
+
+  async function handleTestForm() {
+    const validationError = validate()
+    if (validationError) {
+      setFormError(validationError)
+      return
+    }
+    setFormTesting(true)
+    setFormError("")
+    try {
+      const result = await testPrinter(formPrinter())
+      if (result.ok) {
+        window.alert("Test print sent. Check the printer.")
+      } else {
+        window.alert(`Test print failed.\n\n${result.error ?? "Unknown error"}`)
+      }
+    } catch (e: unknown) {
+      window.alert(`Test print failed.\n\n${errMessage(e)}`)
+    } finally {
+      setFormTesting(false)
+    }
+  }
+
   function targetLabel(item: PosPrinter): string {
     return item.transport === "lan"
       ? `${item.host}:${item.port ?? DEFAULT_PORT}`
@@ -284,6 +340,10 @@ export default function PrinterConfig({ onBack }: Props) {
               case "actions":
                 return (
                   <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => handleTest(item)} disabled={testing.has(item.id)}>
+                      <Printer className="h-4 w-4 mr-1" />
+                      {testing.has(item.id) ? "Printing..." : "Test"}
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
                       <Pencil className="h-4 w-4 mr-1" />
                       Edit
@@ -421,10 +481,14 @@ export default function PrinterConfig({ onBack }: Props) {
           </div>
           {formError && <p className="text-sm text-red-500 text-center mt-2">{formError}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving || formTesting}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-brand-green hover:bg-brand-green/90">
+            <Button variant="outline" onClick={handleTestForm} disabled={saving || formTesting}>
+              <Printer className="h-4 w-4 mr-2" />
+              {formTesting ? "Printing..." : "Test Printer"}
+            </Button>
+            <Button onClick={handleSave} disabled={saving || formTesting} className="bg-brand-green hover:bg-brand-green/90">
               {saving ? "Saving..." : "Save Printer"}
             </Button>
           </DialogFooter>
