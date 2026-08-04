@@ -12,10 +12,10 @@ import {
 import { useAuthStore } from "@/stores/auth";
 
 const carouselImages = [
-  "/images/sample-meals/beef-fry-rice.png",
-  "/images/sample-meals/chicken-fry-chapati.png",
-  "/images/sample-meals/beef-fry-ugali.png",
-  "/images/sample-meals/chicken-fry-rice.png",
+  "./images/sample-meals/beef-fry-rice.png",
+  "./images/sample-meals/chicken-fry-chapati.png",
+  "./images/sample-meals/beef-fry-ugali.png",
+  "./images/sample-meals/chicken-fry-rice.png",
 ];
 
 function ImageCarousel() {
@@ -119,7 +119,7 @@ function Login() {
       {/* Top Logo Section */}
       <div className="flex flex-col items-center pt-10 pb-6 px-4">
         <img
-          src="/images/logo/eraeva-logo.png"
+          src="./images/logo/eraeva-logo.png"
           alt="Eraeva Logo"
           className="w-40 h-40 object-contain rounded-2xl drop-shadow-[0_4px_20px_rgba(181,103,37,0.3)] mb-[30px]"
         />

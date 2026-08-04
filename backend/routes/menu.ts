@@ -1,6 +1,6 @@
 import { Router } from "express";
-import prisma from "../db/db";
-import { ServiceTime } from "../db/generated/prisma/client";
+import prisma from "../db/db.js";
+import { ServiceTime } from "../db/generated/prisma/client.js";
 
 const router = Router();
 

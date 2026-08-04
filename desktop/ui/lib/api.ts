@@ -416,6 +416,13 @@ export async function checkPrinterStatus(printer: PosPrinter): Promise<PrinterSt
   return { online: null, reason: "Status unavailable in browser mode" }
 }
 
+export async function testPrinter(printer: PosPrinter): Promise<PrintResult> {
+  if (window.electron?.printer?.test) {
+    return window.electron.printer.test(printer)
+  }
+  return { ok: false, error: "Test print is only available in the desktop app" }
+}
+
 // ─── Server Config ───────────────────────────────────────────────────────────
 
 const SERVER_STORAGE_KEY = "eraeva.server-config.v1"

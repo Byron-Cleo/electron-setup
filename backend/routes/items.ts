@@ -1,6 +1,6 @@
 import { Router } from "express";
-import prisma from "../db/db";
-import { ItemUnit } from "../db/generated/prisma/client";
+import prisma from "../db/db.js";
+import { ItemUnit } from "../db/generated/prisma/client.js";
 import multer from "multer";
 import path from "path";
 import crypto from "crypto";
