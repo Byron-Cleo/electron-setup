@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
-import { getAccompaniments } from "@/lib/api"
+import { getAccompaniments, menuImageUrl } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import AccompanimentDialog from "./AccompanimentDialog"
 import AccompanimentDetailDialog from "./AccompanimentDetailDialog"
@@ -83,7 +83,7 @@ export default function AccompanimentsTable() {
         return (
           <div className="flex items-center justify-center">
             {row.image ? (
-              <img src={row.image} alt={row.name} className="h-10 w-10 rounded-md object-cover" />
+              <img src={menuImageUrl(row.image) ?? ""} alt={row.name} className="h-10 w-10 rounded-md object-cover" />
             ) : (
               <span className="text-admin-muted text-xs">—</span>
             )}

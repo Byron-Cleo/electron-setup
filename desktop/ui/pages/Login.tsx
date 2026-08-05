@@ -32,7 +32,7 @@ function ImageCarousel() {
   };
 
   return (
-    <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-brand-tan">
+        <div className="relative w-full h-full rounded-2xl overflow-hidden bg-brand-tan">
       <div className="absolute inset-0 bg-gradient-to-br from-brand-green/50 via-brand-green/30 to-brand-beige/40 z-10 pointer-events-none" />
       <Carousel
         setApi={(api) => {
@@ -115,21 +115,21 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5EDE0] text-brand-ebony flex flex-col font-sans selection:bg-brand-gold/30">
+    <div className="h-dvh overflow-hidden bg-[#F5EDE0] text-brand-ebony flex flex-col font-sans selection:bg-brand-gold/30">
       {/* Top Logo Section */}
-      <div className="flex flex-col items-center pt-10 pb-6 px-4">
+      <div className="flex flex-col items-center pt-[min(4vh,40px)] pb-[min(3vh,24px)] px-4">
         <img
           src="./images/logo/eraeva-logo.png"
           alt="Eraeva Logo"
-          className="w-40 h-40 object-contain rounded-2xl drop-shadow-[0_4px_20px_rgba(181,103,37,0.3)] mb-[30px]"
+          className="w-[min(18vh,160px)] h-[min(18vh,160px)] object-contain rounded-2xl drop-shadow-[0_4px_20px_rgba(181,103,37,0.3)] mb-[min(3vh,30px)]"
         />
-        <p className="text-brand-maroon text-[60px] font-bold my-8 tracking-wide uppercase">
+        <p className="text-brand-maroon text-[min(6vh,60px)] font-bold my-[min(2vh,32px)] tracking-wide uppercase leading-none">
           Eraeva Catering Services
         </p>
       </div>
 
       {/* Main Content - Two Column Layout */}
-      <div className="flex-1 grid grid-cols-2 gap-8 px-10 pb-10 overflow-hidden">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-[min(4vh,32px)] px-[min(6vh,40px)] pb-[min(4vh,40px)] overflow-hidden">
         {/* Left Column - Image Carousel */}
         <div className="min-w-0 h-full">
           <ImageCarousel />
@@ -137,9 +137,9 @@ function Login() {
 
         {/* Right Column - PIN Keypad */}
         <div className="min-w-0 h-full">
-          <div className="relative w-full aspect-[4/3] bg-brand-tan rounded-2xl border border-brand-tan/80">
+          <div className="relative w-full h-full bg-brand-tan rounded-2xl border border-brand-tan/80">
             <div className="absolute inset-0 p-4 flex flex-col overflow-hidden">
-              <div className="text-[36px] font-semibold text-brand-green text-center">
+              <div className="text-[min(4vh,36px)] font-semibold text-brand-green text-center">
                 Enter LOGIN PIN
               </div>
 
@@ -151,7 +151,7 @@ function Login() {
                   return (
                     <div
                       key={index}
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center border-2 transition-all duration-200 ${
+                      className={`w-[min(4vh,32px)] h-[min(4vh,32px)] rounded-xl flex items-center justify-center border-2 transition-all duration-200 ${
                         isActive
                           ? "border-brand-green bg-transparent"
                           : isFilled
@@ -171,12 +171,12 @@ function Login() {
               </div>
 
               {/* Keypad Grid */}
-              <div className="grid grid-cols-3 gap-4 mt-auto justify-items-center">
+              <div className="grid grid-cols-3 gap-[min(1.6vh,16px)] mt-auto justify-items-center">
                 {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
                   <button
                     key={num}
                     onClick={() => handleKeyPress(num)}
-                    className="h-[80px] aspect-square bg-brand-red hover:bg-brand-red/85 active:bg-brand-red/70 text-white text-3xl font-semibold rounded-xl flex items-center justify-center transition-all cursor-pointer border border-brand-ebony/20 hover:shadow-lg hover:shadow-brand-red/30 hover:scale-105 active:scale-95"
+                    className="h-[min(9vh,80px)] aspect-square bg-brand-red hover:bg-brand-red/85 active:bg-brand-red/70 text-white text-3xl font-semibold rounded-xl flex items-center justify-center transition-all cursor-pointer border border-brand-ebony/20 hover:shadow-lg hover:shadow-brand-red/30 hover:scale-105 active:scale-95"
                   >
                     {num}
                   </button>
@@ -184,19 +184,19 @@ function Login() {
 
                 <button
                   onClick={handleClear}
-                  className="h-[80px] aspect-square bg-transparent text-brand-ebony hover:bg-brand-ebony/5 text-2xl font-medium rounded-xl flex items-center justify-center transition-all cursor-pointer"
+                  className="h-[min(9vh,80px)] aspect-square bg-transparent text-brand-ebony hover:bg-brand-ebony/5 text-2xl font-medium rounded-xl flex items-center justify-center transition-all cursor-pointer"
                 >
                   ✕
                 </button>
                 <button
                   onClick={() => handleKeyPress("0")}
-                  className="h-[80px] aspect-square bg-brand-red hover:bg-brand-red/85 active:bg-brand-red/70 text-white text-3xl font-semibold rounded-xl flex items-center justify-center transition-all cursor-pointer border border-brand-ebony/20 hover:shadow-lg hover:shadow-brand-red/30 hover:scale-105 active:scale-95"
+                  className="h-[min(9vh,80px)] aspect-square bg-brand-red hover:bg-brand-red/85 active:bg-brand-red/70 text-white text-3xl font-semibold rounded-xl flex items-center justify-center transition-all cursor-pointer border border-brand-ebony/20 hover:shadow-lg hover:shadow-brand-red/30 hover:scale-105 active:scale-95"
                 >
                   0
                 </button>
                 <button
                   onClick={handleSubmit}
-                  className={`h-[80px] aspect-square rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                  className={`h-[min(9vh,80px)] aspect-square rounded-xl flex items-center justify-center transition-all cursor-pointer ${
                     pin.length === 4 && !loading
                       ? "bg-brand-gold text-brand-ebony hover:bg-brand-gold/80 shadow-lg shadow-brand-gold/20"
                       : "bg-brand-gold/80 text-brand-ebony/80 cursor-not-allowed"

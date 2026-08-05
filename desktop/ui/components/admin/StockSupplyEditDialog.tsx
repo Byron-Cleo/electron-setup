@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useForm, useWatch } from "react-hook-form"
+import { useForm, useWatch, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
@@ -41,7 +41,7 @@ import MultiSearchableSelect from "@/components/shared/MultiSearchableSelect"
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  unit: z.enum(["KG", "PKT", "L", "ML", "PCS"], { required_error: "Unit is required" }),
+  unit: z.enum(["KG", "PKT", "L", "ML", "PCS"], "Unit is required"),
   currentStock: z.coerce.number().min(0, "Stock item count is required"),
   reorderLevel: z.coerce.number().min(0, "Reorder level count is required"),
   isMenuStock: z.boolean(),
@@ -83,7 +83,7 @@ export default function StockSupplyEditDialog({ open, onClose, supplyId, onSaved
   const [existingImage, setExistingImage] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as Resolver<FormValues>,
     defaultValues: {
       name: "",
       description: "",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { useForm, useWatch } from "react-hook-form"
+import { useForm, useWatch, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Card, CardContent } from "@/components/ui/card"
@@ -39,7 +39,7 @@ import MultiSearchableSelect from "@/components/shared/MultiSearchableSelect"
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  unit: z.enum(["KG", "PKT", "L", "ML", "PCS"], { required_error: "Unit is required" }),
+  unit: z.enum(["KG", "PKT", "L", "ML", "PCS"], "Unit is required"),
   currentStock: z.coerce.number().min(0, "Stock item count is required"),
   reorderLevel: z.coerce.number().min(0, "Reorder level count is required"),
   isMenuStock: z.boolean(),
@@ -76,7 +76,7 @@ export default function StockSupplyForm() {
   const [existingImage, setExistingImage] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as Resolver<FormValues>,
     defaultValues: {
       name: "",
       description: "",
@@ -88,6 +88,11 @@ export default function StockSupplyForm() {
       departmentIds: [],
     },
   })
+
+  const watchedName = useWatch({ control: form.control, name: "name" })
+  const watchedUnit = useWatch({ control: form.control, name: "unit" })
+  const watchedStock = useWatch({ control: form.control, name: "currentStock" })
+  const watchedIsMenuStock = useWatch({ control: form.control, name: "isMenuStock" })
 
   useEffect(() => {
     getDepartments()
@@ -119,7 +124,6 @@ export default function StockSupplyForm() {
           departmentIds: supply.departments?.map((d: Department) => d.id) ?? [],
         })
         setExistingImage(supply.image)
-        setSelectedDepts(new Set(supply.departments?.map((d: Department) => d.id) ?? []))
       })
       .catch((e) => form.setError("root", { message: e.message }))
   }, [id, form])
@@ -155,11 +159,6 @@ export default function StockSupplyForm() {
     setImagePreview(null)
     setExistingImage(null)
   }
-
-  const watchedName = useWatch({ control: form.control, name: "name" })
-  const watchedUnit = useWatch({ control: form.control, name: "unit" })
-  const watchedStock = useWatch({ control: form.control, name: "currentStock" })
-  const watchedIsMenuStock = useWatch({ control: form.control, name: "isMenuStock" })
 
   const previewName = watchedName || ""
   const previewUnit = watchedUnit || "PCS"

@@ -4,7 +4,7 @@ import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DataTable, type Column } from "@/components/ui/data-table"
-import { getMenus, updateMenuAvailability } from "@/lib/api"
+import { getMenus, updateMenuAvailability, menuImageUrl } from "@/lib/api"
 
 const columns: Column[] = [
   { label: "Image", key: "image" },
@@ -60,7 +60,7 @@ function DiscontinuedMenusTable() {
       case "image":
         return row.images.length > 0 ? (
           <img
-            src={row.images[0]}
+            src={menuImageUrl(row.images[0]) ?? ""}
             alt={row.name}
             className="w-10 h-10 rounded object-cover mx-auto"
           />

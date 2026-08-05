@@ -7,6 +7,17 @@ export function stockSupplyImageUrl(image: string | null): string | null {
   return `${API_ORIGIN}${image}`
 }
 
+// Resolves menu/accompaniment image paths so they work in both the dev server and
+// the packaged Electron build. DB stores paths like "/images/sample-meals/x.png";
+// the leading slash breaks under file:// in production, so we emit a relative path
+// that resolves against the app root. Bare filenames default to the sample-meals folder.
+export function menuImageUrl(url: string | null): string | null {
+  if (!url) return null
+  if (/^(https?:|data:|blob:|file:)/i.test(url)) return url
+  const clean = url.trim().replace(/^(\.\.?\/)+/, "").replace(/^\/+/, "")
+  return clean.includes("/") ? clean : `images/sample-meals/${clean}`
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const UNIT_LABELS: Record<string, string> = {
@@ -174,7 +185,8 @@ export async function updateDepartment(id: string, data: UpdateDepartmentData): 
 
 export async function deleteDepartment(id: string): Promise<void> {
   if (window.electron?.department?.delete) {
-    return window.electron.department.delete(id)
+    await window.electron.department.delete(id)
+    return
   }
   return apiFetch(`/departments/${id}`, { method: "DELETE" })
 }
@@ -204,7 +216,8 @@ export async function updateCookingRecord(id: string, data: UpdateCookingRecordD
 
 export async function deleteCookingRecord(id: string): Promise<void> {
   if (window.electron?.cookingRecord?.delete) {
-    return window.electron.cookingRecord.delete(id)
+    await window.electron.cookingRecord.delete(id)
+    return
   }
   return apiFetch(`/cooking-records/${id}`, { method: "DELETE" })
 }
@@ -288,9 +301,6 @@ export async function getKitchenInventory(stockSupplyId: string): Promise<Kitche
 // ─── Low Stock ──────────────────────────────────────────────────────────────
 
 export async function getLowStockSupplies(): Promise<StockSupply[]> {
-  if (window.electron?.stockSupply?.getLowStockSupplies) {
-    return window.electron.stockSupply.getLowStockSupplies()
-  }
   return apiFetch("/stock-supplies/low-stock")
 }
 

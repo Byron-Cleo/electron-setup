@@ -1,4 +1,4 @@
-import { ReactNode } from "react"
+import { type ReactNode } from "react"
 import { Card } from "@/components/ui/card"
 import BackButton from "@/components/shared/BackButton"
 import { Heading } from "@/components/ui/heading"

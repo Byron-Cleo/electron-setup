@@ -143,7 +143,7 @@ export default function StockSupplies() {
           </span>
         )
       case "menuItem":
-        return supply.isMenuItem ? (
+        return supply.isMenuStock ? (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-800 text-white">
             Yes
           </span>

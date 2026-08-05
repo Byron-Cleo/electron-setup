@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { formatDate } from "@/lib/utils"
 import { cn } from "@/lib/utils"
+import { menuImageUrl } from "@/lib/api"
 
 interface Props {
   open: boolean
@@ -27,7 +28,7 @@ export default function AccompanimentDetailDialog({ open, onClose, item }: Props
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               {item.image ? (
-                <img src={item.image} alt={item.name} className="h-16 w-16 rounded-lg object-cover" />
+                <img src={menuImageUrl(item.image) ?? ""} alt={item.name} className="h-16 w-16 rounded-lg object-cover" />
               ) : (
                 <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center text-admin-muted text-xs">
                   No image

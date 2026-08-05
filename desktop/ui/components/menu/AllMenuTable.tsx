@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
-import { getMenus, updateMenuAvailability } from "@/lib/api"
+import { getMenus, updateMenuAvailability, menuImageUrl } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { getActiveMealPeriods, type MealPeriodLabel } from "@/lib/mealPeriod"
 import CreateMenuDialog from "./CreateMenuDialog"
@@ -173,7 +173,7 @@ export default function AllMenuTable() {
       case "image":
         return row.images.length > 0 ? (
           <img
-            src={row.images[0]}
+            src={menuImageUrl(row.images[0]) ?? ""}
             alt={row.name}
             className="w-10 h-10 rounded object-cover mx-auto"
           />

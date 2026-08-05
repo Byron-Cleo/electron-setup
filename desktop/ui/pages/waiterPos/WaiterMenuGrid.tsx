@@ -16,7 +16,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { getAccompaniments } from "@/lib/api"
+import { getAccompaniments, menuImageUrl } from "@/lib/api"
 import { useWaiterOrder } from "./WaiterOrderContext"
 
 interface Props {
@@ -100,14 +100,15 @@ function AccompanyRadioCard({
   image: string
   badge?: ReactNode
 }) {
+  const src = menuImageUrl(image)
   return (
     <Label
       className="flex w-fit max-w-[130px] flex-col items-center gap-1.5 rounded-lg border p-2 cursor-pointer transition-colors has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5"
     >
       <div className="flex items-center gap-1.5">
         <RadioGroupItem value={value} />
-        {image ? (
-          <img src={image} alt={name} className="h-10 w-10 rounded-md object-cover" />
+        {src ? (
+          <img src={src} alt={name} className="h-10 w-10 rounded-md object-cover" />
         ) : (
           <div className="h-10 w-10 rounded-md bg-gray-100" />
         )}
@@ -129,13 +130,23 @@ function ImageGallery({
   onActiveChange: (index: number) => void
   onImageSelect?: (url: string) => void
 }) {
-  const current = images[active] ?? images[0]
+  const current = menuImageUrl(images[active] ?? images[0])
+  const [imgFailed, setImgFailed] = useState(false)
+
+  useEffect(() => {
+    setImgFailed(false)
+  }, [current])
 
   return (
     <div className="flex flex-col h-full gap-2">
       <div className="flex-1 min-h-0 overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
-        {current ? (
-          <img src={current} alt="Selected item" className="h-full w-full object-contain p-2" />
+        {current && !imgFailed ? (
+          <img
+            src={current}
+            alt="Selected item"
+            className="h-full w-full object-contain p-2"
+            onError={() => setImgFailed(true)}
+          />
         ) : (
           <div className="flex items-center justify-center h-full">
             <Package size={48} className="text-gray-300" />
@@ -156,7 +167,7 @@ function ImageGallery({
                 index === active ? "ring-2 ring-brand-red" : "opacity-60 hover:opacity-100",
               )}
             >
-              <img src={img} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+              <img src={menuImageUrl(img) ?? ""} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
             </button>
           ))}
         </div>
