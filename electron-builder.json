@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.eraeva.pos-billing-system",
-  "productName": "Eraeva POS Billing System",
+  "productName": "Eraeva POS System",
   "copyright": "Copyright © 2026 Eraeva",
   "directories": {
     "buildResources": "resources",
@@ -36,9 +36,9 @@
   },
   "win": {
     "target": [
-      { "target": "nsis", "arch": ["x64"] },
-      { "target": "portable", "arch": ["x64"] }
+      { "target": "nsis", "arch": ["x64"] }
     ],
+    "icon": "build/icon.ico",
     "artifactName": "${productName}-${version}-win-${arch}.${ext}"
   },
   "nsis": {
@@ -48,7 +48,11 @@
     "deleteAppDataOnUninstall": false,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "${productName}"
+    "shortcutName": "Eraeva POS System",
+    "runAfterFinish": true,
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerHeaderIcon": "build/icon.ico"
   },
   "linux": {
     "target": [

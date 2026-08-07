@@ -437,6 +437,11 @@ export async function testPrinter(printer: PosPrinter): Promise<PrintResult> {
 
 const SERVER_STORAGE_KEY = "eraeva.server-config.v1"
 
+function toApiBase(value: string): string {
+  const v = value.trim().replace(/\/+$/, "")
+  return v.endsWith("/api") ? v : `${v}/api`
+}
+
 export async function getServerConfig(): Promise<ServerConfig> {
   if (window.electron?.serverConfig?.getConfig) {
     return window.electron.serverConfig.getConfig()
@@ -461,6 +466,8 @@ export async function getServerApiBase(): Promise<string> {
   if (window.electron?.serverConfig?.getApiBase) {
     return window.electron.serverConfig.getApiBase()
   }
+  const config = await getServerConfig()
+  if (config.serverUrl) return toApiBase(config.serverUrl)
   return import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"
 }
 
@@ -468,7 +475,18 @@ export async function testServerConnection(): Promise<ServerStatus> {
   if (window.electron?.serverConfig?.test) {
     return window.electron.serverConfig.test()
   }
-  return { online: null, reason: "Unavailable in browser mode" }
+  const base = await getServerApiBase()
+  const origin = base.replace(/\/api$/, "")
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 5000)
+  try {
+    const res = await fetch(`${origin}/health`, { signal: controller.signal })
+    return { online: res.ok, reason: res.ok ? "Server reachable" : `HTTP ${res.status}` }
+  } catch (err) {
+    return { online: false, reason: err instanceof Error ? err.message : "Unreachable" }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // ─── User Management ────────────────────────────────────────────────────────

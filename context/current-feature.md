@@ -1,18 +1,46 @@
-# Current Feature
+# Windows Installer — Single Guided Installer + Branded App Icon + Desktop Shortcut + Pre-Login Server IP Recovery
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
+**Phase 1 — Single NSIS Installer + Branded Icon + Rebrand**
+- Produce exactly ONE Windows .exe — the NSIS installer (remove the portable target)
+- Double-clicking the .exe opens a guided installation window (choose install folder → progress → Finish)
+- App launches automatically when installation completes (`runAfterFinish`)
+- Desktop + Start Menu shortcut created, labeled "Eraeva POS System"
+- App icon: convert `eraeva-logo.png` → `.ico` so the installed app, taskbar, and shortcut show the Eraeva logo
+- Rebrand user-facing name to "Eraeva POS System" (shortcut label, installer, .exe filename, window title)
+
+**Phase 2 — Pre-Login Server IP Recovery**
+- At app launch, ping the configured server before login appears
+- If unreachable → show a "Server not reachable" screen with an input for the server IP/URL (reuse `testServerConnection` + `saveServerConfig`)
+- User enters the new IP → reconnect → login proceeds; no dead-end when the baked IP changes
+- Reachable server → no screen, straight to login; works in browser web mode too
+
 ## Notes
 
+- Spec: `context/fix-plan/win-single-installer-branded-icon.md`
+- **Phase 1 first, then Phase 2** — Phase 2 implemented only after Phase 1 is verified on Windows
+- `electron-builder.json`: set `productName: "Eraeva POS System"`, `win.target` = nsis only, `nsis.shortcutName`, `nsis.runAfterFinish: true`, `nsis.installerIcon`/`uninstallerIcon`/`installerHeaderIcon`, `win.icon` → `build/icon.ico`
+- Icon source: `public/images/logo/eraeva-logo.png` (1254×1254) → multi-size ICO (16–256px)
+- Add a `scripts/icon.mjs` regeneration script; commit `build/icon.ico`
+- `index.html` `<title>` → "Eraeva POS System"
+- Phase 2 reuses existing `lib/api.ts` `testServerConnection`/`saveServerConfig` and runtime `getApiBase()` — new pre-login screen + connection gate in `App.tsx`
+- Mac work (icon.icns, DMG branding) is a separate follow-up — Windows-focused
+
 ## History
+
+### frontend - 2026-08-04 — Settings guide step number badges
+- Added step number badges (01, 02, 03…) to the Settings guide cards in `Manager.tsx`, positioned inside the card top-right corner so they aren't clipped
+- Badge placement fixed in a follow-up commit (moved inside card bounds) — verified in browser, eslint clean on `Manager.tsx`
+- Branch: `feature/admin/guide-numbering` (merged to main as `bd75693`)
 
 ### frontend - 2026-08-03 — Pre-Deployment Checklist guide
 - New admin-only card "Pre-Deployment Checklist (Before You Travel)" (`PreDeploymentGuide.tsx`, icon Luggage) placed first among the setup guides in `Manager.tsx`
