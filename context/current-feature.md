@@ -14,6 +14,13 @@ Not Started
 
 ## History
 
+### frontend - 2026-08-10 — Menu Image Uploads + LUNCH/DINNER Accompaniment Validation
+- Menu item images are now uploaded from the Menu create/edit form (`MenuForm`) via `POST /api/menu/upload` (multer → `backend/uploads/menu-items/`), served statically by Express, with the DB `image_path` migrated from old public paths by `backend/db/migrate-menu-images.ts`
+- `lib/api.ts` `menuImageUrl()` is the single source of truth for resolving menu image paths (dev server vs built app) — used in the menu list, detail dialog, form preview, and the Login page carousel sample meals
+- LUNCH/DINNER menus now require BOTH a starch and a vegetable accompaniment: frontend `superRefine` in `MenuForm` shows inline errors on the two selects (with `[invalid]` state) and conditional red `*` asterisks driven by `useWatch`; backend rejects with 400 on `POST /api/menu` and `PUT /api/menu/:id` (PUT falls back to existing row `starchId`/`vegetableId`/`mealTypes` so partial updates like stock-only from the Plate Assignment dialog still pass)
+- Verified end-to-end in browser: image upload renders in form, conditional asterisks appear when LUNCH/DINNER is checked, save without accompaniments shows both inline errors, edit-dialog prefill of starch/vegetable confirmed working on clean page loads; `npm run build` + backend tsc pass, changed files lint-clean
+- Branch: feature/admin/menu-image-uploads (merged to main as `d97b3b6`)
+
 ### frontend - 2026-08-10 — Waiter Order: Multiple Variant Lines per Food
 - Order lines are now keyed by the full combination `menuItem.id|starch.id|vegetable.id` instead of `menuItem.id` alone, so the same dish can appear on multiple lines with different served-with/vegetable combinations (e.g. Beef+Rice, Beef+Chapati, Beef+Ugali) in one order/receipt
 - `addToOrder` increments quantity only when the exact same combination is added again; different combos each get their own line; plain items (no accompaniments, incl. beverages) get their own line too
