@@ -10,13 +10,14 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import { useAuthStore } from "@/stores/auth";
+import { menuImageUrl } from "@/lib/api";
 
 const carouselImages = [
-  "./images/sample-meals/beef-fry-rice.png",
-  "./images/sample-meals/chicken-fry-chapati.png",
-  "./images/sample-meals/beef-fry-ugali.png",
-  "./images/sample-meals/chicken-fry-rice.png",
-];
+  "beef-fry-rice.png",
+  "chicken-fry-chapati.png",
+  "beef-fry-ugali.png",
+  "chicken-fry-rice.png",
+].map((name) => menuImageUrl(name) ?? "");
 
 function ImageCarousel() {
   const [api, setApi] = useState<CarouselApi | null>(null);

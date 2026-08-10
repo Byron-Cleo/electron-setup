@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useForm, type Resolver } from "react-hook-form"
+import { useForm, useWatch, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { ImagePlus } from "lucide-react"
@@ -47,15 +47,35 @@ const CATEGORIES = [
   "Snacks",
 ]
 
-const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  category: z.string().min(1, "Category is required"),
-  price: z.coerce.number().min(0, "Price must be 0 or more"),
-  images: z.array(z.string()).optional(),
-  mealTypes: z.array(z.string()).min(1, "Select at least one meal period"),
-  starchId: z.string().optional(),
-  vegetableId: z.string().optional(),
-})
+const formSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    category: z.string().min(1, "Category is required"),
+    price: z.coerce.number().min(0, "Price must be 0 or more"),
+    images: z.array(z.string()).optional(),
+    mealTypes: z.array(z.string()).min(1, "Select at least one meal period"),
+    starchId: z.string().optional(),
+    vegetableId: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const needsAccompaniments =
+      data.mealTypes.includes("LUNCH") || data.mealTypes.includes("DINNER")
+    if (!needsAccompaniments) return
+    if (!data.starchId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["starchId"],
+        message: "Starch accompaniment is required for LUNCH/DINNER menus",
+      })
+    }
+    if (!data.vegetableId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["vegetableId"],
+        message: "Vegetable accompaniment is required for LUNCH/DINNER menus",
+      })
+    }
+  })
 
 type FormValues = z.infer<typeof formSchema>
 
@@ -145,6 +165,10 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
     },
   })
 
+  const watchedMealTypes = useWatch({ control: form.control, name: "mealTypes" })
+  const needsAccompaniments =
+    watchedMealTypes?.includes("LUNCH") || watchedMealTypes?.includes("DINNER")
+
   useEffect(() => {
     async function load() {
       const [mealTypes, accs] = await Promise.all([getMealTypes(), getAccompaniments()])
@@ -153,7 +177,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
       setVegetableOptions(accs.filter((a) => a.category === "VEGETABLE"))
     }
     load()
-  }, [])
+  }, [form])
 
   useEffect(() => {
     if (!editId) return
@@ -336,7 +360,10 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                   name="starchId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Starch Accompaniment</FormLabel>
+                      <FormLabel>
+                        Starch Accompaniment
+                        {needsAccompaniments && <span className="text-red-500 text-base font-bold">*</span>}
+                      </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value ?? ""}>
                         <FormControl>
                           <SelectTrigger>
@@ -360,7 +387,10 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                   name="vegetableId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Vegetable Accompaniment</FormLabel>
+                      <FormLabel>
+                        Vegetable Accompaniment
+                        {needsAccompaniments && <span className="text-red-500 text-base font-bold">*</span>}
+                      </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value ?? ""}>
                         <FormControl>
                           <SelectTrigger>

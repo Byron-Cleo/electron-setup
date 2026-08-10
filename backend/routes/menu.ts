@@ -215,6 +215,12 @@ router.post("/", async (req, res) => {
     }
   }
 
+  if (mealTypes?.includes("LUNCH") || mealTypes?.includes("DINNER")) {
+    if (!starchId || !vegetableId) {
+      return res.status(400).json({ error: "LUNCH/DINNER menus require both a starch and vegetable accompaniment" });
+    }
+  }
+
   try {
     const result = await prisma.$transaction(async (tx) => {
       const menu = await tx.menu.create({
@@ -276,6 +282,26 @@ router.put("/:id", async (req, res) => {
   }
 
   try {
+    const existing = await prisma.menu.findUnique({
+      where: { id },
+      select: {
+        starchId: true,
+        vegetableId: true,
+        MenuMealType: { select: { mealType: true } },
+      },
+    });
+    if (!existing) return res.status(404).json({ error: "Not found" });
+
+    const effectiveMealTypes = mealTypes ?? existing.MenuMealType.map((mt) => mt.mealType);
+    const effectiveStarchId = starchId !== undefined ? starchId : existing.starchId;
+    const effectiveVegetableId = vegetableId !== undefined ? vegetableId : existing.vegetableId;
+
+    if (effectiveMealTypes.includes("LUNCH") || effectiveMealTypes.includes("DINNER")) {
+      if (!effectiveStarchId || !effectiveVegetableId) {
+        return res.status(400).json({ error: "LUNCH/DINNER menus require both a starch and vegetable accompaniment" });
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const data: Record<string, unknown> = {
         ...(name !== undefined && { name }),
