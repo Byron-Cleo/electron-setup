@@ -8,14 +8,18 @@ export function stockSupplyImageUrl(image: string | null): string | null {
 }
 
 // Resolves menu/accompaniment image paths so they work in both the dev server and
-// the packaged Electron build. DB stores paths like "/images/sample-meals/x.png";
-// the leading slash breaks under file:// in production, so we emit a relative path
-// that resolves against the app root. Bare filenames default to the sample-meals folder.
+// the packaged Electron build. All menu images live in the backend uploads folder
+// (backend/uploads/menu-items), served at /uploads/menu-items. Legacy
+// "images/sample-meals/..." paths (from before the move) are mapped by filename.
 export function menuImageUrl(url: string | null): string | null {
   if (!url) return null
   if (/^(https?:|data:|blob:|file:)/i.test(url)) return url
   const clean = url.trim().replace(/^(\.\.?\/)+/, "").replace(/^\/+/, "")
-  return clean.includes("/") ? clean : `images/sample-meals/${clean}`
+  if (clean.includes("images/sample-meals/")) {
+    return `${API_ORIGIN}/uploads/menu-items/${clean.split("/").pop()}`
+  }
+  if (clean.startsWith("uploads/")) return `${API_ORIGIN}/${clean}`
+  return `${API_ORIGIN}/uploads/menu-items/${clean}`
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -274,6 +278,12 @@ export async function createMenu(data: MenuCreateData): Promise<MenuItem> {
     return window.electron.menu.create(data)
   }
   return apiFetch("/menu", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function uploadMenuImage(imageFile: File): Promise<{ url: string }> {
+  const formData = new FormData()
+  formData.append("image", imageFile)
+  return apiFetch("/menu/upload", { method: "POST", body: formData })
 }
 
 export async function getCookedMenus(date?: string): Promise<CookedMenuItem[]> {

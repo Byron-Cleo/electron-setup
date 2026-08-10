@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
+import { useEffect, useRef, useState } from "react"
+import { useForm, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { ImagePlus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -24,7 +25,7 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { createMenu, getMenuById, getAccompaniments, getMealTypes, updateMenu } from "@/lib/api"
+import { createMenu, getMenuById, getAccompaniments, getMealTypes, menuImageUrl, updateMenu, uploadMenuImage } from "@/lib/api"
 
 interface Props {
   editId: string | null
@@ -50,6 +51,7 @@ const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   category: z.string().min(1, "Category is required"),
   price: z.coerce.number().min(0, "Price must be 0 or more"),
+  images: z.array(z.string()).optional(),
   mealTypes: z.array(z.string()).min(1, "Select at least one meal period"),
   starchId: z.string().optional(),
   vegetableId: z.string().optional(),
@@ -61,17 +63,84 @@ function slugify(text: string) {
   return text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
 }
 
+function MenuImageField({
+  value,
+  onChange,
+  onError,
+}: {
+  value: string[]
+  onChange: (images: string[]) => void
+  onError: (message: string) => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const current = value?.[0] ?? null
+
+  return (
+    <div className="flex items-center gap-3">
+      {current ? (
+        <img
+          src={menuImageUrl(current) ?? undefined}
+          alt="Menu item"
+          className="h-16 w-16 rounded-md border object-cover"
+        />
+      ) : (
+        <div className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed text-muted-foreground">
+          <ImagePlus className="h-5 w-5" />
+        </div>
+      )}
+      <div className="flex flex-col gap-1">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ""
+            if (!file) return
+            try {
+              setUploading(true)
+              const { url } = await uploadMenuImage(file)
+              onChange([url])
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Image upload failed")
+            } finally {
+              setUploading(false)
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? "Uploading..." : current ? "Change Image" : "Upload Image"}
+        </Button>
+        {current && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange([])}>
+            Remove
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function MenuForm({ editId, onSaved, onCancel }: Props) {
   const [mealTypeOptions, setMealTypeOptions] = useState<MealType[]>([])
   const [starchOptions, setStarchOptions] = useState<Accompaniment[]>([])
   const [vegetableOptions, setVegetableOptions] = useState<Accompaniment[]>([])
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema) as any,
+    resolver: zodResolver(formSchema) as unknown as Resolver<FormValues>,
     defaultValues: {
       name: "",
       category: "",
       price: 0,
+      images: [],
       mealTypes: [],
     },
   })
@@ -94,6 +163,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
           name: item.name,
           category: item.category,
           price: Number(item.price),
+          images: item.images ?? [],
           mealTypes: item.mealTypes ?? [],
           starchId: item.starchId ?? undefined,
           vegetableId: item.vegetableId ?? undefined,
@@ -111,6 +181,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
         slug: slugify(data.name),
         category: data.category,
         price: data.price,
+        images: data.images ?? [],
         mealTypes: data.mealTypes,
         starchId: data.starchId || null,
         vegetableId: data.vegetableId || null,
@@ -202,6 +273,22 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="images"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Menu Image</FormLabel>
+                    <MenuImageField
+                      value={field.value ?? []}
+                      onChange={field.onChange}
+                      onError={(message) => form.setError("root", { message })}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

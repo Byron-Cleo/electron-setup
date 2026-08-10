@@ -1,10 +1,33 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { ServiceTime } from "../db/generated/prisma/client.js";
+import multer from "multer";
+import path from "path";
+import crypto from "crypto";
+import { fileURLToPath } from "url";
 
 const router = Router();
 
 const VALID_MEAL_TYPES = Object.values(ServiceTime) as string[];
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const menuImageStorage = multer.diskStorage({
+  destination: path.resolve(__dirname, "../uploads/menu-items"),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+
+const uploadMenuImage = multer({
+  storage: menuImageStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 function serializeMenu(menu: any) {
   const {
@@ -164,10 +187,21 @@ router.get("/:id", async (req, res) => {
   res.json(serializeMenu(item));
 });
 
+router.post("/upload", uploadMenuImage.single("image"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No image file uploaded (jpeg/png/webp, max 5MB)" });
+  }
+  res.status(201).json({ url: `/uploads/menu-items/${req.file.filename}` });
+});
+
 router.post("/", async (req, res) => {
-  const { name, slug, category, stock, price, mealTypes, starchId, vegetableId } = req.body;
+  const { name, slug, category, stock, price, mealTypes, starchId, vegetableId, images } = req.body;
   if (!name || !category) {
     return res.status(400).json({ error: "name, category are required" });
+  }
+
+  if (images !== undefined && !Array.isArray(images)) {
+    return res.status(400).json({ error: "images must be an array of strings" });
   }
 
   if (mealTypes) {
@@ -190,6 +224,7 @@ router.post("/", async (req, res) => {
           category,
           stock: stock ?? undefined,
           price: price ?? 0,
+          images: images ?? [],
           starchId: starchId ?? null,
           vegetableId: vegetableId ?? null,
         },
@@ -223,7 +258,11 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, slug, category, stock, price, mealTypes, starchId, vegetableId } = req.body;
+  const { name, slug, category, stock, price, mealTypes, starchId, vegetableId, images } = req.body;
+
+  if (images !== undefined && !Array.isArray(images)) {
+    return res.status(400).json({ error: "images must be an array of strings" });
+  }
 
   if (mealTypes) {
     if (!Array.isArray(mealTypes)) {
@@ -244,6 +283,7 @@ router.put("/:id", async (req, res) => {
         ...(category !== undefined && { category }),
         ...(stock !== undefined && { stock }),
         ...(price !== undefined && { price }),
+        ...(images !== undefined && { images }),
         ...(starchId !== undefined && { starchId: starchId ?? null }),
         ...(vegetableId !== undefined && { vegetableId: vegetableId ?? null }),
       };

@@ -52,6 +52,7 @@ interface MenuCreateData {
   category: string;
   stock?: number;
   price: number;
+  images?: string[];
   mealTypes: string[];
   starchId?: string | null;
   vegetableId?: string | null;
