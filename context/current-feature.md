@@ -1,16 +1,30 @@
-# Current Feature
+# Current Feature — Waiter Order: Multiple Variant Lines per Food
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
+- A waiter can add the same food with different served-with/vegetable combinations to one order — each combination is its own order line (e.g. Beef+Rice, Beef+Chapati, Beef+Ugali all in the same order/receipt)
+- The quantity +/− buttons only increase/decrease a line when the exact same combination (food + starch + vegetable) is added again
+- Plain items (no accompaniment selected, or items with no accompaniments like beverages) are their own line too — adding plain again just increases that line's qty
+- Order summary shows one line per combination, each with its own +/− and remove controls
+- Same rule applies to any food: fish, chicken, etc.
+
 ## Notes
+
+- Current behavior (bug): `WaiterOrderContext.tsx` `addToOrder` matches order lines by `menuItem.id` only — selecting beef+rice then beef+chapati overwrites the accompaniment to chapati and increments quantity to 2
+- Fix: key order lines by the full combination — `menuItem.id + starch?.id + vegetable?.id` (a line "variant key")
+- `OrderLineItem` already stores `starch`/`vegetable` (`types/electron.d.ts`) — no type change needed
+- `localStorage` persistence (`eraeva.waiterOrder.v1`) unchanged — old payloads with merged lines will simply be split apart on the next add/merge pass
+- No backend work — the order API already takes line items; sending multiple same-food lines is already supported
+- User confirmed: plain = its own line; order summary shows one line per combination
+- Spec file: `context/features/frontend/waiter-order-multi-variant-lines.md`
 
 ## History
 

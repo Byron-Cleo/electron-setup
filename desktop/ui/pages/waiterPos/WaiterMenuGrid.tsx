@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { getAccompaniments, menuImageUrl } from "@/lib/api"
-import { useWaiterOrder } from "./WaiterOrderContext"
+import { useWaiterOrder, orderLineKey, lineKey } from "./WaiterOrderContext"
 
 interface Props {
   mealPeriod: string
@@ -201,11 +201,15 @@ export function WaiterMenuGrid({
   const [selectedVegetable, setSelectedVegetable] = useState<Accompaniment | null>(null)
   const [galleryActive, setGalleryActive] = useState(0)
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+  const [activeOrderKey, setActiveOrderKey] = useState<string | null>(null)
+  const [syncedOrderKey, setSyncedOrderKey] = useState<string | null>(null)
 
   if (processedItems !== items) {
     setProcessedItems(items)
     setSelectedItem(null)
     setSelectedCategory("")
+    setActiveOrderKey(null)
+    setSyncedOrderKey(null)
     if (items.length > 0) {
       const cats = [...new Set(items.map((i) => i.category))]
       setSelectedCategory(cats[0])
@@ -258,9 +262,10 @@ export function WaiterMenuGrid({
     }))
   }, [selectedItem, starches, vegetables])
 
-  if (selectedItem && selectedItem.id !== activeMenuId) {
+  if (selectedItem && (selectedItem.id !== activeMenuId || activeOrderKey !== syncedOrderKey)) {
     setActiveMenuId(selectedItem.id)
-    const stored = orderItems.find((oi) => oi.menuItem.id === selectedItem.id)
+    setSyncedOrderKey(activeOrderKey)
+    const stored = activeOrderKey ? orderItems.find((oi) => lineKey(oi) === activeOrderKey) : null
     let nextStarch: Accompaniment | null = null
     let nextVegetable: Accompaniment | null = null
     if (stored) {
@@ -283,8 +288,9 @@ export function WaiterMenuGrid({
 
   const syncSelection = (starch: Accompaniment | null, vegetable: Accompaniment | null) => {
     if (!selectedItem) return
-    if (orderItems.some((oi) => oi.menuItem.id === selectedItem.id)) {
-      updateAccompaniments(selectedItem.id, starch, vegetable)
+    const key = orderLineKey(selectedItem.id, starch?.id, vegetable?.id)
+    if (orderItems.some((oi) => lineKey(oi) === key)) {
+      updateAccompaniments(key, starch, vegetable)
     }
   }
 
@@ -365,6 +371,7 @@ export function WaiterMenuGrid({
                     setSelectedCategory(cat)
                     const first = itemsByCategory[cat]?.find((i) => platesFor(i) > 0) ?? itemsByCategory[cat]?.[0]
                     setSelectedItem(first ?? null)
+                    setActiveOrderKey(null)
                   }
                 }}
                 className={cn(
@@ -392,7 +399,11 @@ export function WaiterMenuGrid({
                     return (
                       <div
                         key={item.id}
-                        onClick={() => !soldOut && setSelectedItem(item)}
+                        onClick={() => {
+                          if (soldOut) return
+                          setSelectedItem(item)
+                          setActiveOrderKey(null)
+                        }}
                         className={cn(
                           "flex items-center justify-between rounded-md p-2 cursor-pointer transition-colors text-sm",
                           soldOut
@@ -567,13 +578,17 @@ export function WaiterMenuGrid({
                 </div>
               ) : (
                 orderItems.map((oi) => {
-                  const isActive = oi.menuItem.id === selectedItem?.id
+                  const key = lineKey(oi)
+                  const isActive =
+                    !!selectedItem &&
+                    key === orderLineKey(selectedItem.id, selectedStarch?.id, selectedVegetable?.id)
                   return (
                     <div
-                      key={oi.menuItem.id}
+                      key={key}
                       onClick={() => {
                         setSelectedItem(oi.menuItem)
                         setSelectedCategory(oi.menuItem.category)
+                        setActiveOrderKey(key)
                       }}
                       className={cn(
                         "border-b border-gray-100 pb-3 -mx-4 px-4 rounded-lg cursor-pointer transition-colors",
@@ -588,7 +603,7 @@ export function WaiterMenuGrid({
                           className="h-7 w-7 p-0 shrink-0"
                           onClick={(e) => {
                             e.stopPropagation()
-                            removeItem(oi.menuItem.id)
+                            removeItem(key)
                           }}
                         >
                           <X className="h-3 w-3" />
@@ -608,7 +623,7 @@ export function WaiterMenuGrid({
                             className="h-7 w-7 p-0"
                             onClick={(e) => {
                               e.stopPropagation()
-                              updateQuantity(oi.menuItem.id, -1)
+                              updateQuantity(key, -1)
                             }}
                           >
                             <Minus className="h-3 w-3" />
@@ -620,7 +635,7 @@ export function WaiterMenuGrid({
                             className="h-7 w-7 p-0"
                             onClick={(e) => {
                               e.stopPropagation()
-                              updateQuantity(oi.menuItem.id, 1)
+                              updateQuantity(key, 1)
                             }}
                           >
                             <Plus className="h-3 w-3" />

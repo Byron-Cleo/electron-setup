@@ -7,12 +7,20 @@ function platesFor(item: MenuItem): number {
   return item.availablePlates ?? item.stock
 }
 
+function orderLineKey(menuItemId: string, starchId?: string | null, vegetableId?: string | null): string {
+  return `${menuItemId}|${starchId ?? ""}|${vegetableId ?? ""}`
+}
+
+function lineKey(item: OrderLineItem): string {
+  return orderLineKey(item.menuItem.id, item.starch?.id, item.vegetable?.id)
+}
+
 interface WaiterOrderContextValue {
   items: OrderLineItem[]
   addToOrder: (item: MenuItem, starch: OrderAccompaniment | null, vegetable: OrderAccompaniment | null) => void
-  updateAccompaniments: (menuId: string, starch: OrderAccompaniment | null, vegetable: OrderAccompaniment | null) => void
-  updateQuantity: (menuId: string, delta: number) => void
-  removeItem: (menuId: string) => void
+  updateAccompaniments: (key: string, starch: OrderAccompaniment | null, vegetable: OrderAccompaniment | null) => void
+  updateQuantity: (key: string, delta: number) => void
+  removeItem: (key: string) => void
   clearOrder: () => void
   totalPrice: number
 }
@@ -48,12 +56,13 @@ export function WaiterOrderProvider({ children }: { children: ReactNode }) {
 
   const addToOrder = useCallback(
     (item: MenuItem, starch: OrderAccompaniment | null, vegetable: OrderAccompaniment | null) => {
+      const key = orderLineKey(item.id, starch?.id, vegetable?.id)
       setItems((prev) => {
-        const existing = prev.find((oi) => oi.menuItem.id === item.id)
+        const existing = prev.find((oi) => lineKey(oi) === key)
         if (existing) {
           return prev.map((oi) =>
-            oi.menuItem.id === item.id
-              ? { ...oi, starch, vegetable, quantity: Math.min(oi.quantity + 1, platesFor(item)) }
+            lineKey(oi) === key
+              ? { ...oi, quantity: Math.min(oi.quantity + 1, platesFor(item)) }
               : oi,
           )
         }
@@ -63,10 +72,10 @@ export function WaiterOrderProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const updateQuantity = useCallback((menuId: string, delta: number) => {
+  const updateQuantity = useCallback((key: string, delta: number) => {
     setItems((prev) =>
       prev.flatMap((oi) => {
-        if (oi.menuItem.id !== menuId) return [oi]
+        if (lineKey(oi) !== key) return [oi]
         const next = oi.quantity + delta
         if (next <= 0) return []
         return [{ ...oi, quantity: Math.min(next, platesFor(oi.menuItem)) }]
@@ -75,16 +84,16 @@ export function WaiterOrderProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateAccompaniments = useCallback(
-    (menuId: string, starch: OrderAccompaniment | null, vegetable: OrderAccompaniment | null) => {
+    (key: string, starch: OrderAccompaniment | null, vegetable: OrderAccompaniment | null) => {
       setItems((prev) =>
-        prev.map((oi) => (oi.menuItem.id === menuId ? { ...oi, starch, vegetable } : oi)),
+        prev.map((oi) => (lineKey(oi) === key ? { ...oi, starch, vegetable } : oi)),
       )
     },
     [],
   )
 
-  const removeItem = useCallback((menuId: string) => {
-    setItems((prev) => prev.filter((oi) => oi.menuItem.id !== menuId))
+  const removeItem = useCallback((key: string) => {
+    setItems((prev) => prev.filter((oi) => lineKey(oi) !== key))
   }, [])
 
   const clearOrder = useCallback(() => {
@@ -109,3 +118,6 @@ export function useWaiterOrder() {
   if (!ctx) throw new Error("useWaiterOrder must be used within a WaiterOrderProvider")
   return ctx
 }
+
+// eslint-disable-next-line react-refresh/only-export-components
+export { orderLineKey, lineKey }
