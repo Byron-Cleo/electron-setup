@@ -147,7 +147,7 @@ function Login() {
               {/* PIN Indicators */}
               <div className="flex justify-center gap-3 my-auto">
                 {[0, 1, 2, 3].map((index) => {
-                  const isActive = pin.length === index;
+                  const isActive = pin.length > 0 && pin.length === index;
                   const isFilled = pin.length > index;
                   return (
                     <div

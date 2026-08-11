@@ -161,6 +161,7 @@ interface ReceiptData {
     name: string;
     branch?: string;
     address?: string;
+    city?: string;
     phone?: string;
     tel?: string;
     poweredBy?: string;

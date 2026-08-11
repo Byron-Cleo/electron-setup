@@ -2,7 +2,7 @@
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
@@ -10,7 +10,21 @@ Not Started
 
 ## Goals
 
+- Replace the waiter 3-column menu screen with a 2-column layout: serving-period bar on top + dynamic first column (listing ↔ detail) + order column (400px, unchanged) on the right
+- State A (listing): all foods for the active serving period grouped by category — category heading + grid of cards (thumbnail, name, price, plates badge); all categories visible, scrollable; sold-out cards dimmed
+- State B (detail): clicking a menu card unmounts the listing and mounts the existing detail view (gallery left, accompaniments right, Add to Order) in the same wide first column
+- Serving-period bar lists all periods (BREAKFAST/LUNCH/DINNER/DESSERT/BEVERAGE); closed periods disabled/dimmed, current highlighted; clicking a different period navigates, clicking the active period while in State B returns to State A
+- No back button in the detail view or top of grid — period bar is the single navigation mechanism; BackButton kept only in error/empty states
+- Order column position (`w-[400px]`), content, and cross-period persistence untouched
+- Frontend-only; no backend/route/Prisma changes
+
 ## Notes
+
+- Plan: `context/fix-plan/waiter-two-column-menu.md`
+- Prompt: `context/prompts/frontend/waiter-two-column-menu.md` (deepseek-coder:latest)
+- Reuse existing detail/order markup from `WaiterMenuGrid.tsx` verbatim — only the layout shell changes
+- Period data from `@/lib/mealPeriod` (`getActiveMealPeriods`, `MEAL_PERIODS`); reuse `WaiterPOS` chip/badge styling
+- Branch: `feature/waiter/two-column-menu`
 
 ## History
 

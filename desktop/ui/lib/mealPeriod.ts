@@ -9,7 +9,7 @@ export interface ActiveMealPeriod {
   badgeLabel: string
 }
 
-export const TIME_FILTER_ENABLED = false
+export const TIME_FILTER_ENABLED = true
 
 export function getActiveMealPeriods(hour: number): ActiveMealPeriod[] {
   return MEAL_PERIODS.map((period) => {

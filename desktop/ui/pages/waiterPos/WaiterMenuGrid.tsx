@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import BackButton from "@/components/shared/BackButton"
-import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye } from "lucide-react"
+import ServingPeriodBar from "./ServingPeriodBar"
+import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye, ArrowLeft } from "lucide-react"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
@@ -193,7 +194,6 @@ export function WaiterMenuGrid({
   const navigate = useNavigate()
   const { items: orderItems, addToOrder, updateAccompaniments, updateQuantity, removeItem, totalPrice } = useWaiterOrder()
 
-  const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
   const [processedItems, setProcessedItems] = useState<MenuItem[]>([])
   const [accompaniments, setAccompaniments] = useState<Accompaniment[]>([])
@@ -204,18 +204,19 @@ export function WaiterMenuGrid({
   const [activeOrderKey, setActiveOrderKey] = useState<string | null>(null)
   const [syncedOrderKey, setSyncedOrderKey] = useState<string | null>(null)
 
+  const handleSelectPeriod = (period: string) => {
+    if (period !== mealPeriod) {
+      navigate(`/waiter/menu/${period}`)
+    } else {
+      setSelectedItem(null)
+    }
+  }
+
   if (processedItems !== items) {
     setProcessedItems(items)
     setSelectedItem(null)
-    setSelectedCategory("")
     setActiveOrderKey(null)
     setSyncedOrderKey(null)
-    if (items.length > 0) {
-      const cats = [...new Set(items.map((i) => i.category))]
-      setSelectedCategory(cats[0])
-      const firstItems = items.filter((i) => i.category === cats[0])
-      if (firstItems.length > 0) setSelectedItem(firstItems[0])
-    }
   }
 
   useEffect(() => {
@@ -322,116 +323,44 @@ export function WaiterMenuGrid({
     syncSelection(selectedStarch, vegetable)
   }
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-brand-maroon" />
-        <p className="text-brand-ebony/60">Loading menu...</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <AlertCircle className="h-10 w-10 text-red-500" />
-        <p className="text-red-500 font-medium">{error}</p>
-        <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
-      </div>
-    )
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <Package className="h-10 w-10 text-brand-ebony/30" />
-        <p className="text-brand-ebony/60 text-lg font-medium">No items available for {mealPeriod}</p>
-        <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
-      </div>
-    )
-  }
-
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center shrink-0 mb-4">
-        <BackButton onClick={() => navigate("/waiter")} />
+      <div className="flex items-center justify-between shrink-0 mb-4 gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/waiter")}
+          className="gap-1.5 text-green-700 border border-green-500 bg-green-50 hover:bg-green-100"
+        >
+          <ArrowLeft size={16} />
+          Home
+        </Button>
+        <ServingPeriodBar mealPeriod={mealPeriod} onSelectPeriod={handleSelectPeriod} />
       </div>
 
-      <div className="flex gap-4 flex-1 min-h-0">
-        {/* Column 1 — Categories with expandable items + plates badge */}
-        <div className="w-[240px] shrink-0 space-y-1 overflow-y-auto">
-          {categories.map((cat) => (
-            <div key={cat}>
-              <div
-                onClick={() => {
-                  if (selectedCategory === cat) {
-                    setSelectedCategory("")
-                    setSelectedItem(null)
-                  } else {
-                    setSelectedCategory(cat)
-                    const first = itemsByCategory[cat]?.find((i) => platesFor(i) > 0) ?? itemsByCategory[cat]?.[0]
-                    setSelectedItem(first ?? null)
-                    setActiveOrderKey(null)
-                  }
-                }}
-                className={cn(
-                  "flex items-center justify-between rounded-lg p-3 cursor-pointer transition-colors",
-                  selectedCategory === cat
-                    ? "bg-brand-maroon text-white"
-                    : "hover:bg-gray-100 text-brand-ebony",
-                )}
-              >
-                <span className="font-medium">{cat}</span>
-                <span
-                  className={cn(
-                    "text-xs font-semibold px-2 py-0.5 rounded-full",
-                    selectedCategory === cat ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700",
-                  )}
-                >
-                  {itemsByCategory[cat]?.length ?? 0}
-                </span>
-              </div>
-              {selectedCategory === cat && (
-                <div className="ml-2 mt-1 space-y-0.5 border-l-2 border-brand-maroon/30 pl-2">
-                  {itemsByCategory[cat]?.map((item) => {
-                    const plates = platesFor(item)
-                    const soldOut = plates <= 0
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          if (soldOut) return
-                          setSelectedItem(item)
-                          setActiveOrderKey(null)
-                        }}
-                        className={cn(
-                          "flex items-center justify-between rounded-md p-2 cursor-pointer transition-colors text-sm",
-                          soldOut
-                            ? "opacity-50 cursor-not-allowed"
-                            : selectedItem?.id === item.id
-                              ? "bg-brand-maroon/10 text-brand-maroon font-medium"
-                              : "hover:bg-gray-50 text-brand-ebony/80",
-                        )}
-                      >
-                        <span className="truncate">{item.name}</span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs font-semibold">{formatPrice(item.price)}</span>
-                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", platesBadgeClass(plates))}>
-                            {soldOut ? "Sold Out" : `${plates} plates`}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-brand-maroon" />
+          <p className="text-brand-ebony/60">Loading menu...</p>
         </div>
-
-        {/* Column 2 — Detail */}
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <AlertCircle className="h-10 w-10 text-red-500" />
+          <p className="text-red-500 font-medium">{error}</p>
+          <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <Package className="h-10 w-10 text-brand-ebony/30" />
+          <p className="text-brand-ebony/60 text-lg font-medium">No items available for {mealPeriod}</p>
+          <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
+        </div>
+      ) : (
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Column 1 — Dynamic: full category listing ↔ selected item detail */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[720px]">
           {selectedItem ? (
             <div>
               {/* Header — menu name centered, price beside it, spanning full width */}
@@ -549,20 +478,63 @@ export function WaiterMenuGrid({
               </div>
           </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full py-20 text-brand-ebony/40">
-              <Package size={48} />
-              <p className="mt-2">Select an item to view details</p>
+            <div className="space-y-6">
+              {categories.map((cat) => {
+                const catItems = itemsByCategory[cat] ?? []
+                if (catItems.length === 0) return null
+                return (
+                  <div key={cat}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-red-500 mb-2">{cat}</p>
+                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                      {catItems.map((item) => {
+                        const plates = platesFor(item)
+                        const soldOut = plates <= 0
+                        return (
+                          <Card
+                            key={item.id}
+                            onClick={() => {
+                              if (soldOut) return
+                              setSelectedItem(item)
+                              setActiveOrderKey(null)
+                            }}
+                            className={cn(
+                              "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
+                              soldOut && "opacity-50 cursor-not-allowed hover:shadow-none hover:translate-y-0",
+                            )}
+                          >
+                            <CardContent className="p-3 space-y-1.5">
+                              <p className="text-sm font-medium leading-tight text-brand-ebony">{item.name}</p>
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-brand-maroon">{formatPrice(item.price)}</p>
+                                <span
+                                  className={cn(
+                                    "text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap",
+                                    platesBadgeClass(plates),
+                                  )}
+                                >
+                                  {soldOut ? "Sold Out" : `${plates} plates`}
+                                </span>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
+            </div>
           </div>
         </div>
 
-        {/* Column 3 — Order Summary (persists across serving times) */}
+        {/* Column 2 — Order Summary (persists across serving times) */}
         <div className="w-[400px] shrink-0 flex flex-col">
           <Card className="flex-1 flex flex-col min-h-0">
             <CardHeader className="pb-3 shrink-0">
               <div className="flex items-center justify-between">
-                <Heading as="h3" className="text-brand-ebony">Current Order</Heading>
+                <Heading as="h3" className="text-brand-ebony uppercase tracking-wide">Current Order</Heading>
                 {orderItems.length > 0 && (
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-maroon text-white">
                     {orderItems.length}
@@ -587,7 +559,6 @@ export function WaiterMenuGrid({
                       key={key}
                       onClick={() => {
                         setSelectedItem(oi.menuItem)
-                        setSelectedCategory(oi.menuItem.category)
                         setActiveOrderKey(key)
                       }}
                       className={cn(
@@ -679,6 +650,7 @@ export function WaiterMenuGrid({
           </Card>
         </div>
       </div>
+      )}
 
       <Dialog open={previewHtml !== null || previewError !== null} onOpenChange={(open) => !open && onClosePreview()}>
         <DialogContent className="sm:max-w-md">
