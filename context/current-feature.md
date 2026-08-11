@@ -2,7 +2,7 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
@@ -10,23 +10,22 @@ Not Started
 
 ## Goals
 
-- Replace the waiter 3-column menu screen with a 2-column layout: serving-period bar on top + dynamic first column (listing ↔ detail) + order column (400px, unchanged) on the right
-- State A (listing): all foods for the active serving period grouped by category — category heading + grid of cards (thumbnail, name, price, plates badge); all categories visible, scrollable; sold-out cards dimmed
-- State B (detail): clicking a menu card unmounts the listing and mounts the existing detail view (gallery left, accompaniments right, Add to Order) in the same wide first column
-- Serving-period bar lists all periods (BREAKFAST/LUNCH/DINNER/DESSERT/BEVERAGE); closed periods disabled/dimmed, current highlighted; clicking a different period navigates, clicking the active period while in State B returns to State A
-- No back button in the detail view or top of grid — period bar is the single navigation mechanism; BackButton kept only in error/empty states
-- Order column position (`w-[400px]`), content, and cross-period persistence untouched
-- Frontend-only; no backend/route/Prisma changes
+
 
 ## Notes
 
-- Plan: `context/fix-plan/waiter-two-column-menu.md`
-- Prompt: `context/prompts/frontend/waiter-two-column-menu.md` (deepseek-coder:latest)
-- Reuse existing detail/order markup from `WaiterMenuGrid.tsx` verbatim — only the layout shell changes
-- Period data from `@/lib/mealPeriod` (`getActiveMealPeriods`, `MEAL_PERIODS`); reuse `WaiterPOS` chip/badge styling
-- Branch: `feature/waiter/two-column-menu`
+
 
 ## History
+
+### frontend - 2026-08-11 — Waiter Two-Column Menu + Receipt Footer Branding
+- Replaced the waiter 3-column menu screen with a 2-column layout: serving-period bar on top + dynamic first column (listing ↔ detail) + order column (400px, unchanged) on the right
+- New `ServingPeriodBar.tsx` lists all periods (BREAKFAST/LUNCH/DINNER/DESSERT/BEVERAGE); closed periods disabled/dimmed, current highlighted; clicking a different period navigates, clicking the active period while in detail returns to listing — the period bar is the single navigation mechanism (no back button in detail view or grid top; BackButton kept only in error/empty states)
+- Listing (State A) groups foods for the active period by category — heading + grid of cards (thumbnail, name, price, plates badge), all categories visible + scrollable, sold-out cards dimmed; clicking a card mounts the existing detail view (State B) in the same wide first column
+- Receipt footer branding: "Apydy Technologies" bold below "POS Designed and Build By:", city under the address, QTY/ITEM/PRICE/TOTAL item table header, "Buy Goods Till No: 994296", services wording fixed to "Supermarket Systems" and "Mobile Development"; company name removed from the receipt header
+- Login PIN slots neutral (no green border/pulse) until the first digit is keyed
+- Verified: receipt HTML rendered + screenshot, `tsc -b` + eslint clean
+- Branch: `feature/waiter/two-column-menu` (merged to main as `0806b53`)
 
 ### frontend - 2026-08-10 — Menu Image Uploads + LUNCH/DINNER Accompaniment Validation
 - Menu item images are now uploaded from the Menu create/edit form (`MenuForm`) via `POST /api/menu/upload` (multer → `backend/uploads/menu-items/`), served statically by Express, with the DB `image_path` migrated from old public paths by `backend/db/migrate-menu-images.ts`
