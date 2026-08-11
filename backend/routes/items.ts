@@ -5,16 +5,14 @@ import multer from "multer";
 import path from "path";
 import crypto from "crypto";
 import fs from "fs";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { uploadsDir, uploadsRoot } from "../db/uploads.js";
 
 const router = Router();
 
 const VALID_UNITS = Object.values(ItemUnit) as string[];
 
 const storage = multer.diskStorage({
-  destination: path.resolve(__dirname, "../uploads/stock-supplies"),
+  destination: uploadsDir("stock-supplies"),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${crypto.randomUUID()}${ext}`);
@@ -32,7 +30,7 @@ const upload = multer({
 
 function deleteImageFile(imagePath: string | null) {
   if (!imagePath) return;
-  const fullPath = path.resolve(__dirname, "..", imagePath);
+  const fullPath = path.resolve(uploadsRoot(), imagePath.replace(/^\/+/, ""));
   if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
 }
 

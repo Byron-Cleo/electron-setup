@@ -51,16 +51,26 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: `Invalid mealType. Must be one of: ${Object.values(ServiceTime).join(", ")}` });
   }
 
-  const itemsPrice = items.reduce(
-    (sum: number, item: { price: number; qty: number }) => sum + Number(item.price) * item.qty,
-    0,
-  );
   const shippingPrice = 0;
   const taxPrice = 0;
-  const totalPrice = itemsPrice + shippingPrice + taxPrice;
 
   try {
     const order = await prisma.$transaction(async (tx) => {
+      let itemsPrice = 0;
+      for (const item of items) {
+        const [starch, vegetable] = await Promise.all([
+          item.starchId
+            ? tx.menuAccompaniment.findUnique({ where: { id: item.starchId }, select: { price: true } })
+            : Promise.resolve(null),
+          item.vegetableId
+            ? tx.menuAccompaniment.findUnique({ where: { id: item.vegetableId }, select: { price: true } })
+            : Promise.resolve(null),
+        ]);
+        itemsPrice +=
+          (Number(item.price) + Number(starch?.price ?? 0) + Number(vegetable?.price ?? 0)) * item.qty;
+      }
+      const totalPrice = itemsPrice + shippingPrice + taxPrice;
+
       const created = await tx.order.create({
         data: {
           userId,

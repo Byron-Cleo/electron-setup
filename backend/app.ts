@@ -17,6 +17,7 @@ import kitchenConfigRouter from "./routes/kitchenConfig.js";
 import dailyReportRouter from "./routes/dailyReport.js";
 import ordersRouter from "./routes/orders.js";
 import usersRouter from "./routes/users.js";
+import { uploadsRoot } from "./db/uploads.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,12 +43,12 @@ app.use(cors());
 app.use(express.json());
 
 // Ensure upload folders exist before multer writes to them (fresh clones).
-const uploadsRoot = path.join(__dirname, "uploads");
-fs.mkdirSync(path.join(uploadsRoot, "stock-supplies"), { recursive: true });
-fs.mkdirSync(path.join(uploadsRoot, "menu-items"), { recursive: true });
+const uploads = uploadsRoot();
+fs.mkdirSync(path.join(uploads, "stock-supplies"), { recursive: true });
+fs.mkdirSync(path.join(uploads, "menu-items"), { recursive: true });
 
 // All uploaded images (stock supplies + menu items) are served from /uploads.
-app.use("/uploads", express.static(uploadsRoot));
+app.use("/uploads", express.static(uploads));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

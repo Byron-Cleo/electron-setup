@@ -35,6 +35,9 @@ function buildOrderItems(orderItems: OrderLineItem[]): CreateOrderItemData[] {
 
 function buildReceipt(order: Order, orderItems: OrderLineItem[], waiterName: string, mealType: string): ReceiptData {
   const items = toReceiptItems(orderItems)
+  const itemsPrice = items.reduce((sum, item) => sum + item.lineTotal, 0)
+  const shippingPrice = Number(order.shippingPrice) || 0
+  const taxPrice = Number(order.taxPrice) || 0
 
   return {
     ticket: "customer",
@@ -58,10 +61,10 @@ function buildReceipt(order: Order, orderItems: OrderLineItem[], waiterName: str
     waiter: { name: waiterName },
     items,
     totals: {
-      itemsPrice: Number(order.itemsPrice),
-      shippingPrice: Number(order.shippingPrice),
-      taxPrice: Number(order.taxPrice),
-      totalPrice: Number(order.totalPrice),
+      itemsPrice,
+      shippingPrice,
+      taxPrice,
+      totalPrice: itemsPrice + shippingPrice + taxPrice,
     },
     barcode: String(order.orderNumber),
   }

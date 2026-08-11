@@ -4,16 +4,14 @@ import { ServiceTime } from "../db/generated/prisma/client.js";
 import multer from "multer";
 import path from "path";
 import crypto from "crypto";
-import { fileURLToPath } from "url";
+import { uploadsDir } from "../db/uploads.js";
 
 const router = Router();
 
 const VALID_MEAL_TYPES = Object.values(ServiceTime) as string[];
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const menuImageStorage = multer.diskStorage({
-  destination: path.resolve(__dirname, "../uploads/menu-items"),
+  destination: uploadsDir("menu-items"),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${crypto.randomUUID()}${ext}`);

@@ -15,6 +15,11 @@ export interface PrintResult {
 const ESC_INIT = Buffer.from([0x1b, 0x40]); // ESC @
 const ESC_FEED_4 = Buffer.from([0x1b, 0x64, 0x04]); // ESC d 4 — feed 4 lines
 const GS_CUT = Buffer.from([0x1d, 0x56, 0x42, 0x00]); // GS V B 0 — full cut
+const ESC_BOLD_ON = Buffer.from([0x1b, 0x45, 0x01]); // ESC E 1 — bold on
+const ESC_BOLD_OFF = Buffer.from([0x1b, 0x45, 0x00]); // ESC E 0 — bold off
+
+type Seg = { t: string; b?: boolean };
+type Line = Seg[];
 
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`;
@@ -36,44 +41,120 @@ function padCenter(text: string, width: number): string {
   return " ".repeat(left) + trimmed;
 }
 
-function plainTextReceipt(data: ReceiptData): string {
+function wrapWords(text: string, width: number): string[] {
+  if (text.length <= width) return [text];
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let cur = "";
+  for (const word of words) {
+    const candidate = cur ? `${cur} ${word}` : word;
+    if (candidate.length > width) {
+      if (cur) lines.push(cur);
+      cur = word;
+    } else {
+      cur = candidate;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+// Renders receipt lines as raw ESC/POS with bold segments (ESC E). Mirrors the
+// HTML preview so the printed receipt keeps the same content, emphasis and no
+// truncated words.
+function renderEscPos(lines: Line[]): Buffer {
+  const parts: Buffer[] = [];
+  let bold = false;
+  for (const line of lines) {
+    for (const seg of line) {
+      const want = seg.b ?? false;
+      if (want !== bold) {
+        parts.push(want ? ESC_BOLD_ON : ESC_BOLD_OFF);
+        bold = want;
+      }
+      parts.push(Buffer.from(seg.t, "latin1"));
+    }
+    parts.push(Buffer.from("\n", "latin1"));
+  }
+  if (bold) parts.push(ESC_BOLD_OFF);
+  return Buffer.concat(parts);
+}
+
+function plainTextLines(data: ReceiptData): Line[] {
   const r = data.restaurant;
   const width = 42;
   const line = "-".repeat(width);
-  const out: string[] = [];
+  const lines: Line[] = [];
+  const push = (text: string, b = false) => lines.push([{ t: text, b }]);
+  const pushCenter = (text: string, b = false) => {
+    for (const wrapped of wrapWords(text, width)) push(padCenter(wrapped, width), b);
+  };
+  const pushRow = (left: string, right: string, b = false) => {
+    const pad = Math.max(1, width - left.length - right.length);
+    const segs: Seg[] = [{ t: left, b }, { t: " ".repeat(pad) }, { t: right, b }];
+    lines.push(segs);
+  };
 
-  out.push(padCenter(r.name, width));
-  if (r.branch) out.push(padCenter(`Branch: ${r.branch}`, width));
-  if (r.address) out.push(padCenter(r.address, width));
-  if (r.phone) out.push(padCenter(r.phone, width));
-  if (r.tel) out.push(`Tel: ${r.tel}`);
-  out.push(line);
-  out.push(`Order #${data.order.number}`);
-  out.push(`Meal: ${data.order.mealType}`);
-  out.push(`Date: ${formatDate(data.order.createdAt)}`);
-  out.push(`Payment: ${data.order.paymentMethod}`);
-  out.push(`Waiter: ${data.waiter.name}`);
-  out.push(line);
+  pushCenter(r.name, true);
+  if (r.branch) pushCenter(`Branch: ${r.branch}`, true);
+  if (r.address) pushCenter(r.address);
+  if (r.city) pushCenter(r.city);
+  push(line);
+  pushRow("Order #", String(data.order.number), true);
+  pushRow("Waiter", data.waiter.name);
+  pushRow("Date", formatDate(data.order.createdAt));
+  pushRow("Meal", data.order.mealType);
+  push(line);
+
+  // Four-column item block mirroring the HTML preview (QTY | ITEM | PRICE | TOTAL).
+  const qtyW = 4;
+  const nameW = 14;
+  const priceW = 12;
+  const totalW = 12;
+  const header =
+    "QTY".padEnd(qtyW) + "ITEM".padEnd(nameW) + "PRICE".padStart(priceW) + "TOTAL".padStart(totalW);
+  push(header, true);
 
   for (const item of data.items) {
-    out.push(item.name);
-    out.push(`  ${item.qty} x ${money(item.unitPrice)}  ${money(item.lineTotal)}`);
+    const qty = String(item.qty).padEnd(qtyW);
+    const name = item.name;
+    const price = money(item.unitPrice).padStart(priceW);
+    const total = money(item.lineTotal).padStart(totalW);
+    lines.push([
+      { t: qty, b: true },
+      { t: name.slice(0, nameW).padEnd(nameW) },
+      { t: price },
+      { t: total, b: true },
+    ]);
+    const overflow = name.slice(nameW).trim();
+    if (overflow) {
+      const contWidth = width - qtyW;
+      for (const wrapped of wrapWords(overflow, contWidth)) {
+        push(" ".repeat(qtyW) + wrapped);
+      }
+    }
     for (const acc of item.accompaniments) {
-      out.push(`    * ${acc.name}${acc.charged ? ` (+${money(acc.price)})` : " — FREE"}`);
+      const tag = acc.charged ? `(+${money(acc.price)})` : "(FREE)";
+      for (const wrapped of wrapWords(`* ${acc.name} ${tag}`, width - qtyW)) {
+        push(" ".repeat(qtyW) + wrapped);
+      }
     }
   }
-  out.push(line);
-  out.push(`Items: ${money(data.totals.itemsPrice)}`);
-  out.push(`Shipping: ${money(data.totals.shippingPrice)}`);
-  out.push(`Tax: ${money(data.totals.taxPrice)}`);
-  out.push(`TOTAL: ${money(data.totals.totalPrice)}`);
-  out.push(line);
-  out.push(padCenter("Thank You! Visit Again", width));
-  out.push(padCenter(`Order #${data.barcode}`, width));
-  if (r.poweredBy) out.push(r.poweredBy);
-  if (r.services) out.push(r.services);
+  push(line);
+  pushRow("Sub-Total", money(data.totals.itemsPrice), true);
+  pushRow("Shipping", money(data.totals.shippingPrice));
+  pushRow("Tax", money(data.totals.taxPrice));
+  pushRow("Total", money(data.totals.totalPrice), true);
+  push(line);
+  pushCenter("Thank You. Welcome Again", true);
+  pushCenter("Buy Goods Till No: 994296", true);
+  push(line);
+  pushCenter("POS Designed and Build By:", true);
+  if (r.poweredBy) pushCenter(r.poweredBy, true);
+  if (r.tel) pushCenter(`Tel: ${r.tel}`);
+  if (r.services) pushCenter(r.services);
 
-  return out.join("\n") + "\n";
+  return lines;
 }
 
 function plainTextTest(name: string): string {
@@ -91,7 +172,7 @@ function plainTextTest(name: string): string {
   ].join("\n") + "\n";
 }
 
-function printToLan(printer: PosPrinter, text: string, timeoutMs = 5000): Promise<PrintResult> {
+function printToLan(printer: PosPrinter, payload: Buffer, timeoutMs = 5000): Promise<PrintResult> {
   const host = printer.host ?? "";
   const port = printer.port ?? 9100;
 
@@ -108,13 +189,8 @@ function printToLan(printer: PosPrinter, text: string, timeoutMs = 5000): Promis
     socket.setTimeout(timeoutMs);
 
     socket.once("connect", () => {
-      const payload = Buffer.concat([
-        ESC_INIT,
-        Buffer.from(text, "latin1"),
-        ESC_FEED_4,
-        GS_CUT,
-      ]);
-      socket.write(payload, (err) => {
+      const buffer = Buffer.concat([ESC_INIT, payload, ESC_FEED_4, GS_CUT]);
+      socket.write(buffer, (err) => {
         if (err) {
           finish({ ok: false, error: err.message });
         } else {
@@ -181,21 +257,16 @@ function rawWriteToTarget(target: string, buffer: Buffer, timeoutMs = 10000): Pr
   });
 }
 
-async function printRawUsb(printer: PosPrinter, text: string): Promise<PrintResult> {
+async function printRawUsb(printer: PosPrinter, payload: Buffer): Promise<PrintResult> {
   if (!printer.deviceName) return { ok: false, error: "USB printer has no device name configured" };
-  const payload = Buffer.concat([
-    ESC_INIT,
-    Buffer.from(text, "latin1"),
-    ESC_FEED_4,
-    GS_CUT,
-  ]);
+  const buffer = Buffer.concat([ESC_INIT, payload, ESC_FEED_4, GS_CUT]);
 
   const port = await getRawPort(printer.deviceName);
   const targets = [port && `\\\\localhost\\${port}`, `\\\\localhost\\${printer.deviceName}`].filter(
     (t): t is string => !!t,
   );
   for (const target of targets) {
-    const result = await rawWriteToTarget(target, payload);
+    const result = await rawWriteToTarget(target, buffer);
     if (result.ok) return result;
   }
   const portHint = port ? ` printer port ${port}` : "";
@@ -321,12 +392,12 @@ async function printReceipt(data: ReceiptData): Promise<PrintResult> {
     if (!printer.host) {
       return { ok: false, error: "LAN printer has no IP address configured" };
     }
-    return printToLan(printer, plainTextReceipt(data));
+    return printToLan(printer, renderEscPos(plainTextLines(data)));
   }
   if (!printer.deviceName) {
     return { ok: false, error: "USB printer has no device name configured" };
   }
-  const raw = await printRawUsb(printer, plainTextReceipt(data));
+  const raw = await printRawUsb(printer, renderEscPos(plainTextLines(data)));
   if (raw.ok) return raw;
   const html = templateFor(data)(data);
   return printHtml(printer.deviceName, html);
@@ -344,12 +415,12 @@ export function registerReceiptHandlers(): void {
   ipcMain.handle("printer:test-print", async (_event, printer: PosPrinter): Promise<PrintResult> => {
     if (printer.transport === "lan") {
       if (!printer.host) return { ok: false, error: "LAN printer has no IP address configured" };
-      return printToLan(printer, plainTextTest(printer.name));
+      return printToLan(printer, Buffer.from(plainTextTest(printer.name), "latin1"));
     }
     if (!printer.deviceName) {
       return { ok: false, error: "USB printer has no device name configured" };
     }
-    const raw = await printRawUsb(printer, plainTextTest(printer.name));
+    const raw = await printRawUsb(printer, Buffer.from(plainTextTest(printer.name), "latin1"));
     if (raw.ok) return raw;
     return printHtml(printer.deviceName, testHtml(printer.name));
   });
