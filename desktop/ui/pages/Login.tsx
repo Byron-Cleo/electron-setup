@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Info } from "lucide-react";
+import { ArrowRight, Info, Power } from "lucide-react";
 import Autoplay from "embla-carousel-autoplay";
 
 import {
@@ -115,8 +115,22 @@ function Login() {
     }
   };
 
+  const handleExit = () => {
+    if (window.confirm("Are you sure you want to exit Eraeva POS?")) {
+      window.electron?.app?.quit();
+    }
+  };
+
   return (
-    <div className="h-dvh overflow-hidden bg-[#F5EDE0] text-brand-ebony flex flex-col font-sans selection:bg-brand-gold/30">
+    <div className="relative h-dvh overflow-hidden bg-[#F5EDE0] text-brand-ebony flex flex-col font-sans selection:bg-brand-gold/30">
+      {/* Exit Button */}
+      <button
+        onClick={handleExit}
+        className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-brand-red hover:bg-brand-red/85 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-brand-red/30 cursor-pointer transition-all"
+      >
+        <Power className="w-5 h-5" />
+        Exit
+      </button>
       {/* Top Logo Section */}
       <div className="flex flex-col items-center pt-[min(4vh,40px)] pb-[min(3vh,24px)] px-4">
         <img

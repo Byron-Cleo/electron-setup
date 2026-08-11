@@ -492,6 +492,9 @@ interface ServerStatus {
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: any) => void) => void;
   getStaticData: () => void;
+  app: {
+    quit: () => Promise<void>;
+  };
   mealType: {
     getAll: () => Promise<MealType[]>;
     getById: (id: string) => Promise<MealType>;

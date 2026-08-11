@@ -3,6 +3,9 @@ import electron = require("electron");
 electron.contextBridge.exposeInMainWorld("electron", {
   subscribeStatistics: (callback: (statistics: any) => void) => callback({}),
   getStaticData: () => console.log("static"),
+  app: {
+    quit: () => electron.ipcRenderer.invoke("app:quit"),
+  },
   mealType: {
     getAll: () => electron.ipcRenderer.invoke("meal-type:get-all"),
     getById: (id: string) => electron.ipcRenderer.invoke("meal-type:get-by-id", id),

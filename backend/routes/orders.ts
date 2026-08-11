@@ -57,6 +57,7 @@ router.post("/", async (req, res) => {
   try {
     const order = await prisma.$transaction(async (tx) => {
       let itemsPrice = 0;
+      const resolvedAccompaniments: { starchId: string | null; vegetableId: string | null }[] = [];
       for (const item of items) {
         const [starch, vegetable] = await Promise.all([
           item.starchId
@@ -68,6 +69,10 @@ router.post("/", async (req, res) => {
         ]);
         itemsPrice +=
           (Number(item.price) + Number(starch?.price ?? 0) + Number(vegetable?.price ?? 0)) * item.qty;
+        resolvedAccompaniments.push({
+          starchId: starch ? item.starchId ?? null : null,
+          vegetableId: vegetable ? item.vegetableId ?? null : null,
+        });
       }
       const totalPrice = itemsPrice + shippingPrice + taxPrice;
 
@@ -84,7 +89,8 @@ router.post("/", async (req, res) => {
         },
       });
 
-      for (const item of items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         await tx.orderItem.create({
           data: {
             orderId: created.id,
@@ -94,8 +100,8 @@ router.post("/", async (req, res) => {
             name: item.name,
             slug: item.slug,
             image: item.image,
-            starchId: item.starchId ?? null,
-            vegetableId: item.vegetableId ?? null,
+            starchId: resolvedAccompaniments[i]?.starchId ?? null,
+            vegetableId: resolvedAccompaniments[i]?.vegetableId ?? null,
           },
         });
 

@@ -2,7 +2,7 @@ import pkg from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { isDev } from "./utils.ts";
-const { app, BrowserWindow } = pkg;
+const { app, BrowserWindow, ipcMain } = pkg;
 import { getPreloadPath } from "./pathResolver.ts";
 import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers, registerStockSupplyCategoryHandlers, registerStockSupplyHandlers, registerStockRequestHandlers, registerStockSupplyExtraHandlers, registerDepartmentHandlers, registerCookingRecordHandlers, registerKitchenConfigHandlers, registerOrderHandlers } from "./ipc-handlers.ts";
 import { registerPrinterHandlers } from "./printers.ts";
@@ -21,6 +21,32 @@ try {
   });
 } catch {} // dev-only
 
+function createMainWindow() {
+  const win = new BrowserWindow({
+    show: false,
+    kiosk: true,
+    frame: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: getPreloadPath(),
+    },
+  });
+
+  if (isDev()) {
+    win.loadURL("http://localhost:5123");
+  } else {
+    win.loadFile(path.join(appPath + "/dist-react/index.html"));
+  }
+
+  win.once("ready-to-show", () => {
+    win.show();
+    win.focus();
+  });
+
+  return win;
+}
+
 app.whenReady().then(() => {
   registerMealTypeHandlers();
   registerMenuHandlers();
@@ -36,27 +62,12 @@ app.whenReady().then(() => {
   registerPrinterHandlers();
   registerReceiptHandlers();
   registerServerConfigHandlers();
-  const win = new BrowserWindow({
-    show: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: getPreloadPath(),
-    },
+
+  ipcMain.handle("app:quit", () => {
+    app.quit();
   });
 
-  if (isDev()) {
-    win.loadURL("http://localhost:5123");
-  } else {
-    win.loadFile(path.join(appPath + "/dist-react/index.html"));
-  }
-
-  win.once("ready-to-show", () => {
-    win.maximize();
-    win.show();
-    win.focus();
-  });
-
+  createMainWindow();
 });
 
 app.on("window-all-closed", () => {
@@ -65,18 +76,6 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    const win = new BrowserWindow({
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        preload: getPreloadPath(),
-      },
-    });
-    win.maximize();
-    if (isDev()) {
-      win.loadURL("http://localhost:5123");
-    } else {
-      win.loadFile(appPath + "/dist-react/index.html");
-    }
+    createMainWindow();
   }
 });
