@@ -114,6 +114,7 @@ function plainTextLines(data: ReceiptData): Line[] {
   const header =
     "QTY".padEnd(qtyW) + "ITEM".padEnd(nameW) + "PRICE".padStart(priceW) + "TOTAL".padStart(totalW);
   push(header, true);
+  push(line);
 
   for (const item of data.items) {
     const qty = String(item.qty).padEnd(qtyW);
