@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Info, Power } from "lucide-react";
+import { ArrowRight, Info, Loader2, Power } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth";
 import { getMenuImages, menuImageUrl } from "@/lib/api";
@@ -14,6 +14,7 @@ const fallbackImages = [
 
 function ImageCarousel() {
   const [images, setImages] = useState<string[]>(fallbackImages);
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
@@ -22,7 +23,21 @@ function ImageCarousel() {
       .then((paths) => {
         if (!active) return;
         const urls = paths.map((p) => menuImageUrl(p) ?? "").filter(Boolean);
-        if (urls.length > 0) setImages(urls);
+        if (urls.length > 0) {
+          setImages(urls);
+          // Preload every image up-front so the carousel never shows a blank
+          // frame while a large PNG is still downloading.
+          urls.forEach((url) => {
+            const img = new Image();
+            img.onload = () => {
+              if (active) setLoaded((prev) => ({ ...prev, [url]: true }));
+            };
+            img.onerror = () => {
+              if (active) setLoaded((prev) => ({ ...prev, [url]: false }));
+            };
+            img.src = url;
+          });
+        }
       })
       .catch(() => {
         /* keep fallback images */
@@ -46,16 +61,24 @@ function ImageCarousel() {
     return () => clearInterval(timer);
   }, [images.length]);
 
+  const url = images[current] ?? "";
+  const isLoaded = !!url && loaded[url];
+
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden bg-brand-tan">
       <div className="absolute inset-0 bg-gradient-to-br from-brand-green/50 via-brand-green/30 to-brand-beige/40 z-10 pointer-events-none" />
-      <div
-        key={images[current]}
-        className="absolute inset-0 animate-[fade-in_0.5s_ease] bg-contain bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${images[current]})` }}
-        role="img"
-        aria-label={`Restaurant view ${current + 1}`}
-      />
+      {isLoaded ? (
+        <img
+          key={url}
+          src={url}
+          alt={`Restaurant view ${current + 1}`}
+          className="absolute inset-0 w-full h-full object-contain animate-[fade-in_0.5s_ease]"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-green/60" />
+        </div>
+      )}
     </div>
   );
 }
