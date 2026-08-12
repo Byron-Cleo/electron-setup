@@ -4,8 +4,8 @@ import { WaiterOrderProvider } from "./WaiterOrderContext"
 
 export function WaiterLayout() {
   return (
-    <div className="h-screen bg-brand-light/20 flex flex-col">
-      <div className="w-full mx-auto max-w-[1400px] flex-1 flex flex-col">
+    <div className="h-screen bg-brand-light/20 flex flex-col overflow-hidden">
+      <div className="w-full mx-auto max-w-[1400px] flex-1 flex flex-col min-h-0">
         <WaiterOrderProvider>
           <WaiterHeader />
           <main className="flex-1 overflow-y-auto">

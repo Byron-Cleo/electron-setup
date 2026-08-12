@@ -39,6 +39,8 @@ function platesFor(item: MenuItem): number {
   return item.availablePlates ?? item.stock
 }
 
+const CATEGORY_ORDER = ["Beverages", "Snacks"]
+
 function isFreeAccompaniment(a: OrderAccompaniment): boolean {
   return a.price == null || a.price <= 0
 }
@@ -232,7 +234,16 @@ export function WaiterMenuGrid({
       .catch(() => {})
   }, [])
 
-  const categories = useMemo(() => [...new Set(items.map((i) => i.category))], [items])
+  const categories = useMemo(() => {
+    const cats = [...new Set(items.map((i) => i.category))]
+    if (mealPeriod !== "BREAKFAST") return cats
+    return cats.sort((a, b) => {
+      const pa = CATEGORY_ORDER.indexOf(a)
+      const pb = CATEGORY_ORDER.indexOf(b)
+      if (pa !== -1 || pb !== -1) return (pa === -1 ? CATEGORY_ORDER.length : pa) - (pb === -1 ? CATEGORY_ORDER.length : pb)
+      return 0
+    })
+  }, [items, mealPeriod])
 
   const itemsByCategory = useMemo(() => {
     const grouped: Record<string, MenuItem[]> = {}
@@ -242,6 +253,40 @@ export function WaiterMenuGrid({
     })
     return grouped
   }, [items])
+
+  const renderItemCard = (item: MenuItem) => {
+    const plates = platesFor(item)
+    const soldOut = plates <= 0
+    return (
+      <Card
+        key={item.id}
+        onClick={() => {
+          if (soldOut) return
+          setSelectedItem(item)
+          setActiveOrderKey(null)
+        }}
+        className={cn(
+          "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
+          soldOut && "opacity-50 cursor-not-allowed hover:shadow-none hover:translate-y-0",
+        )}
+      >
+        <CardContent className="p-3 space-y-1.5">
+          <p className="text-sm font-medium leading-tight text-brand-ebony">{item.name}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-brand-maroon">{formatPrice(item.price)}</p>
+            <span
+              className={cn(
+                "text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap",
+                platesBadgeClass(plates),
+              )}
+            >
+              {soldOut ? "Sold Out" : `${plates} plates`}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   const starches = useMemo(() => accompaniments.filter((a) => a.category === "STARCH"), [accompaniments])
   const vegetables = useMemo(() => accompaniments.filter((a) => a.category === "VEGETABLE"), [accompaniments])
@@ -486,39 +531,7 @@ export function WaiterMenuGrid({
                   <div key={cat}>
                     <p className="text-xs font-semibold uppercase tracking-wide text-red-500 mb-2">{cat}</p>
                     <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                      {catItems.map((item) => {
-                        const plates = platesFor(item)
-                        const soldOut = plates <= 0
-                        return (
-                          <Card
-                            key={item.id}
-                            onClick={() => {
-                              if (soldOut) return
-                              setSelectedItem(item)
-                              setActiveOrderKey(null)
-                            }}
-                            className={cn(
-                              "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
-                              soldOut && "opacity-50 cursor-not-allowed hover:shadow-none hover:translate-y-0",
-                            )}
-                          >
-                            <CardContent className="p-3 space-y-1.5">
-                              <p className="text-sm font-medium leading-tight text-brand-ebony">{item.name}</p>
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-brand-maroon">{formatPrice(item.price)}</p>
-                                <span
-                                  className={cn(
-                                    "text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap",
-                                    platesBadgeClass(plates),
-                                  )}
-                                >
-                                  {soldOut ? "Sold Out" : `${plates} plates`}
-                                </span>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
+                      {catItems.map(renderItemCard)}
                     </div>
                   </div>
                 )

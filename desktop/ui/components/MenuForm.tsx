@@ -38,7 +38,7 @@ const CATEGORIES = [
   "Chicken",
   "Vegetable",
   "Drinks",
-  "Beverage",
+  "Beverages",
   "Starch",
   "Fish",
   "1/2 Fish",
