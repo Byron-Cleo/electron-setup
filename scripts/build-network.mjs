@@ -76,7 +76,7 @@ if (!existsSync(serverConfigPath)) {
   console.error(`Missing ${serverConfigPath} — the Electron build did not produce it.`)
   process.exit(1)
 }
-const fallback = "http://localhost:3001/api"
+const fallback = "http://192.168.100.45:3001/api"
 let code = readFileSync(serverConfigPath, "utf8")
 if (!code.includes(fallback)) {
   console.error(`Could not find fallback API base (${fallback}) in ${serverConfigPath}.`)

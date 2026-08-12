@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://192.168.100.45:3001/api";
 
 interface AuthState {
   user: User | null;

@@ -15,7 +15,7 @@ const CONFIG_FILENAME = "server-config.json";
 
 // Baked-in default. The build-network script rewrites this literal to the
 // network server address so the packaged app works without a config file.
-const DEFAULT_API_BASE = "http://localhost:3001/api";
+const DEFAULT_API_BASE = "http://192.168.100.45:3001/api";
 
 function toApiBase(value: string): string {
   const v = value.trim().replace(/\/+$/, "");

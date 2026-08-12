@@ -1,5 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? "http://localhost:3001"
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://192.168.100.45:3001/api"
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? "http://192.168.100.45:3001"
 
 export function stockSupplyImageUrl(image: string | null): string | null {
   if (!image) return null
@@ -486,7 +486,7 @@ export async function getServerApiBase(): Promise<string> {
   }
   const config = await getServerConfig()
   if (config.serverUrl) return toApiBase(config.serverUrl)
-  return import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"
+  return import.meta.env.VITE_API_BASE ?? "http://192.168.100.45:3001/api"
 }
 
 export async function testServerConnection(): Promise<ServerStatus> {
