@@ -112,10 +112,6 @@ export default function Users() {
       setFormError("Name is required")
       return
     }
-    if (!formEmail.trim()) {
-      setFormError("Email is required")
-      return
-    }
     if (!editTarget && formPin.length < 4) {
       setFormError("PIN must be at least 4 characters")
       return
@@ -130,7 +126,7 @@ export default function Users() {
       if (editTarget) {
         await updateUser(editTarget.id, {
           name: formName.trim(),
-          email: formEmail.trim(),
+          email: formEmail.trim() || undefined,
           pin: formPin || undefined,
           role: formRole,
           isActive: formActive,
@@ -334,12 +330,12 @@ export default function Users() {
               />
             </div>
             <div>
-              <Label className="text-sm font-medium text-admin-header-text">Email *</Label>
+              <Label className="text-sm font-medium text-admin-header-text">Email (optional)</Label>
               <Input
                 type="email"
                 value={formEmail}
                 onChange={(e) => setFormEmail(e.target.value)}
-                placeholder="name@example.com"
+                placeholder="name@example.com (optional)"
                 className="mt-1"
               />
             </div>

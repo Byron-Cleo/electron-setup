@@ -44,7 +44,7 @@ async function main() {
 
   // 2. Menus — references starchId/vegetableId (already in DB above).
   await prisma.menu.createMany({
-    data: sampleData.menus.map((m) => ({ ...m, stock: m.stock ?? 100 })),
+    data: sampleData.menus.map((m) => ({ ...m, stock: 100 })),
   });
   console.log("Seeded menus");
 

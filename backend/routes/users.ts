@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { hash, compare } from "bcrypt-ts-edge";
 import prisma from "../db/db.js";
 
@@ -55,10 +56,6 @@ router.post("/", async (req, res) => {
       res.status(400).json({ error: "Name is required" });
       return;
     }
-    if (!email || typeof email !== "string" || !email.trim()) {
-      res.status(400).json({ error: "Email is required" });
-      return;
-    }
     if (!pin || typeof pin !== "string" || pin.length < 4) {
       res.status(400).json({ error: "PIN must be at least 4 characters" });
       return;
@@ -68,18 +65,24 @@ router.post("/", async (req, res) => {
       return;
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (existing) {
-      res.status(409).json({ error: "A user with this email already exists" });
-      return;
+    const providedEmail =
+      email && typeof email === "string" && email.trim()
+        ? email.trim().toLowerCase()
+        : null;
+    if (providedEmail) {
+      const existing = await prisma.user.findUnique({ where: { email: providedEmail } });
+      if (existing) {
+        res.status(409).json({ error: "A user with this email already exists" });
+        return;
+      }
     }
+    const emailValue = providedEmail ?? `user-${randomUUID()}@eraeva.local`;
 
     const hashedPin = await hash(pin, 12);
     const created = await prisma.user.create({
       data: {
         name: name.trim(),
-        email: normalizedEmail,
+        email: emailValue,
         pin: hashedPin,
         role,
         isActive: isActive === undefined ? true : !!isActive,
@@ -114,11 +117,7 @@ router.put("/:id", async (req, res) => {
       data.name = name.trim();
     }
 
-    if (email !== undefined) {
-      if (typeof email !== "string" || !email.trim()) {
-        res.status(400).json({ error: "Email cannot be empty" });
-        return;
-      }
+    if (email !== undefined && typeof email === "string" && email.trim()) {
       const normalizedEmail = email.trim().toLowerCase();
       const emailTaken = await prisma.user.findFirst({
         where: { email: normalizedEmail, id: { not: id } },
