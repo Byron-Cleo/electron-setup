@@ -1,18 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Info, Power } from "lucide-react";
-import Autoplay from "embla-carousel-autoplay";
 
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  type CarouselApi,
-} from "@/components/ui/carousel";
 import { useAuthStore } from "@/stores/auth";
-import { menuImageUrl } from "@/lib/api";
+import { getMenuImages, menuImageUrl } from "@/lib/api";
 
-const carouselImages = [
+const fallbackImages = [
   "beef-fry-rice.png",
   "chicken-fry-chapati.png",
   "beef-fry-ugali.png",
@@ -20,62 +13,49 @@ const carouselImages = [
 ].map((name) => menuImageUrl(name) ?? "");
 
 function ImageCarousel() {
-  const [api, setApi] = useState<CarouselApi | null>(null);
+  const [images, setImages] = useState<string[]>(fallbackImages);
   const [current, setCurrent] = useState(0);
-  const [count, setCount] = useState(0);
 
-  const plugin = Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: false });
+  useEffect(() => {
+    let active = true;
+    getMenuImages()
+      .then((paths) => {
+        if (!active) return;
+        const urls = paths.map((p) => menuImageUrl(p) ?? "").filter(Boolean);
+        if (urls.length > 0) setImages(urls);
+      })
+      .catch(() => {
+        /* keep fallback images */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const onSelect = (api: CarouselApi) => {
-    if (!api) return;
-    setCurrent(api.selectedScrollSnap());
-    setCount(api.scrollSnapList().length);
-  };
+  // Every 2s pick a random image and fade it in. No sliding — the next image
+  // simply replaces the current one, guaranteed different from what's showing.
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrent((prev) => {
+        let next = Math.floor(Math.random() * images.length);
+        if (next === prev) next = (next + 1) % images.length;
+        return next;
+      });
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [images.length]);
 
   return (
-        <div className="relative w-full h-full rounded-2xl overflow-hidden bg-brand-tan">
+    <div className="relative w-full h-full rounded-2xl overflow-hidden bg-brand-tan">
       <div className="absolute inset-0 bg-gradient-to-br from-brand-green/50 via-brand-green/30 to-brand-beige/40 z-10 pointer-events-none" />
-      <Carousel
-        setApi={(api) => {
-          setApi(api);
-          if (api) {
-            onSelect(api);
-            api.on("select", () => onSelect(api));
-            api.on("reInit", () => onSelect(api));
-          }
-        }}
-        plugins={[plugin]}
-        opts={{ loop: true, align: "start" }}
-        className="w-full h-full"
-      >
-        <CarouselContent className="h-full -ml-0">
-          {carouselImages.map((src, index) => (
-            <CarouselItem key={index} className="pl-0 basis-full h-full">
-              <div
-                className="w-full h-full bg-contain bg-center bg-no-repeat"
-                style={{ backgroundImage: `url(${src})` }}
-                role="img"
-                aria-label={`Restaurant view ${index + 1}`}
-              />
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
-
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-        {Array.from({ length: count }).map((_, index) => (
-          <button
-            key={index}
-            onClick={() => api?.scrollTo(index)}
-            className={`w-2 h-2 rounded-full transition-all ${
-              index === current
-                ? "bg-white w-6"
-                : "bg-white/50 hover:bg-white/70"
-            }`}
-            aria-label={`Go to image ${index + 1}`}
-          />
-        ))}
-      </div>
+      <div
+        key={images[current]}
+        className="absolute inset-0 animate-[fade-in_0.5s_ease] bg-contain bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${images[current]})` }}
+        role="img"
+        aria-label={`Restaurant view ${current + 1}`}
+      />
     </div>
   );
 }

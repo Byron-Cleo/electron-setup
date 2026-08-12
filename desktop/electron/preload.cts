@@ -19,6 +19,7 @@ electron.contextBridge.exposeInMainWorld("electron", {
     getAll: () => electron.ipcRenderer.invoke("menu:get-all"),
     getById: (id: string) => electron.ipcRenderer.invoke("menu:get-by-id", id),
     getByMealType: (mealType: string) => electron.ipcRenderer.invoke("menu:get-by-meal-type", mealType),
+    listImages: () => electron.ipcRenderer.invoke("menu:list-images"),
     create: (data: any) => electron.ipcRenderer.invoke("menu:create", data),
     update: (id: string, data: any) =>
       electron.ipcRenderer.invoke("menu:update", id, data),

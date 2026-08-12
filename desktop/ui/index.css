@@ -286,3 +286,8 @@ code {
     @apply bg-background text-foreground;}
   html {
     @apply font-sans;}}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

@@ -31,6 +31,7 @@ export function registerMenuHandlers() {
   ipcMain.handle("menu:get-all", async () => apiFetch("/menu"));
   ipcMain.handle("menu:get-by-id", async (_event, id: string) => apiFetch(`/menu/${id}`));
   ipcMain.handle("menu:get-by-meal-type", async (_event, mealType: string) => apiFetch(`/menu?mealType=${encodeURIComponent(mealType)}`));
+  ipcMain.handle("menu:list-images", async () => apiFetch("/menu/images"));
   ipcMain.handle("menu:create", async (_event, data) =>
     apiFetch("/menu", { method: "POST", body: JSON.stringify(data) })
   );

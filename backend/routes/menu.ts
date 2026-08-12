@@ -5,6 +5,7 @@ import multer from "multer";
 import path from "path";
 import crypto from "crypto";
 import { uploadsDir } from "../db/uploads.js";
+import fs from "fs/promises";
 
 const router = Router();
 
@@ -169,6 +170,20 @@ router.get("/", async (req, res) => {
   }));
 
   res.json(result);
+});
+
+router.get("/images", async (_req, res) => {
+  try {
+    const dir = uploadsDir("menu-items");
+    const files = await fs.readdir(dir);
+    const images = files
+      .filter((f) => /\.(png|jpe?g|webp)$/i.test(f))
+      .sort()
+      .map((f) => `/uploads/menu-items/${f}`);
+    res.json({ images });
+  } catch {
+    res.status(500).json({ error: "Failed to list menu images" });
+  }
 });
 
 router.get("/:id", async (req, res) => {

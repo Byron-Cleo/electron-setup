@@ -266,6 +266,14 @@ export async function getMenuByMealType(mealPeriod: string): Promise<MenuItem[]>
   return apiFetch(`/menu?mealType=${encodeURIComponent(mealPeriod)}`)
 }
 
+export async function getMenuImages(): Promise<string[]> {
+  if (window.electron?.menu?.listImages) {
+    return (await window.electron.menu.listImages()).images
+  }
+  const res = await apiFetch("/menu/images")
+  return (res as { images: string[] }).images ?? []
+}
+
 export async function getMenuById(id: string): Promise<MenuItem> {
   if (window.electron?.menu?.getById) {
     return window.electron.menu.getById(id)

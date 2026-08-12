@@ -506,6 +506,7 @@ interface ElectronAPI {
     getAll: () => Promise<MenuItem[]>;
     getById: (id: string) => Promise<MenuItem>;
     getByMealType: (mealType: string) => Promise<MenuItem[]>;
+    listImages: () => Promise<{ images: string[] }>;
     create: (data: MenuCreateData) => Promise<MenuItem>;
     update: (id: string, data: MenuUpdateData) => Promise<MenuItem>;
     delete: (id: string) => Promise<{ message: string }>;
