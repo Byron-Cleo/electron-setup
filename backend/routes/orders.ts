@@ -51,6 +51,20 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: `Invalid mealType. Must be one of: ${Object.values(ServiceTime).join(", ")}` });
   }
 
+  const lineKey = (item: { menuId: string; starchId?: string | null; vegetableId?: string | null }) =>
+    `${item.menuId}|${item.starchId ?? ""}|${item.vegetableId ?? ""}`;
+  const merged = new Map<string, (typeof items)[number]>();
+  for (const item of items) {
+    const key = lineKey(item);
+    const existing = merged.get(key);
+    if (existing) {
+      existing.qty += item.qty;
+    } else {
+      merged.set(key, { ...item });
+    }
+  }
+  const lines = [...merged.values()];
+
   const shippingPrice = 0;
   const taxPrice = 0;
 
@@ -58,7 +72,7 @@ router.post("/", async (req, res) => {
     const order = await prisma.$transaction(async (tx) => {
       let itemsPrice = 0;
       const resolvedAccompaniments: { starchId: string | null; vegetableId: string | null }[] = [];
-      for (const item of items) {
+      for (const item of lines) {
         const [starch, vegetable] = await Promise.all([
           item.starchId
             ? tx.menuAccompaniment.findUnique({ where: { id: item.starchId }, select: { price: true } })
@@ -89,8 +103,8 @@ router.post("/", async (req, res) => {
         },
       });
 
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
+      for (let i = 0; i < lines.length; i++) {
+        const item = lines[i];
         await tx.orderItem.create({
           data: {
             orderId: created.id,

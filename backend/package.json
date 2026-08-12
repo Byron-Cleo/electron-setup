@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch index.ts",
-    "db:generate": "prisma generate",
+    "db:generate": "prisma generate && node scripts/fix-prisma-imports.mjs",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "seed": "tsx db/seed.ts",

@@ -100,6 +100,7 @@ model Order {
 }
 
 model OrderItem {
+  id          Int                @id @default(autoincrement())
   orderId     String             @db.Uuid
   menuId      String             @db.Uuid
   qty         Int
@@ -114,7 +115,7 @@ model OrderItem {
   Starch      MenuAccompaniment? @relation("OrderItem_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
   Vegetable   MenuAccompaniment? @relation("OrderItem_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
 
-  @@id([orderId, menuId], map: "orderitems_orderIdmenuId_pk")
+  @@unique([orderId, menuId, starchId, vegetableId], map: "orderitems_order_menu_starch_veg_key")
 }
 
 model Review {
