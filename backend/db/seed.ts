@@ -43,7 +43,9 @@ async function main() {
   console.log("Seeded accompaniments");
 
   // 2. Menus — references starchId/vegetableId (already in DB above).
-  await prisma.menu.createMany({ data: sampleData.menus });
+  await prisma.menu.createMany({
+    data: sampleData.menus.map((m) => ({ ...m, stock: m.stock ?? 100 })),
+  });
   console.log("Seeded menus");
 
   // 3. MenuMealType last — menuId must already exist.
