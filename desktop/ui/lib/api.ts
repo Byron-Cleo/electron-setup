@@ -1,5 +1,10 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://192.168.100.45:3001/api"
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? "http://192.168.100.45:3001"
+function resolveApiOrigin(): string {
+  if (import.meta.env.VITE_API_ORIGIN) return import.meta.env.VITE_API_ORIGIN
+  return "http://localhost:3001"
+}
+
+const API_ORIGIN = resolveApiOrigin()
+const API_BASE = import.meta.env.VITE_API_BASE ?? `${API_ORIGIN}/api`
 
 export function stockSupplyImageUrl(image: string | null): string | null {
   if (!image) return null
@@ -453,8 +458,6 @@ export async function testPrinter(printer: PosPrinter): Promise<PrintResult> {
 
 // ─── Server Config ───────────────────────────────────────────────────────────
 
-const SERVER_STORAGE_KEY = "eraeva.server-config.v1"
-
 function toApiBase(value: string): string {
   const v = value.trim().replace(/\/+$/, "")
   return v.endsWith("/api") ? v : `${v}/api`
@@ -486,7 +489,7 @@ export async function getServerApiBase(): Promise<string> {
   }
   const config = await getServerConfig()
   if (config.serverUrl) return toApiBase(config.serverUrl)
-  return import.meta.env.VITE_API_BASE ?? "http://192.168.100.45:3001/api"
+  return import.meta.env.VITE_API_BASE ?? `${API_ORIGIN}/api`
 }
 
 export async function testServerConnection(): Promise<ServerStatus> {
