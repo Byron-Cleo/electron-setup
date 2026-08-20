@@ -31,5 +31,8 @@ release
 # Playwright MCP session artifacts
 .playwright-mcp/
 
+# User uploads
+backend/uploads/
+
 # Foglamp scan (contains edit token)
 .foglamp/
