@@ -2,36 +2,27 @@
 
 ## Platform
 
-fullstack
+Not Specified
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Define Day/Night shift with correct meal period times
-- Track opening/closing plate stock per shift (auto + manual snapshots)
-- Generate shift sales reports broken down by meal period (Breakfast/Lunch for Day, Dinner for Night)
-- Allow cashier to void orders within current shift only
-- Add costPrice to StockSupply for production vs sales analysis
-- Auto-close shifts at defined times as backup
-- Track drift between auto-close and manual close times
+
 
 ## Notes
-
-- Phase 4 of 12 — Shift Management feature COMPLETE
-- All backend APIs and frontend UI implemented
-- Meal period times updated: Breakfast 5:30AM-11:59AM, Lunch 12PM-5:29PM, Dinner 5:30PM-5:29AM
-- Void functionality: cashier can void orders, waiter sees notification card
-- Shift API: open, close, auto-close, reports
-- costPrice added to StockSupply
-- Full spec: context/features/shift-management.md
-- Plan: context/features/shift-management-plan.md
 
 
 
 ## History
+
+### fullstack - 2026-08-22 — Shift Management Phases 1–7 (Foundation)
+- Implemented Phases 1–7 of the 12-phase Shift Management feature: Prisma schema + migration (Shift, ShiftSnapshot, ShiftType enum, Order void fields incl. shiftId/voidedOrderId, StockSupply.costPrice), Shift API (`routes/shifts.ts`: open/close/current/:id/auto-close) mounted at `/api/shifts`, void API (`POST /api/orders/:id/void` restoring stock + decrementing snapshot platesSold), costPrice on StockSupply CRUD + seed data, shift report API (`GET /api/reports/shift/:id` in dailyReport.ts), Cashier void UI (reason presets dialog, VOIDED badge), Waiter void notification card (WaiterPOS)
+- Meal period times updated: Breakfast 5:30AM–11:59AM, Lunch 12PM–5:29PM, Dinner 5:30PM–5:29AM
+- Remaining Phases 8–12 tracked in `context/features/shift-management-completion.md`
+- Verified: backend tsc + eslint clean; work committed directly on main as `4408996` (no feature branch existed)
 
 ### frontend - 2026-08-11 — Waiter Two-Column Menu + Receipt Footer Branding
 - Replaced the waiter 3-column menu screen with a 2-column layout: serving-period bar on top + dynamic first column (listing ↔ detail) + order column (400px, unchanged) on the right
