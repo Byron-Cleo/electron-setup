@@ -2,19 +2,30 @@
 
 ## Platform
 
-Not Specified
+fullstack
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-
+- Phase 8: Waiter replacement-order flow — link new order to voided order via voidedOrderId, clear notification after placement
+- Phase 9: Cashier Shift Close UI — ShiftCloseDialog with order/voided/revenue summary + drift warning; shift open/close from UI
+- Phase 10: Manager Report UI — Reports page with shift selector, plate movement, revenue by period, production vs sales, variance
+- Phase 11: Auto-close scheduler — backend interval closing expired shifts every minute
+- Phase 12: Void analytics — GET /api/reports/voids?date= per-waiter summary + surface in Reports UI
 
 ## Notes
 
-
+- Phases 1–7 DONE (merged to main `4408996`) — foundation table in spec lists what exists; do NOT rebuild
+- ⚠️ Gap A: POST /api/orders must accept voidedOrderId (Phase 8 blocker)
+- ⚠️ Gap B: lib/api.ts has NO shift functions yet — add openShift/closeShift/getCurrentShift/getShift/autoCloseShifts first (shared by 9 & 10); also add Shift types to electron.d.ts
+- Order of work: gap B → 8 → 9 → 10 → 11 → 12
+- Spec: context/features/shift-management-completion.md
+- Deep logic reference: context/features/shift-management.md (§5–7), plan phases 8–12
+- Verification gates per phase: tsc --noEmit (root + backend), npm run lint, browser/E2E acceptance check
+- Ollama models must be stopped (`ollama stop <model>`) immediately after each generation run
 
 ## History
 
