@@ -176,26 +176,37 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "Assignment already exists for this cooking record and menu. Use PUT to update." });
   }
 
-  const assignment = await prisma.cookingRecordAssignment.create({
-    data: {
-      cookingRecordId: cookingRecord.id,
-      menuId,
-      quantityPlates: Number(quantityPlates),
-    },
-    include: {
-      cookingRecord: {
-        include: {
-          stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true } },
-          cookedBy: { select: { id: true, name: true } },
-          assignments: {
-            include: {
-              menu: { select: { id: true, name: true, slug: true, images: true } },
+  const assignment = await prisma.$transaction(async (tx) => {
+    const created = await tx.cookingRecordAssignment.create({
+      data: {
+        cookingRecordId: cookingRecord.id,
+        menuId,
+        quantityPlates: Number(quantityPlates),
+      },
+    });
+
+    await tx.menu.update({
+      where: { id: menuId },
+      data: { stock: { increment: Number(quantityPlates) } },
+    });
+
+    return tx.cookingRecordAssignment.findUnique({
+      where: { id: created.id },
+      include: {
+        cookingRecord: {
+          include: {
+            stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true } },
+            cookedBy: { select: { id: true, name: true } },
+            assignments: {
+              include: {
+                menu: { select: { id: true, name: true, slug: true, images: true } },
+              },
             },
           },
         },
+        menu: { select: { id: true, name: true, slug: true, images: true } },
       },
-      menu: { select: { id: true, name: true, slug: true, images: true } },
-    },
+    });
   });
 
   res.status(201).json(assignment);
@@ -234,23 +245,40 @@ router.put("/:id", async (req, res) => {
     });
   }
 
-  const assignment = await prisma.cookingRecordAssignment.update({
-    where: { id },
-    data: { quantityPlates: Number(quantityPlates) },
-    include: {
-      cookingRecord: {
-        include: {
-          stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true } },
-          cookedBy: { select: { id: true, name: true } },
-          assignments: {
-            include: {
-              menu: { select: { id: true, name: true, slug: true, images: true } },
+  const oldQty = Number(existing.quantityPlates);
+  const newQty = Number(quantityPlates);
+  const delta = newQty - oldQty;
+
+  const assignment = await prisma.$transaction(async (tx) => {
+    const updated = await tx.cookingRecordAssignment.update({
+      where: { id },
+      data: { quantityPlates: newQty },
+    });
+
+    if (delta !== 0) {
+      await tx.menu.update({
+        where: { id: existing.menuId },
+        data: delta > 0 ? { stock: { increment: delta } } : { stock: { decrement: Math.abs(delta) } },
+      });
+    }
+
+    return tx.cookingRecordAssignment.findUnique({
+      where: { id: updated.id },
+      include: {
+        cookingRecord: {
+          include: {
+            stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true } },
+            cookedBy: { select: { id: true, name: true } },
+            assignments: {
+              include: {
+                menu: { select: { id: true, name: true, slug: true, images: true } },
+              },
             },
           },
         },
+        menu: { select: { id: true, name: true, slug: true, images: true } },
       },
-      menu: { select: { id: true, name: true, slug: true, images: true } },
-    },
+    });
   });
 
   res.json(assignment);
@@ -263,7 +291,14 @@ router.delete("/:id", async (req, res) => {
   const existing = await prisma.cookingRecordAssignment.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: "Assignment not found" });
 
-  await prisma.cookingRecordAssignment.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.cookingRecordAssignment.delete({ where: { id } });
+
+    await tx.menu.update({
+      where: { id: existing.menuId },
+      data: { stock: { decrement: Number(existing.quantityPlates) } },
+    });
+  });
 
   res.json({ message: "Assignment deleted" });
 });

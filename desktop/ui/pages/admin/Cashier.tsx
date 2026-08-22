@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react"
-import { Search, Eye } from "lucide-react"
+import { Search, Eye, Ban } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getOrders } from "@/lib/api"
+import { getOrders, voidOrder } from "@/lib/api"
+import { useAuthStore } from "@/stores/auth"
 
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`
@@ -51,6 +52,10 @@ function Cashier() {
   const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState<number | null>(null)
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
+  const [voidOrderData, setVoidOrderData] = useState<Order | null>(null)
+  const [voidReason, setVoidReason] = useState("")
+  const [voiding, setVoiding] = useState(false)
+  const user = useAuthStore((s) => s.user)
 
   useEffect(() => {
     let cancelled = false
@@ -85,10 +90,40 @@ function Cashier() {
     setSearchQuery(null)
   }
 
+  async function handleVoidOrder() {
+    if (!voidOrderData || !user) return
+    setVoiding(true)
+    try {
+      await voidOrder(voidOrderData.id, user.id, voidReason || undefined)
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === voidOrderData.id
+            ? { ...o, isVoid: true, voidReason, voidedAt: new Date().toISOString() }
+            : o
+        )
+      )
+      setVoidOrderData(null)
+      setVoidReason("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to void order")
+    } finally {
+      setVoiding(false)
+    }
+  }
+
   function renderCell(order: Order, column: Column): ReactNode {
     switch (column.key) {
       case "orderNumber":
-        return <span className="font-semibold">#{order.orderNumber}</span>
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">#{order.orderNumber}</span>
+            {order.isVoid && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                VOIDED
+              </span>
+            )}
+          </div>
+        )
       case "mealType":
         return order.mealType
       case "paymentMethod":
@@ -101,14 +136,26 @@ function Cashier() {
         return formatDate(order.createdAt)
       case "details":
         return (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setDetailOrder(order)}
-          >
-            <Eye />
-            Details
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDetailOrder(order)}
+            >
+              <Eye />
+              Details
+            </Button>
+            {!order.isVoid && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setVoidOrderData(order)}
+              >
+                <Ban />
+                Void
+              </Button>
+            )}
+          </div>
         )
       default:
         return null
@@ -211,6 +258,68 @@ function Cashier() {
           )}
 
           <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
+
+      {/* Void Order Dialog */}
+      <Dialog open={voidOrderData !== null} onOpenChange={(open) => { if (!open) { setVoidOrderData(null); setVoidReason("") } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Void Order #{voidOrderData?.orderNumber}</DialogTitle>
+            <DialogDescription>
+              This will void the entire order and restore all items to stock. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {voidOrderData && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-admin-muted">Waiter</div>
+                  <div className="font-medium">{voidOrderData.User?.name ?? "—"}</div>
+                  <div className="text-admin-muted">Total</div>
+                  <div className="font-medium">{money(voidOrderData.totalPrice)}</div>
+                  <div className="text-admin-muted">Items</div>
+                  <div className="font-medium">{voidOrderData.OrderItem.length}</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-admin-header-text">Reason (optional)</label>
+                <div className="flex flex-wrap gap-2">
+                  {["Customer changed order", "Wrong item served", "Other"].map((reason) => (
+                    <Button
+                      key={reason}
+                      type="button"
+                      variant={voidReason === reason ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setVoidReason(voidReason === reason ? "" : reason)}
+                    >
+                      {reason}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setVoidOrderData(null); setVoidReason("") }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleVoidOrder}
+                  disabled={voiding}
+                >
+                  {voiding ? "Voiding..." : "Confirm Void"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

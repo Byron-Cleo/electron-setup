@@ -2,17 +2,32 @@
 
 ## Platform
 
-Not Specified
+fullstack
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-
+- Define Day/Night shift with correct meal period times
+- Track opening/closing plate stock per shift (auto + manual snapshots)
+- Generate shift sales reports broken down by meal period (Breakfast/Lunch for Day, Dinner for Night)
+- Allow cashier to void orders within current shift only
+- Add costPrice to StockSupply for production vs sales analysis
+- Auto-close shifts at defined times as backup
+- Track drift between auto-close and manual close times
 
 ## Notes
+
+- Phase 4 of 12 — Shift Management feature COMPLETE
+- All backend APIs and frontend UI implemented
+- Meal period times updated: Breakfast 5:30AM-11:59AM, Lunch 12PM-5:29PM, Dinner 5:30PM-5:29AM
+- Void functionality: cashier can void orders, waiter sees notification card
+- Shift API: open, close, auto-close, reports
+- costPrice added to StockSupply
+- Full spec: context/features/shift-management.md
+- Plan: context/features/shift-management-plan.md
 
 
 

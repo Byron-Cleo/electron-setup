@@ -89,21 +89,24 @@ router.get("/cooked", async (req, res) => {
         });
 
         let totalProduced = 0;
+        const cookingRecordIds: string[] = [];
         for (const record of cookingRecords) {
           totalProduced += Number(record.platesActual ?? record.platesExpected);
         }
 
-        const relatedMenus = await prisma.menu.findMany({
-          where: {
-            stockSupplyMenus: {
-              some: { stockSupplyId: { in: stockSupplyIds } },
-            },
-          },
-          select: { stock: true },
+        const allCookingRecords = await prisma.cookingRecord.findMany({
+          where: { stockSupplyId: { in: stockSupplyIds }, ...dateFilter },
+          select: { id: true },
+        });
+        for (const r of allCookingRecords) cookingRecordIds.push(r.id);
+
+        const assignments = await prisma.cookingRecordAssignment.findMany({
+          where: { cookingRecordId: { in: cookingRecordIds } },
+          select: { quantityPlates: true },
         });
 
-        const totalAssigned = relatedMenus.reduce(
-          (sum, m) => sum + (m.stock ?? 0),
+        const totalAssigned = assignments.reduce(
+          (sum, a) => sum + Number(a.quantityPlates),
           0
         );
 
@@ -142,7 +145,6 @@ router.get("/", async (req, res) => {
       res.status(400).json({ error: `Invalid mealType: ${mealType}. Must be one of: ${VALID_MEAL_TYPES.join(", ")}` });
       return;
     }
-    where.stock = { gt: 0 };
     where.isAvailable = true;
     where.MenuMealType = { some: { mealType: mealType as string } };
   }
@@ -164,12 +166,15 @@ router.get("/", async (req, res) => {
     ...menu
   }) => ({
     ...menu,
+    availablePlates: menu.stock,
     mealTypes: MenuMealType.map((mt) => mt.mealType),
     starch: starchRel,
     vegetable: vegetableRel,
   }));
 
-  res.json(result);
+  const filtered = mealType ? result.filter((item) => (item.availablePlates ?? 0) > 0) : result;
+
+  res.json(filtered);
 });
 
 router.get("/images", async (_req, res) => {
@@ -311,7 +316,10 @@ router.put("/:id", async (req, res) => {
 
     if (effectiveMealTypes.includes("LUNCH") || effectiveMealTypes.includes("DINNER")) {
       if (!effectiveStarchId || !effectiveVegetableId) {
-        return res.status(400).json({ error: "LUNCH/DINNER menus require both a starch and vegetable accompaniment" });
+        const hasSchemaChange = mealTypes !== undefined || starchId !== undefined || vegetableId !== undefined;
+        if (hasSchemaChange) {
+          return res.status(400).json({ error: "LUNCH/DINNER menus require both a starch and vegetable accompaniment" });
+        }
       }
     }
 

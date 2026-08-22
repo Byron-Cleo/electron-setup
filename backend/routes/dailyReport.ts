@@ -279,4 +279,191 @@ router.get("/", async (req, res) => {
   });
 });
 
+// GET /api/reports/shift/:id - Full shift report
+router.get("/shift/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const shift = await prisma.shift.findUnique({
+      where: { id },
+      include: {
+        openedBy: { select: { id: true, name: true } },
+        closedBy: { select: { id: true, name: true } },
+        snapshots: { include: { menu: { select: { id: true, name: true, price: true } } } },
+        orders: {
+          where: { isVoid: false },
+          include: {
+            OrderItem: true,
+            User: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!shift) {
+      return res.status(404).json({ error: "Shift not found" });
+    }
+
+    // Calculate plate movement per item
+    const plateMovement = shift.snapshots.map((snapshot) => {
+      const expectedClosing = snapshot.openingPlates - snapshot.platesSold - snapshot.platesWasted;
+      const variance = (snapshot.closingPlates ?? expectedClosing) - expectedClosing;
+
+      return {
+        menuId: snapshot.menuId,
+        menuName: snapshot.menu.name,
+        openingPlates: snapshot.openingPlates,
+        platesSold: snapshot.platesSold,
+        platesWasted: snapshot.platesWasted,
+        closingPlates: snapshot.closingPlates,
+        expectedClosing,
+        variance,
+      };
+    });
+
+    // Calculate revenue breakdown by meal period
+    const revenueByMealType: Record<string, { orders: number; total: number }> = {};
+
+    for (const order of shift.orders) {
+      const mealType = order.mealType;
+      if (!revenueByMealType[mealType]) {
+        revenueByMealType[mealType] = { orders: 0, total: 0 };
+      }
+      revenueByMealType[mealType].orders += 1;
+      revenueByMealType[mealType].total += Number(order.totalPrice);
+    }
+
+    // Calculate production cost
+    const totalSales = shift.orders.reduce((sum, order) => sum + Number(order.totalPrice), 0);
+
+    // Get production cost from cooking records during shift period
+    const cookingRecords = await prisma.cookingRecord.findMany({
+      where: {
+        cookedDate: shift.date,
+        cookedAt: {
+          gte: shift.openingTime,
+          lte: shift.actualCloseTime ?? shift.autoCloseTime,
+        },
+      },
+      include: {
+        stockSupply: { select: { costPrice: true } },
+      },
+    });
+
+    const totalProductionCost = cookingRecords.reduce((sum, record) => {
+      const costPrice = Number(record.stockSupply.costPrice ?? 0);
+      const quantityCooked = Number(record.quantityCooked);
+      return sum + costPrice * quantityCooked;
+    }, 0);
+
+    // Calculate drift
+    const driftMinutes = shift.actualCloseTime
+      ? Math.round((shift.actualCloseTime.getTime() - shift.autoCloseTime.getTime()) / 60000)
+      : 0;
+
+    res.json({
+      shift: {
+        id: shift.id,
+        type: shift.type,
+        date: shift.date,
+        openingTime: shift.openingTime,
+        autoCloseTime: shift.autoCloseTime,
+        actualCloseTime: shift.actualCloseTime,
+        driftMinutes,
+        isOpen: shift.isOpen,
+        openedBy: shift.openedBy,
+        closedBy: shift.closedBy,
+      },
+      plateMovement,
+      revenue: {
+        ...revenueByMealType,
+        total: totalSales,
+      },
+      production: {
+        totalCost: totalProductionCost,
+        totalSales,
+        variance: totalSales - totalProductionCost,
+        profitMargin: totalSales > 0 ? `${((totalSales - totalProductionCost) / totalSales * 100).toFixed(1)}%` : "0%",
+      },
+      summary: {
+        totalOrders: shift.orders.length,
+        voidedOrders: shift.orders.filter((o) => o.isVoid).length,
+      },
+    });
+  } catch (e) {
+    console.error("Error getting shift report:", e);
+    res.status(500).json({ error: "Failed to get shift report" });
+  }
+});
+
+// GET /api/reports/voids?date=YYYY-MM-DD - Void summary by waiter
+router.get("/voids", async (req, res) => {
+  const { date } = req.query;
+
+  if (!date) {
+    return res.status(400).json({ error: "date query parameter is required (YYYY-MM-DD)" });
+  }
+
+  const targetDate = new Date(date as string);
+  if (isNaN(targetDate.getTime())) {
+    return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
+  }
+
+  const startOfDay = new Date(targetDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(targetDate);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  try {
+    // Get all orders for the day
+    const orders = await prisma.order.findMany({
+      where: {
+        createdAt: { gte: startOfDay, lte: endOfDay },
+      },
+      include: {
+        User: { select: { id: true, name: true } },
+      },
+    });
+
+    // Aggregate by waiter
+    const waiterStats = new Map<string, { name: string; totalOrders: number; voidedOrders: number; voidReasons: string[] }>();
+
+    for (const order of orders) {
+      const waiterId = order.userId;
+      const existing = waiterStats.get(waiterId);
+
+      if (existing) {
+        existing.totalOrders += 1;
+        if (order.isVoid) {
+          existing.voidedOrders += 1;
+          if (order.voidReason && !existing.voidReasons.includes(order.voidReason)) {
+            existing.voidReasons.push(order.voidReason);
+          }
+        }
+      } else {
+        waiterStats.set(waiterId, {
+          name: order.User?.name ?? "Unknown",
+          totalOrders: 1,
+          voidedOrders: order.isVoid ? 1 : 0,
+          voidReasons: order.voidReason ? [order.voidReason] : [],
+        });
+      }
+    }
+
+    const waiters = Array.from(waiterStats.entries()).map(([id, stats]) => ({
+      waiterId: id,
+      name: stats.name,
+      totalOrders: stats.totalOrders,
+      voidedOrders: stats.voidedOrders,
+      voidRate: stats.totalOrders > 0 ? `${((stats.voidedOrders / stats.totalOrders) * 100).toFixed(1)}%` : "0%",
+      commonReasons: stats.voidReasons,
+    }));
+
+    res.json({ date: targetDate, waiters });
+  } catch (e) {
+    console.error("Error getting void report:", e);
+    res.status(500).json({ error: "Failed to get void report" });
+  }
+});
+
 export default router;

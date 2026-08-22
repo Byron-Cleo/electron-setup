@@ -41,6 +41,7 @@ function serializeStockSupply(item: any) {
     reorderLevel: item.reorderLevel != null ? Number(item.reorderLevel) : null,
     isMenuStock: item.isMenuStock ?? false,
     platesPerUnit: item.platesPerUnit != null ? Number(item.platesPerUnit) : null,
+    costPrice: item.costPrice != null ? Number(item.costPrice) : null,
     departments: item.DepartmentStockSupply
       ? item.DepartmentStockSupply.map((ds: any) => ({ id: ds.department?.id ?? ds.departmentId, name: ds.department?.name ?? "Unknown" }))
       : item.departments,
@@ -174,7 +175,7 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/stock-supplies - Create item
 router.post("/", upload.single("image"), async (req, res) => {
-  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock, departmentIds, menuIds } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isMenuStock, departmentIds, menuIds, costPrice } = req.body;
   const image = req.file ? `/uploads/stock-supplies/${req.file.filename}` : null;
   
   if (!name || !unit) {
@@ -218,6 +219,7 @@ router.post("/", upload.single("image"), async (req, res) => {
         reorderLevel,
         isMenuStock: isMenuStock === "true" || isMenuStock === true,
         image,
+        costPrice: costPrice ? Number(costPrice) : null,
         ...(parsedDeptIds.length > 0 && {
           DepartmentStockSupply: {
             create: parsedDeptIds.map((deptId: string) => ({ departmentId: deptId })),
@@ -245,7 +247,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 // PUT /api/stock-supplies/:id - Update item
 router.put("/:id", upload.single("image"), async (req, res) => {
   const { id } = req.params;
-  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock, departmentIds, menuIds } = req.body;
+  const { name, slug, description, unit, currentStock, reorderLevel, isActive, isMenuStock, departmentIds, menuIds, costPrice } = req.body;
   
   if (unit && !VALID_UNITS.includes(unit)) {
     return res.status(400).json({ error: `Invalid unit: ${unit}. Must be one of: ${VALID_UNITS.join(", ")}` });
@@ -295,6 +297,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
           ...(reorderLevel !== undefined && { reorderLevel }),
           ...(isActive !== undefined && { isActive }),
           ...(isMenuStock !== undefined && { isMenuStock: isMenuStock === "true" || isMenuStock === true }),
+          ...(costPrice !== undefined && { costPrice: costPrice ? Number(costPrice) : null }),
           image: newImage,
           ...(parsedDeptIds !== null && {
             DepartmentStockSupply: {

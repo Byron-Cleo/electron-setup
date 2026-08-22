@@ -17,6 +17,7 @@ import kitchenConfigRouter from "./routes/kitchenConfig.js";
 import dailyReportRouter from "./routes/dailyReport.js";
 import ordersRouter from "./routes/orders.js";
 import usersRouter from "./routes/users.js";
+import shiftsRouter from "./routes/shifts.js";
 import { uploadsRoot } from "./db/uploads.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,7 @@ app.use("/api/kitchen-config", kitchenConfigRouter);
 app.use("/api/reports", dailyReportRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/users", usersRouter);
+app.use("/api/shifts", shiftsRouter);
 
 // Serve the built React app (web interface over WiFi) + SPA fallback.
 const distReact = resolveDistReact();

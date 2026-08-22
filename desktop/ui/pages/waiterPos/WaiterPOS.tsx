@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Sunrise, Sun, Moon, CakeSlice, CupSoda } from "lucide-react"
+import { Sunrise, Sun, Moon, CakeSlice, CupSoda, Ban } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
 import { getActiveMealPeriods, type ActiveMealPeriod, type MealPeriodLabel } from "@/lib/mealPeriod"
+import { getOrders } from "@/lib/api"
+import { useAuthStore } from "@/stores/auth"
 
 const PERIOD_META: Record<MealPeriodLabel, { icon: typeof Sunrise; description: string }> = {
   BREAKFAST: { icon: Sunrise, description: "Morning meals" },
@@ -19,11 +21,33 @@ type CardPeriod = ActiveMealPeriod & { icon: typeof Sunrise; description: string
 export function WaiterPOS() {
   const navigate = useNavigate()
   const [hour, setHour] = useState(new Date().getHours())
+  const [voidedOrders, setVoidedOrders] = useState<Order[]>([])
+  const user = useAuthStore((s) => s.user)
 
   useEffect(() => {
     const id = setInterval(() => setHour(new Date().getHours()), 60000)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    async function fetchVoidedOrders() {
+      if (!user) return
+      try {
+        const orders = await getOrders()
+        const today = new Date().toDateString()
+        const voided = orders.filter(
+          (o) =>
+            o.isVoid &&
+            o.userId === user.id &&
+            new Date(o.createdAt).toDateString() === today
+        )
+        setVoidedOrders(voided)
+      } catch {
+        // Ignore errors for voided orders
+      }
+    }
+    fetchVoidedOrders()
+  }, [user])
 
   const periods: CardPeriod[] = getActiveMealPeriods(hour).map((p) => ({
     ...p,
@@ -77,6 +101,33 @@ export function WaiterPOS() {
 
   return (
     <div className="space-y-8">
+      {voidedOrders.length > 0 && (
+        <section>
+          <Heading as="h2" className="text-sm text-red-600 uppercase tracking-wider mb-4">Action Required</Heading>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Card
+              onClick={() => navigate("/waiter/menu/LUNCH")}
+              className="relative w-48 cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1 border-red-200 bg-red-50"
+            >
+              <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-500 text-white">
+                {voidedOrders.length}
+              </span>
+              <CardContent className="flex flex-col items-center justify-center gap-2 p-5 pt-6">
+                <div className="h-14 w-14 rounded-full flex items-center justify-center bg-red-100 text-red-600">
+                  <Ban size={28} />
+                </div>
+                <span className="text-base font-bold text-red-700 text-center">VOID ORDERS</span>
+                <span className="text-xs text-red-600/80 text-center">
+                  {voidedOrders.length === 1
+                    ? "1 order needs regeneration"
+                    : `${voidedOrders.length} orders need regeneration`}
+                </span>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      )}
+
       <section>
         <Heading as="h2" className="text-sm text-brand-green uppercase tracking-wider mb-4">Now Serving</Heading>
         <div className="flex flex-wrap justify-center gap-4">

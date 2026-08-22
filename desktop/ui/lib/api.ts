@@ -397,6 +397,13 @@ export async function getOrders(orderNumber?: number): Promise<Order[]> {
   return apiFetch(`/orders${query}`)
 }
 
+export async function voidOrder(orderId: string, voidedById: string, reason?: string): Promise<Order> {
+  return apiFetch(`/orders/${orderId}/void`, {
+    method: "POST",
+    body: JSON.stringify({ voidedById, reason }),
+  })
+}
+
 export async function previewReceipt(data: ReceiptData): Promise<string> {
   if (window.electron?.print?.preview) {
     return window.electron.print.preview(data)

@@ -147,4 +147,88 @@ router.post("/", async (req, res) => {
   }
 });
 
+// Void an order
+router.post("/:id/void", async (req, res) => {
+  const { id } = req.params;
+  const { voidedById, reason } = req.body;
+
+  if (!voidedById) {
+    return res.status(400).json({ error: "voidedById is required" });
+  }
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { OrderItem: true },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (order.isVoid) {
+      return res.status(400).json({ error: "Order is already voided" });
+    }
+
+    // Check if order is in current open shift
+    const currentShift = await prisma.shift.findFirst({
+      where: { isOpen: true },
+    });
+
+    if (currentShift && order.shiftId && order.shiftId !== currentShift.id) {
+      return res.status(400).json({ error: "Cannot void order from a different shift" });
+    }
+
+    const now = new Date();
+
+    // Void order and restore plates
+    const voidedOrder = await prisma.$transaction(async (tx) => {
+      // Restore plates for each item
+      for (const item of order.OrderItem) {
+        const menu = await tx.menu.findUnique({ where: { id: item.menuId } });
+        if (menu) {
+          const currentStock = menu.stock ?? 0;
+          await tx.menu.update({
+            where: { id: item.menuId },
+            data: {
+              stock: currentStock + item.qty,
+              isAvailable: true,
+            },
+          });
+        }
+
+        // Update shift snapshot if exists
+        if (order.shiftId) {
+          const snapshot = await tx.shiftSnapshot.findUnique({
+            where: { shiftId_menuId: { shiftId: order.shiftId, menuId: item.menuId } },
+          });
+          if (snapshot) {
+            await tx.shiftSnapshot.update({
+              where: { id: snapshot.id },
+              data: { platesSold: Math.max(0, snapshot.platesSold - item.qty) },
+            });
+          }
+        }
+      }
+
+      // Mark order as voided
+      return tx.order.update({
+        where: { id },
+        data: {
+          isVoid: true,
+          voidReason: reason,
+          voidedAt: now,
+          voidedById,
+        },
+        include: { OrderItem: true },
+      });
+    });
+
+    res.json(voidedOrder);
+  } catch (e) {
+    console.error("Error voiding order:", e);
+    res.status(500).json({ error: "Failed to void order" });
+  }
+});
+
 export default router;

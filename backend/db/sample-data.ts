@@ -695,13 +695,27 @@ const sampleData = {
 
   // ── Stock Supplies ─────────────────────────────────────────────────────────
   stockSupplies: [
-    { name: "Fish (Tilapia)", unit: "PCS", currentStock: 50 },
-    { name: "Chicken", unit: "PCS", currentStock: 40 },
-    { name: "Sugar", unit: "KG", currentStock: 100 },
-    { name: "Salt", unit: "KG", currentStock: 80 },
-    { name: "Cooking Oil", unit: "L", currentStock: 60 },
-    { name: "Rice", unit: "KG", currentStock: 200 },
-    { name: "Onion", unit: "KG", currentStock: 30 },
+    { name: "Fish (Tilapia)", unit: "PCS", currentStock: 50, costPrice: 200.00 },
+    { name: "Chicken", unit: "PCS", currentStock: 40, costPrice: 350.00 },
+    { name: "Beef", unit: "KG", currentStock: 30, costPrice: 600.00 },
+    { name: "Liver", unit: "KG", currentStock: 15, costPrice: 400.00 },
+    { name: "Matumbo", unit: "KG", currentStock: 20, costPrice: 250.00 },
+    { name: "Sugar", unit: "KG", currentStock: 100, costPrice: 80.00 },
+    { name: "Salt", unit: "KG", currentStock: 80, costPrice: 50.00 },
+    { name: "Cooking Oil", unit: "L", currentStock: 60, costPrice: 150.00 },
+    { name: "Rice", unit: "KG", currentStock: 200, costPrice: 100.00 },
+    { name: "Onion", unit: "KG", currentStock: 30, costPrice: 60.00 },
+    { name: "Chapati Flour", unit: "KG", currentStock: 50, costPrice: 80.00 },
+    { name: "Ugali Flour", unit: "KG", currentStock: 80, costPrice: 60.00 },
+    { name: "Vegetables (Sukuma Wiki)", unit: "KG", currentStock: 40, costPrice: 30.00 },
+    { name: "Cabbage", unit: "KG", currentStock: 25, costPrice: 40.00 },
+  ],
+
+  // ── Departments ──────────────────────────────────────────────────────────
+  departments: [
+    { name: "Kitchen", description: "Food preparation and cooking" },
+    { name: "Procurement", description: "Stock purchasing and supply management" },
+    { name: "Cashier", description: "Payment processing and receipt management" },
   ],
 };
 

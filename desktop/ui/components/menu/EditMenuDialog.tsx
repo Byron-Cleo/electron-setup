@@ -19,22 +19,23 @@ interface Props {
 }
 
 export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) {
-  const [stock, setStock] = useState("")
+  const [platesToAdd, setPlatesToAdd] = useState("")
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (item) {
-      setStock(String(item.stock ?? ""))
+      setPlatesToAdd("")
       setError("")
     }
   }, [item])
 
   const totalProduced = item?.cooking.totalProduced ?? 0
-  const stockNum = stock === "" ? 0 : Number(stock)
   const currentStock = item?.stock ?? 0
-  const maxStock = item ? item.cooking.totalAvailable + currentStock : 0
-  const canSave = stockNum > 0 && stockNum <= maxStock
+  const addNum = platesToAdd === "" ? 0 : Number(platesToAdd)
+  const newTotal = currentStock + addNum
+  const maxToAdd = item ? item.cooking.totalAvailable : 0
+  const canSave = addNum > 0 && addNum <= maxToAdd
 
   async function handleSave() {
     if (!item || !canSave) return
@@ -42,7 +43,7 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
     try {
       setSaving(true)
       setError("")
-      await updateMenu(item.id, { stock: stockNum })
+      await updateMenu(item.id, { stock: newTotal })
       onSaved()
       onClose()
     } catch (err) {
@@ -63,25 +64,50 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
 
         <div className="space-y-4">
           {totalProduced > 0 ? (
-            <div className="space-y-2 bg-gray-100 p-4 rounded-lg">
-              <Label htmlFor="edit-stock">Stock (Plates)</Label>
-              <Input
-                id="edit-stock"
-                type="number"
-                min="0"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                placeholder="0"
-              />
-              {stockNum > 0 && stockNum > maxStock ? (
-                <p className="text-[11px] text-red-500 font-semibold uppercase">
-                  Only {maxStock} plates remaining after other menu assignments
-                </p>
-              ) : (
-                <p className="text-[11px] text-yellow-600">
-                  Sets the quantity of plates waiters can bill through the POS
-                </p>
-              )}
+            <div className="space-y-3 bg-gray-100 p-4 rounded-lg">
+              {/* Current Stock Display */}
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Current Plates:</span>
+                <span className={`font-bold ${currentStock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {currentStock}
+                </span>
+              </div>
+
+              {/* Available from Kitchen */}
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Available from Kitchen:</span>
+                <span className="font-medium text-blue-600">{totalProduced} plates</span>
+              </div>
+
+              {/* Add Plates Input */}
+              <div className="pt-2 border-t border-gray-200">
+                <Label htmlFor="add-plates" className="text-sm font-medium">
+                  Add Plates
+                </Label>
+                <Input
+                  id="add-plates"
+                  type="number"
+                  min="0"
+                  max={maxToAdd}
+                  value={platesToAdd}
+                  onChange={(e) => setPlatesToAdd(e.target.value)}
+                  placeholder="0"
+                  className="mt-1"
+                />
+                {addNum > 0 && addNum > maxToAdd ? (
+                  <p className="text-[11px] text-red-500 font-semibold uppercase mt-1">
+                    Cannot exceed {maxToAdd} plates available from kitchen
+                  </p>
+                ) : addNum > 0 ? (
+                  <p className="text-[11px] text-green-600 mt-1">
+                    New total will be {newTotal} plates
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-yellow-600 mt-1">
+                    Enter number of plates to add from kitchen production
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
             <p className="text-sm text-admin-muted text-center py-4">
@@ -97,7 +123,7 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={!canSave || saving}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? "Saving..." : "Add Plates"}
           </Button>
         </DialogFooter>
       </DialogContent>

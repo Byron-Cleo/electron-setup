@@ -104,6 +104,12 @@ interface Order {
   deliveredAt: string | null;
   createdAt: string;
   mealType: string;
+  isVoid: boolean;
+  voidReason: string | null;
+  voidedAt: string | null;
+  voidedById: string | null;
+  voidedOrderId: string | null;
+  shiftId: string | null;
   OrderItem: OrderItem[];
   User?: { name: string } | null;
 }

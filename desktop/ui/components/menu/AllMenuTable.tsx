@@ -28,7 +28,8 @@ const PERIOD_ICONS: Record<MealPeriodLabel, typeof Sunrise> = {
 }
 
 function getMenuStatus(item: MenuItem): { label: string; className: string } {
-  if ((item.stock ?? 0) > 0) return { label: "Selling Now", className: "bg-green-100 text-green-700" }
+  const plates = item.availablePlates ?? item.stock ?? 0
+  if (plates > 0) return { label: "Now Selling", className: "bg-green-100 text-green-700" }
   return { label: "Sold Out", className: "bg-orange-100 text-orange-700" }
 }
 
@@ -93,15 +94,16 @@ export default function AllMenuTable() {
 
   const counts = useMemo(() => ({
     all: periodFiltered.length,
-    available: periodFiltered.filter((i) => i.isAvailable && (i.stock ?? 0) > 0).length,
-    soldout: periodFiltered.filter((i) => i.isAvailable && (i.stock ?? 0) <= 0).length,
+    available: periodFiltered.filter((i) => i.isAvailable && ((i.availablePlates ?? i.stock ?? 0) > 0)).length,
+    soldout: periodFiltered.filter((i) => i.isAvailable && ((i.availablePlates ?? i.stock ?? 0) <= 0)).length,
   }), [periodFiltered])
 
   const statusFiltered = useMemo(() => {
     if (statusTab === "all") return periodFiltered
     return periodFiltered.filter((item) => {
-      const isAvailable = item.isAvailable && (item.stock ?? 0) > 0
-      const isSoldOut = item.isAvailable && (item.stock ?? 0) <= 0
+      const plates = item.availablePlates ?? item.stock ?? 0
+      const isAvailable = item.isAvailable && plates > 0
+      const isSoldOut = item.isAvailable && plates <= 0
       switch (statusTab) {
         case "available": return isAvailable
         case "soldout": return isSoldOut
