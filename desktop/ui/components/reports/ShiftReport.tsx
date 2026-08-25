@@ -1,6 +1,10 @@
-import { AlertTriangle, CheckCircle2 } from "lucide-react"
+import { useState } from "react"
+import { AlertTriangle, CheckCircle2, Eye, Printer } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { previewShiftReport, printShiftReport } from "@/lib/api"
 
 function money(amount: number): string {
   return `KSH ${Number(amount).toLocaleString("en-KE", { maximumFractionDigits: 2 })}`
@@ -15,18 +19,80 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-KE", { dateStyle: "medium" })
 }
 
+function buildShiftReportData(report: ShiftReport): ShiftReportData {
+  return {
+    restaurant: {
+      name: "ERAEVA RESTAURANT",
+      branch: "Airport",
+      address: "Nairobi",
+      poweredBy: "Apydy Technologies",
+      tel: "0701315250",
+    },
+    shift: {
+      type: report.shift.type,
+      date: report.shift.date,
+      openingTime: report.shift.openingTime,
+      autoCloseTime: report.shift.autoCloseTime,
+      actualCloseTime: report.shift.actualCloseTime,
+      openedBy: report.shift.openedBy?.name ?? "—",
+      closedBy: report.shift.closedBy?.name,
+    },
+    summary: report.summary,
+    revenue: report.revenue,
+    plateMovement: report.plateMovement,
+    production: report.production,
+  }
+}
+
 interface Props {
   report: ShiftReport
 }
 
 function ShiftReportView({ report }: Props) {
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [printing, setPrinting] = useState(false)
   const { shift, plateMovement, revenue, production, summary } = report
   const revenueEntries = (
     Object.entries(revenue) as [string, ShiftRevenueEntry][]
   ).filter(([key]) => key !== "total")
 
+  async function handlePreview() {
+    try {
+      const html = await previewShiftReport(buildShiftReportData(report))
+      setPreviewHtml(html)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to generate preview")
+    }
+  }
+
+  async function handlePrint() {
+    setPrinting(true)
+    try {
+      const result = await printShiftReport(buildShiftReportData(report))
+      if (!result.ok) {
+        alert(result.error ?? "Print failed")
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to print")
+    } finally {
+      setPrinting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 print:hidden">
+        <Button variant="outline" size="sm" onClick={handlePreview}>
+          <Eye />
+          Preview Report
+        </Button>
+        <Button variant="outline" size="sm" onClick={handlePrint} disabled={printing}>
+          <Printer />
+          {printing ? "Printing..." : "Print Report"}
+        </Button>
+      </div>
+
       {/* Summary tiles */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card>
@@ -174,46 +240,73 @@ function ShiftReportView({ report }: Props) {
           {plateMovement.length === 0 ? (
             <p className="text-sm text-admin-muted">No snapshots recorded.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-admin-card-border text-left text-xs uppercase tracking-wide text-admin-muted">
-                  <th className="py-2 pr-2 font-semibold">Item</th>
-                  <th className="py-2 px-2 text-right font-semibold">Opening</th>
-                  <th className="py-2 px-2 text-right font-semibold">Cooked</th>
-                  <th className="py-2 px-2 text-right font-semibold">Sold</th>
-                  <th className="py-2 px-2 text-right font-semibold">Expected</th>
-                  <th className="py-2 px-2 text-right font-semibold">Actual Close</th>
-                  <th className="py-2 pl-2 text-right font-semibold">Variance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plateMovement.map((row) => (
-                  <tr key={row.menuId} className="border-b border-admin-card-border last:border-b-0">
-                    <td className="max-w-[200px] truncate py-2 pr-2">{row.menuName}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{row.openingPlates}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{row.platesCooked}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{row.platesSold}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{row.expectedClosing}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{row.closingPlates ?? "—"}</td>
-                    <td
-                      className={cn(
-                        "py-2 pl-2 text-right font-medium tabular-nums",
-                        row.closingPlates === null
-                          ? "text-admin-muted"
-                          : row.variance !== 0
-                            ? "text-red-600"
-                            : "text-green-600",
-                      )}
-                    >
-                      {row.closingPlates === null ? "—" : row.variance > 0 ? `+${row.variance}` : row.variance}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="space-y-3">
+              {plateMovement.map((row) => (
+                <div
+                  key={row.menuId}
+                  className="rounded-lg border border-admin-card-border p-3"
+                >
+                  <div className="mb-2 text-base font-bold text-admin-header-text">{row.menuName}</div>
+                  <div className="grid grid-cols-3 gap-2 text-xs sm:grid-cols-6">
+                    <div>
+                      <span className="text-admin-muted">Opening</span>
+                      <p className="text-sm font-semibold tabular-nums">{row.openingPlates}</p>
+                    </div>
+                    <div>
+                      <span className="text-admin-muted">Cooked</span>
+                      <p className="text-sm font-semibold tabular-nums">{row.platesCooked}</p>
+                    </div>
+                    <div>
+                      <span className="text-admin-muted">Sold</span>
+                      <p className="text-sm font-semibold tabular-nums">{row.platesSold}</p>
+                    </div>
+                    <div>
+                      <span className="text-admin-muted">Expected</span>
+                      <p className="text-sm font-semibold tabular-nums">{row.expectedClosing}</p>
+                    </div>
+                    <div>
+                      <span className="text-admin-muted">Actual Close</span>
+                      <p className="text-sm font-semibold tabular-nums">{row.closingPlates ?? "—"}</p>
+                    </div>
+                    <div>
+                      <span className="text-admin-muted">Variance</span>
+                      <p
+                        className={cn(
+                          "text-sm font-semibold tabular-nums",
+                          row.closingPlates === null
+                            ? "text-admin-muted"
+                            : row.variance !== 0
+                              ? "text-red-600"
+                              : "text-green-600",
+                        )}
+                      >
+                        {row.closingPlates === null ? "—" : row.variance > 0 ? `+${row.variance}` : row.variance}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Preview Dialog */}
+      <Dialog open={previewHtml !== null} onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}>
+        <DialogContent className="max-w-md print:max-w-none print:p-0">
+          <DialogHeader className="print:hidden">
+            <DialogTitle>Shift Report Preview</DialogTitle>
+          </DialogHeader>
+          {previewHtml && (
+            <iframe
+              srcDoc={previewHtml}
+              className="w-full border-0 print:h-auto"
+              style={{ height: "70vh" }}
+              title="Shift Report Preview"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

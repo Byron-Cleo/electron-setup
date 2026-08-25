@@ -3,7 +3,7 @@ import net from "net";
 import fs from "fs";
 import { execFile } from "child_process";
 import { findPrinterByRole, type PosPrinter, type PosPrinterRole } from "./printers.ts";
-import { customerReceiptHtml, kitchenReceiptHtml, barReceiptHtml, type ReceiptData } from "./receiptTemplate.ts";
+import { customerReceiptHtml, kitchenReceiptHtml, barReceiptHtml, shiftReportHtml, type ReceiptData, type ShiftReportData } from "./receiptTemplate.ts";
 
 export interface PrintResult {
   ok: boolean;
@@ -78,6 +78,90 @@ function renderEscPos(lines: Line[]): Buffer {
   }
   if (bold) parts.push(ESC_BOLD_OFF);
   return Buffer.concat(parts);
+}
+
+function shiftReportLines(data: ShiftReportData): Line[] {
+  const width = 42;
+  const line = "-".repeat(width);
+  const lines: Line[] = [];
+  const push = (text: string, b = false) => lines.push([{ t: text, b }]);
+  const pushCenter = (text: string, b = false) => {
+    for (const wrapped of wrapWords(text, width)) push(padCenter(wrapped, width), b);
+  };
+  const pushRow = (left: string, right: string, b = false) => {
+    const pad = Math.max(1, width - left.length - right.length);
+    const segs: Seg[] = [{ t: left, b }, { t: " ".repeat(pad) }, { t: right, b }];
+    lines.push(segs);
+  };
+
+  const r = data.restaurant;
+  const s = data.shift;
+
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
+  };
+
+  const fmtTime = (iso: string | null) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const shiftLabel = s.type === "DAY" ? "DAY" : "NIGHT";
+
+  pushCenter(r.name, true);
+  if (r.branch) pushCenter(`Branch: ${r.branch}`, true);
+  if (r.address) pushCenter(r.address);
+  if (r.city) pushCenter(r.city);
+  push(line);
+  pushRow("Shift", `${shiftLabel} · ${fmtDate(s.date)}`);
+  pushRow("Opened", `${fmtTime(s.openingTime)} by ${s.openedBy}`);
+  pushRow("Scheduled close", fmtTime(s.autoCloseTime));
+  pushRow("Closed", `${fmtTime(s.actualCloseTime)}${s.closedBy ? ` by ${s.closedBy}` : ""}`);
+  push(line);
+
+  pushCenter("REVENUE BY MEAL PERIOD", true);
+  push(line);
+  const revenueEntries = Object.entries(data.revenue).filter(
+    ([k]) => k !== "total",
+  ) as [string, { orders: number; total: number }][];
+  for (const [mealType, entry] of revenueEntries) {
+    pushRow(`${mealType} (${entry.orders} orders)`, money(entry.total));
+  }
+  push(line);
+  pushRow("Total", money(data.revenue.total), true);
+  push(line);
+
+  pushCenter("PLATE MOVEMENT", true);
+  push(line);
+  if (data.plateMovement.length === 0) {
+    pushCenter("No snapshots recorded.");
+  } else {
+    push("ITEM           OPEN  COOKED  SOLD   CLOSE", true);
+    push(line);
+    for (const p of data.plateMovement) {
+      const name = p.menuName.slice(0, 14).padEnd(14);
+      const open = String(p.openingPlates).padStart(5);
+      const cooked = String(p.platesCooked).padStart(7);
+      const sold = String(p.platesSold).padStart(6);
+      const close = String(p.closingPlates ?? "—").padStart(6);
+      push(name + open + cooked + sold + close);
+    }
+  }
+  push(line);
+
+  pushCenter("PRODUCTION vs SALES", true);
+  push(line);
+  pushRow("Production cost", money(data.production.totalCost));
+  pushRow("Sales", money(data.production.totalSales));
+  pushRow("Variance", money(data.production.variance), true);
+  pushRow("Profit margin", data.production.profitMargin);
+  push(line);
+
+  return lines;
 }
 
 function plainTextLines(data: ReceiptData): Line[] {
@@ -424,5 +508,24 @@ export function registerReceiptHandlers(): void {
     const raw = await printRawUsb(printer, Buffer.from(plainTextTest(printer.name), "latin1"));
     if (raw.ok) return raw;
     return printHtml(printer.deviceName, testHtml(printer.name));
+  });
+
+  ipcMain.handle("printer:preview-shift-report", (_event, data: ShiftReportData): string => {
+    return shiftReportHtml(data);
+  });
+
+  ipcMain.handle("printer:print-shift-report", async (_event, data: ShiftReportData): Promise<PrintResult> => {
+    const printer = findPrinterByRole("customer");
+    if (!printer) return { ok: false, error: "No customer printer configured" };
+    if (printer.transport === "lan") {
+      if (!printer.host) return { ok: false, error: "LAN printer has no IP address configured" };
+      return printToLan(printer, renderEscPos(shiftReportLines(data)));
+    }
+    if (!printer.deviceName) {
+      return { ok: false, error: "USB printer has no device name configured" };
+    }
+    const raw = await printRawUsb(printer, renderEscPos(shiftReportLines(data)));
+    if (raw.ok) return raw;
+    return printHtml(printer.deviceName, shiftReportHtml(data));
   });
 }

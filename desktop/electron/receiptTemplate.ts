@@ -195,3 +195,110 @@ export function kitchenReceiptHtml(data: ReceiptData): string {
 export function barReceiptHtml(data: ReceiptData): string {
   return documentHtml(stationBody(data, "BAR TICKET"));
 }
+
+// ─── Shift Report ────────────────────────────────────────────────────────────
+
+export interface ShiftReportData {
+  restaurant: {
+    name: string;
+    branch?: string;
+    address?: string;
+    city?: string;
+    poweredBy?: string;
+    tel?: string;
+    services?: string;
+  };
+  shift: {
+    type: string;
+    date: string;
+    openingTime: string;
+    autoCloseTime: string;
+    actualCloseTime: string | null;
+    openedBy: string;
+    closedBy?: string;
+  };
+  summary: {
+    totalOrders: number;
+    voidedOrders: number;
+  };
+  revenue: {
+    [mealType: string]: { orders: number; total: number } | number;
+    total: number;
+  };
+  plateMovement: {
+    menuName: string;
+    openingPlates: number;
+    platesCooked: number;
+    platesSold: number;
+    closingPlates: number | null;
+    expectedClosing: number;
+    variance: number;
+  }[];
+  production: {
+    totalCost: number;
+    totalSales: number;
+    variance: number;
+    profitMargin: string;
+  };
+}
+
+function shiftReportBody(data: ShiftReportData): string {
+  const r = data.restaurant;
+  const s = data.shift;
+  const revenueEntries = Object.entries(data.revenue).filter(
+    ([k]) => k !== "total",
+  ) as [string, { orders: number; total: number }][];
+
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
+  };
+
+  const fmtTime = (iso: string | null) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const shiftLabel = s.type === "DAY" ? "DAY" : "NIGHT";
+
+  return `
+  ${blockCenter(`<span style="font-size:17px; font-weight:bold;">${r.name}</span>`)}
+  ${r.branch ? blockCenter(`Branch: ${r.branch}`, "font-size:11px; font-weight:bold;") : ""}
+  ${r.address ? blockCenter(r.address, "font-size:11px;") : ""}
+  ${r.city ? blockCenter(r.city, "font-size:11px;") : ""}
+  ${divider()}
+  ${row("Shift", `${shiftLabel} · ${fmtDate(s.date)}`)}
+  ${row("Opened", `${fmtTime(s.openingTime)} by ${s.openedBy}`)}
+  ${row("Scheduled close", fmtTime(s.autoCloseTime))}
+  ${row("Closed", `${fmtTime(s.actualCloseTime)}${s.closedBy ? ` by ${s.closedBy}` : ""}`)}
+  ${divider()}
+  ${blockCenter("REVENUE BY MEAL PERIOD", "font-weight:bold; font-size:13px;")}
+  ${divider()}
+  ${revenueEntries.map(([mealType, entry]) => row(`${mealType} (${entry.orders} orders)`, money(entry.total))).join("")}
+  ${divider()}
+  ${row("Total", money(data.revenue.total), "font-weight:bold;", "font-weight:bold; font-size:14px;")}
+  ${divider()}
+  ${blockCenter("PLATE MOVEMENT", "font-weight:bold; font-size:13px;")}
+  ${divider()}
+  ${data.plateMovement.length === 0 ? blockCenter("No snapshots recorded.") : ""}
+  ${data.plateMovement.length > 0 ? `<pre style="margin:0; font-family:'Courier New',Courier,monospace; font-size:12px; line-height:1.5;">ITEM           OPEN  COOKED  SOLD   CLOSE
+${"─".repeat(38)}
+${data.plateMovement.map((p) =>
+  `<b>${p.menuName.slice(0, 14).padEnd(14)}</b>${String(p.openingPlates).padStart(5)}${String(p.platesCooked).padStart(7)}${String(p.platesSold).padStart(6)}${String(p.closingPlates ?? "—").padStart(6)}`
+).join("\n")}</pre>` : ""}
+  ${data.plateMovement.length > 0 ? divider() : ""}
+  ${blockCenter("PRODUCTION vs SALES", "font-weight:bold; font-size:13px;")}
+  ${divider()}
+  ${row("Production cost", money(data.production.totalCost))}
+  ${row("Sales", money(data.production.totalSales))}
+  ${row("Variance", money(data.production.variance), "font-weight:bold;", "font-weight:bold;")}
+  ${row("Profit margin", data.production.profitMargin)}
+  ${divider()}`;
+}
+
+export function shiftReportHtml(data: ShiftReportData): string {
+  return documentHtml(shiftReportBody(data));
+}

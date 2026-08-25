@@ -599,6 +599,50 @@ interface ShiftReport {
   };
 }
 
+interface ShiftReportData {
+  restaurant: {
+    name: string;
+    branch?: string;
+    address?: string;
+    city?: string;
+    poweredBy?: string;
+    tel?: string;
+    services?: string;
+  };
+  shift: {
+    type: string;
+    date: string;
+    openingTime: string;
+    autoCloseTime: string;
+    actualCloseTime: string | null;
+    openedBy: string;
+    closedBy?: string;
+  };
+  summary: {
+    totalOrders: number;
+    voidedOrders: number;
+  };
+  revenue: {
+    [mealType: string]: { orders: number; total: number } | number;
+    total: number;
+  };
+  plateMovement: {
+    menuName: string;
+    openingPlates: number;
+    platesCooked: number;
+    platesSold: number;
+    closingPlates: number | null;
+    expectedClosing: number;
+    variance: number;
+  }[];
+  production: {
+    totalCost: number;
+    totalSales: number;
+    variance: number;
+    profitMargin: string;
+  };
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: unknown) => void) => void;
   getStaticData: () => void;
@@ -676,6 +720,8 @@ interface ElectronAPI {
   print: {
     preview: (data: ReceiptData) => Promise<string>;
     receipt: (data: ReceiptData) => Promise<PrintResult>;
+    previewShiftReport: (data: ShiftReportData) => Promise<string>;
+    printShiftReport: (data: ShiftReportData) => Promise<PrintResult>;
   };
 }
 

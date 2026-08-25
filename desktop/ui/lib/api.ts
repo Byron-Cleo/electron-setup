@@ -425,6 +425,20 @@ export async function printReceipt(data: ReceiptData): Promise<PrintResult> {
   return { ok: true }
 }
 
+export async function previewShiftReport(data: ShiftReportData): Promise<string> {
+  if (window.electron?.print?.previewShiftReport) {
+    return window.electron.print.previewShiftReport(data)
+  }
+  throw new Error("Shift report preview is only available in the desktop app")
+}
+
+export async function printShiftReport(data: ShiftReportData): Promise<PrintResult> {
+  if (window.electron?.print?.printShiftReport) {
+    return window.electron.print.printShiftReport(data)
+  }
+  return { ok: true }
+}
+
 // ─── Shifts ──────────────────────────────────────────────────────────────────
 
 export async function openShift(type: ShiftType, openedById: string): Promise<Shift> {

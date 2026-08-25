@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Loader2, Eye, Printer } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { closeShift, getShiftReport } from "@/lib/api"
+import { closeShift, getShiftReport, previewShiftReport, printShiftReport } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 function money(amount: number): string {
@@ -37,6 +37,8 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
   const [closing, setClosing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<ShiftReport | null>(null)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [printing, setPrinting] = useState(false)
 
   const stats = useMemo(() => {
     const orders = shift.orders ?? []
@@ -83,7 +85,58 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
       setReport(null)
       setError(null)
       setClosing(false)
+      setPreviewHtml(null)
     }, 200)
+  }
+
+  function toReportData(r: ShiftReport): ShiftReportData {
+    return {
+      restaurant: {
+        name: "ERAEVA RESTAURANT",
+        branch: "Airport",
+        address: "Nairobi",
+        poweredBy: "Apydy Technologies",
+        tel: "0701315250",
+      },
+      shift: {
+        type: r.shift.type,
+        date: r.shift.date,
+        openingTime: r.shift.openingTime,
+        autoCloseTime: r.shift.autoCloseTime,
+        actualCloseTime: r.shift.actualCloseTime,
+        openedBy: r.shift.openedBy?.name ?? "—",
+        closedBy: r.shift.closedBy?.name,
+      },
+      summary: r.summary,
+      revenue: r.revenue,
+      plateMovement: r.plateMovement,
+      production: r.production,
+    }
+  }
+
+  async function handlePreview() {
+    if (!report) return
+    try {
+      const html = await previewShiftReport(toReportData(report))
+      setPreviewHtml(html)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to generate preview")
+    }
+  }
+
+  async function handlePrint() {
+    if (!report) return
+    setPrinting(true)
+    try {
+      const result = await printShiftReport(toReportData(report))
+      if (!result.ok) {
+        alert(result.error ?? "Print failed")
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to print")
+    } finally {
+      setPrinting(false)
+    }
   }
 
   return (
@@ -284,11 +337,36 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
               </div>
             </div>
 
-            <DialogFooter showCloseButton>
+            <DialogFooter className="flex-row gap-2">
+              <Button type="button" variant="outline" onClick={handlePreview}>
+                <Eye />
+                Preview
+              </Button>
+              <Button type="button" variant="outline" onClick={handlePrint} disabled={printing}>
+                <Printer />
+                {printing ? "Printing..." : "Print"}
+              </Button>
               <Button type="button" onClick={handleDismiss}>
                 Done
               </Button>
             </DialogFooter>
+
+            {/* Preview Dialog */}
+            <Dialog open={previewHtml !== null} onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}>
+              <DialogContent className="max-w-md print:max-w-none print:p-0">
+                <DialogHeader className="print:hidden">
+                  <DialogTitle>Shift Report Preview</DialogTitle>
+                </DialogHeader>
+                {previewHtml && (
+                  <iframe
+                    srcDoc={previewHtml}
+                    className="w-full border-0 print:h-auto"
+                    style={{ height: "70vh" }}
+                    title="Shift Report Preview"
+                  />
+                )}
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </DialogContent>

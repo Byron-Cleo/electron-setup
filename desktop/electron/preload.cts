@@ -95,5 +95,7 @@ electron.contextBridge.exposeInMainWorld("electron", {
   print: {
     preview: (data: any) => electron.ipcRenderer.invoke("printer:preview", data),
     receipt: (data: any) => electron.ipcRenderer.invoke("printer:print-receipt", data),
+    previewShiftReport: (data: any) => electron.ipcRenderer.invoke("printer:preview-shift-report", data),
+    printShiftReport: (data: any) => electron.ipcRenderer.invoke("printer:print-shift-report", data),
   },
 });

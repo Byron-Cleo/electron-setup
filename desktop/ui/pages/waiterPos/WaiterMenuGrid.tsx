@@ -194,7 +194,7 @@ export function WaiterMenuGrid({
   onClosePreview,
 }: Props) {
   const navigate = useNavigate()
-  const { items: orderItems, addToOrder, updateAccompaniments, updateQuantity, removeItem, totalPrice } = useWaiterOrder()
+  const { items: orderItems, addToOrder, updateAccompaniments, updateQuantity, removeItem, totalPrice, replacementTargetId, voidedOrders } = useWaiterOrder()
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
   const [processedItems, setProcessedItems] = useState<MenuItem[]>([])
@@ -546,14 +546,25 @@ export function WaiterMenuGrid({
         <div className="w-[400px] shrink-0 flex flex-col">
           <Card className="flex-1 flex flex-col min-h-0">
             <CardHeader className="pb-3 shrink-0">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <Heading as="h3" className="text-brand-ebony uppercase tracking-wide">Current Order</Heading>
+                {replacementTargetId && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-600 text-white">
+                    Void Order
+                  </span>
+                )}
                 {orderItems.length > 0 && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-maroon text-white">
+                  <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-maroon text-white">
                     {orderItems.length}
                   </span>
                 )}
               </div>
+              {replacementTargetId && (() => {
+                const voided = voidedOrders.find((o) => o.id === replacementTargetId)
+                return voided ? (
+                  <p className="text-xs text-red-600 font-medium mt-0.5">Replaces Order #{voided.orderNumber}</p>
+                ) : null
+              })()}
             </CardHeader>
             <CardContent className="space-y-3 flex-1 overflow-y-auto">
               {orderItems.length === 0 ? (
