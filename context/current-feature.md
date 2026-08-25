@@ -6,7 +6,7 @@ fullstack
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
@@ -33,13 +33,24 @@ In Progress
 - ✅ Void-card UX refinement (user-directed): red VOID ORDERS card moved out of its own "Action Required" section into the Now Serving card row (WaiterPOS); clicking opens new `VoidOrdersDialog` (components/waiterPos/) listing all pending voids oldest-first with order #, time, item summary (+N more cap), reason; oldest pre-selected; Start Replacement sets replacementTargetId in context → WaiterMenu prefills cart via prefillFromVoid (merges voided order's lines into cart clamped to current stock, skips unavailable items) → placeOrder links THAT void (FIFO fallback for normal orders), clears target + notification after success. deepseek-coder output rejected in review (broken imports/structure); implemented manually per fallback rule. tsc + eslint clean
 - ✅ Receipt correlation line (user-directed): replacement orders print "REPLACES ORDER #142" centered+bold under the Order # row in the customer receipt (`receiptTemplate.ts` customerBody, optional `replacesOrderNumber` on ReceiptOrderInfo in both electron.d.ts + template's local interface); WaiterMenu passes the voided order's number into buildReceipt AND buildPreviewReceipt (preview resolves replacement with same fallback as placeOrder → print==preview parity); normal receipts unchanged; kitchen/bar tickets unaffected. App/root/electron tsc + eslint clean
 - ✅ Void reconciliation in analytics (user-directed): /voids endpoint now computes replacedVoids (void id appears as voidedOrderId on any order — searched by link, no date filter, so next-day replacements count) + pendingVoids = voided − replaced per waiter; VoidReportWaiter type extended; Reports Void Analytics table gains green Replaced + amber Pending columns (drill-down click-through explicitly deferred by user). Backend/app tsc + eslint clean
-- All 12 phases of Shift Management are now implemented + E2E verified. Ready for review/complete (commit + merge) on user request
+- All 12 phases of Shift Management are now implemented + E2E verified. Merged to main `69d9371`.
+- Plate movement fix: only items with activity (cooked or sold), Cooked column added, Wasted removed
 - Spec: context/features/shift-management-completion.md
 - Deep logic reference: context/features/shift-management.md (§5–7), plan phases 8–12
 - Verification gates per phase: tsc --noEmit (root + backend), npm run lint, browser/E2E acceptance check
 - Ollama models must be stopped (`ollama stop <model>`) immediately after each generation run
 
 ## History
+
+### fullstack - 2026-08-25 — Shift Management Phases 8–12 + Plate Movement Fix
+- Phase 8: Waiter replacement-order flow — voidedOrderId on order create, VoidOrdersDialog, FIFO void linking, cart prefill from voided order
+- Phase 9: Cashier Shift Close UI — ShiftCloseDialog (confirm view with drift warning + report view with full summary), shift open/close from Cashier page
+- Phase 10: Manager Report UI — Reports page with date picker, shift selector, plate movement table, revenue by period, production vs sales
+- Phase 11: Auto-close scheduler — backend interval closing expired shifts every minute
+- Phase 12: Void analytics — per-waiter void summary with replaced/pending reconciliation in Reports UI
+- Plate movement: only show items with activity (cooked or sold), add Cooked column from CookingRecordAssignment, remove Wasted
+- Dev-window toggle, receipt correlation line for replacement orders, void reconciliation in analytics
+- Branch: `feature/cashier/shift-close-void-flow` (merged to main `69d9371`)
 
 ### fullstack - 2026-08-22 — Shift Management Phases 1–7 (Foundation)
 - Implemented Phases 1–7 of the 12-phase Shift Management feature: Prisma schema + migration (Shift, ShiftSnapshot, ShiftType enum, Order void fields incl. shiftId/voidedOrderId, StockSupply.costPrice), Shift API (`routes/shifts.ts`: open/close/current/:id/auto-close) mounted at `/api/shifts`, void API (`POST /api/orders/:id/void` restoring stock + decrementing snapshot platesSold), costPrice on StockSupply CRUD + seed data, shift report API (`GET /api/reports/shift/:id` in dailyReport.ts), Cashier void UI (reason presets dialog, VOIDED badge), Waiter void notification card (WaiterPOS)
