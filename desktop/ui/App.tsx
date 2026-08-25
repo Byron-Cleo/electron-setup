@@ -13,6 +13,7 @@ import AdminMenu from "./pages/admin/Menu"
 import AdminKitchen from "./pages/admin/Kitchen"
 import AdminStore from "./pages/admin/Store"
 import AdminCashier from "./pages/admin/Cashier"
+import AdminReports from "./pages/admin/Reports"
 import AdminManager from "./pages/admin/Manager"
 import StockSupplies from "./pages/admin/StockSupplies"
 import StockSupplyForm from "./pages/admin/StockSupplyForm"
@@ -134,6 +135,14 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="cashier" element={<AdminCashier />} />
+          <Route
+            path="reports"
+            element={
+              <ProtectedRoute role={["admin", "manager"]}>
+                <AdminReports />
+              </ProtectedRoute>
+            }
+          />
         </Route>
         <Route
           path="/waiter"

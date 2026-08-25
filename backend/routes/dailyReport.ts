@@ -291,7 +291,6 @@ router.get("/shift/:id", async (req, res) => {
         closedBy: { select: { id: true, name: true } },
         snapshots: { include: { menu: { select: { id: true, name: true, price: true } } } },
         orders: {
-          where: { isVoid: false },
           include: {
             OrderItem: true,
             User: { select: { name: true } },
@@ -304,27 +303,13 @@ router.get("/shift/:id", async (req, res) => {
       return res.status(404).json({ error: "Shift not found" });
     }
 
-    // Calculate plate movement per item
-    const plateMovement = shift.snapshots.map((snapshot) => {
-      const expectedClosing = snapshot.openingPlates - snapshot.platesSold - snapshot.platesWasted;
-      const variance = (snapshot.closingPlates ?? expectedClosing) - expectedClosing;
-
-      return {
-        menuId: snapshot.menuId,
-        menuName: snapshot.menu.name,
-        openingPlates: snapshot.openingPlates,
-        platesSold: snapshot.platesSold,
-        platesWasted: snapshot.platesWasted,
-        closingPlates: snapshot.closingPlates,
-        expectedClosing,
-        variance,
-      };
-    });
+    // Revenue is computed from non-void orders only
+    const activeOrders = shift.orders.filter((o) => !o.isVoid);
 
     // Calculate revenue breakdown by meal period
     const revenueByMealType: Record<string, { orders: number; total: number }> = {};
 
-    for (const order of shift.orders) {
+    for (const order of activeOrders) {
       const mealType = order.mealType;
       if (!revenueByMealType[mealType]) {
         revenueByMealType[mealType] = { orders: 0, total: 0 };
@@ -334,19 +319,20 @@ router.get("/shift/:id", async (req, res) => {
     }
 
     // Calculate production cost
-    const totalSales = shift.orders.reduce((sum, order) => sum + Number(order.totalPrice), 0);
+    const totalSales = activeOrders.reduce((sum, order) => sum + Number(order.totalPrice), 0);
 
-    // Get production cost from cooking records during shift period
+    // Get cooking records during shift period (used for both cost and plate movement)
     const cookingRecords = await prisma.cookingRecord.findMany({
       where: {
         cookedDate: shift.date,
-        cookedAt: {
+        createdAt: {
           gte: shift.openingTime,
           lte: shift.actualCloseTime ?? shift.autoCloseTime,
         },
       },
       include: {
         stockSupply: { select: { costPrice: true } },
+        assignments: { select: { menuId: true, quantityPlates: true } },
       },
     });
 
@@ -355,6 +341,35 @@ router.get("/shift/:id", async (req, res) => {
       const quantityCooked = Number(record.quantityCooked);
       return sum + costPrice * quantityCooked;
     }, 0);
+
+    // Aggregate plates cooked per menu item from cooking record assignments
+    const platesCookedByMenu = new Map<string, number>();
+    for (const record of cookingRecords) {
+      for (const assignment of record.assignments) {
+        const prev = platesCookedByMenu.get(assignment.menuId) ?? 0;
+        platesCookedByMenu.set(assignment.menuId, prev + Number(assignment.quantityPlates));
+      }
+    }
+
+    // Calculate plate movement — only items that were cooked or sold
+    const plateMovement = shift.snapshots
+      .map((snapshot) => {
+        const platesCooked = platesCookedByMenu.get(snapshot.menuId) ?? 0;
+        const expectedClosing = snapshot.openingPlates + platesCooked - snapshot.platesSold;
+        const variance = (snapshot.closingPlates ?? expectedClosing) - expectedClosing;
+
+        return {
+          menuId: snapshot.menuId,
+          menuName: snapshot.menu.name,
+          openingPlates: snapshot.openingPlates,
+          platesCooked,
+          platesSold: snapshot.platesSold,
+          closingPlates: snapshot.closingPlates,
+          expectedClosing,
+          variance,
+        };
+      })
+      .filter((row) => row.platesSold > 0 || row.platesCooked > 0);
 
     // Calculate drift
     const driftMinutes = shift.actualCloseTime
@@ -425,8 +440,20 @@ router.get("/voids", async (req, res) => {
       },
     });
 
+    // Reconciled voids = a replacement order exists whose voidedOrderId points
+    // at them (searched by link, so replacements placed after midnight still count)
+    const voidedIds = orders.filter((o) => o.isVoid).map((o) => o.id);
+    const replacements =
+      voidedIds.length > 0
+        ? await prisma.order.findMany({
+            where: { voidedOrderId: { in: voidedIds } },
+            select: { id: true, voidedOrderId: true },
+          })
+        : [];
+    const replacedVoidIds = new Set(replacements.map((r) => r.voidedOrderId as string));
+
     // Aggregate by waiter
-    const waiterStats = new Map<string, { name: string; totalOrders: number; voidedOrders: number; voidReasons: string[] }>();
+    const waiterStats = new Map<string, { name: string; totalOrders: number; voidedOrders: number; replacedVoids: number; voidReasons: string[] }>();
 
     for (const order of orders) {
       const waiterId = order.userId;
@@ -436,6 +463,9 @@ router.get("/voids", async (req, res) => {
         existing.totalOrders += 1;
         if (order.isVoid) {
           existing.voidedOrders += 1;
+          if (replacedVoidIds.has(order.id)) {
+            existing.replacedVoids += 1;
+          }
           if (order.voidReason && !existing.voidReasons.includes(order.voidReason)) {
             existing.voidReasons.push(order.voidReason);
           }
@@ -445,6 +475,7 @@ router.get("/voids", async (req, res) => {
           name: order.User?.name ?? "Unknown",
           totalOrders: 1,
           voidedOrders: order.isVoid ? 1 : 0,
+          replacedVoids: order.isVoid && replacedVoidIds.has(order.id) ? 1 : 0,
           voidReasons: order.voidReason ? [order.voidReason] : [],
         });
       }
@@ -455,6 +486,8 @@ router.get("/voids", async (req, res) => {
       name: stats.name,
       totalOrders: stats.totalOrders,
       voidedOrders: stats.voidedOrders,
+      replacedVoids: stats.replacedVoids,
+      pendingVoids: stats.voidedOrders - stats.replacedVoids,
       voidRate: stats.totalOrders > 0 ? `${((stats.voidedOrders / stats.totalOrders) * 100).toFixed(1)}%` : "0%",
       commonReasons: stats.voidReasons,
     }));

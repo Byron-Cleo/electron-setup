@@ -18,6 +18,7 @@ export interface ReceiptOrderInfo {
   mealType: string;
   createdAt: string;
   paymentMethod: string;
+  replacesOrderNumber?: number;
 }
 
 export interface ReceiptTotals {
@@ -139,6 +140,7 @@ function customerBody(data: ReceiptData): string {
   ${data.restaurant.city ? blockCenter(data.restaurant.city, "font-size:11px;") : ""}
   ${divider()}
   ${row("Order #", String(data.order.number), "font-weight:bold;", "font-weight:bold;")}
+  ${data.order.replacesOrderNumber != null ? blockCenter(`** REPLACES ORDER #${data.order.replacesOrderNumber} **`, "font-weight:bold; margin-top:2px;") : ""}
   ${row("Waiter", data.waiter.name)}
   ${row("Date", formatDate(data.order.createdAt))}
   ${row("Meal", data.order.mealType)}

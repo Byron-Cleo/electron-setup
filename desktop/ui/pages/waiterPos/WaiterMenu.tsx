@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams } from "react-router-dom"
 import { getMenuByMealType, createOrder, printReceipt, previewReceipt, getOrderCount } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
@@ -33,7 +33,13 @@ function buildOrderItems(orderItems: OrderLineItem[]): CreateOrderItemData[] {
   }))
 }
 
-function buildReceipt(order: Order, orderItems: OrderLineItem[], waiterName: string, mealType: string): ReceiptData {
+function buildReceipt(
+  order: Order,
+  orderItems: OrderLineItem[],
+  waiterName: string,
+  mealType: string,
+  replacesOrderNumber?: number,
+): ReceiptData {
   const items = toReceiptItems(orderItems)
   const itemsPrice = items.reduce((sum, item) => sum + item.lineTotal, 0)
   const shippingPrice = Number(order.shippingPrice) || 0
@@ -47,6 +53,7 @@ function buildReceipt(order: Order, orderItems: OrderLineItem[], waiterName: str
       mealType,
       createdAt: order.createdAt,
       paymentMethod: order.paymentMethod,
+      ...(replacesOrderNumber != null ? { replacesOrderNumber } : {}),
     },
     restaurant: {
       name: "ERAEVA CATERING SERVICES",
@@ -75,6 +82,7 @@ function buildPreviewReceipt(
   waiterName: string,
   mealType: string,
   nextNumber: number,
+  replacesOrderNumber?: number,
 ): ReceiptData {
   const items = toReceiptItems(orderItems)
   const itemsPrice = items.reduce((sum, item) => sum + item.lineTotal, 0)
@@ -87,6 +95,7 @@ function buildPreviewReceipt(
       mealType,
       createdAt: new Date().toISOString(),
       paymentMethod: "Cash",
+      ...(replacesOrderNumber != null ? { replacesOrderNumber } : {}),
     },
     restaurant: {
       name: "ERAEVA CATERING SERVICES",
@@ -112,7 +121,15 @@ function buildPreviewReceipt(
 
 export function WaiterMenu() {
   const { mealPeriod } = useParams<{ mealPeriod: string }>()
-  const { items: orderItems, clearOrder } = useWaiterOrder()
+  const {
+    items: orderItems,
+    clearOrder,
+    voidedOrders,
+    clearVoidedOrder,
+    replacementTargetId,
+    setReplacementTargetId,
+    prefillFromVoid,
+  } = useWaiterOrder()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const [items, setItems] = useState<MenuItem[]>([])
@@ -124,6 +141,17 @@ export function WaiterMenu() {
   const [previewing, setPreviewing] = useState(false)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const prefilledRef = useRef<string | null>(null)
+
+  const replacementOrder = voidedOrders.find((o) => o.id === replacementTargetId)
+
+  // Preload the cart with the targeted voided order's items once per selection
+  useEffect(() => {
+    if (!replacementTargetId || !replacementOrder) return
+    if (prefilledRef.current === replacementTargetId) return
+    prefilledRef.current = replacementTargetId
+    prefillFromVoid(replacementOrder)
+  }, [replacementTargetId, replacementOrder, prefillFromVoid])
 
   if (loadedPeriod !== (mealPeriod ?? null)) {
     setLoadedPeriod(mealPeriod ?? null)
@@ -160,13 +188,25 @@ export function WaiterMenu() {
     if (!user || orderItems.length === 0 || !mealPeriod) return
     setPlacing(true)
     setPlaceError(null)
+    // Replacement flow: link the new order to the targeted voided order
+    // (falls back to the oldest pending void when placing a normal order)
+    const replacementForId = replacementTargetId ?? voidedOrders[0]?.id
+    const replacesOrderNumber = replacementForId
+      ? voidedOrders.find((o) => o.id === replacementForId)?.orderNumber
+      : undefined
     try {
       const order = await createOrder({
         userId: user.id,
         items: buildOrderItems(orderItems),
         mealType: mealPeriod,
+        ...(replacementForId ? { voidedOrderId: replacementForId } : {}),
       })
-      const receipt = buildReceipt(order, orderItems, user.name, mealPeriod)
+      if (replacementForId) {
+        clearVoidedOrder(replacementForId)
+      }
+      setReplacementTargetId(null)
+      prefilledRef.current = null
+      const receipt = buildReceipt(order, orderItems, user.name, mealPeriod, replacesOrderNumber)
       const printResult = await printReceipt(receipt)
       if (!printResult.ok) {
         window.alert(
@@ -187,7 +227,12 @@ export function WaiterMenu() {
     setPreviewError(null)
     try {
       const count = await getOrderCount()
-      const receipt = buildPreviewReceipt(orderItems, user.name, mealPeriod ?? "", count + 1)
+      // Mirror placeOrder's replacement resolution so preview == print
+      const replacementForId = replacementTargetId ?? voidedOrders[0]?.id
+      const replacesOrderNumber = replacementForId
+        ? voidedOrders.find((o) => o.id === replacementForId)?.orderNumber
+        : undefined
+      const receipt = buildPreviewReceipt(orderItems, user.name, mealPeriod ?? "", count + 1, replacesOrderNumber)
       const html = await previewReceipt(receipt)
       setPreviewHtml(html)
     } catch (err) {

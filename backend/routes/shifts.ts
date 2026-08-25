@@ -1,8 +1,42 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { ShiftType } from "../db/generated/prisma/client.js";
+import { autoCloseExpiredShifts } from "../scheduler.js";
 
 const router = Router();
+
+// List shifts, optionally filtered by date (YYYY-MM-DD)
+router.get("/", async (req, res) => {
+  const { date } = req.query;
+
+  try {
+    const where: { date?: { gte: Date; lt: Date } } = {};
+
+    if (date) {
+      const targetDate = new Date(String(date));
+      if (isNaN(targetDate.getTime())) {
+        return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
+      }
+      const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+      const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
+      where.date = { gte: startOfDay, lt: endOfDay };
+    }
+
+    const shifts = await prisma.shift.findMany({
+      where,
+      orderBy: [{ date: "desc" }, { openingTime: "asc" }],
+      include: {
+        openedBy: { select: { id: true, name: true } },
+        closedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    res.json(shifts);
+  } catch (e) {
+    console.error("Error listing shifts:", e);
+    res.status(500).json({ error: "Failed to list shifts" });
+  }
+});
 
 // Get current open shift
 router.get("/current", async (_req, res) => {
@@ -13,6 +47,9 @@ router.get("/current", async (_req, res) => {
       include: {
         openedBy: { select: { id: true, name: true } },
         snapshots: { include: { menu: { select: { id: true, name: true } } } },
+        orders: {
+          select: { id: true, mealType: true, totalPrice: true, isVoid: true, createdAt: true },
+        },
       },
     });
     res.json(shift);
@@ -130,8 +167,8 @@ router.post("/open", async (req, res) => {
     });
 
     res.status(201).json(shift);
-  } catch (e: any) {
-    if (e.code === "P2002") {
+  } catch (e: unknown) {
+    if ((e as { code?: string })?.code === "P2002") {
       return res.status(409).json({ error: "Shift already exists for this period" });
     }
     console.error("Error opening shift:", e);
@@ -164,7 +201,7 @@ router.post("/:id/close", async (req, res) => {
     // Close shift and take closing snapshot
     const closedShift = await prisma.$transaction(async (tx) => {
       // Update shift
-      const updated = await tx.shift.update({
+      await tx.shift.update({
         where: { id },
         data: {
           isOpen: false,
@@ -204,56 +241,10 @@ router.post("/:id/close", async (req, res) => {
   }
 });
 
-// Auto-close expired shifts (called by scheduler)
+// Auto-close expired shifts (also called by the scheduler every minute)
 router.post("/auto-close", async (_req, res) => {
-  const now = new Date();
-
   try {
-    const expiredShifts = await prisma.shift.findMany({
-      where: {
-        isOpen: true,
-        autoCloseTime: { lte: now },
-      },
-    });
-
-    const closedShifts = [];
-
-    for (const shift of expiredShifts) {
-      const closed = await prisma.$transaction(async (tx) => {
-        // Update shift
-        await tx.shift.update({
-          where: { id: shift.id },
-          data: {
-            isOpen: false,
-            actualCloseTime: shift.autoCloseTime,
-          },
-        });
-
-        // Take closing snapshot
-        const snapshots = await tx.shiftSnapshot.findMany({
-          where: { shiftId: shift.id },
-          include: { menu: { select: { id: true, stock: true } } },
-        });
-
-        for (const snapshot of snapshots) {
-          const currentStock = snapshot.menu.stock ?? 0;
-          await tx.shiftSnapshot.update({
-            where: { id: snapshot.id },
-            data: { closingPlates: currentStock },
-          });
-        }
-
-        return tx.shift.findUnique({
-          where: { id: shift.id },
-          include: {
-            snapshots: { include: { menu: { select: { id: true, name: true } } } },
-          },
-        });
-      });
-
-      closedShifts.push(closed);
-    }
-
+    const closedShifts = await autoCloseExpiredShifts();
     res.json({ closed: closedShifts.length, shifts: closedShifts });
   } catch (e) {
     console.error("Error auto-closing shifts:", e);
