@@ -213,6 +213,13 @@ export function WaiterMenu() {
           `Order #${order.orderNumber} placed, but the receipt did not print.\n\n${printResult.error ?? "Unknown print error"}\n\nPlease check the printer config, then reprint the receipt for the order.`,
         )
       }
+      const kitchenReceipt = { ...receipt, ticket: "kitchen" as const }
+      const kitchenResult = await printReceipt(kitchenReceipt)
+      if (!kitchenResult.ok) {
+        window.alert(
+          `Order #${order.orderNumber} placed, but the kitchen receipt did not print.\n\n${kitchenResult.error ?? "Unknown print error"}\n\nPlease check the kitchen printer config.`,
+        )
+      }
       clearOrder()
       await logout()
     } catch (err) {
