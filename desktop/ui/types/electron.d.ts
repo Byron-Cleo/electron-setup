@@ -129,6 +129,7 @@ interface CreateOrderData {
   userId: string;
   items: CreateOrderItemData[];
   mealType: string;
+  voidedOrderId?: string;
 }
 
 interface ReceiptAccompaniment {
@@ -151,6 +152,7 @@ interface ReceiptOrderInfo {
   mealType: string;
   createdAt: string;
   paymentMethod: string;
+  replacesOrderNumber?: number;
 }
 
 interface ReceiptTotals {
@@ -495,8 +497,110 @@ interface ServerStatus {
   reason: string;
 }
 
+type ShiftType = "DAY" | "NIGHT";
+
+interface ShiftSnapshot {
+  id: string;
+  shiftId: string;
+  menuId: string;
+  openingPlates: number;
+  closingPlates: number | null;
+  platesSold: number;
+  platesWasted: number;
+  menu: {
+    id: string;
+    name: string;
+  };
+}
+
+interface Shift {
+  id: string;
+  type: ShiftType;
+  date: string;
+  openingTime: string;
+  autoCloseTime: string;
+  actualCloseTime: string | null;
+  isOpen: boolean;
+  openedById: string;
+  closedById: string | null;
+  createdAt: string;
+  openedBy: {
+    id: string;
+    name: string;
+  };
+  closedBy?: {
+    id: string;
+    name: string;
+  } | null;
+  snapshots: ShiftSnapshot[];
+  orders?: Order[];
+}
+
+interface AutoCloseResult {
+  closed: number;
+  shifts: Shift[];
+}
+
+interface VoidReportWaiter {
+  waiterId: string;
+  name: string;
+  totalOrders: number;
+  voidedOrders: number;
+  replacedVoids: number;
+  pendingVoids: number;
+  voidRate: string;
+  commonReasons: string[];
+}
+
+interface ShiftReportMeta {
+  id: string;
+  type: ShiftType;
+  date: string;
+  openingTime: string;
+  autoCloseTime: string;
+  actualCloseTime: string | null;
+  driftMinutes: number;
+  isOpen: boolean;
+  openedBy: { id: string; name: string };
+  closedBy?: { id: string; name: string } | null;
+}
+
+interface ShiftPlateMovementRow {
+  menuId: string;
+  menuName: string;
+  openingPlates: number;
+  platesCooked: number;
+  platesSold: number;
+  closingPlates: number | null;
+  expectedClosing: number;
+  variance: number;
+}
+
+interface ShiftRevenueEntry {
+  orders: number;
+  total: number;
+}
+
+interface ShiftProduction {
+  totalCost: number;
+  totalSales: number;
+  variance: number;
+  profitMargin: string;
+}
+
+interface ShiftReport {
+  shift: ShiftReportMeta;
+  plateMovement: ShiftPlateMovementRow[];
+  revenue: Record<string, ShiftRevenueEntry> & { total: number };
+  production: ShiftProduction;
+  summary: {
+    totalOrders: number;
+    voidedOrders: number;
+  };
+}
+
 interface ElectronAPI {
-  subscribeStatistics: (callback: (statistics: any) => void) => void;
+  subscribeStatistics: (callback: (statistics: unknown) => void) => void;
   getStaticData: () => void;
   app: {
     quit: () => Promise<void>;

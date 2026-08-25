@@ -1,6 +1,7 @@
 import "dotenv/config";
 import app from "./app.js";
 import prisma from "./db/db.js";
+import { startScheduler } from "./scheduler.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
@@ -16,6 +17,8 @@ async function main() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
   });
+
+  startScheduler();
 }
 
 main();

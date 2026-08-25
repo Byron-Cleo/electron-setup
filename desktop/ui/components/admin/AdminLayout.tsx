@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
-import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings } from "lucide-react"
+import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const allNavItems: {
@@ -16,6 +16,7 @@ const allNavItems: {
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"] },
   { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"] },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager"] },
+  { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
 ]
 
@@ -29,7 +30,7 @@ function AdminLayout() {
 
   return (
     <div className="h-screen flex overflow-hidden bg-admin-content">
-      <aside className="w-60 bg-admin-sidebar flex flex-col shrink-0 border-r border-admin-card-border">
+      <aside className="w-60 bg-admin-sidebar flex flex-col shrink-0 border-r border-admin-card-border print:hidden">
         <div className="flex flex-col items-center gap-1 pt-4 pb-2 px-4">
           <img src="./images/logo/eraeva-logo.png" alt="Eraeva Logo" className="h-20 w-20 object-contain" />
           <span className="text-xs font-semibold text-admin-header-text text-center leading-tight">Eraeva<br />Catering Services</span>
@@ -56,7 +57,7 @@ function AdminLayout() {
       </aside>
 
       <div className="flex flex-col flex-1">
-        <header className="h-15 bg-admin-header text-admin-header-text flex items-center justify-end gap-4 px-6 shrink-0 border-b border-admin-card-border">
+        <header className="h-15 bg-admin-header text-admin-header-text flex items-center justify-end gap-4 px-6 shrink-0 border-b border-admin-card-border print:hidden">
           <div className="h-8 w-8 rounded-full bg-admin-accent/10 flex items-center justify-center text-admin-accent text-sm font-bold">
             {user?.name?.charAt(0)?.toUpperCase() || "U"}
           </div>
@@ -70,7 +71,7 @@ function AdminLayout() {
           <Outlet />
         </main>
 
-        <footer className="h-10 bg-admin-content text-admin-muted flex items-center justify-center text-xs shrink-0 border-t border-admin-card-border">
+        <footer className="h-10 bg-admin-content text-admin-muted flex items-center justify-center text-xs shrink-0 border-t border-admin-card-border print:hidden">
           &copy; {new Date().getFullYear()} Eraeva POS. All rights reserved.
         </footer>
       </div>

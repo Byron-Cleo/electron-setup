@@ -5,8 +5,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
 import { getActiveMealPeriods, type ActiveMealPeriod, type MealPeriodLabel } from "@/lib/mealPeriod"
-import { getOrders } from "@/lib/api"
-import { useAuthStore } from "@/stores/auth"
+import { useWaiterOrder } from "./WaiterOrderContext"
+import VoidOrdersDialog from "@/components/waiterPos/VoidOrdersDialog"
 
 const PERIOD_META: Record<MealPeriodLabel, { icon: typeof Sunrise; description: string }> = {
   BREAKFAST: { icon: Sunrise, description: "Morning meals" },
@@ -21,33 +21,13 @@ type CardPeriod = ActiveMealPeriod & { icon: typeof Sunrise; description: string
 export function WaiterPOS() {
   const navigate = useNavigate()
   const [hour, setHour] = useState(new Date().getHours())
-  const [voidedOrders, setVoidedOrders] = useState<Order[]>([])
-  const user = useAuthStore((s) => s.user)
+  const [voidDialogOpen, setVoidDialogOpen] = useState(false)
+  const { voidedOrders } = useWaiterOrder()
 
   useEffect(() => {
     const id = setInterval(() => setHour(new Date().getHours()), 60000)
     return () => clearInterval(id)
   }, [])
-
-  useEffect(() => {
-    async function fetchVoidedOrders() {
-      if (!user) return
-      try {
-        const orders = await getOrders()
-        const today = new Date().toDateString()
-        const voided = orders.filter(
-          (o) =>
-            o.isVoid &&
-            o.userId === user.id &&
-            new Date(o.createdAt).toDateString() === today
-        )
-        setVoidedOrders(voided)
-      } catch {
-        // Ignore errors for voided orders
-      }
-    }
-    fetchVoidedOrders()
-  }, [user])
 
   const periods: CardPeriod[] = getActiveMealPeriods(hour).map((p) => ({
     ...p,
@@ -101,12 +81,13 @@ export function WaiterPOS() {
 
   return (
     <div className="space-y-8">
-      {voidedOrders.length > 0 && (
-        <section>
-          <Heading as="h2" className="text-sm text-red-600 uppercase tracking-wider mb-4">Action Required</Heading>
-          <div className="flex flex-wrap justify-center gap-4">
+      <section>
+        <Heading as="h2" className="text-sm text-brand-green uppercase tracking-wider mb-4">Now Serving</Heading>
+        <div className="flex flex-wrap justify-center gap-4">
+          {activePeriods.map(renderCard)}
+          {voidedOrders.length > 0 && (
             <Card
-              onClick={() => navigate("/waiter/menu/LUNCH")}
+              onClick={() => setVoidDialogOpen(true)}
               className="relative w-48 cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1 border-red-200 bg-red-50"
             >
               <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-500 text-white">
@@ -124,14 +105,7 @@ export function WaiterPOS() {
                 </span>
               </CardContent>
             </Card>
-          </div>
-        </section>
-      )}
-
-      <section>
-        <Heading as="h2" className="text-sm text-brand-green uppercase tracking-wider mb-4">Now Serving</Heading>
-        <div className="flex flex-wrap justify-center gap-4">
-          {activePeriods.map(renderCard)}
+          )}
         </div>
       </section>
 
@@ -143,6 +117,8 @@ export function WaiterPOS() {
           </div>
         </section>
       )}
+
+      <VoidOrdersDialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen} />
     </div>
   )
 }

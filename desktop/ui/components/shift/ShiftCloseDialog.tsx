@@ -1,0 +1,299 @@
+import { useMemo, useState } from "react"
+import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { closeShift, getShiftReport } from "@/lib/api"
+import { cn } from "@/lib/utils"
+
+function money(amount: number): string {
+  return `KSH ${Number(amount).toLocaleString("en-KE", { maximumFractionDigits: 2 })}`
+}
+
+function formatTime(iso: string | null): string {
+  if (!iso) return "—"
+  return new Date(iso).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-KE", { dateStyle: "medium" })
+}
+
+interface Props {
+  shift: Shift
+  closedById: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onClosed: () => void
+}
+
+function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: Props) {
+  const [closing, setClosing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [report, setReport] = useState<ShiftReport | null>(null)
+
+  const stats = useMemo(() => {
+    const orders = shift.orders ?? []
+    const active = orders.filter((o) => !o.isVoid)
+    const revenueByMealType: Record<string, { orders: number; total: number }> = {}
+    let revenue = 0
+    for (const order of active) {
+      revenue += Number(order.totalPrice)
+      const entry = (revenueByMealType[order.mealType] ??= { orders: 0, total: 0 })
+      entry.orders += 1
+      entry.total += Number(order.totalPrice)
+    }
+    return {
+      totalOrders: orders.length,
+      voidedOrders: orders.length - active.length,
+      unvoidedOrders: active.length,
+      revenue,
+      revenueByMealType,
+    }
+  }, [shift])
+
+  const pastAutoClose = new Date() > new Date(shift.autoCloseTime)
+
+  async function handleCloseShift() {
+    setClosing(true)
+    setError(null)
+    try {
+      await closeShift(shift.id, closedById)
+      const data = await getShiftReport(shift.id)
+      setReport(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to close shift")
+    } finally {
+      setClosing(false)
+    }
+  }
+
+  function handleDismiss() {
+    // If a close already succeeded, let the parent refresh its shift state
+    if (report) onClosed()
+    onOpenChange(false)
+    // Reset after the dialog unmounts so reopening shows the confirm view again
+    setTimeout(() => {
+      setReport(null)
+      setError(null)
+      setClosing(false)
+    }, 200)
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) handleDismiss()
+      }}
+    >
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        {!report ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                Close {shift.type === "DAY" ? "Day" : "Night"} Shift
+              </DialogTitle>
+              <DialogDescription>
+                Review this shift before locking it. Counts and revenue below are final once
+                closed.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {pastAutoClose && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    This shift is past its scheduled close time ({formatTime(shift.autoCloseTime)}
+                    ). Closing now will record a drift against it.
+                  </span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
+                <div className="text-admin-muted">Opened</div>
+                <div className="font-medium">
+                  {formatTime(shift.openingTime)} by {shift.openedBy?.name ?? "—"}
+                </div>
+                <div className="text-admin-muted">Scheduled close</div>
+                <div className="font-medium">{formatTime(shift.autoCloseTime)}</div>
+                <div className="text-admin-muted">Total orders</div>
+                <div className="font-medium">{stats.totalOrders}</div>
+                <div className="text-admin-muted">Voided</div>
+                <div className="font-medium text-red-600">{stats.voidedOrders}</div>
+                <div className="text-admin-muted">Unvoided (locks at close)</div>
+                <div className="font-medium">{stats.unvoidedOrders}</div>
+                <div className="text-admin-muted">Revenue</div>
+                <div className="font-semibold">{money(stats.revenue)}</div>
+              </div>
+
+              {Object.keys(stats.revenueByMealType).length > 0 && (
+                <div className="rounded-lg border border-admin-card-border p-4">
+                  <p className="mb-2 text-sm font-medium text-admin-header-text">
+                    Revenue by meal period
+                  </p>
+                  <div className="space-y-1 text-sm">
+                    {Object.entries(stats.revenueByMealType).map(([mealType, entry]) => (
+                      <div key={mealType} className="flex items-center justify-between">
+                        <span className="text-admin-muted">
+                          {mealType} ({entry.orders})
+                        </span>
+                        <span>{money(entry.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {error && <p className="text-sm text-red-600">{error}</p>}
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleDismiss} disabled={closing}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleCloseShift} disabled={closing}>
+                {closing ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    Closing...
+                  </>
+                ) : (
+                  "Confirm Close"
+                )}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                Shift Report — {report.shift.type === "DAY" ? "Day" : "Night"}
+              </DialogTitle>
+              <DialogDescription>
+                {formatDate(report.shift.date)} · opened {formatTime(report.shift.openingTime)} ·
+                closed {formatTime(report.shift.actualCloseTime)} by{" "}
+                {report.shift.closedBy?.name ?? "—"}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm sm:grid-cols-4">
+                <div>
+                  <p className="text-xs text-admin-muted">Orders</p>
+                  <p className="text-lg font-bold text-admin-header-text">
+                    {report.summary.totalOrders}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-admin-muted">Voided</p>
+                  <p
+                    className={cn(
+                      "text-lg font-bold",
+                      report.summary.voidedOrders > 0 ? "text-red-600" : "text-admin-header-text",
+                    )}
+                  >
+                    {report.summary.voidedOrders}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-admin-muted">Revenue</p>
+                  <p className="text-lg font-bold text-admin-header-text">
+                    {money(report.revenue.total)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-admin-muted">Drift</p>
+                  <p
+                    className={cn(
+                      "text-lg font-bold",
+                      report.shift.driftMinutes > 15 ? "text-amber-600" : "text-green-600",
+                    )}
+                  >
+                    {report.shift.driftMinutes > 0 ? `${report.shift.driftMinutes}m` : "On time"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-admin-card-border p-4">
+                <p className="mb-2 text-sm font-medium text-admin-header-text">
+                  Production vs Sales
+                </p>
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-admin-muted">Production cost</span>
+                    <span>{money(report.production.totalCost)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-admin-muted">Sales</span>
+                    <span>{money(report.production.totalSales)}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-medium">
+                    <span>Variance</span>
+                    <span>{money(report.production.variance)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-admin-muted">Margin</span>
+                    <span>{report.production.profitMargin}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-admin-card-border p-4">
+                <p className="mb-2 text-sm font-medium text-admin-header-text">Plate Movement</p>
+                {report.plateMovement.length === 0 ? (
+                  <p className="text-sm text-admin-muted">No snapshots recorded.</p>
+                ) : (
+                  <div className="space-y-1 text-sm">
+                    <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 text-xs font-semibold uppercase tracking-wide text-admin-muted">
+                      <span>Item</span>
+                      <span className="text-right">Open</span>
+                      <span className="text-right">Cooked</span>
+                      <span className="text-right">Sold</span>
+                      <span className="text-right">Close</span>
+                    </div>
+                    {report.plateMovement.map((row) => (
+                      <div
+                        key={row.menuId}
+                        className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 border-t border-admin-card-border pt-1"
+                      >
+                        <span className="truncate">{row.menuName}</span>
+                        <span className="text-right tabular-nums">{row.openingPlates}</span>
+                        <span className="text-right tabular-nums">{row.platesCooked}</span>
+                        <span className="text-right tabular-nums">{row.platesSold}</span>
+                        <span
+                          className={cn(
+                            "text-right tabular-nums",
+                            row.closingPlates !== row.expectedClosing && "font-medium text-amber-600",
+                          )}
+                        >
+                          {row.closingPlates ?? "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter showCloseButton>
+              <Button type="button" onClick={handleDismiss}>
+                Done
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export default ShiftCloseDialog

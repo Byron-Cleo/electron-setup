@@ -24,8 +24,10 @@ try {
 function createMainWindow() {
   const win = new BrowserWindow({
     show: false,
-    kiosk: true,
-    frame: false,
+    // Dev: normal window with native minimize/maximize/close so you can
+    // switch between apps. Production: locked frameless kiosk (default).
+    kiosk: !isDev(),
+    frame: isDev(),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

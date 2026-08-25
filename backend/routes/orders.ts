@@ -41,7 +41,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { userId, items, mealType } = req.body;
+  const { userId, items, mealType, voidedOrderId } = req.body;
 
   if (!userId || !items?.length || !mealType) {
     return res.status(400).json({ error: "userId, items, and mealType are required" });
@@ -68,7 +68,25 @@ router.post("/", async (req, res) => {
   const shippingPrice = 0;
   const taxPrice = 0;
 
+  // Link the order to the currently open shift (if any) for plate tracking
+  const currentShift = await prisma.shift.findFirst({
+    where: { isOpen: true },
+    select: { id: true },
+  });
+
   try {
+    // Optional replacement link: new order replaces an existing VOIDED order
+    let replacementOf: { id: string } | null = null;
+    if (voidedOrderId) {
+      replacementOf = await prisma.order.findFirst({
+        where: { id: voidedOrderId, isVoid: true },
+        select: { id: true },
+      });
+      if (!replacementOf) {
+        return res.status(400).json({ error: "voidedOrderId must reference an existing voided order" });
+      }
+    }
+
     const order = await prisma.$transaction(async (tx) => {
       let itemsPrice = 0;
       const resolvedAccompaniments: { starchId: string | null; vegetableId: string | null }[] = [];
@@ -100,6 +118,8 @@ router.post("/", async (req, res) => {
           taxPrice,
           totalPrice,
           mealType,
+          ...(replacementOf ? { voidedOrderId: replacementOf.id } : {}),
+          ...(currentShift ? { shiftId: currentShift.id } : {}),
         },
       });
 
@@ -129,6 +149,21 @@ router.post("/", async (req, res) => {
             isAvailable: remaining > 0,
           },
         });
+
+        // Track plates sold on the shift snapshot (openingPlates falls back to
+        // pre-sale stock when the item has no snapshot — e.g. added mid-shift)
+        if (currentShift) {
+          await tx.shiftSnapshot.upsert({
+            where: { shiftId_menuId: { shiftId: currentShift.id, menuId: item.menuId } },
+            create: {
+              shiftId: currentShift.id,
+              menuId: item.menuId,
+              openingPlates: currentStock,
+              platesSold: item.qty,
+            },
+            update: { platesSold: { increment: item.qty } },
+          });
+        }
       }
 
       return tx.order.findUnique({
@@ -138,8 +173,8 @@ router.post("/", async (req, res) => {
     });
 
     res.status(201).json(order);
-  } catch (e: any) {
-    if (e.code === "P2025") {
+  } catch (e: unknown) {
+    if ((e as { code?: string })?.code === "P2025") {
       return res.status(404).json({ error: "Menu item not found" });
     }
     console.error("Error creating order:", e);

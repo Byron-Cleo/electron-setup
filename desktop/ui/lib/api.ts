@@ -418,6 +418,50 @@ export async function printReceipt(data: ReceiptData): Promise<PrintResult> {
   return { ok: true }
 }
 
+// ─── Shifts ──────────────────────────────────────────────────────────────────
+
+export async function openShift(type: ShiftType, openedById: string): Promise<Shift> {
+  return apiFetch("/shifts/open", {
+    method: "POST",
+    body: JSON.stringify({ type, openedById }),
+  })
+}
+
+export async function closeShift(shiftId: string, closedById: string): Promise<Shift> {
+  return apiFetch(`/shifts/${shiftId}/close`, {
+    method: "POST",
+    body: JSON.stringify({ closedById }),
+  })
+}
+
+export async function getCurrentShift(): Promise<Shift | null> {
+  return apiFetch("/shifts/current")
+}
+
+export async function getShift(shiftId: string): Promise<Shift> {
+  return apiFetch(`/shifts/${shiftId}`)
+}
+
+export async function listShifts(date?: string): Promise<Shift[]> {
+  const query = date ? `?date=${encodeURIComponent(date)}` : ""
+  return apiFetch(`/shifts${query}`)
+}
+
+export async function autoCloseShifts(): Promise<AutoCloseResult> {
+  return apiFetch("/shifts/auto-close", { method: "POST" })
+}
+
+export async function getShiftReport(shiftId: string): Promise<ShiftReport> {
+  return apiFetch(`/reports/shift/${shiftId}`)
+}
+
+export async function getVoidReport(date: string): Promise<VoidReportWaiter[]> {
+  const data = (await apiFetch(
+    `/reports/voids?date=${encodeURIComponent(date)}`
+  )) as { date: string; waiters: VoidReportWaiter[] }
+  return data.waiters
+}
+
 // ─── POS Printer Config ──────────────────────────────────────────────────────
 
 const PRINTER_STORAGE_KEY = "eraeva.printers.v1"
@@ -464,6 +508,8 @@ export async function testPrinter(printer: PosPrinter): Promise<PrintResult> {
 }
 
 // ─── Server Config ───────────────────────────────────────────────────────────
+
+const SERVER_STORAGE_KEY = "eraeva.server-config.v1"
 
 function toApiBase(value: string): string {
   const v = value.trim().replace(/\/+$/, "")
