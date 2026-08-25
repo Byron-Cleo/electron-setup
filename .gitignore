@@ -36,3 +36,6 @@ backend/uploads/
 
 # Foglamp scan (contains edit token)
 .foglamp/
+
+# Uploaded files
+backend/uploads/
