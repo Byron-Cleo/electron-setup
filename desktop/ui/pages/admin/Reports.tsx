@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
-import { CalendarDays, FileText, Printer, ShieldX } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CalendarDays, FileText, Printer, ShieldX, ArrowLeft, ClipboardList } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -13,19 +14,86 @@ import {
 import { getShiftReport, getVoidReport, listShifts } from "@/lib/api"
 import ShiftReportView from "@/components/reports/ShiftReport"
 
+type ActiveView = "shift-report" | "waiters-report" | null
+
+const cards: {
+  title: string
+  description: string
+  icon: typeof ClipboardList
+  view: NonNullable<ActiveView>
+}[] = [
+  {
+    title: "Shift Report",
+    description: "View revenue, plate movement and production for a closed shift",
+    icon: ClipboardList,
+    view: "shift-report",
+  },
+  {
+    title: "Waiters Report",
+    description: "Void analytics per waiter for a selected date",
+    icon: ShieldX,
+    view: "waiters-report",
+  },
+]
+
 function todayISO(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
 }
 
 function Reports() {
+  const [activeView, setActiveView] = useState<ActiveView>(null)
+
+  if (!activeView) {
+    return (
+      <div>
+        <Heading as="h1" className="mb-6 text-admin-header-text">Reports</Heading>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {cards.map((card) => (
+            <Card
+              key={card.view}
+              className="relative p-6 cursor-pointer hover:border-admin-accent transition-colors"
+              onClick={() => setActiveView(card.view)}
+            >
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                  <card.icon size={24} className="text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <Heading as="h3" className="text-lg text-admin-header-text">{card.title}</Heading>
+                  <p className="text-sm text-admin-muted">{card.description}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <Button
+        variant="ghost"
+        className="mb-4 gap-2"
+        onClick={() => setActiveView(null)}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
+
+      {activeView === "shift-report" && <ShiftReportSection />}
+      {activeView === "waiters-report" && <WaitersReportSection />}
+    </div>
+  )
+}
+
+function ShiftReportSection() {
   const [date, setDate] = useState(todayISO())
   const [shifts, setShifts] = useState<Shift[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
   const [report, setReport] = useState<ShiftReport | null>(null)
-  const [voidWaiters, setVoidWaiters] = useState<VoidReportWaiter[]>([])
   const [loading, setLoading] = useState(false)
-  const [voidError, setVoidError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -50,22 +118,7 @@ function Reports() {
       }
     }
 
-    async function loadVoidReport() {
-      setVoidError(null)
-      setVoidWaiters([])
-      try {
-        const waiters = await getVoidReport(date)
-        if (cancelled) return
-        setVoidWaiters(waiters)
-      } catch (err) {
-        if (!cancelled) {
-          setVoidError(err instanceof Error ? err.message : "Failed to load void analytics")
-        }
-      }
-    }
-
     loadShifts()
-    loadVoidReport()
     return () => {
       cancelled = true
     }
@@ -94,7 +147,7 @@ function Reports() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <h1 className="text-2xl font-bold text-admin-header-text">Reports</h1>
+        <Heading as="h2" className="text-admin-header-text">Shift Report</Heading>
         {report && (
           <Button variant="outline" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />
@@ -103,7 +156,6 @@ function Reports() {
         )}
       </div>
 
-      {/* Selector */}
       <Card className="print:hidden">
         <CardContent className="flex flex-wrap items-center gap-3 p-4">
           <div className="flex items-center gap-2">
@@ -166,20 +218,76 @@ function Reports() {
       )}
 
       {report && <ShiftReportView report={report} />}
+    </div>
+  )
+}
 
-      {/* Void analytics (per selected date) */}
+function WaitersReportSection() {
+  const [date, setDate] = useState(todayISO())
+  const [voidWaiters, setVoidWaiters] = useState<VoidReportWaiter[]>([])
+  const [voidError, setVoidError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadVoidReport() {
+      setLoading(true)
+      setVoidError(null)
+      setVoidWaiters([])
+      try {
+        const waiters = await getVoidReport(date)
+        if (cancelled) return
+        setVoidWaiters(waiters)
+      } catch (err) {
+        if (!cancelled) {
+          setVoidError(err instanceof Error ? err.message : "Failed to load void analytics")
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    loadVoidReport()
+    return () => {
+      cancelled = true
+    }
+  }, [date])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <Heading as="h2" className="text-admin-header-text">Waiters Report</Heading>
+        <Button variant="outline" onClick={() => window.print()}>
+          <Printer className="h-4 w-4" />
+          Print / Export PDF
+        </Button>
+      </div>
+
+      <Card className="print:hidden">
+        <CardContent className="flex flex-wrap items-center gap-3 p-4">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-admin-muted" />
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-44"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {voidError ? (
-        <Card className="print:hidden">
+        <Card>
           <CardContent className="p-6 text-sm text-red-600">{voidError}</CardContent>
+        </Card>
+      ) : loading ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-admin-muted">Loading report...</CardContent>
         </Card>
       ) : (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldX className="h-4 w-4 text-admin-muted" />
-              Void Analytics — {date}
-            </CardTitle>
-          </CardHeader>
           <CardContent>
             {voidWaiters.length === 0 ? (
               <p className="text-sm text-admin-muted">No orders recorded on this date.</p>

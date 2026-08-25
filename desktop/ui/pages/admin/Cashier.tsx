@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react"
-import { Search, Eye, Ban, Play, Square } from "lucide-react"
+import { Search, Eye, Ban, CreditCard } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -12,11 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { getOrders, voidOrder, getCurrentShift, openShift } from "@/lib/api"
+import { getOrders, voidOrder, updateOrderPayment } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
-import ShiftCloseDialog from "@/components/shift/ShiftCloseDialog"
 
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`
@@ -39,13 +36,14 @@ function StatusBadge({ isPaid }: { isPaid: boolean }) {
 }
 
 const COLUMNS: Column[] = [
+  { label: "Mark Payment", key: "markPayment" },
   { label: "Order #", key: "orderNumber" },
   { label: "Meal", key: "mealType" },
   { label: "Payment", key: "paymentMethod" },
   { label: "Total", key: "totalPrice", align: "right" },
   { label: "Status", key: "status" },
   { label: "Date", key: "createdAt" },
-  { label: "", key: "details", isAction: true },
+  { label: "Actions", key: "details", isAction: true },
 ]
 
 function Cashier() {
@@ -58,61 +56,9 @@ function Cashier() {
   const [voidOrderData, setVoidOrderData] = useState<Order | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [voiding, setVoiding] = useState(false)
-  const [currentShift, setCurrentShift] = useState<Shift | null>(null)
-  const [shiftLoading, setShiftLoading] = useState(true)
-  const [closeShiftOpen, setCloseShiftOpen] = useState(false)
-  const [openShiftDialog, setOpenShiftDialog] = useState(false)
-  const [newShiftType, setNewShiftType] = useState<ShiftType>("DAY")
-  const [openingShift, setOpeningShift] = useState(false)
-  const [shiftError, setShiftError] = useState("")
+  const [paymentOrder, setPaymentOrder] = useState<Order | null>(null)
+  const [collectingPayment, setCollectingPayment] = useState(false)
   const user = useAuthStore((s) => s.user)
-
-  useEffect(() => {
-    let cancelled = false
-    getCurrentShift()
-      .then((shift) => {
-        if (!cancelled) setCurrentShift(shift ?? null)
-      })
-      .catch(() => {
-        // Shift status is non-critical — leave as none
-      })
-      .finally(() => {
-        if (!cancelled) setShiftLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  async function handleOpenCloseDialog() {
-    // Refetch so the dialog shows orders placed since page load
-    try {
-      const fresh = await getCurrentShift()
-      setCurrentShift(fresh ?? null)
-      if (fresh) {
-        setCloseShiftOpen(true)
-        return
-      }
-    } catch {
-      // Fall through to showing the dialog with what we have
-    }
-    setCloseShiftOpen(true)
-  }
-
-  async function handleOpenShift() {
-    if (!user) return
-    setOpeningShift(true)
-    setShiftError("")
-    try {
-      const shift = await openShift(newShiftType, user.id)
-      setCurrentShift(shift)
-      setOpenShiftDialog(false)
-    } catch (err) {
-      setShiftError(err instanceof Error ? err.message : "Failed to open shift")
-    } finally {
-      setOpeningShift(false)
-    }
-  }
 
   useEffect(() => {
     let cancelled = false
@@ -168,8 +114,53 @@ function Cashier() {
     }
   }
 
+  async function handleCollectPayment(method: "cash" | "mpesa") {
+    if (!paymentOrder) return
+    setCollectingPayment(true)
+    try {
+      await updateOrderPayment(paymentOrder.id, method)
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === paymentOrder.id
+            ? { ...o, paymentMethod: method, isPaid: true, paidAt: new Date().toISOString() }
+            : o
+        )
+      )
+      setPaymentOrder(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update payment")
+    } finally {
+      setCollectingPayment(false)
+    }
+  }
+
   function renderCell(order: Order, column: Column): ReactNode {
     switch (column.key) {
+      case "markPayment":
+        if (order.isPaid) {
+          if (order.paymentMethod === "mpesa") {
+            return (
+              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                Paid
+              </span>
+            )
+          }
+          return (
+            <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+              Paid
+            </span>
+          )
+        }
+        return (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setPaymentOrder(order)}
+          >
+            <CreditCard />
+            Pay
+          </Button>
+        )
       case "orderNumber":
         return (
           <div className="flex items-center gap-2">
@@ -184,7 +175,13 @@ function Cashier() {
       case "mealType":
         return order.mealType
       case "paymentMethod":
-        return order.paymentMethod
+        if (!order.isPaid) {
+          return <span className="text-admin-muted">Unpaid</span>
+        }
+        if (order.paymentMethod === "mpesa") {
+          return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">M-Pesa</span>
+        }
+        return <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">Cash</span>
       case "totalPrice":
         return <span className="font-medium">{money(order.totalPrice)}</span>
       case "status":
@@ -202,7 +199,7 @@ function Cashier() {
               <Eye />
               Details
             </Button>
-            {!order.isVoid && (
+            {!order.isVoid && !order.isPaid && (
               <Button
                 variant="destructive"
                 size="sm"
@@ -227,49 +224,6 @@ function Cashier() {
 
       {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {/* Shift status bar */}
-      <div className="flex flex-col gap-3 rounded-lg border border-admin-card-border bg-admin-content p-4 sm:flex-row sm:items-center sm:justify-between">
-        {shiftLoading ? (
-          <p className="text-sm text-admin-muted">Checking shift status...</p>
-        ) : currentShift ? (
-          <>
-            <div className="flex items-center gap-3 text-sm">
-              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-                {currentShift.type === "DAY" ? "DAY" : "NIGHT"} SHIFT OPEN
-              </span>
-              <span className="text-admin-muted">
-                since{" "}
-                {new Date(currentShift.openingTime).toLocaleTimeString("en-KE", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}{" "}
-                by {currentShift.openedBy?.name ?? "—"}
-              </span>
-            </div>
-            <Button type="button" variant="destructive" size="sm" onClick={handleOpenCloseDialog}>
-              <Square />
-              Close Shift
-            </Button>
-          </>
-        ) : (
-          <>
-            <p className="text-sm text-admin-muted">No shift is currently open.</p>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setNewShiftType("DAY")
-                setOpenShiftDialog(true)
-              }}
-            >
-              <Play />
-              Open Shift
-            </Button>
-          </>
-        )}
-      </div>
 
       <DataTable
         columns={COLUMNS}
@@ -422,61 +376,47 @@ function Cashier() {
           )}
         </DialogContent>
       </Dialog>
-      {/* Close Shift Dialog */}
-      {currentShift && user && (
-        <ShiftCloseDialog
-          shift={currentShift}
-          closedById={user.id}
-          open={closeShiftOpen}
-          onOpenChange={setCloseShiftOpen}
-          onClosed={() => setCurrentShift(null)}
-        />
-      )}
 
-      {/* Open Shift Dialog */}
-      <Dialog open={openShiftDialog} onOpenChange={setOpenShiftDialog}>
+      {/* Collect Payment Dialog */}
+      <Dialog open={paymentOrder !== null} onOpenChange={(open) => { if (!open) setPaymentOrder(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Open Shift</DialogTitle>
+            <DialogTitle>Collect Payment</DialogTitle>
             <DialogDescription>
-              Choose which shift period to start. A shift closes automatically at its scheduled
-              end time.
+              Order #{paymentOrder?.orderNumber} — {paymentOrder && money(paymentOrder.totalPrice)}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <RadioGroup value={newShiftType} onValueChange={(v) => setNewShiftType(v as ShiftType)} className="gap-3">
-              <Label
-                htmlFor="shift-day"
-                className="flex cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-3 transition-colors has-[button[data-state=checked]]:border-admin-accent"
-              >
-                <RadioGroupItem value="DAY" id="shift-day" className="mt-0.5" />
-                <span>
-                  <span className="block font-medium text-admin-header-text">Day shift</span>
-                  <span className="block text-xs text-admin-muted">5:30 AM — 5:30 PM</span>
-                </span>
-              </Label>
-              <Label
-                htmlFor="shift-night"
-                className="flex cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-3 transition-colors has-[button[data-state=checked]]:border-admin-accent"
-              >
-                <RadioGroupItem value="NIGHT" id="shift-night" className="mt-0.5" />
-                <span>
-                  <span className="block font-medium text-admin-header-text">Night shift</span>
-                  <span className="block text-xs text-admin-muted">5:30 PM — 5:30 AM (next day)</span>
-                </span>
-              </Label>
-            </RadioGroup>
-
-            {shiftError && <p className="text-sm text-red-600">{shiftError}</p>}
+          <div className="flex flex-col gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-start gap-3 h-14 text-base"
+              disabled={collectingPayment}
+              onClick={() => handleCollectPayment("mpesa")}
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">
+                M
+              </span>
+              M-Pesa
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-start gap-3 h-14 text-base"
+              disabled={collectingPayment}
+              onClick={() => handleCollectPayment("cash")}
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+                C
+              </span>
+              Cash
+            </Button>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpenShiftDialog(false)}>
+            <Button type="button" variant="ghost" onClick={() => setPaymentOrder(null)}>
               Cancel
-            </Button>
-            <Button type="button" onClick={handleOpenShift} disabled={openingShift}>
-              {openingShift ? "Opening..." : "Open Shift"}
             </Button>
           </DialogFooter>
         </DialogContent>

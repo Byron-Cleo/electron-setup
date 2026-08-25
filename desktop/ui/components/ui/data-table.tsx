@@ -43,18 +43,14 @@ function DataTable<T>({
       )}
 
       <div className={cn("flex-1 min-h-[384px]", columns.length > 10 && "overflow-x-auto")}>
-        <table className={cn("table-fixed", columns.length <= 10 ? "w-full" : "min-w-full")}>
+        <table className={cn(columns.length <= 10 ? "w-full" : "min-w-full")}>
           <thead>
             <tr className="text-sm text-admin-header-text/60 border-b border-admin-card-border bg-admin-content">
               {columns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
-                    "px-4 py-3 font-medium",
-                    col.isAction ? "text-right" : "text-center",
-                    col.isAction
-                      ? "w-auto"
-                      : "max-w-[144px]",
+                    "px-2 py-2 font-medium whitespace-nowrap text-center",
                     col.align === "right" && "text-right",
                     col.align === "center" && "text-center",
                     col.className
@@ -70,7 +66,7 @@ function DataTable<T>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-4 py-8 text-center text-admin-header-text/60"
+                  className="px-2 py-8 text-center text-admin-header-text/60"
                 >
                   {emptyMessage}
                 </td>
@@ -90,7 +86,7 @@ function DataTable<T>({
                     <td
                       key={col.key}
                       className={cn(
-                        "px-4 py-3",
+                        "px-2 py-2 whitespace-nowrap",
                         col.isAction ? "text-right" : "text-center",
                         col.align === "right" && "text-right",
                         col.align === "center" && "text-center",

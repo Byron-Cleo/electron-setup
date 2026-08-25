@@ -15,6 +15,7 @@ import AdminStore from "./pages/admin/Store"
 import AdminCashier from "./pages/admin/Cashier"
 import AdminReports from "./pages/admin/Reports"
 import AdminManager from "./pages/admin/Manager"
+import AdminShiftManagement from "./pages/admin/ShiftManagement"
 import StockSupplies from "./pages/admin/StockSupplies"
 import StockSupplyForm from "./pages/admin/StockSupplyForm"
 import ProtectedRoute from "./components/ProtectedRoute"
@@ -121,6 +122,11 @@ function App() {
           <Route path="settings" element={
             <ProtectedRoute role={["admin", "manager"]}>
               <AdminManager />
+            </ProtectedRoute>
+          } />
+          <Route path="shift-management" element={
+            <ProtectedRoute role={["admin", "manager"]}>
+              <AdminShiftManagement />
             </ProtectedRoute>
           } />
           <Route path="store" element={<AdminStore />} />

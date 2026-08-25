@@ -404,6 +404,13 @@ export async function voidOrder(orderId: string, voidedById: string, reason?: st
   })
 }
 
+export async function updateOrderPayment(orderId: string, paymentMethod: "cash" | "mpesa"): Promise<Order> {
+  return apiFetch(`/orders/${orderId}/payment`, {
+    method: "PATCH",
+    body: JSON.stringify({ paymentMethod }),
+  })
+}
+
 export async function previewReceipt(data: ReceiptData): Promise<string> {
   if (window.electron?.print?.preview) {
     return window.electron.print.preview(data)

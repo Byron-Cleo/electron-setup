@@ -112,7 +112,7 @@ router.post("/", async (req, res) => {
         data: {
           userId,
           shippingAddress: {},
-          paymentMethod: "cash",
+          paymentMethod: "unpaid",
           itemsPrice,
           shippingPrice,
           taxPrice,
@@ -179,6 +179,42 @@ router.post("/", async (req, res) => {
     }
     console.error("Error creating order:", e);
     res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
+// Update payment method and mark as paid
+router.patch("/:id/payment", async (req, res) => {
+  const { id } = req.params;
+  const { paymentMethod } = req.body;
+
+  if (!paymentMethod || !["cash", "mpesa"].includes(paymentMethod)) {
+    return res.status(400).json({ error: "paymentMethod must be 'cash' or 'mpesa'" });
+  }
+
+  try {
+    const order = await prisma.order.findUnique({ where: { id } });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (order.isPaid) {
+      return res.status(400).json({ error: "Order is already paid" });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        paymentMethod,
+        isPaid: true,
+        paidAt: new Date(),
+      },
+    });
+
+    res.json(updated);
+  } catch (e) {
+    console.error("Error updating payment:", e);
+    res.status(500).json({ error: "Failed to update payment" });
   }
 });
 

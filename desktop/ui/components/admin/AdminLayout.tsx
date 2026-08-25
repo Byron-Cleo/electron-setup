@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
-import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart } from "lucide-react"
+import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const allNavItems: {
@@ -11,6 +11,7 @@ const allNavItems: {
   roles: User["role"][]
 }[] = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
+  { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager"] },
   { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
   { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"] },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"] },
