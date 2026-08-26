@@ -10,7 +10,10 @@ Complete
 
 ## Goals
 
-- Phase 8: Waiter replacement-order flow — link new order to voided order via voidedOrderId, clear notification after placement
+- Cashier Payment Wizard: 3-step modal (Payment Type → Payment Method → Select Orders) supporting single and batch payments
+- Batch payment tracking: `paymentType` field on Order model to distinguish single vs batch-paid orders
+- "Batch" badge on orders paid via batch in the Orders table
+- Ref: `context/fix-plan/cashier-payment-wizard.md`
 - Phase 9: Cashier Shift Close UI — ShiftCloseDialog with order/voided/revenue summary + drift warning; shift open/close from UI
 - Phase 10: Manager Report UI — Reports page with shift selector, plate movement, revenue by period, production vs sales, variance
 - Phase 11: Auto-close scheduler — backend interval closing expired shifts every minute
@@ -41,6 +44,19 @@ Complete
 - Ollama models must be stopped (`ollama stop <model>`) immediately after each generation run
 
 ## History
+
+### fullstack - 2026-08-26 — Cashier Payment Wizard + Batch Tracking + Sidebar Reorder
+- Single order payment dialog: per-row "Pay" button → order summary + M-Pesa/Cash radio + Confirm Payment
+- Batch payment wizard: 2-step modal (Method → Select Orders with checkbox) with accumulated total, batchId via `crypto.randomUUID()`
+- Backend: `paymentType` and `batchId` fields on Order model, PATCH /api/orders/:id/payment accepts both
+- API layer: `updateOrderPayment()` in lib/api.ts accepts optional paymentType and batchId
+- OrdersView: view-only listing with 6 filter tabs (All/M-Pesa/Cash/Void/Unpaid/Batch), batch totals memoized, search matches order number or batch total
+- VoidView: "Void Order" column header, centered void button with Ban icon
+- Payment column simplified: method badge only (M-Pesa/Cash), batch amount removed (shown in Order # column)
+- Fixed blank screen on Payment card: PaymentView referenced `activeTab`/`searchInput` from OrdersView instead of own `orderSearch` state
+- Sidebar reorder: Dashboard → Shift Management → Store/Procurement → Kitchen → Menu/Dispatch → Cashier → Reports → Users → Settings
+- Menu renamed to Menu/Dispatch in sidebar and page heading
+- Branch: `feature/cashier/payment-wizard` (merged to main `865c85d`)
 
 ### fullstack - 2026-08-25 — Shift Management Phases 8–12 + Plate Movement Fix
 - Phase 8: Waiter replacement-order flow — voidedOrderId on order create, VoidOrdersDialog, FIFO void linking, cart prefill from voided order
