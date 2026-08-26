@@ -284,6 +284,73 @@ router.put("/:id", async (req, res) => {
   res.json(assignment);
 });
 
+// POST /api/cooking-assignments/upsert - Create or update assignment for a cooking record + menu
+router.post("/upsert", async (req, res) => {
+  const { cookingRecordId, menuId, quantityPlates } = req.body;
+
+  if (!cookingRecordId || !menuId || quantityPlates === undefined) {
+    return res.status(400).json({ error: "cookingRecordId, menuId, and quantityPlates are required" });
+  }
+
+  if (Number(quantityPlates) <= 0) {
+    return res.status(400).json({ error: "quantityPlates must be greater than 0" });
+  }
+
+  const cookingRecord = await prisma.cookingRecord.findUnique({
+    where: { id: cookingRecordId },
+    include: { assignments: true },
+  });
+  if (!cookingRecord) return res.status(404).json({ error: "Cooking record not found" });
+
+  const menu = await prisma.menu.findUnique({ where: { id: menuId } });
+  if (!menu) return res.status(404).json({ error: "Menu not found" });
+
+  const existing = cookingRecord.assignments.find((a) => a.menuId === menuId);
+  const oldQty = existing ? Number(existing.quantityPlates) : 0;
+  const newQty = Number(quantityPlates);
+  const delta = newQty - oldQty;
+
+  // Available = total produced - (total assigned excluding this menu's current assignment)
+  const otherAssigned = cookingRecord.assignments
+    .filter((a) => a.menuId !== menuId)
+    .reduce((sum, a) => sum + Number(a.quantityPlates), 0);
+  const platesActual = Number(cookingRecord.platesActual ?? cookingRecord.platesExpected);
+  const available = platesActual - otherAssigned;
+
+  if (newQty > available) {
+    return res.status(400).json({
+      error: `Cannot assign ${newQty} plates. Only ${available} available.`,
+    });
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    let assignment;
+    if (existing) {
+      assignment = await tx.cookingRecordAssignment.update({
+        where: { id: existing.id },
+        data: { quantityPlates: newQty },
+      });
+    } else {
+      assignment = await tx.cookingRecordAssignment.create({
+        data: { cookingRecordId, menuId, quantityPlates: newQty },
+      });
+    }
+
+    if (delta !== 0) {
+      await tx.menu.update({
+        where: { id: menuId },
+        data: delta > 0
+          ? { stock: { increment: delta } }
+          : { stock: { decrement: Math.abs(delta) } },
+      });
+    }
+
+    return assignment;
+  });
+
+  res.status(existing ? 200 : 201).json(result);
+});
+
 // DELETE /api/cooking-assignments/:id - Remove assignment
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;

@@ -6,19 +6,24 @@ fullstack
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Cashier Payment Wizard: 2-step modal (Method → Select Orders) supporting single and batch payments
-- Batch payment tracking: `paymentType` and `batchId` fields on Order model to distinguish single vs batch-paid orders
-- "Batch" badge on orders paid via batch in the Orders table
-- Sidebar reorder + Menu/Dispatch rename
-- Ref: `context/fix-plan/cashier-payment-wizard.md`
+- Menu Category Management: replace hardcoded `CATEGORIES` array with a dynamic DB-backed Category model
+- Settings card for admin/manager to add, edit, and delete menu categories
+- Seed DB with existing categories (Beef, Chicken, Vegetable, Drinks, Beverages, Starch, Fish, 1/2 Fish, Liver, Matumbo, Snacks) + Staff
+- Menu create/edit forms fetch categories from API instead of hardcoded list
+- Ref: `context/fix-plan/menu-category-management.md`
 
 ## Notes
 
-- Phases 1–7 DONE (merged to main `4408996`) — foundation table in spec lists what exists; do NOT rebuild
+- 7 phases: Schema → API → Seed → Frontend API → Category Manager UI → MenuForm update → Verify
+- Menu.category stays as String (no FK) — categories are a flat dropdown list
+- Follows DepartmentManager pattern for the Settings card
+- Verification gates: tsc --noEmit (root + backend), npm run lint, seed populates 12 categories, dynamic dropdown in MenuForm
+
+## History
 - ✅ Gap B DONE — shift functions in lib/api.ts (openShift/closeShift/getCurrentShift/getShift/autoCloseShifts, plain apiFetch like voidOrder) + ShiftType/Shift/ShiftSnapshot/AutoCloseResult types in electron.d.ts
 - ✅ Phase 8 DONE — POST /api/orders accepts+validates voidedOrderId (must reference isVoid order); waiter flow links oldest void via context (WaiterOrderContext owns voidedOrders state + clearVoidedOrder; WaiterPOS consumes; fetch excludes already-replaced voids so count drop persists across re-login). Verified E2E: link persisted in DB, card gone after placement
 - ⚠️ DB repaired mid-session: eraevadb was missing OrderItem.id PK (schema drift broke all order reads); synced manually (drop composite PK → add SERIAL id → new PK + 4-col unique index + StockSupplyMenu FK). `prisma db push` chokes on this diff (Prisma 7 RENAME CONSTRAINT bug) — applied equivalent SQL by hand

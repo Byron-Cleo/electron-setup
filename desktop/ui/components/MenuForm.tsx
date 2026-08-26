@@ -25,27 +25,14 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { createMenu, getMenuById, getAccompaniments, getMealTypes, menuImageUrl, updateMenu, uploadMenuImage } from "@/lib/api"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { createMenu, getMenuById, getAccompaniments, getMealTypes, getCategories, menuImageUrl, updateMenu, uploadMenuImage } from "@/lib/api"
 
 interface Props {
   editId: string | null
   onSaved: () => void
   onCancel: () => void
 }
-
-const CATEGORIES = [
-  "Beef",
-  "Chicken",
-  "Vegetable",
-  "Drinks",
-  "Beverages",
-  "Starch",
-  "Fish",
-  "1/2 Fish",
-  "Liver",
-  "Matumbo",
-  "Snacks",
-]
 
 const formSchema = z
   .object({
@@ -54,25 +41,24 @@ const formSchema = z
     price: z.coerce.number().min(0, "Price must be 0 or more"),
     images: z.array(z.string()).optional(),
     mealTypes: z.array(z.string()).min(1, "Select at least one meal period"),
+    hasStarch: z.enum(["yes", "no"]),
+    hasVegetable: z.enum(["yes", "no"]),
     starchId: z.string().optional(),
     vegetableId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    const needsAccompaniments =
-      data.mealTypes.includes("LUNCH") || data.mealTypes.includes("DINNER")
-    if (!needsAccompaniments) return
-    if (!data.starchId) {
+    if (data.hasStarch === "yes" && !data.starchId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["starchId"],
-        message: "Starch accompaniment is required for LUNCH/DINNER menus",
+        message: "Starch accompaniment is required when serving with starch",
       })
     }
-    if (!data.vegetableId) {
+    if (data.hasVegetable === "yes" && !data.vegetableId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["vegetableId"],
-        message: "Vegetable accompaniment is required for LUNCH/DINNER menus",
+        message: "Vegetable accompaniment is required when serving with vegetable",
       })
     }
   })
@@ -153,6 +139,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
   const [mealTypeOptions, setMealTypeOptions] = useState<MealType[]>([])
   const [starchOptions, setStarchOptions] = useState<Accompaniment[]>([])
   const [vegetableOptions, setVegetableOptions] = useState<Accompaniment[]>([])
+  const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as unknown as Resolver<FormValues>,
@@ -162,19 +149,21 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
       price: 0,
       images: [],
       mealTypes: [],
+      hasStarch: "no",
+      hasVegetable: "no",
     },
   })
 
-  const watchedMealTypes = useWatch({ control: form.control, name: "mealTypes" })
-  const needsAccompaniments =
-    watchedMealTypes?.includes("LUNCH") || watchedMealTypes?.includes("DINNER")
+  const watchedHasStarch = useWatch({ control: form.control, name: "hasStarch" })
+  const watchedHasVegetable = useWatch({ control: form.control, name: "hasVegetable" })
 
   useEffect(() => {
     async function load() {
-      const [mealTypes, accs] = await Promise.all([getMealTypes(), getAccompaniments()])
+      const [mealTypes, accs, cats] = await Promise.all([getMealTypes(), getAccompaniments(), getCategories()])
       setMealTypeOptions(mealTypes)
       setStarchOptions(accs.filter((a) => a.category === "STARCH"))
       setVegetableOptions(accs.filter((a) => a.category === "VEGETABLE"))
+      setCategoryOptions(cats)
     }
     load()
   }, [form])
@@ -189,6 +178,8 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
           price: Number(item.price),
           images: item.images ?? [],
           mealTypes: item.mealTypes ?? [],
+          hasStarch: item.hasStarch ? "yes" : "no",
+          hasVegetable: item.hasVegetable ? "yes" : "no",
           starchId: item.starchId ?? undefined,
           vegetableId: item.vegetableId ?? undefined,
         })
@@ -207,6 +198,8 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
         price: data.price,
         images: data.images ?? [],
         mealTypes: data.mealTypes,
+        hasStarch: data.hasStarch === "yes",
+        hasVegetable: data.hasVegetable === "yes",
         starchId: data.starchId || null,
         vegetableId: data.vegetableId || null,
       }
@@ -265,9 +258,9 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
+                          {categoryOptions.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.name}>
+                              {cat.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -355,41 +348,91 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
               />
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="starchId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Starch Accompaniment
-                        {needsAccompaniments && <span className="text-red-500 text-base font-bold">*</span>}
-                      </FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                <div className="space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="hasStarch"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Served with Starch?</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select starch" />
-                          </SelectTrigger>
+                          <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="yes" id="starch-yes" />
+                              <Label htmlFor="starch-yes" className="font-normal cursor-pointer">Yes</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="no" id="starch-no" />
+                              <Label htmlFor="starch-no" className="font-normal cursor-pointer">No</Label>
+                            </div>
+                          </RadioGroup>
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value="">None</SelectItem>
-                          {starchOptions.map((acc) => (
-                            <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="vegetableId"
+                  {watchedHasStarch === "yes" && (
+                    <FormField
+                      control={form.control}
+                      name="starchId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Starch Accompaniment <span className="text-red-500 text-base font-bold">*</span>
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select starch" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="">None</SelectItem>
+                              {starchOptions.map((acc) => (
+                                <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="hasVegetable"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Served with Vegetable?</FormLabel>
+                        <FormControl>
+                          <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="yes" id="veg-yes" />
+                              <Label htmlFor="veg-yes" className="font-normal cursor-pointer">Yes</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="no" id="veg-no" />
+                              <Label htmlFor="veg-no" className="font-normal cursor-pointer">No</Label>
+                            </div>
+                          </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {watchedHasVegetable === "yes" && (
+                    <FormField
+                      control={form.control}
+                      name="vegetableId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        Vegetable Accompaniment
-                        {needsAccompaniments && <span className="text-red-500 text-base font-bold">*</span>}
+                        Vegetable Accompaniment <span className="text-red-500 text-base font-bold">*</span>
                       </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value ?? ""}>
                         <FormControl>
@@ -408,6 +451,8 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                     </FormItem>
                   )}
                 />
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

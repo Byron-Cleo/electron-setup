@@ -78,7 +78,7 @@ function ShiftManagement() {
       </Heading>
 
       {/* Shift status card */}
-      <Card>
+      <Card className={`mx-auto mt-24 max-w-3xl ${currentShift ? "border-green-500/30 bg-green-500/5" : !shiftLoading ? "border-red-500/30 bg-red-500/5" : ""}`}>
         <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
           {shiftLoading ? (
             <div className="flex items-center gap-2 text-sm text-admin-muted">
@@ -94,24 +94,26 @@ function ShiftManagement() {
                 <span className="text-admin-muted">
                   since{" "}
                   {new Date(currentShift.openingTime).toLocaleTimeString("en-KE", {
-                    hour: "2-digit",
+                    hour: "numeric",
                     minute: "2-digit",
+                    hour12: true,
                   })}{" "}
-                  by {currentShift.openedBy?.name ?? "—"}
+                  by <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">{currentShift.openedBy?.name ?? "—"}</span>
                 </span>
               </div>
-              <Button type="button" variant="destructive" size="sm" onClick={handleOpenCloseDialog}>
+              <Button type="button" variant="destructive" size="sm" className="px-8 py-4 text-lg" onClick={handleOpenCloseDialog}>
                 <Square />
                 Close Shift
               </Button>
             </>
           ) : (
             <>
-              <p className="text-sm text-admin-muted">No shift is currently open.</p>
+              <p className="text-sm text-red-400 font-semibold bg-red-600/15 px-4 py-2 rounded-lg">No shift is currently open.</p>
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
+                className="bg-green-600 text-white hover:bg-green-700 px-8 py-4 text-lg"
                 onClick={() => {
                   setNewShiftType("DAY")
                   setOpenShiftDialog(true)
@@ -156,7 +158,7 @@ function ShiftManagement() {
                 <RadioGroupItem value="DAY" id="shift-day" className="mt-0.5" />
                 <span>
                   <span className="block font-medium text-admin-header-text">Day shift</span>
-                  <span className="block text-xs text-admin-muted">5:30 AM — 5:30 PM</span>
+                  <span className="block text-xs text-admin-muted">5:30AM — 5:30PM</span>
                 </span>
               </Label>
               <Label
@@ -166,7 +168,7 @@ function ShiftManagement() {
                 <RadioGroupItem value="NIGHT" id="shift-night" className="mt-0.5" />
                 <span>
                   <span className="block font-medium text-admin-header-text">Night shift</span>
-                  <span className="block text-xs text-admin-muted">5:30 PM — 5:30 AM (next day)</span>
+                  <span className="block text-xs text-admin-muted">5:30PM — 5:30AM (next day)</span>
                 </span>
               </Label>
             </RadioGroup>
