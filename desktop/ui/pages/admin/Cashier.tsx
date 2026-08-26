@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react"
-import { Search, Eye, Ban, CreditCard } from "lucide-react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { Eye, Ban, CreditCard, Receipt, XCircle, Wallet } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import {
   Dialog,
@@ -14,6 +15,8 @@ import {
 } from "@/components/ui/dialog"
 import { getOrders, voidOrder, updateOrderPayment } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
+import { usePagination } from "@/hooks/usePagination"
+import BackButton from "@/components/shared/BackButton"
 
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`
@@ -35,39 +38,186 @@ function StatusBadge({ isPaid }: { isPaid: boolean }) {
   )
 }
 
-const COLUMNS: Column[] = [
-  { label: "Mark Payment", key: "markPayment" },
+type CashierView = "dashboard" | "orders" | "void" | "payment"
+
+type OrderTab = "ALL" | "MPESA" | "CASH" | "VOID" | "UNPAID"
+
+const TAB_LABELS: Record<OrderTab, string> = {
+  ALL: "All",
+  MPESA: "M-Pesa",
+  CASH: "Cash",
+  VOID: "Void",
+  UNPAID: "Unpaid",
+}
+
+const TAB_COLORS: Record<OrderTab, { active: string; inactive: string }> = {
+  ALL: {
+    active: "bg-admin-accent text-admin-accent-text",
+    inactive: "text-admin-muted hover:text-admin-header-text",
+  },
+  MPESA: {
+    active: "bg-blue-100 text-blue-700",
+    inactive: "text-blue-400 hover:text-blue-600",
+  },
+  CASH: {
+    active: "bg-orange-100 text-orange-700",
+    inactive: "text-orange-400 hover:text-orange-600",
+  },
+  VOID: {
+    active: "bg-red-100 text-red-700",
+    inactive: "text-red-400 hover:text-red-600",
+  },
+  UNPAID: {
+    active: "bg-gray-100 text-gray-700",
+    inactive: "text-gray-400 hover:text-gray-600",
+  },
+}
+
+const ORDER_COLUMNS: Column[] = [
   { label: "Order #", key: "orderNumber" },
   { label: "Meal", key: "mealType" },
   { label: "Payment", key: "paymentMethod" },
   { label: "Total", key: "totalPrice", align: "right" },
   { label: "Status", key: "status" },
   { label: "Date", key: "createdAt" },
-  { label: "Actions", key: "details", isAction: true },
+  { label: "Details", key: "details", isAction: true },
 ]
 
 function Cashier() {
+  const [view, setView] = useState<CashierView>("dashboard")
+
+  return (
+    <div className="space-y-6">
+      <Heading as="h1" className="text-admin-header-text">
+        Cashier
+      </Heading>
+
+      {view !== "dashboard" && (
+        <BackButton onClick={() => setView("dashboard")} />
+      )}
+
+      {view === "dashboard" && <DashboardView onNavigate={setView} />}
+      {view === "orders" && <OrdersView />}
+      {view === "void" && <VoidView />}
+      {view === "payment" && <PaymentView />}
+    </div>
+  )
+}
+
+function DashboardView({ onNavigate }: { onNavigate: (v: CashierView) => void }) {
+  const [counts, setCounts] = useState({ total: 0, unpaid: 0, voided: 0 })
+
+  useEffect(() => {
+    let cancelled = false
+    getOrders()
+      .then((data) => {
+        if (cancelled) return
+        setCounts({
+          total: data.length,
+          unpaid: data.filter((o) => !o.isPaid && !o.isVoid).length,
+          voided: data.filter((o) => o.isVoid).length,
+        })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <Card
+        className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+        onClick={() => onNavigate("orders")}
+      >
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
+            <Receipt size={24} className="text-green-600" />
+          </div>
+          <div>
+            <Heading as="h3" className="text-lg text-admin-header-text">Orders</Heading>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                {counts.total} total
+              </span>
+              {counts.unpaid > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                  {counts.unpaid} unpaid
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-admin-muted mt-1">View all orders with filters and search.</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+        onClick={() => onNavigate("void")}
+      >
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-lg bg-red-500/10 flex items-center justify-center">
+            <XCircle size={24} className="text-red-600" />
+          </div>
+          <div>
+            <Heading as="h3" className="text-lg text-admin-header-text">Void Order</Heading>
+            <div className="flex items-center gap-2 mt-1">
+              {counts.unpaid > 0 ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  {counts.unpaid} voidable
+                </span>
+              ) : (
+                <span className="text-sm text-admin-muted">No voidable orders</span>
+              )}
+            </div>
+            <p className="text-xs text-admin-muted mt-1">Select and void an unpaid order.</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+        onClick={() => onNavigate("payment")}
+      >
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
+            <Wallet size={24} className="text-blue-600" />
+          </div>
+          <div>
+            <Heading as="h3" className="text-lg text-admin-header-text">Payment</Heading>
+            <div className="flex items-center gap-2 mt-1">
+              {counts.unpaid > 0 ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                  {counts.unpaid} unpaid
+                </span>
+              ) : (
+                <span className="text-sm text-admin-muted">All orders paid</span>
+              )}
+            </div>
+            <p className="text-xs text-admin-muted mt-1">Mark an order as paid via M-Pesa or Cash.</p>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function OrdersView() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchInput, setSearchInput] = useState("")
-  const [searchQuery, setSearchQuery] = useState<number | null>(null)
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
-  const [voidOrderData, setVoidOrderData] = useState<Order | null>(null)
-  const [voidReason, setVoidReason] = useState("")
-  const [voiding, setVoiding] = useState(false)
-  const [paymentOrder, setPaymentOrder] = useState<Order | null>(null)
-  const [collectingPayment, setCollectingPayment] = useState(false)
-  const user = useAuthStore((s) => s.user)
+  const [activeTab, setActiveTab] = useState<OrderTab>("ALL")
 
   useEffect(() => {
     let cancelled = false
-
     async function loadOrders() {
       setLoading(true)
       setError("")
       try {
-        const data = await getOrders(searchQuery ?? undefined)
+        const data = await getOrders()
         if (!cancelled) setOrders(data)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
@@ -75,92 +225,53 @@ function Cashier() {
         if (!cancelled) setLoading(false)
       }
     }
-
     loadOrders()
-    return () => {
-      cancelled = true
+    return () => { cancelled = true }
+  }, [])
+
+  const filtered = useMemo(() => {
+    let source = orders
+    switch (activeTab) {
+      case "MPESA":
+        source = source.filter((o) => o.isPaid && o.paymentMethod === "mpesa")
+        break
+      case "CASH":
+        source = source.filter((o) => o.isPaid && o.paymentMethod === "cash")
+        break
+      case "VOID":
+        source = source.filter((o) => o.isVoid)
+        break
+      case "UNPAID":
+        source = source.filter((o) => !o.isPaid && !o.isVoid)
+        break
     }
-  }, [searchQuery])
-
-  function handleSearch(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const trimmed = searchInput.trim()
-    setSearchQuery(trimmed === "" ? null : Number(trimmed))
-  }
-
-  function handleClearSearch() {
-    setSearchInput("")
-    setSearchQuery(null)
-  }
-
-  async function handleVoidOrder() {
-    if (!voidOrderData || !user) return
-    setVoiding(true)
-    try {
-      await voidOrder(voidOrderData.id, user.id, voidReason || undefined)
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === voidOrderData.id
-            ? { ...o, isVoid: true, voidReason, voidedAt: new Date().toISOString() }
-            : o
-        )
-      )
-      setVoidOrderData(null)
-      setVoidReason("")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to void order")
-    } finally {
-      setVoiding(false)
+    if (searchInput) {
+      const q = searchInput.toLowerCase()
+      source = source.filter((o) => String(o.orderNumber).includes(q))
     }
-  }
+    return source
+  }, [orders, activeTab, searchInput])
 
-  async function handleCollectPayment(method: "cash" | "mpesa") {
-    if (!paymentOrder) return
-    setCollectingPayment(true)
-    try {
-      await updateOrderPayment(paymentOrder.id, method)
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === paymentOrder.id
-            ? { ...o, paymentMethod: method, isPaid: true, paidAt: new Date().toISOString() }
-            : o
-        )
-      )
-      setPaymentOrder(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update payment")
-    } finally {
-      setCollectingPayment(false)
-    }
-  }
+  const counts = useMemo(() => ({
+    ALL: orders.length,
+    MPESA: orders.filter((o) => o.isPaid && o.paymentMethod === "mpesa").length,
+    CASH: orders.filter((o) => o.isPaid && o.paymentMethod === "cash").length,
+    VOID: orders.filter((o) => o.isVoid).length,
+    UNPAID: orders.filter((o) => !o.isPaid && !o.isVoid).length,
+  }), [orders])
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(filtered)
 
   function renderCell(order: Order, column: Column): ReactNode {
     switch (column.key) {
-      case "markPayment":
-        if (order.isPaid) {
-          if (order.paymentMethod === "mpesa") {
-            return (
-              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                Paid
-              </span>
-            )
-          }
-          return (
-            <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
-              Paid
-            </span>
-          )
-        }
-        return (
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => setPaymentOrder(order)}
-          >
-            <CreditCard />
-            Pay
-          </Button>
-        )
       case "orderNumber":
         return (
           <div className="flex items-center gap-2">
@@ -190,26 +301,10 @@ function Cashier() {
         return formatDate(order.createdAt)
       case "details":
         return (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDetailOrder(order)}
-            >
-              <Eye />
-              Details
-            </Button>
-            {!order.isVoid && !order.isPaid && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setVoidOrderData(order)}
-              >
-                <Ban />
-                Void
-              </Button>
-            )}
-          </div>
+          <Button variant="outline" size="sm" onClick={() => setDetailOrder(order)}>
+            <Eye />
+            Details
+          </Button>
         )
       default:
         return null
@@ -217,47 +312,54 @@ function Cashier() {
   }
 
   return (
-    <div className="space-y-6">
-      <Heading as="h1" className="text-admin-header-text">
-        Cashier
-      </Heading>
+    <div className="space-y-4">
+      <Heading as="h2" className="text-admin-header-text text-center text-xl">Orders</Heading>
+
+      <div className="flex flex-wrap gap-2">
+        {(["ALL", "MPESA", "CASH", "VOID", "UNPAID"] as OrderTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              activeTab === tab
+                ? TAB_COLORS[tab].active
+                : `bg-gray-50 ${TAB_COLORS[tab].inactive}`
+            }`}
+          >
+            {TAB_LABELS[tab]}
+            <span className="ml-1.5 opacity-70">({counts[tab]})</span>
+          </button>
+        ))}
+      </div>
 
       {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <DataTable
-        columns={COLUMNS}
-        data={orders}
-        renderCell={renderCell}
-        keyExtractor={(order) => order.id}
-        emptyMessage="No orders found"
-        header={
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Heading as="h2" className="text-lg text-admin-header-text">
-              Orders
-            </Heading>
-            <form onSubmit={handleSearch} className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-admin-muted" />
-                <Input
-                  placeholder="Search by order number"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-56 pl-8"
-                />
-              </div>
-              <Button type="submit" variant="secondary" size="sm">
-                Search
-              </Button>
-              {searchQuery !== null && (
-                <Button type="button" variant="ghost" size="sm" onClick={handleClearSearch}>
-                  Clear
-                </Button>
-              )}
-            </form>
-          </div>
-        }
-      />
+      {!loading && !error && (
+        <DataTable
+          columns={ORDER_COLUMNS}
+          data={paginatedItems}
+          renderCell={renderCell}
+          keyExtractor={(order) => order.id}
+          emptyMessage="No orders found"
+          pagination={{
+            currentPage,
+            totalPages,
+            onPrev: prevPage,
+            onNext: nextPage,
+            canPrev,
+            canNext,
+          }}
+          header={
+            <Input
+              placeholder="Search by order number..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="max-w-sm"
+            />
+          }
+        />
+      )}
 
       <Dialog open={detailOrder !== null} onOpenChange={(open) => { if (!open) setDetailOrder(null) }}>
         <DialogContent className="max-w-lg">
@@ -314,27 +416,157 @@ function Cashier() {
           <DialogFooter showCloseButton />
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
 
-      {/* Void Order Dialog */}
-      <Dialog open={voidOrderData !== null} onOpenChange={(open) => { if (!open) { setVoidOrderData(null); setVoidReason("") } }}>
+function VoidView() {
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [voidReason, setVoidReason] = useState("")
+  const [voiding, setVoiding] = useState(false)
+  const user = useAuthStore((s) => s.user)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadOrders() {
+      setLoading(true)
+      try {
+        const data = await getOrders()
+        if (!cancelled) setOrders(data.filter((o) => !o.isPaid && !o.isVoid))
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    loadOrders()
+    return () => { cancelled = true }
+  }, [])
+
+  const filtered = useMemo(() => {
+    if (!searchInput) return orders
+    const q = searchInput.toLowerCase()
+    return orders.filter((o) => String(o.orderNumber).includes(q))
+  }, [orders, searchInput])
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(filtered)
+
+  async function handleVoidOrder() {
+    if (!selectedOrder || !user) return
+    setVoiding(true)
+    try {
+      await voidOrder(selectedOrder.id, user.id, voidReason || undefined)
+      setOrders((prev) => prev.filter((o) => o.id !== selectedOrder.id))
+      setSelectedOrder(null)
+      setVoidReason("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to void order")
+    } finally {
+      setVoiding(false)
+    }
+  }
+
+  const VOID_COLUMNS: Column[] = [
+    { label: "Order #", key: "orderNumber" },
+    { label: "Meal", key: "mealType" },
+    { label: "Waiter", key: "waiter" },
+    { label: "Total", key: "totalPrice", align: "right" },
+    { label: "Date", key: "createdAt" },
+    { label: "Action", key: "action", isAction: true },
+  ]
+
+  function renderCell(order: Order, column: Column): ReactNode {
+    switch (column.key) {
+      case "orderNumber":
+        return <span className="font-semibold">#{order.orderNumber}</span>
+      case "mealType":
+        return order.mealType
+      case "waiter":
+        return order.User?.name ?? "—"
+      case "totalPrice":
+        return <span className="font-medium">{money(order.totalPrice)}</span>
+      case "createdAt":
+        return formatDate(order.createdAt)
+      case "action":
+        return (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setSelectedOrder(order)}
+          >
+            <Ban />
+            Void
+          </Button>
+        )
+      default:
+        return null
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Heading as="h2" className="text-admin-header-text text-center text-xl">Void Order</Heading>
+
+      {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!loading && !error && (
+        <DataTable
+          columns={VOID_COLUMNS}
+          data={paginatedItems}
+          renderCell={renderCell}
+          keyExtractor={(order) => order.id}
+          emptyMessage="No voidable orders found"
+          pagination={{
+            currentPage,
+            totalPages,
+            onPrev: prevPage,
+            onNext: nextPage,
+            canPrev,
+            canNext,
+          }}
+          header={
+            <Input
+              placeholder="Search by order number..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="max-w-sm"
+            />
+          }
+        />
+      )}
+
+      <Dialog open={selectedOrder !== null} onOpenChange={(open) => { if (!open) { setSelectedOrder(null); setVoidReason("") } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Void Order #{voidOrderData?.orderNumber}</DialogTitle>
+            <DialogTitle>Void Order #{selectedOrder?.orderNumber}</DialogTitle>
             <DialogDescription>
               This will void the entire order and restore all items to stock. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
 
-          {voidOrderData && (
+          {selectedOrder && (
             <div className="space-y-4">
               <div className="rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="text-admin-muted">Waiter</div>
-                  <div className="font-medium">{voidOrderData.User?.name ?? "—"}</div>
+                  <div className="font-medium">{selectedOrder.User?.name ?? "—"}</div>
                   <div className="text-admin-muted">Total</div>
-                  <div className="font-medium">{money(voidOrderData.totalPrice)}</div>
+                  <div className="font-medium">{money(selectedOrder.totalPrice)}</div>
                   <div className="text-admin-muted">Items</div>
-                  <div className="font-medium">{voidOrderData.OrderItem.length}</div>
+                  <div className="font-medium">{selectedOrder.OrderItem.length}</div>
                 </div>
               </div>
 
@@ -359,7 +591,7 @@ function Cashier() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => { setVoidOrderData(null); setVoidReason("") }}
+                  onClick={() => { setSelectedOrder(null); setVoidReason("") }}
                 >
                   Cancel
                 </Button>
@@ -376,14 +608,139 @@ function Cashier() {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
 
-      {/* Collect Payment Dialog */}
-      <Dialog open={paymentOrder !== null} onOpenChange={(open) => { if (!open) setPaymentOrder(null) }}>
+function PaymentView() {
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [collectingPayment, setCollectingPayment] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadOrders() {
+      setLoading(true)
+      try {
+        const data = await getOrders()
+        if (!cancelled) setOrders(data.filter((o) => !o.isPaid && !o.isVoid))
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    loadOrders()
+    return () => { cancelled = true }
+  }, [])
+
+  const filtered = useMemo(() => {
+    if (!searchInput) return orders
+    const q = searchInput.toLowerCase()
+    return orders.filter((o) => String(o.orderNumber).includes(q))
+  }, [orders, searchInput])
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(filtered)
+
+  async function handleCollectPayment(method: "cash" | "mpesa") {
+    if (!selectedOrder) return
+    setCollectingPayment(true)
+    try {
+      await updateOrderPayment(selectedOrder.id, method)
+      setOrders((prev) => prev.filter((o) => o.id !== selectedOrder.id))
+      setSelectedOrder(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update payment")
+    } finally {
+      setCollectingPayment(false)
+    }
+  }
+
+  const PAYMENT_COLUMNS: Column[] = [
+    { label: "Order #", key: "orderNumber" },
+    { label: "Meal", key: "mealType" },
+    { label: "Waiter", key: "waiter" },
+    { label: "Total", key: "totalPrice", align: "right" },
+    { label: "Date", key: "createdAt" },
+    { label: "Action", key: "action", isAction: true },
+  ]
+
+  function renderCell(order: Order, column: Column): ReactNode {
+    switch (column.key) {
+      case "orderNumber":
+        return <span className="font-semibold">#{order.orderNumber}</span>
+      case "mealType":
+        return order.mealType
+      case "waiter":
+        return order.User?.name ?? "—"
+      case "totalPrice":
+        return <span className="font-medium">{money(order.totalPrice)}</span>
+      case "createdAt":
+        return formatDate(order.createdAt)
+      case "action":
+        return (
+          <Button
+            size="sm"
+            className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
+            onClick={() => setSelectedOrder(order)}
+          >
+            <CreditCard />
+            Pay
+          </Button>
+        )
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Heading as="h2" className="text-admin-header-text text-center text-xl">Payment</Heading>
+
+      {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!loading && !error && (
+        <DataTable
+          columns={PAYMENT_COLUMNS}
+          data={paginatedItems}
+          renderCell={renderCell}
+          keyExtractor={(order) => order.id}
+          emptyMessage="No unpaid orders found"
+          pagination={{
+            currentPage,
+            totalPages,
+            onPrev: prevPage,
+            onNext: nextPage,
+            canPrev,
+            canNext,
+          }}
+          header={
+            <Input
+              placeholder="Search by order number..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="max-w-sm"
+            />
+          }
+        />
+      )}
+
+      <Dialog open={selectedOrder !== null} onOpenChange={(open) => { if (!open) setSelectedOrder(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Collect Payment</DialogTitle>
             <DialogDescription>
-              Order #{paymentOrder?.orderNumber} — {paymentOrder && money(paymentOrder.totalPrice)}
+              Order #{selectedOrder?.orderNumber} — {selectedOrder && money(selectedOrder.totalPrice)}
             </DialogDescription>
           </DialogHeader>
 
@@ -415,7 +772,7 @@ function Cashier() {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setPaymentOrder(null)}>
+            <Button type="button" variant="ghost" onClick={() => setSelectedOrder(null)}>
               Cancel
             </Button>
           </DialogFooter>

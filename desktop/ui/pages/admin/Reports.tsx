@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { CalendarDays, FileText, Printer, ShieldX, ArrowLeft, ClipboardList } from "lucide-react"
+import { CalendarDays, FileText, Printer, ShieldX, ClipboardList } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { DataTable } from "@/components/ui/data-table"
+import BackButton from "@/components/shared/BackButton"
 import { getShiftReport, getVoidReport, listShifts } from "@/lib/api"
 import ShiftReportView from "@/components/reports/ShiftReport"
 
@@ -44,46 +46,49 @@ function todayISO(): string {
 function Reports() {
   const [activeView, setActiveView] = useState<ActiveView>(null)
 
-  if (!activeView) {
-    return (
-      <div>
-        <Heading as="h1" className="mb-6 text-admin-header-text">Reports</Heading>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  return (
+    <div>
+      <Heading as="h1" className="mb-4 text-admin-header-text">Reports</Heading>
+
+      {!activeView && (
+        <div className="grid grid-cols-2 gap-6">
           {cards.map((card) => (
             <Card
               key={card.view}
-              className="relative p-6 cursor-pointer hover:border-admin-accent transition-colors"
+              className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
               onClick={() => setActiveView(card.view)}
             >
               <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
                   <card.icon size={24} className="text-green-600" />
                 </div>
-                <div className="min-w-0">
+                <div>
                   <Heading as="h3" className="text-lg text-admin-header-text">{card.title}</Heading>
-                  <p className="text-sm text-admin-muted">{card.description}</p>
+                  <p className="text-sm text-admin-muted mt-1">{card.description}</p>
                 </div>
               </div>
             </Card>
           ))}
         </div>
-      </div>
-    )
-  }
+      )}
 
-  return (
-    <div>
-      <Button
-        variant="ghost"
-        className="mb-4 gap-2"
-        onClick={() => setActiveView(null)}
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Button>
-
-      {activeView === "shift-report" && <ShiftReportSection />}
-      {activeView === "waiters-report" && <WaitersReportSection />}
+      {activeView && (
+        <div className="space-y-4">
+          <BackButton onClick={() => setActiveView(null)} />
+          {activeView === "shift-report" && (
+            <>
+              <Heading as="h2" className="text-admin-header-text text-center">Shift Report</Heading>
+              <ShiftReportSection />
+            </>
+          )}
+          {activeView === "waiters-report" && (
+            <>
+              <Heading as="h2" className="text-admin-header-text text-center">Waiters Report</Heading>
+              <WaitersReportSection />
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -147,7 +152,6 @@ function ShiftReportSection() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Heading as="h2" className="text-admin-header-text">Shift Report</Heading>
         {report && (
           <Button variant="outline" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />
@@ -222,6 +226,16 @@ function ShiftReportSection() {
   )
 }
 
+const voidColumns = [
+  { label: "Waiter", key: "name", align: "left" as const },
+  { label: "Total Orders", key: "totalOrders", align: "right" as const },
+  { label: "Voided", key: "voidedOrders", align: "right" as const },
+  { label: "Replaced", key: "replacedVoids", align: "right" as const },
+  { label: "Pending", key: "pendingVoids", align: "right" as const },
+  { label: "Void Rate", key: "voidRate", align: "right" as const },
+  { label: "Common Reasons", key: "commonReasons", align: "left" as const },
+]
+
 function WaitersReportSection() {
   const [date, setDate] = useState(todayISO())
   const [voidWaiters, setVoidWaiters] = useState<VoidReportWaiter[]>([])
@@ -254,10 +268,46 @@ function WaitersReportSection() {
     }
   }, [date])
 
+  function renderVoidCell(w: VoidReportWaiter, col: { key: string }) {
+    switch (col.key) {
+      case "name":
+        return <span>{w.name}</span>
+      case "totalOrders":
+        return <span className="tabular-nums">{w.totalOrders}</span>
+      case "voidedOrders":
+        return (
+          <span className={w.voidedOrders > 0 ? "font-medium text-red-600 tabular-nums" : "tabular-nums"}>
+            {w.voidedOrders}
+          </span>
+        )
+      case "replacedVoids":
+        return (
+          <span className={w.replacedVoids > 0 ? "font-medium text-green-600 tabular-nums" : "tabular-nums"}>
+            {w.replacedVoids}
+          </span>
+        )
+      case "pendingVoids":
+        return (
+          <span className={w.pendingVoids > 0 ? "font-medium text-amber-600 tabular-nums" : "tabular-nums"}>
+            {w.pendingVoids}
+          </span>
+        )
+      case "voidRate":
+        return (
+          <span className={w.voidedOrders > 0 ? "font-medium text-red-600" : ""}>
+            {w.voidRate}
+          </span>
+        )
+      case "commonReasons":
+        return <span className="text-admin-muted">{w.commonReasons.length > 0 ? w.commonReasons.join(", ") : "—"}</span>
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Heading as="h2" className="text-admin-header-text">Waiters Report</Heading>
         <Button variant="outline" onClick={() => window.print()}>
           <Printer className="h-4 w-4" />
           Print / Export PDF
@@ -282,79 +332,14 @@ function WaitersReportSection() {
         <Card>
           <CardContent className="p-6 text-sm text-red-600">{voidError}</CardContent>
         </Card>
-      ) : loading ? (
-        <Card>
-          <CardContent className="p-6 text-sm text-admin-muted">Loading report...</CardContent>
-        </Card>
       ) : (
-        <Card>
-          <CardContent>
-            {voidWaiters.length === 0 ? (
-              <p className="text-sm text-admin-muted">No orders recorded on this date.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-admin-card-border text-left text-xs uppercase tracking-wide text-admin-muted">
-                    <th className="py-2 pr-2 font-semibold">Waiter</th>
-                    <th className="py-2 px-2 text-right font-semibold">Total Orders</th>
-                    <th className="py-2 px-2 text-right font-semibold">Voided</th>
-                    <th className="py-2 px-2 text-right font-semibold">Replaced</th>
-                    <th className="py-2 px-2 text-right font-semibold">Pending</th>
-                    <th className="py-2 px-2 text-right font-semibold">Void Rate</th>
-                    <th className="py-2 pl-2 font-semibold">Common Reasons</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {voidWaiters.map((w) => (
-                    <tr key={w.waiterId} className="border-b border-admin-card-border last:border-b-0">
-                      <td className="py-2 pr-2">{w.name}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{w.totalOrders}</td>
-                      <td
-                        className={
-                          w.voidedOrders > 0
-                            ? "px-2 py-2 text-right font-medium text-red-600 tabular-nums"
-                            : "px-2 py-2 text-right tabular-nums"
-                        }
-                      >
-                        {w.voidedOrders}
-                      </td>
-                      <td
-                        className={
-                          w.replacedVoids > 0
-                            ? "px-2 py-2 text-right font-medium text-green-600 tabular-nums"
-                            : "px-2 py-2 text-right tabular-nums"
-                        }
-                      >
-                        {w.replacedVoids}
-                      </td>
-                      <td
-                        className={
-                          w.pendingVoids > 0
-                            ? "px-2 py-2 text-right font-medium text-amber-600 tabular-nums"
-                            : "px-2 py-2 text-right tabular-nums"
-                        }
-                      >
-                        {w.pendingVoids}
-                      </td>
-                      <td
-                        className={
-                          w.voidedOrders > 0
-                            ? "px-2 py-2 text-right font-medium text-red-600"
-                            : "px-2 py-2 text-right"
-                        }
-                      >
-                        {w.voidRate}
-                      </td>
-                      <td className="py-2 pl-2 text-admin-muted">
-                        {w.commonReasons.length > 0 ? w.commonReasons.join(", ") : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </CardContent>
-        </Card>
+        <DataTable
+          columns={voidColumns}
+          data={voidWaiters}
+          renderCell={renderVoidCell}
+          keyExtractor={(w) => w.waiterId}
+          emptyMessage={loading ? "Loading report..." : "No orders recorded on this date."}
+        />
       )}
     </div>
   )
