@@ -11,6 +11,8 @@ async function main() {
   const prisma = new PrismaClient({ adapter });
 
   // ── Wipe in reverse-FK order so constraints are never violated ────────────
+  await prisma.shiftSnapshot.deleteMany();
+  await prisma.shift.deleteMany();
   await prisma.stockFulfillmentItem.deleteMany();
   await prisma.stockFulfillment.deleteMany();
   await prisma.stockRequestItem.deleteMany();
@@ -31,6 +33,7 @@ async function main() {
   await prisma.session.deleteMany();
   await prisma.verificationToken.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.category.deleteMany();
 
   // ── Insert in FK-safe order ───────────────────────────────────────────────
   // 1. Accompaniments first — Menu.starchId/vegetableId point here.
@@ -69,6 +72,16 @@ async function main() {
   // 6. Departments
   await prisma.department.createMany({ data: sampleData.departments });
   console.log("Seeded departments");
+
+  // 7. Categories
+  const categories = [
+    "Beef", "Chicken", "Vegetable", "Drinks", "Beverages",
+    "Starch", "Fish", "1/2 Fish", "Liver", "Matumbo", "Snacks", "Staff",
+  ];
+  await prisma.category.createMany({
+    data: categories.map((name) => ({ name })),
+  });
+  console.log("Seeded categories");
 
   console.log("Database seeded successfully");
 

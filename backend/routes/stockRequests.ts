@@ -5,6 +5,14 @@ const router = Router();
 
 const VALID_STATUSES = ["PENDING", "PARTIAL", "COMPLETED"];
 
+// GET /api/stock-requests/pending-count - Count pending requests (for sidebar badge)
+router.get("/pending-count", async (_req, res) => {
+  const count = await prisma.stockRequest.count({
+    where: { status: "PENDING" },
+  });
+  res.json({ count });
+});
+
 // GET /api/stock-requests - List all requests (optional ?status filter)
 router.get("/", async (req, res) => {
   const { status } = req.query;

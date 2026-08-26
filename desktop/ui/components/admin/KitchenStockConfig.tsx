@@ -128,7 +128,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
         </Button>
       </div>
 
-      <Heading as="h2" className="mb-6 text-admin-header-text text-center">Kitchen Stock Configuration</Heading>
+      <Heading as="h2" className="mb-6 text-admin-header-text text-center">Stock-Kitchen Configuration</Heading>
 
       <p className="text-sm text-red-500 mb-4">
         Configure how stock items convert to menu plates. Set the plates per unit for each ingredient.

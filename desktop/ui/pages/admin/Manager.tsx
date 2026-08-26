@@ -1,8 +1,9 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, Printer, Server } from "lucide-react"
+import { Building2, ChefHat, Printer, Server, Tag } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
+import CategoryManager from "@/components/admin/CategoryManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
 import PrinterConfig from "@/components/admin/PrinterConfig"
 import ServerConfig from "@/components/admin/ServerConfig"
@@ -10,6 +11,7 @@ import { useAuthStore } from "@/stores/auth"
 
 type ActiveView =
   | "departments"
+  | "categories"
   | "kitchen-config"
   | "pos-printer"
   | "server-config"
@@ -30,7 +32,14 @@ const cards: {
     adminOnly: false,
   },
   {
-    title: "Kitchen Stock Configuration",
+    title: "Menu Categories",
+    description: "Manage categories for menu items",
+    icon: Tag,
+    view: "categories",
+    adminOnly: false,
+  },
+  {
+    title: "Stock-Kitchen Configuration",
     description: "Configure how stock items convert to menu plates",
     icon: ChefHat,
     view: "kitchen-config",
@@ -71,6 +80,10 @@ function Manager() {
 
       {resolvedView === "departments" && (
         <DepartmentManager onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "categories" && (
+        <CategoryManager onBack={() => setActiveView(null)} />
       )}
 
       {resolvedView === "kitchen-config" && (

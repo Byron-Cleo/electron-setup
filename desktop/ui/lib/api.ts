@@ -133,6 +133,11 @@ export async function deleteStockSupply(id: string) {
 
 // ─── Stock Requests ──────────────────────────────────────────────────────────
 
+export async function getPendingStockRequestCount(): Promise<number> {
+  const res = await apiFetch("/stock-requests/pending-count") as { count: number }
+  return res.count
+}
+
 export async function getStockRequests(status?: string): Promise<StockRequest[]> {
   if (window.electron?.stockRequest?.getAll) {
     return window.electron.stockRequest.getAll(status)
@@ -200,6 +205,24 @@ export async function deleteDepartment(id: string): Promise<void> {
   return apiFetch(`/departments/${id}`, { method: "DELETE" })
 }
 
+// ─── Categories ─────────────────────────────────────────────────────────────
+
+export async function getCategories(): Promise<Category[]> {
+  return apiFetch("/categories")
+}
+
+export async function createCategory(data: CreateCategoryData): Promise<Category> {
+  return apiFetch("/categories", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function updateCategory(id: string, data: UpdateCategoryData): Promise<Category> {
+  return apiFetch(`/categories/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export async function deleteCategory(id: string): Promise<void> {
+  return apiFetch(`/categories/${id}`, { method: "DELETE" })
+}
+
 // ─── Cooking Records ────────────────────────────────────────────────────────
 
 export async function getCookingRecords(stockSupplyId?: string): Promise<CookingRecord[]> {
@@ -253,6 +276,10 @@ export async function updateCookingAssignment(id: string, data: { quantityPlates
 
 export async function deleteCookingAssignment(id: string) {
   return apiFetch(`/cooking-assignments/${id}`, { method: "DELETE" })
+}
+
+export async function upsertCookingAssignment(data: { cookingRecordId: string; menuId: string; quantityPlates: number }) {
+  return apiFetch("/cooking-assignments/upsert", { method: "POST", body: JSON.stringify(data) })
 }
 
 // ─── Menu ───────────────────────────────────────────────────────────────────

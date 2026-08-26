@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getCurrentShift } from "@/lib/api"
+import { getCurrentShift, getPendingStockRequestCount } from "@/lib/api"
 
 const allNavItems: {
   label: string
@@ -12,9 +12,10 @@ const allNavItems: {
   end?: boolean
   roles: User["role"][]
   accent?: boolean
+  pending?: boolean
 }[] = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
-  { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"] },
+  { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"], pending: true },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"] },
   { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"] },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager"] },
@@ -28,6 +29,7 @@ function AdminLayout() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
+  const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -40,8 +42,21 @@ function AdminLayout() {
           if (!cancelled) setHasOpenShift(false)
         })
     }
+    function checkPending() {
+      getPendingStockRequestCount()
+        .then((count) => {
+          if (!cancelled) setPendingCount(count)
+        })
+        .catch(() => {
+          if (!cancelled) setPendingCount(0)
+        })
+    }
     checkShift()
-    const interval = setInterval(checkShift, 30000)
+    checkPending()
+    const interval = setInterval(() => {
+      checkShift()
+      checkPending()
+    }, 30000)
     return () => {
       cancelled = true
       clearInterval(interval)
@@ -75,14 +90,23 @@ function AdminLayout() {
                       : isActive
                         ? "bg-red-600/15 text-red-400 font-semibold"
                         : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
-                    : isActive
-                      ? "bg-admin-accent text-admin-accent-text"
-                      : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
+                    : item.pending && pendingCount > 0
+                      ? isActive
+                        ? "bg-amber-500/15 text-amber-400 font-semibold"
+                        : "text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 font-semibold"
+                      : isActive
+                        ? "bg-admin-accent text-admin-accent-text"
+                        : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
                 }`
               }
             >
               <item.icon size={18} />
               {item.label}
+              {item.pending && pendingCount > 0 && (
+                <span className="ml-auto inline-flex items-center justify-center h-5 min-w-5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">
+                  {pendingCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

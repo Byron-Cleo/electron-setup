@@ -39,6 +39,8 @@ interface MenuItem {
   isAvailable: boolean;
   banner: string | null;
   createdAt: string;
+  hasStarch: boolean;
+  hasVegetable: boolean;
   starchId: string | null;
   vegetableId: string | null;
   mealTypes: string[];
@@ -54,6 +56,8 @@ interface MenuCreateData {
   price: number;
   images?: string[];
   mealTypes: string[];
+  hasStarch?: boolean;
+  hasVegetable?: boolean;
   starchId?: string | null;
   vegetableId?: string | null;
 }
@@ -341,6 +345,19 @@ interface CreateDepartmentData {
 
 type UpdateDepartmentData = Partial<CreateDepartmentData>;
 
+interface Category {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CreateCategoryData {
+  name: string;
+}
+
+type UpdateCategoryData = Partial<CreateCategoryData>;
+
 interface StockFulfillment {
   id: string;
   stockRequestId: string;
@@ -419,6 +436,17 @@ interface CookedMenuItem {
     totalAssigned: number;
     totalAvailable: number;
   };
+  cookingRecords: {
+    id: string;
+    cookedDate: string;
+    plates: number;
+  }[];
+  assignments: {
+    id: string;
+    menuId: string;
+    menuName: string;
+    quantityPlates: number;
+  }[];
 }
 
 interface KitchenStockItem {

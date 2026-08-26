@@ -85,24 +85,24 @@ router.get("/cooked", async (req, res) => {
 
         const cookingRecords = await prisma.cookingRecord.findMany({
           where: { stockSupplyId: { in: stockSupplyIds }, ...dateFilter },
-          select: { platesActual: true, platesExpected: true },
+          select: { id: true, platesActual: true, platesExpected: true, cookedDate: true },
         });
 
+        const cookingRecordIds = cookingRecords.map((r) => r.id);
+
         let totalProduced = 0;
-        const cookingRecordIds: string[] = [];
         for (const record of cookingRecords) {
           totalProduced += Number(record.platesActual ?? record.platesExpected);
         }
 
-        const allCookingRecords = await prisma.cookingRecord.findMany({
-          where: { stockSupplyId: { in: stockSupplyIds }, ...dateFilter },
-          select: { id: true },
-        });
-        for (const r of allCookingRecords) cookingRecordIds.push(r.id);
-
         const assignments = await prisma.cookingRecordAssignment.findMany({
           where: { cookingRecordId: { in: cookingRecordIds } },
-          select: { quantityPlates: true },
+          select: {
+            id: true,
+            menuId: true,
+            quantityPlates: true,
+            menu: { select: { name: true } },
+          },
         });
 
         const totalAssigned = assignments.reduce(
@@ -125,6 +125,17 @@ router.get("/cooked", async (req, res) => {
             totalAssigned,
             totalAvailable: totalProduced - totalAssigned,
           },
+          cookingRecords: cookingRecords.map((r) => ({
+            id: r.id,
+            cookedDate: r.cookedDate.toISOString().slice(0, 10),
+            plates: Number(r.platesActual ?? r.platesExpected),
+          })),
+          assignments: assignments.map((a) => ({
+            id: a.id,
+            menuId: a.menuId,
+            menuName: a.menu.name,
+            quantityPlates: Number(a.quantityPlates),
+          })),
         };
       })
     );
@@ -213,7 +224,7 @@ router.post("/upload", uploadMenuImage.single("image"), (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, slug, category, stock, price, mealTypes, starchId, vegetableId, images } = req.body;
+  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images } = req.body;
   if (!name || !category) {
     return res.status(400).json({ error: "name, category are required" });
   }
@@ -233,10 +244,11 @@ router.post("/", async (req, res) => {
     }
   }
 
-  if (mealTypes?.includes("LUNCH") || mealTypes?.includes("DINNER")) {
-    if (!starchId || !vegetableId) {
-      return res.status(400).json({ error: "LUNCH/DINNER menus require both a starch and vegetable accompaniment" });
-    }
+  if (hasStarch && !starchId) {
+    return res.status(400).json({ error: "starchId is required when hasStarch is true" });
+  }
+  if (hasVegetable && !vegetableId) {
+    return res.status(400).json({ error: "vegetableId is required when hasVegetable is true" });
   }
 
   try {
@@ -249,6 +261,8 @@ router.post("/", async (req, res) => {
           stock: stock ?? undefined,
           price: price ?? 0,
           images: images ?? [],
+          hasStarch: hasStarch ?? false,
+          hasVegetable: hasVegetable ?? false,
           starchId: starchId ?? null,
           vegetableId: vegetableId ?? null,
         },
@@ -282,7 +296,7 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, slug, category, stock, price, mealTypes, starchId, vegetableId, images } = req.body;
+  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images } = req.body;
 
   if (images !== undefined && !Array.isArray(images)) {
     return res.status(400).json({ error: "images must be an array of strings" });
@@ -303,6 +317,8 @@ router.put("/:id", async (req, res) => {
     const existing = await prisma.menu.findUnique({
       where: { id },
       select: {
+        hasStarch: true,
+        hasVegetable: true,
         starchId: true,
         vegetableId: true,
         MenuMealType: { select: { mealType: true } },
@@ -310,17 +326,16 @@ router.put("/:id", async (req, res) => {
     });
     if (!existing) return res.status(404).json({ error: "Not found" });
 
-    const effectiveMealTypes = mealTypes ?? existing.MenuMealType.map((mt) => mt.mealType);
+    const effectiveHasStarch = hasStarch !== undefined ? hasStarch : existing.hasStarch;
+    const effectiveHasVegetable = hasVegetable !== undefined ? hasVegetable : existing.hasVegetable;
     const effectiveStarchId = starchId !== undefined ? starchId : existing.starchId;
     const effectiveVegetableId = vegetableId !== undefined ? vegetableId : existing.vegetableId;
 
-    if (effectiveMealTypes.includes("LUNCH") || effectiveMealTypes.includes("DINNER")) {
-      if (!effectiveStarchId || !effectiveVegetableId) {
-        const hasSchemaChange = mealTypes !== undefined || starchId !== undefined || vegetableId !== undefined;
-        if (hasSchemaChange) {
-          return res.status(400).json({ error: "LUNCH/DINNER menus require both a starch and vegetable accompaniment" });
-        }
-      }
+    if (effectiveHasStarch && !effectiveStarchId) {
+      return res.status(400).json({ error: "starchId is required when hasStarch is true" });
+    }
+    if (effectiveHasVegetable && !effectiveVegetableId) {
+      return res.status(400).json({ error: "vegetableId is required when hasVegetable is true" });
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -331,6 +346,8 @@ router.put("/:id", async (req, res) => {
         ...(stock !== undefined && { stock }),
         ...(price !== undefined && { price }),
         ...(images !== undefined && { images }),
+        ...(hasStarch !== undefined && { hasStarch }),
+        ...(hasVegetable !== undefined && { hasVegetable }),
         ...(starchId !== undefined && { starchId: starchId ?? null }),
         ...(vegetableId !== undefined && { vegetableId: vegetableId ?? null }),
       };

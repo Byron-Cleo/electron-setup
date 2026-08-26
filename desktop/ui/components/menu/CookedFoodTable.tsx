@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
 import { getCookedMenus, updateMenuAvailability, stockSupplyImageUrl } from "@/lib/api"
-import EditMenuDialog from "./EditMenuDialog"
+import AssignmentModal from "./AssignmentModal"
 
 interface Props {
   onRefresh?: () => void
@@ -203,11 +203,26 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         }
       />
 
-      <EditMenuDialog
+      <AssignmentModal
         open={editDialog.open}
         onClose={() => setEditDialog({ open: false, item: null })}
-        item={editDialog.item}
-        onSaved={loadData}
+        cookedItem={
+          editDialog.item
+            ? {
+                menuId: editDialog.item.id,
+                menuName: editDialog.item.name,
+                stockSupplyId: editDialog.item.stockSupply?.id ?? "",
+                stockSupplyName: editDialog.item.stockSupply?.name ?? "",
+                cookedDate: editDialog.item.cookingRecords[0]?.cookedDate ?? new Date().toISOString().slice(0, 10),
+                totalProduced: editDialog.item.cooking.totalProduced,
+                totalAssigned: editDialog.item.cooking.totalAssigned,
+                totalAvailable: editDialog.item.cooking.totalAvailable,
+                cookingRecordId: editDialog.item.cookingRecords[0]?.id,
+                assignments: editDialog.item.assignments,
+              }
+            : null
+        }
+        onRefresh={loadData}
       />
 
       {deleteDialog.open && deleteDialog.item && (
