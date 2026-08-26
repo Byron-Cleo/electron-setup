@@ -10,14 +10,11 @@ Complete
 
 ## Goals
 
-- Cashier Payment Wizard: 3-step modal (Payment Type → Payment Method → Select Orders) supporting single and batch payments
-- Batch payment tracking: `paymentType` field on Order model to distinguish single vs batch-paid orders
+- Cashier Payment Wizard: 2-step modal (Method → Select Orders) supporting single and batch payments
+- Batch payment tracking: `paymentType` and `batchId` fields on Order model to distinguish single vs batch-paid orders
 - "Batch" badge on orders paid via batch in the Orders table
+- Sidebar reorder + Menu/Dispatch rename
 - Ref: `context/fix-plan/cashier-payment-wizard.md`
-- Phase 9: Cashier Shift Close UI — ShiftCloseDialog with order/voided/revenue summary + drift warning; shift open/close from UI
-- Phase 10: Manager Report UI — Reports page with shift selector, plate movement, revenue by period, production vs sales, variance
-- Phase 11: Auto-close scheduler — backend interval closing expired shifts every minute
-- Phase 12: Void analytics — GET /api/reports/voids?date= per-waiter summary + surface in Reports UI
 
 ## Notes
 
