@@ -1,7 +1,9 @@
+import { useState, useEffect } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getCurrentShift } from "@/lib/api"
 
 const allNavItems: {
   label: string
@@ -9,21 +11,42 @@ const allNavItems: {
   icon: typeof LayoutDashboard
   end?: boolean
   roles: User["role"][]
+  accent?: boolean
 }[] = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
-  { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager"] },
-  { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
   { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"] },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"] },
   { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"] },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager"] },
+  { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager"], accent: true },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
+  { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
 ]
 
 function AdminLayout() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    function checkShift() {
+      getCurrentShift()
+        .then((shift) => {
+          if (!cancelled) setHasOpenShift(!!shift)
+        })
+        .catch(() => {
+          if (!cancelled) setHasOpenShift(false)
+        })
+    }
+    checkShift()
+    const interval = setInterval(checkShift, 30000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
 
   const navItems = allNavItems.filter((item) =>
     item.roles.includes(user?.role as User["role"])
@@ -44,9 +67,17 @@ function AdminLayout() {
               end={item.end}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive
-                    ? "bg-admin-accent text-admin-accent-text"
-                    : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
+                  item.accent
+                    ? hasOpenShift
+                      ? isActive
+                        ? "bg-green-600/15 text-green-400 font-semibold"
+                        : "text-green-500 hover:bg-green-600/10 hover:text-green-400 font-semibold"
+                      : isActive
+                        ? "bg-red-600/15 text-red-400 font-semibold"
+                        : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
+                    : isActive
+                      ? "bg-admin-accent text-admin-accent-text"
+                      : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
                 }`
               }
             >
