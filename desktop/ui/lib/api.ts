@@ -404,10 +404,10 @@ export async function voidOrder(orderId: string, voidedById: string, reason?: st
   })
 }
 
-export async function updateOrderPayment(orderId: string, paymentMethod: "cash" | "mpesa"): Promise<Order> {
+export async function updateOrderPayment(orderId: string, paymentMethod: "cash" | "mpesa", paymentType?: "SINGLE" | "BATCH", batchId?: string): Promise<Order> {
   return apiFetch(`/orders/${orderId}/payment`, {
     method: "PATCH",
-    body: JSON.stringify({ paymentMethod }),
+    body: JSON.stringify({ paymentMethod, paymentType, batchId }),
   })
 }
 

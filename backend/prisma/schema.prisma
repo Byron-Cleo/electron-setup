@@ -102,6 +102,8 @@ model Order {
   voidedAt          DateTime?   @db.Timestamp(6)
   voidedById        String?     @db.Uuid
   voidedOrderId     String?     @db.Uuid
+  paymentType       String?     // "SINGLE" or "BATCH"
+  batchId           String?     // groups orders paid together in a batch
   User              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   OrderItem         OrderItem[]
   shift             Shift?      @relation(fields: [shiftId], references: [id])

@@ -185,10 +185,14 @@ router.post("/", async (req, res) => {
 // Update payment method and mark as paid
 router.patch("/:id/payment", async (req, res) => {
   const { id } = req.params;
-  const { paymentMethod } = req.body;
+  const { paymentMethod, paymentType, batchId } = req.body;
 
   if (!paymentMethod || !["cash", "mpesa"].includes(paymentMethod)) {
     return res.status(400).json({ error: "paymentMethod must be 'cash' or 'mpesa'" });
+  }
+
+  if (paymentType && !["SINGLE", "BATCH"].includes(paymentType)) {
+    return res.status(400).json({ error: "paymentType must be 'SINGLE' or 'BATCH'" });
   }
 
   try {
@@ -208,6 +212,8 @@ router.patch("/:id/payment", async (req, res) => {
         paymentMethod,
         isPaid: true,
         paidAt: new Date(),
+        ...(paymentType ? { paymentType } : {}),
+        ...(batchId ? { batchId } : {}),
       },
     });
 

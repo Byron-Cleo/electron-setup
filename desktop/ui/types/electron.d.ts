@@ -109,6 +109,8 @@ interface Order {
   voidedAt: string | null;
   voidedById: string | null;
   voidedOrderId: string | null;
+  paymentType: string | null;
+  batchId: string | null;
   shiftId: string | null;
   OrderItem: OrderItem[];
   User?: { name: string } | null;

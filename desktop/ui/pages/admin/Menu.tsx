@@ -79,7 +79,7 @@ function Menu() {
 
   return (
     <div className="space-y-6">
-      <Heading as="h1" className="text-admin-header-text">Menu</Heading>
+      <Heading as="h1" className="text-admin-header-text">Menu/Dispatch</Heading>
 
       {view === "dashboard" && (
         <div className="grid grid-cols-2 gap-6">

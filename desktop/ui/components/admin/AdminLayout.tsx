@@ -12,13 +12,13 @@ const allNavItems: {
 }[] = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
   { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager"] },
-  { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
   { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"] },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"] },
-  { label: "Menu", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"] },
+  { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"] },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager"] },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
+  { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
 ]
 
 function AdminLayout() {

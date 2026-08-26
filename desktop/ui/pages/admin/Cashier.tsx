@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
-import { Eye, Ban, CreditCard, Receipt, XCircle, Wallet } from "lucide-react"
+import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,9 @@ import { getOrders, voidOrder, updateOrderPayment } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { usePagination } from "@/hooks/usePagination"
 import BackButton from "@/components/shared/BackButton"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`
@@ -40,7 +43,7 @@ function StatusBadge({ isPaid }: { isPaid: boolean }) {
 
 type CashierView = "dashboard" | "orders" | "void" | "payment"
 
-type OrderTab = "ALL" | "MPESA" | "CASH" | "VOID" | "UNPAID"
+type OrderTab = "ALL" | "MPESA" | "CASH" | "VOID" | "UNPAID" | "BATCH"
 
 const TAB_LABELS: Record<OrderTab, string> = {
   ALL: "All",
@@ -48,6 +51,7 @@ const TAB_LABELS: Record<OrderTab, string> = {
   CASH: "Cash",
   VOID: "Void",
   UNPAID: "Unpaid",
+  BATCH: "Batch",
 }
 
 const TAB_COLORS: Record<OrderTab, { active: string; inactive: string }> = {
@@ -71,23 +75,27 @@ const TAB_COLORS: Record<OrderTab, { active: string; inactive: string }> = {
     active: "bg-gray-100 text-gray-700",
     inactive: "text-gray-400 hover:text-gray-600",
   },
+  BATCH: {
+    active: "bg-purple-100 text-purple-700",
+    inactive: "text-purple-400 hover:text-purple-600",
+  },
 }
 
 const ORDER_COLUMNS: Column[] = [
-  { label: "Order #", key: "orderNumber" },
+  { label: "Order #", key: "orderNumber", align: "center" },
   { label: "Meal", key: "mealType" },
-  { label: "Payment", key: "paymentMethod" },
-  { label: "Total", key: "totalPrice", align: "right" },
+  { label: "Payment", key: "paymentMethod", align: "center" },
+  { label: "Total", key: "totalPrice", align: "center" },
   { label: "Status", key: "status" },
   { label: "Date", key: "createdAt" },
-  { label: "Details", key: "details", isAction: true },
+  { label: "Details", key: "details", isAction: true, align: "center" },
 ]
 
 function Cashier() {
   const [view, setView] = useState<CashierView>("dashboard")
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <Heading as="h1" className="text-admin-header-text">
         Cashier
       </Heading>
@@ -152,31 +160,6 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView) => void })
 
       <Card
         className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
-        onClick={() => onNavigate("void")}
-      >
-        <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-lg bg-red-500/10 flex items-center justify-center">
-            <XCircle size={24} className="text-red-600" />
-          </div>
-          <div>
-            <Heading as="h3" className="text-lg text-admin-header-text">Void Order</Heading>
-            <div className="flex items-center gap-2 mt-1">
-              {counts.unpaid > 0 ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  {counts.unpaid} voidable
-                </span>
-              ) : (
-                <span className="text-sm text-admin-muted">No voidable orders</span>
-              )}
-            </div>
-            <p className="text-xs text-admin-muted mt-1">Select and void an unpaid order.</p>
-          </div>
-        </div>
-      </Card>
-
-      <Card
-        className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
         onClick={() => onNavigate("payment")}
       >
         <div className="flex items-center gap-4">
@@ -196,6 +179,31 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView) => void })
               )}
             </div>
             <p className="text-xs text-admin-muted mt-1">Mark an order as paid via M-Pesa or Cash.</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        className="p-6 cursor-pointer border-2 border-red-400 bg-red-50/50 hover:border-red-600 transition-colors"
+        onClick={() => onNavigate("void")}
+      >
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-lg bg-red-500/10 flex items-center justify-center">
+            <XCircle size={24} className="text-red-600" />
+          </div>
+          <div>
+            <Heading as="h3" className="text-lg text-red-700">Void Order</Heading>
+            <div className="flex items-center gap-2 mt-1">
+              {counts.unpaid > 0 ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  {counts.unpaid} voidable
+                </span>
+              ) : (
+                <span className="text-sm text-admin-muted">No voidable orders</span>
+              )}
+            </div>
+            <p className="text-xs text-admin-muted mt-1">Select and void an unpaid order.</p>
           </div>
         </div>
       </Card>
@@ -229,6 +237,16 @@ function OrdersView() {
     return () => { cancelled = true }
   }, [])
 
+  const batchTotals = useMemo(() => {
+    const totals: Record<string, number> = {}
+    for (const o of orders) {
+      if (o.batchId) {
+        totals[o.batchId] = (totals[o.batchId] ?? 0) + Number(o.totalPrice)
+      }
+    }
+    return totals
+  }, [orders])
+
   const filtered = useMemo(() => {
     let source = orders
     switch (activeTab) {
@@ -244,13 +262,23 @@ function OrdersView() {
       case "UNPAID":
         source = source.filter((o) => !o.isPaid && !o.isVoid)
         break
+      case "BATCH":
+        source = source.filter((o) => o.isPaid && o.paymentType === "BATCH")
+        break
     }
     if (searchInput) {
       const q = searchInput.toLowerCase()
-      source = source.filter((o) => String(o.orderNumber).includes(q))
+      source = source.filter((o) => {
+        if (String(o.orderNumber).includes(q)) return true
+        if (o.batchId) {
+          const batchTotal = batchTotals[o.batchId]
+          if (batchTotal !== undefined && String(Math.round(batchTotal)).includes(q)) return true
+        }
+        return false
+      })
     }
     return source
-  }, [orders, activeTab, searchInput])
+  }, [orders, activeTab, searchInput, batchTotals])
 
   const counts = useMemo(() => ({
     ALL: orders.length,
@@ -258,6 +286,7 @@ function OrdersView() {
     CASH: orders.filter((o) => o.isPaid && o.paymentMethod === "cash").length,
     VOID: orders.filter((o) => o.isVoid).length,
     UNPAID: orders.filter((o) => !o.isPaid && !o.isVoid).length,
+    BATCH: orders.filter((o) => o.isPaid && o.paymentType === "BATCH").length,
   }), [orders])
 
   const {
@@ -274,11 +303,16 @@ function OrdersView() {
     switch (column.key) {
       case "orderNumber":
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             <span className="font-semibold">#{order.orderNumber}</span>
             {order.isVoid && (
               <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
                 VOIDED
+              </span>
+            )}
+            {order.isPaid && order.paymentType === "BATCH" && order.batchId && (
+              <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">
+                {money(batchTotals[order.batchId] ?? 0)}
               </span>
             )}
           </div>
@@ -289,10 +323,20 @@ function OrdersView() {
         if (!order.isPaid) {
           return <span className="text-admin-muted">Unpaid</span>
         }
-        if (order.paymentMethod === "mpesa") {
-          return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">M-Pesa</span>
-        }
-        return <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">Cash</span>
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            {order.paymentMethod === "mpesa" ? (
+              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">M-Pesa</span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">Cash</span>
+            )}
+            {order.paymentType === "BATCH" && (
+              <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">
+                Batch
+              </span>
+            )}
+          </div>
+        )
       case "totalPrice":
         return <span className="font-medium">{money(order.totalPrice)}</span>
       case "status":
@@ -316,7 +360,7 @@ function OrdersView() {
       <Heading as="h2" className="text-admin-header-text text-center text-xl">Orders</Heading>
 
       <div className="flex flex-wrap gap-2">
-        {(["ALL", "MPESA", "CASH", "VOID", "UNPAID"] as OrderTab[]).map((tab) => (
+        {(["ALL", "MPESA", "CASH", "VOID", "UNPAID", "BATCH"] as OrderTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -484,7 +528,7 @@ function VoidView() {
     { label: "Waiter", key: "waiter" },
     { label: "Total", key: "totalPrice", align: "right" },
     { label: "Date", key: "createdAt" },
-    { label: "Action", key: "action", isAction: true },
+    { label: "Void Order", key: "action", isAction: true, align: "center" },
   ]
 
   function renderCell(order: Order, column: Column): ReactNode {
@@ -501,14 +545,16 @@ function VoidView() {
         return formatDate(order.createdAt)
       case "action":
         return (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setSelectedOrder(order)}
-          >
-            <Ban />
-            Void
-          </Button>
+          <div className="flex justify-center">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setSelectedOrder(order)}
+            >
+              <Ban />
+              Void
+            </Button>
+          </div>
         )
       default:
         return null
@@ -616,9 +662,15 @@ function PaymentView() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [searchInput, setSearchInput] = useState("")
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  const [collectingPayment, setCollectingPayment] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardStep, setWizardStep] = useState<1 | 2>(1)
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | null>(null)
+  const [selectedOrders, setSelectedOrders] = useState<Order[]>([])
+  const [orderSearch, setOrderSearch] = useState("")
+  const [processing, setProcessing] = useState(false)
+  const [payOrder, setPayOrder] = useState<Order | null>(null)
+  const [payMethod, setPayMethod] = useState<"cash" | "mpesa" | null>(null)
+  const [payProcessing, setPayProcessing] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -638,10 +690,10 @@ function PaymentView() {
   }, [])
 
   const filtered = useMemo(() => {
-    if (!searchInput) return orders
-    const q = searchInput.toLowerCase()
+    if (!orderSearch) return orders
+    const q = orderSearch.toLowerCase()
     return orders.filter((o) => String(o.orderNumber).includes(q))
-  }, [orders, searchInput])
+  }, [orders, orderSearch])
 
   const {
     currentPage,
@@ -653,17 +705,44 @@ function PaymentView() {
     canPrev,
   } = usePagination(filtered)
 
-  async function handleCollectPayment(method: "cash" | "mpesa") {
-    if (!selectedOrder) return
-    setCollectingPayment(true)
+  const accumulatedTotal = useMemo(
+    () => selectedOrders.reduce((sum, o) => sum + Number(o.totalPrice), 0),
+    [selectedOrders]
+  )
+
+  function openWizard() {
+    setWizardStep(1)
+    setPaymentMethod(null)
+    setSelectedOrders([])
+    setOrderSearch("")
+    setWizardOpen(true)
+  }
+
+  function toggleOrder(order: Order) {
+    setSelectedOrders((prev) =>
+      prev.some((o) => o.id === order.id)
+        ? prev.filter((o) => o.id !== order.id)
+        : [...prev, order]
+    )
+  }
+
+  async function handleConfirmPayment() {
+    if (!paymentMethod || selectedOrders.length === 0) return
+    setProcessing(true)
     try {
-      await updateOrderPayment(selectedOrder.id, method)
-      setOrders((prev) => prev.filter((o) => o.id !== selectedOrder.id))
-      setSelectedOrder(null)
+      const batchId = crypto.randomUUID()
+      await Promise.all(
+        selectedOrders.map((o) =>
+          updateOrderPayment(o.id, paymentMethod, "BATCH", batchId)
+        )
+      )
+      const paidIds = new Set(selectedOrders.map((o) => o.id))
+      setOrders((prev) => prev.filter((o) => !paidIds.has(o.id)))
+      setWizardOpen(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update payment")
+      setError(err instanceof Error ? err.message : "Failed to process payment")
     } finally {
-      setCollectingPayment(false)
+      setProcessing(false)
     }
   }
 
@@ -690,21 +769,36 @@ function PaymentView() {
         return formatDate(order.createdAt)
       case "action":
         return (
-          <Button
-            size="sm"
-            className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
-            onClick={() => setSelectedOrder(order)}
-          >
-            <CreditCard />
-            Pay
-          </Button>
+          <div className="flex justify-center">
+            <Button
+              size="sm"
+              className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
+              onClick={() => { setPayOrder(order); setPayMethod(null) }}
+            >
+              <Banknote />
+              Pay
+            </Button>
+          </div>
         )
+      default:
+        return null
     }
   }
 
+  const stepLabels = ["Method", "Orders"]
+
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center text-xl">Payment</Heading>
+      <div className="flex items-center justify-between">
+        <Heading as="h2" className="text-admin-header-text text-center text-xl flex-1">Payment</Heading>
+        <Button
+          className="px-6 py-6 bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200"
+          onClick={openWizard}
+        >
+          <Landmark />
+          Batch Payment
+        </Button>
+      </div>
 
       {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -727,54 +821,250 @@ function PaymentView() {
           header={
             <Input
               placeholder="Search by order number..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
               className="max-w-sm"
             />
           }
         />
       )}
 
-      <Dialog open={selectedOrder !== null} onOpenChange={(open) => { if (!open) setSelectedOrder(null) }}>
+      {/* Single Order Payment Dialog */}
+      <Dialog open={payOrder !== null} onOpenChange={(open) => { if (!open) setPayOrder(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Collect Payment</DialogTitle>
-            <DialogDescription>
-              Order #{selectedOrder?.orderNumber} — {selectedOrder && money(selectedOrder.totalPrice)}
-            </DialogDescription>
+            <DialogTitle className="text-center text-xs font-black uppercase tracking-widest text-green-600">Pay Order #{payOrder?.orderNumber}</DialogTitle>
           </DialogHeader>
 
-          <div className="flex flex-col gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-start gap-3 h-14 text-base"
-              disabled={collectingPayment}
-              onClick={() => handleCollectPayment("mpesa")}
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">
-                M
-              </span>
-              M-Pesa
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-start gap-3 h-14 text-base"
-              disabled={collectingPayment}
-              onClick={() => handleCollectPayment("cash")}
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
-                C
-              </span>
-              Cash
-            </Button>
+          <div className="space-y-3 py-2">
+            <div className="rounded-lg border border-admin-card-border p-3 text-sm">
+              <div className="flex justify-between"><span className="text-admin-muted">Meal</span><span className="font-medium">{payOrder?.mealType}</span></div>
+              <div className="flex justify-between"><span className="text-admin-muted">Waiter</span><span className="font-medium">{payOrder?.User?.name ?? "—"}</span></div>
+              <div className="flex justify-between"><span className="text-admin-muted">Total</span><span className="font-bold">{payOrder ? money(payOrder.totalPrice) : ""}</span></div>
+            </div>
+
+            <p className="text-sm font-medium text-admin-header-text mb-2">Select payment method</p>
+            <RadioGroup value={payMethod ?? ""} onValueChange={(v) => setPayMethod(v as "cash" | "mpesa")} className="flex flex-row gap-4">
+              <Label
+                htmlFor="single-mpesa"
+                className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-3 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+              >
+                <RadioGroupItem value="mpesa" id="single-mpesa" className="mt-0.5" />
+                <span>
+                  <span className="block mb-1 font-medium text-admin-header-text">M-Pesa</span>
+                  <span className="block text-xs text-admin-muted">Mobile money</span>
+                </span>
+              </Label>
+              <Label
+                htmlFor="single-cash"
+                className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-3 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+              >
+                <RadioGroupItem value="cash" id="single-cash" className="mt-0.5" />
+                <span>
+                  <span className="block mb-1 font-medium text-admin-header-text">Cash</span>
+                  <span className="block text-xs text-admin-muted">Physical cash</span>
+                </span>
+              </Label>
+            </RadioGroup>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setSelectedOrder(null)}>
-              Cancel
+            <Button
+              type="button"
+              className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200"
+              disabled={!payMethod || payProcessing}
+              onClick={async () => {
+                if (!payOrder || !payMethod) return
+                setPayProcessing(true)
+                try {
+                  await updateOrderPayment(payOrder.id, payMethod, "SINGLE")
+                  setOrders((prev) => prev.filter((o) => o.id !== payOrder.id))
+                  setPayOrder(null)
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to process payment")
+                } finally {
+                  setPayProcessing(false)
+                }
+              }}
+            >
+              {payProcessing ? "Processing..." : "Confirm Payment"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Payment Wizard */}
+      <Dialog open={wizardOpen} onOpenChange={(open) => { if (!open) setWizardOpen(false) }}>
+        <DialogContent className="max-w-xl sm:max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xs font-black uppercase tracking-widest text-blue-600">Batch Payment</DialogTitle>
+          </DialogHeader>
+
+          {/* Step Indicators */}
+          <div className="flex items-center justify-center gap-2 py-2">
+            {stepLabels.map((label, i) => {
+              const step = (i + 1) as 1 | 2
+              const isActive = wizardStep === step
+              const isDone = wizardStep > step
+              return (
+                <div key={label} className="flex items-center gap-2">
+                  {i > 0 && <div className={`w-8 h-px ${isDone ? "bg-blue-500" : "bg-gray-300"}`} />}
+                  <div className={`flex items-center gap-1.5 text-xs font-semibold ${isActive ? "text-blue-600" : isDone ? "text-blue-600" : "text-admin-muted"}`}>
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${isDone ? "bg-blue-100 text-blue-700" : isActive ? "bg-blue-600 text-white" : "bg-gray-100 text-admin-muted"}`}>
+                      {isDone ? "✓" : step}
+                    </span>
+                    {label}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Step 1: Payment Method */}
+          {wizardStep === 1 && (
+            <div className="space-y-3 py-2">
+              <p className="text-sm font-medium text-admin-header-text mb-2">Select payment method</p>
+              <RadioGroup value={paymentMethod ?? ""} onValueChange={(v) => setPaymentMethod(v as "cash" | "mpesa")} className="flex flex-row gap-4">
+                <Label
+                  htmlFor="pay-mpesa"
+                  className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-4 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+                >
+                  <RadioGroupItem value="mpesa" id="pay-mpesa" className="mt-0.5" />
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">M</span>
+                    <span>
+                      <span className="block mb-1 font-medium text-admin-header-text">M-Pesa</span>
+                      <span className="block text-xs text-admin-muted">Mobile money payment</span>
+                    </span>
+                  </span>
+                </Label>
+                <Label
+                  htmlFor="pay-cash"
+                  className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-4 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+                >
+                  <RadioGroupItem value="cash" id="pay-cash" className="mt-0.5" />
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">C</span>
+                    <span>
+                      <span className="block mb-1 font-medium text-admin-header-text">Cash</span>
+                      <span className="block text-xs text-admin-muted">Physical cash payment</span>
+                    </span>
+                  </span>
+                </Label>
+              </RadioGroup>
+            </div>
+          )}
+
+          {/* Step 2: Select Orders */}
+          {wizardStep === 2 && (
+            <div className="space-y-3 py-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-admin-header-text">
+                  Select orders to pay
+                </p>
+                {selectedOrders.length > 0 && (
+                  <span className="text-xs font-semibold text-blue-600">{selectedOrders.length} selected</span>
+                )}
+              </div>
+              <Input
+                placeholder="Search by order number..."
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                className="max-w-sm"
+              />
+              <div className="max-h-72 overflow-y-auto rounded-lg border border-admin-card-border divide-y divide-admin-card-border">
+                {filtered.length === 0 ? (
+                  <p className="text-sm text-admin-muted text-center py-4">No orders found</p>
+                ) : (
+                  (() => {
+                    const showSearchResults = orderSearch.trim() !== ""
+                    const displayOrders = showSearchResults
+                      ? filtered
+                      : filtered.slice(0, 10)
+                    const hiddenCount = showSearchResults ? 0 : Math.max(0, filtered.length - 10)
+
+                    return (
+                      <>
+                        {displayOrders.map((order) => {
+                          const isSelected = selectedOrders.some((o) => o.id === order.id)
+                          return (
+                            <label
+                              key={order.id}
+                              className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors hover:bg-muted/50 ${
+                                isSelected ? "bg-blue-50" : ""
+                              }`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleOrder(order)}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-semibold">#{order.orderNumber}</span>
+                                <span className="ml-2 text-xs text-admin-muted">{order.mealType}</span>
+                                <span className="ml-2 text-xs text-admin-muted">{order.User?.name ?? "—"}</span>
+                              </div>
+                              <span className="text-sm font-medium shrink-0">{money(order.totalPrice)}</span>
+                            </label>
+                          )
+                        })}
+                        {hiddenCount > 0 && (
+                          <p className="text-xs text-admin-muted text-center py-2">
+                            + {hiddenCount} more — use search to find
+                          </p>
+                        )}
+                      </>
+                    )
+                  })()
+                )}
+              </div>
+              {selectedOrders.length > 0 && (
+                <div className="flex items-center justify-between rounded-lg bg-blue-50 border border-blue-200 p-3">
+                  <span className="text-sm font-medium text-admin-header-text">
+                    Total ({selectedOrders.length} {selectedOrders.length === 1 ? "order" : "orders"})
+                  </span>
+                  <span className="text-lg font-bold text-blue-700">{money(accumulatedTotal)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <div className="flex items-center justify-between w-full">
+              <div>
+                {wizardStep > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setWizardStep((s) => (s - 1) as 1 | 2)}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {wizardStep < 2 ? (
+                  <Button
+                    type="button"
+                    className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200"
+                    disabled={!paymentMethod}
+                    onClick={() => setWizardStep((s) => (s + 1) as 1 | 2)}
+                  >
+                    Next
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200"
+                    disabled={selectedOrders.length === 0 || processing}
+                    onClick={handleConfirmPayment}
+                  >
+                    {processing ? "Processing..." : `Confirm Payment`}
+                  </Button>
+                )}
+              </div>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
