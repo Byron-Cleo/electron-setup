@@ -41,6 +41,7 @@ export function registerMenuHandlers() {
   ipcMain.handle("menu:delete", async (_event, id: string) =>
     apiFetch(`/menu/${id}`, { method: "DELETE" })
   );
+  ipcMain.handle("menu:get-running-low-count", async () => apiFetch("/menu/running-low-count"));
 }
 
 export function registerAuthHandlers() {

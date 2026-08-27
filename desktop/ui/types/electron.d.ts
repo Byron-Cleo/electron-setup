@@ -443,6 +443,7 @@ interface CookedMenuItem {
     cookedDate: string;
     plates: number;
   }[];
+  menuAssigned: number;
   assignments: {
     id: string;
     menuId: string;
@@ -627,6 +628,15 @@ interface ShiftReport {
     totalOrders: number;
     voidedOrders: number;
   };
+  drift: {
+    minutes: number;
+    records: {
+      menuName: string;
+      quantityCooked: number;
+      platesProduced: number;
+      costPrice: number;
+    }[];
+  };
 }
 
 interface ShiftReportData {
@@ -694,6 +704,7 @@ interface ElectronAPI {
     create: (data: MenuCreateData) => Promise<MenuItem>;
     update: (id: string, data: MenuUpdateData) => Promise<MenuItem>;
     delete: (id: string) => Promise<{ message: string }>;
+    getRunningLowCount: () => Promise<{ count: number }>;
   };
   auth: {
     login: (pin: string) => Promise<LoginResponse>;

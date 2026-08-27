@@ -13,6 +13,14 @@ router.get("/pending-count", async (_req, res) => {
   res.json({ count });
 });
 
+// GET /api/stock-requests/partial-count - Count partial requests (for sidebar badge)
+router.get("/partial-count", async (_req, res) => {
+  const count = await prisma.stockRequest.count({
+    where: { status: "PARTIAL" },
+  });
+  res.json({ count });
+});
+
 // GET /api/stock-requests - List all requests (optional ?status filter)
 router.get("/", async (req, res) => {
   const { status } = req.query;

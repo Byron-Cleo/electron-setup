@@ -172,26 +172,35 @@ router.post("/", async (req, res) => {
   const existing = await prisma.cookingRecordAssignment.findUnique({
     where: { cookingRecordId_menuId: { cookingRecordId: cookingRecord.id, menuId } },
   });
-  if (existing) {
-    return res.status(400).json({ error: "Assignment already exists for this cooking record and menu. Use PUT to update." });
-  }
 
   const assignment = await prisma.$transaction(async (tx) => {
-    const created = await tx.cookingRecordAssignment.create({
-      data: {
-        cookingRecordId: cookingRecord.id,
-        menuId,
-        quantityPlates: Number(quantityPlates),
-      },
-    });
+    let assignment;
+    if (existing) {
+      // Additive: add new quantity to existing quantity
+      const updatedQty = Number(existing.quantityPlates) + Number(quantityPlates);
+      assignment = await tx.cookingRecordAssignment.update({
+        where: { id: existing.id },
+        data: { quantityPlates: updatedQty },
+      });
+    } else {
+      // Create new assignment
+      assignment = await tx.cookingRecordAssignment.create({
+        data: {
+          cookingRecordId: cookingRecord.id,
+          menuId,
+          quantityPlates: Number(quantityPlates),
+        },
+      });
+    }
 
+    // Increment menu stock — assignment adds plates to the menu
     await tx.menu.update({
       where: { id: menuId },
       data: { stock: { increment: Number(quantityPlates) } },
     });
 
     return tx.cookingRecordAssignment.findUnique({
-      where: { id: created.id },
+      where: { id: assignment.id },
       include: {
         cookingRecord: {
           include: {
@@ -209,7 +218,7 @@ router.post("/", async (req, res) => {
     });
   });
 
-  res.status(201).json(assignment);
+  res.status(existing ? 200 : 201).json(assignment);
 });
 
 // PUT /api/cooking-assignments/:id - Update assignment quantity

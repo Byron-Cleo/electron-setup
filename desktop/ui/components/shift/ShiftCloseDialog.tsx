@@ -60,7 +60,10 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
     }
   }, [shift])
 
-  const pastAutoClose = new Date() > new Date(shift.autoCloseTime)
+  const enforceCloseTime = import.meta.env.VITE_ENFORCE_SHIFT_CLOSE_TIME === "true"
+  const pastAutoClose = enforceCloseTime
+    ? new Date() > new Date(shift.autoCloseTime)
+    : true
 
   async function handleCloseShift() {
     setClosing(true)
@@ -212,14 +215,21 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
               <Button type="button" variant="outline" onClick={handleDismiss} disabled={closing}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleCloseShift} disabled={closing}>
+              <Button
+                type="button"
+                onClick={handleCloseShift}
+                disabled={closing || !pastAutoClose}
+                title={!pastAutoClose ? "Shift can only be closed after its scheduled close time." : ""}
+              >
                 {closing ? (
                   <>
                     <Loader2 className="animate-spin" />
                     Closing...
                   </>
-                ) : (
+                ) : pastAutoClose ? (
                   "Confirm Close"
+                ) : (
+                  `Closes ${formatTime(shift.autoCloseTime)}`
                 )}
               </Button>
             </DialogFooter>

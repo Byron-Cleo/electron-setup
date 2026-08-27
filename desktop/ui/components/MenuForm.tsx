@@ -251,7 +251,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category <span className="text-red-500 text-base font-bold">*</span></FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select key={field.value || "empty"} onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select category" />

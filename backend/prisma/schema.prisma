@@ -46,7 +46,7 @@ model Menu {
   slug                                                  String                    @unique(map: "product_slug_idx")
   category                                              String
   images                                                String[]
-  stock                                                 Int?
+  stock                                                 Int                       @default(0)
   price                                                 Decimal                   @default(0) @db.Decimal(12, 2)
   numReviews                                            Int                       @default(0)
   banner                                                String?

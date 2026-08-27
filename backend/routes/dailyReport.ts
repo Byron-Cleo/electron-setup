@@ -321,13 +321,24 @@ router.get("/shift/:id", async (req, res) => {
     // Calculate production cost
     const totalSales = activeOrders.reduce((sum, order) => sum + Number(order.totalPrice), 0);
 
-    // Get cooking records during shift period (used for both cost and plate movement)
+    // Find the next shift's openingTime to define the upper boundary of this shift's window
+    const nextShift = await prisma.shift.findFirst({
+      where: {
+        openingTime: { gt: shift.openingTime },
+        date: shift.date,
+      },
+      orderBy: { openingTime: "asc" },
+      select: { openingTime: true },
+    });
+
+    const windowEnd = nextShift?.openingTime ?? shift.autoCloseTime;
+
+    // Core cooking records: within the shift's scheduled time window
     const cookingRecords = await prisma.cookingRecord.findMany({
       where: {
-        cookedDate: shift.date,
         createdAt: {
           gte: shift.openingTime,
-          lte: shift.actualCloseTime ?? shift.autoCloseTime,
+          lt: windowEnd,
         },
       },
       include: {
@@ -376,6 +387,30 @@ router.get("/shift/:id", async (req, res) => {
       ? Math.round((shift.actualCloseTime.getTime() - shift.autoCloseTime.getTime()) / 60000)
       : 0;
 
+    // Drift records: created after autoCloseTime but before actualCloseTime (carried forward to next shift)
+    let driftRecords: { menuName: string; quantityCooked: number; platesProduced: number; costPrice: number }[] = [];
+    if (driftMinutes > 0 && shift.actualCloseTime) {
+      const driftCookingRecords = await prisma.cookingRecord.findMany({
+        where: {
+          createdAt: {
+            gte: shift.autoCloseTime,
+            lt: shift.actualCloseTime,
+          },
+        },
+        include: {
+          stockSupply: { select: { name: true, costPrice: true } },
+          assignments: { select: { menuId: true, quantityPlates: true } },
+        },
+      });
+
+      driftRecords = driftCookingRecords.map((record) => ({
+        menuName: record.stockSupply.name,
+        quantityCooked: Number(record.quantityCooked),
+        platesProduced: Number(record.platesActual ?? record.platesExpected),
+        costPrice: Number(record.stockSupply.costPrice ?? 0),
+      }));
+    }
+
     res.json({
       shift: {
         id: shift.id,
@@ -403,6 +438,10 @@ router.get("/shift/:id", async (req, res) => {
       summary: {
         totalOrders: shift.orders.length,
         voidedOrders: shift.orders.filter((o) => o.isVoid).length,
+      },
+      drift: {
+        minutes: driftMinutes,
+        records: driftRecords,
       },
     });
   } catch (e) {

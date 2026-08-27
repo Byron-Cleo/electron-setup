@@ -138,6 +138,11 @@ export async function getPendingStockRequestCount(): Promise<number> {
   return res.count
 }
 
+export async function getPartialStockRequestCount(): Promise<number> {
+  const res = await apiFetch("/stock-requests/partial-count") as { count: number }
+  return res.count
+}
+
 export async function getStockRequests(status?: string): Promise<StockRequest[]> {
   if (window.electron?.stockRequest?.getAll) {
     return window.electron.stockRequest.getAll(status)
@@ -329,6 +334,42 @@ export async function uploadMenuImage(imageFile: File): Promise<{ url: string }>
 export async function getCookedMenus(date?: string): Promise<CookedMenuItem[]> {
   const query = date ? `?date=${encodeURIComponent(date)}` : ""
   return apiFetch(`/menu/cooked${query}`)
+}
+
+export async function getReadyForServingCount(): Promise<number> {
+  const res = await apiFetch("/menu/ready-count") as { count: number }
+  return res.count
+}
+
+export async function getRunningLowCount(): Promise<number> {
+  if (window.electron?.menu?.getRunningLowCount) {
+    return (await window.electron.menu.getRunningLowCount()).count
+  }
+  const res = await apiFetch("/menu/running-low-count") as { count: number }
+  return res.count
+}
+
+export interface MenuStockStatusItem {
+  id: string
+  name: string
+  category: string
+  mealTypes: string[]
+  produced: number
+  sold: number
+  remaining: number
+}
+
+export interface MenuStockStatus {
+  shift: { id: string; type: string; openingTime: string } | null
+  mealType: string | null
+  selling: MenuStockStatusItem[]
+  soldOut: MenuStockStatusItem[]
+  runningLow: MenuStockStatusItem[]
+}
+
+export async function getMenuStockStatus(mealType?: string): Promise<MenuStockStatus> {
+  const q = mealType ? `?mealType=${encodeURIComponent(mealType)}` : ""
+  return apiFetch(`/menu/stock-status${q}`) as Promise<MenuStockStatus>
 }
 
 export async function updateMenu(id: string, data: Partial<MenuCreateData>): Promise<MenuItem> {

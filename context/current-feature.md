@@ -47,6 +47,12 @@ Not Started
 
 ## History
 
+### fullstack - 2026-08-27 — Menu category edit "save doesn't stick" fix (MenuForm)
+- Root cause: editing a menu item left the Category dropdown blank (showed "Select category") even though `getMenuById` returns the correct category and it's a valid option. `form.reset({ category })` didn't propagate the value into the Radix `Select`, so RHF's `category` field stayed empty → required-field validation ("Category is required") blocked the Save → **no PUT was sent → changes didn't persist**. This is the classic Radix Select + react-hook-form async-`reset()` sync bug.
+- Verified end-to-end in browser + network log: with the blank dropdown, changing only price produced NO PUT (dialog still open with `[invalid]` + "Category is required"); with the category manually re-picked, the PUT fired and category persisted. Backend/DB proven correct (direct API PUT of category persists).
+- Fix: `desktop/ui/components/MenuForm.tsx:254` — added `key={field.value || "empty"}` to the Category `<Select>` so it remounts and re-syncs its trigger once the async-loaded value lands after `reset`. After the fix, a fresh Edit dialog opens with the category correctly displayed, and saving (e.g. price-only change) submits + persists (verified: price 500→501→500, category stayed "Fish"). `tsc -b`/vite build + eslint clean on MenuForm.tsx.
+- Data layer unaffected; no backend change.
+
 ### fullstack - 2026-08-26 — Cashier Payment Wizard + Batch Tracking + Sidebar Reorder
 - Single order payment dialog: per-row "Pay" button → order summary + M-Pesa/Cash radio + Confirm Payment
 - Batch payment wizard: 2-step modal (Method → Select Orders with checkbox) with accumulated total, batchId via `crypto.randomUUID()`

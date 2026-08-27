@@ -10,6 +10,7 @@ import AllMenuTable from "@/components/menu/AllMenuTable"
 import DiscontinuedMenusTable from "@/components/menu/DiscontinuedMenusTable"
 import AccompanimentsTable from "@/components/menu/AccompanimentsTable"
 import CreateMenuDialog from "@/components/menu/CreateMenuDialog"
+import MenuStockStatusCard from "@/components/menu/MenuStockStatusCard"
 import { getCookedMenus } from "@/lib/api"
 
 type MenuView = "dashboard" | "cooked-food" | "all-menu"
@@ -88,8 +89,8 @@ function Menu() {
             onClick={() => setView("cooked-food")}
           >
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <UtensilsCrossed size={24} className="text-green-600" />
+              <div className="h-12 w-12 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                <UtensilsCrossed size={24} className="text-orange-600" />
               </div>
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">
@@ -97,8 +98,8 @@ function Menu() {
                 </Heading>
                 <div className="flex items-center gap-2 mt-1">
                   {readyCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
                       {readyCount} Ready for Serving
                     </span>
                   ) : (
@@ -129,6 +130,8 @@ function Menu() {
           </Card>
         </div>
       )}
+
+      {view === "dashboard" && <MenuStockStatusCard />}
 
       {view === "cooked-food" && (
         <div className="space-y-4">

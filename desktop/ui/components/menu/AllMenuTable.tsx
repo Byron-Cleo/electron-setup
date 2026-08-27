@@ -7,17 +7,9 @@ import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
 import { getMenus, updateMenuAvailability, menuImageUrl } from "@/lib/api"
 import { cn } from "@/lib/utils"
-import { getActiveMealPeriods, type MealPeriodLabel } from "@/lib/mealPeriod"
+import { MEAL_PERIODS, type MealPeriodLabel } from "@/lib/mealPeriod"
 import CreateMenuDialog from "./CreateMenuDialog"
 import MenuDetailDialog from "./MenuDetailDialog"
-
-type StatusTab = "all" | "available" | "soldout"
-
-const TABS: { key: StatusTab; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "available", label: "Selling Now" },
-  { key: "soldout", label: "Sold Out" },
-]
 
 const PERIOD_ICONS: Record<MealPeriodLabel, typeof Sunrise> = {
   BREAKFAST: Sunrise,
@@ -27,26 +19,12 @@ const PERIOD_ICONS: Record<MealPeriodLabel, typeof Sunrise> = {
   BEVERAGE: CupSoda,
 }
 
-function getMenuStatus(item: MenuItem): { label: string; className: string } {
-  const plates = item.availablePlates ?? item.stock ?? 0
-  if (plates > 0) return { label: "Now Selling", className: "bg-green-100 text-green-700" }
-  return { label: "Sold Out", className: "bg-orange-100 text-orange-700" }
-}
-
-function getDefaultPeriod(): MealPeriodLabel {
-  const now = new Date().getHours()
-  const periods = getActiveMealPeriods(now)
-  return periods.find((p) => p.isActive)?.period ?? "BREAKFAST"
-}
-
 export default function AllMenuTable() {
   const [items, setItems] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
-  const [statusTab, setStatusTab] = useState<StatusTab>("all")
-  const [hour, setHour] = useState(new Date().getHours())
-  const [selectedPeriod, setSelectedPeriod] = useState<MealPeriodLabel>(getDefaultPeriod)
+  const [selectedPeriod, setSelectedPeriod] = useState<MealPeriodLabel | "all">("all")
   const [detailTarget, setDetailTarget] = useState<MenuItem | null>(null)
   const [editDialog, setEditDialog] = useState<{ open: boolean; editId: string | null }>({
     open: false,
@@ -75,52 +53,22 @@ export default function AllMenuTable() {
     loadData()
   }, [loadData])
 
-  useEffect(() => {
-    const id = setInterval(() => setHour(new Date().getHours()), 60000)
-    return () => clearInterval(id)
-  }, [])
-
-  const mealPeriods = useMemo(() => getActiveMealPeriods(hour), [hour])
-
-  const activePeriods = mealPeriods.filter((p) => p.isActive)
-  const closedPeriods = mealPeriods.filter((p) => !p.isActive)
-
   const activeItems = useMemo(() => items.filter((i) => i.isAvailable), [items])
 
   const periodFiltered = useMemo(() => {
-    if (!selectedPeriod) return activeItems
+    if (!selectedPeriod || selectedPeriod === "all") return activeItems
     return activeItems.filter((item) => item.mealTypes.includes(selectedPeriod))
   }, [activeItems, selectedPeriod])
 
-  const counts = useMemo(() => ({
-    all: periodFiltered.length,
-    available: periodFiltered.filter((i) => i.isAvailable && ((i.availablePlates ?? i.stock ?? 0) > 0)).length,
-    soldout: periodFiltered.filter((i) => i.isAvailable && ((i.availablePlates ?? i.stock ?? 0) <= 0)).length,
-  }), [periodFiltered])
-
-  const statusFiltered = useMemo(() => {
-    if (statusTab === "all") return periodFiltered
-    return periodFiltered.filter((item) => {
-      const plates = item.availablePlates ?? item.stock ?? 0
-      const isAvailable = item.isAvailable && plates > 0
-      const isSoldOut = item.isAvailable && plates <= 0
-      switch (statusTab) {
-        case "available": return isAvailable
-        case "soldout": return isSoldOut
-        default: return true
-      }
-    })
-  }, [periodFiltered, statusTab])
-
   const searchedItems = useMemo(() => {
-    if (!search) return statusFiltered
+    if (!search) return periodFiltered
     const q = search.toLowerCase()
-    return statusFiltered.filter(
+    return periodFiltered.filter(
       (item) =>
         item.name.toLowerCase().includes(q) ||
         item.category.toLowerCase().includes(q)
     )
-  }, [statusFiltered, search])
+  }, [periodFiltered, search])
 
   const {
     currentPage,
@@ -155,7 +103,6 @@ export default function AllMenuTable() {
     { label: "Category", key: "category" },
     { label: "Price", key: "price" },
     { label: "Stock", key: "stock" },
-    { label: "Status", key: "status" },
     { label: "Actions", key: "actions", isAction: true, align: "right" },
   ]
 
@@ -192,14 +139,6 @@ export default function AllMenuTable() {
         return <span>KSh {row.price}</span>
       case "stock":
         return <span>{row.stock}</span>
-      case "status": {
-        const { label, className } = getMenuStatus(row)
-        return (
-          <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", className)}>
-            {label}
-          </span>
-        )
-      }
       case "actions":
         return (
           <div className="flex items-center justify-end gap-1">
@@ -236,87 +175,36 @@ export default function AllMenuTable() {
         All Restaurant Menu
       </Heading>
 
-      <div className="flex flex-wrap items-start gap-6">
-        {activePeriods.length > 0 && (
-          <section>
-            <Heading as="h3" className="text-xs text-green-600 uppercase tracking-wider mb-2">Now Serving</Heading>
-            <div className="flex flex-wrap gap-2">
-              {activePeriods.map((p) => {
-                const Icon = PERIOD_ICONS[p.period]
-                const isSelected = selectedPeriod === p.period
-                return (
-                  <button
-                    key={p.period}
-                    onClick={() => setSelectedPeriod(p.period)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                      isSelected
-                        ? "bg-green-600 text-white shadow-sm"
-                        : "bg-green-50 text-green-700 border border-green-200 hover:bg-green-100",
-                    )}
-                  >
-                    <Icon size={14} />
-                    {p.period}
-                    {p.badgeLabel !== "Now Serving" && p.badgeLabel !== "Always Available" && (
-                      <span className="text-[10px] opacity-75">({p.servingHours})</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </section>
-        )}
-
-        {closedPeriods.length > 0 && (
-          <section>
-            <Heading as="h3" className="text-xs text-red-500 uppercase tracking-wider mb-2">Closed</Heading>
-            <div className="flex flex-wrap gap-2">
-              {closedPeriods.map((p) => {
-                const Icon = PERIOD_ICONS[p.period]
-                return (
-                  <button
-                    key={p.period}
-                    disabled
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium opacity-60 cursor-not-allowed bg-red-50 text-red-500 border border-red-200"
-                  >
-                    <Icon size={14} />
-                    {p.period}
-                  </button>
-                )
-              })}
-            </div>
-          </section>
-        )}
-      </div>
-
-      <div className="flex gap-2">
-        {TABS.map(({ key, label }) => {
-          const isActive = statusTab === key
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setSelectedPeriod("all")}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+            selectedPeriod === "all"
+              ? "bg-green-600 text-white shadow-sm"
+              : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100",
+          )}
+        >
+          All
+        </button>
+        {MEAL_PERIODS.map((period) => {
+          const Icon = PERIOD_ICONS[period]
+          const isSelected = selectedPeriod === period
           return (
             <button
-              key={key}
-              onClick={() => setStatusTab(key)}
+              key={period}
+              type="button"
+              onClick={() => setSelectedPeriod(period)}
               className={cn(
-                "flex flex-col items-center px-4 py-3 h-auto rounded-lg cursor-pointer transition-colors",
-                key === "all" && "mr-auto",
-                isActive && key === "all" && "bg-admin-accent/60 text-white",
-                isActive && key === "available" && "bg-green-500/60 text-white",
-                isActive && key === "soldout" && "bg-red-500/60 text-white",
-                !isActive && key === "all" && "border-4 border-admin-accent/40 text-admin-accent",
-                !isActive && key === "available" && "border-4 border-green-400 text-green-600",
-                !isActive && key === "soldout" && "border-4 border-red-400 text-red-500",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                isSelected
+                  ? "bg-green-600 text-white shadow-sm"
+                  : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100",
               )}
             >
-              <span className="text-sm font-bold leading-tight">{label}</span>
-              <span className={cn(
-                "mt-0.5 text-xs font-bold rounded-full px-2 py-0.5",
-                isActive && "bg-white/20 text-white",
-                !isActive && key === "all" && "bg-admin-accent/10 text-admin-accent",
-                !isActive && key === "available" && "bg-green-100 text-green-600",
-                !isActive && key === "soldout" && "bg-red-100 text-red-500",
-              )}>
-                {counts[key]}
-              </span>
+              <Icon size={14} />
+              {period}
             </button>
           )
         })}

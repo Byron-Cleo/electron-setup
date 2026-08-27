@@ -69,8 +69,8 @@ function matchAccompanimentForImage(url: string, accs: Accompaniment[]): Accompa
 }
 
 function platesBadgeClass(plates: number) {
-  if (plates > 5) return "bg-brand-green/10 text-brand-green"
-  if (plates > 0) return "bg-amber-100 text-amber-700"
+  if (plates > 5) return "bg-green-200 text-green-800"
+  if (plates > 0) return "bg-orange-100 text-orange-700"
   return "bg-red-100 text-red-600"
 }
 
@@ -257,6 +257,8 @@ export function WaiterMenuGrid({
   const renderItemCard = (item: MenuItem) => {
     const plates = platesFor(item)
     const soldOut = plates <= 0
+    const runningLow = plates > 0 && plates <= 5
+    const inStock = plates > 5
     return (
       <Card
         key={item.id}
@@ -267,6 +269,10 @@ export function WaiterMenuGrid({
         }}
         className={cn(
           "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
+          inStock &&
+            "border-green-400 bg-green-100/70 hover:border-green-500 hover:bg-green-100",
+          runningLow &&
+            "border-red-500 bg-red-200/70 hover:border-red-600 hover:bg-red-200",
           soldOut && "opacity-50 cursor-not-allowed hover:shadow-none hover:translate-y-0",
         )}
       >

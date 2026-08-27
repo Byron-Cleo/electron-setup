@@ -167,6 +167,7 @@ export function WaiterMenu() {
 
     let cancelled = false
 
+    // Initial load (full loading state)
     getMenuByMealType(mealPeriod)
       .then((data) => {
         if (cancelled) return
@@ -179,8 +180,21 @@ export function WaiterMenu() {
         setLoading(false)
       })
 
+    // Poll every 5s to pick up menu changes (availability/stock) in near-realtime
+    const id = setInterval(() => {
+      getMenuByMealType(mealPeriod)
+        .then((data) => {
+          if (cancelled) return
+          setItems(data)
+        })
+        .catch(() => {
+          // Silent — keep showing last good data
+        })
+    }, 5000)
+
     return () => {
       cancelled = true
+      clearInterval(id)
     }
   }, [mealPeriod])
 

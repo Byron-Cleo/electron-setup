@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Trash2, Plus, Save } from "lucide-react"
+import { Trash2, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -32,6 +32,7 @@ interface CookedItemData {
   totalAvailable: number
   assignments: AssignmentRow[]
   cookingRecordId?: string
+  menuAssigned: number
 }
 
 interface Props {
@@ -58,6 +59,10 @@ export default function AssignmentModal({ open, onClose, cookedItem, onRefresh }
   if (!cookedItem) return null
 
   const existingAssignment = cookedItem.assignments.find((a) => a.menuId === cookedItem.menuId)
+  const menuAssigned = cookedItem.assignments.reduce(
+    (sum, a) => sum + a.quantityPlates,
+    0
+  )
 
   // Available from kitchen pool (produced minus all assigned across all menus)
   const kitchenAvailable = cookedItem.totalAvailable
@@ -79,6 +84,7 @@ export default function AssignmentModal({ open, onClose, cookedItem, onRefresh }
         quantityPlates: qty,
       })
       onRefresh()
+      onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save assignment")
     } finally {
@@ -94,6 +100,7 @@ export default function AssignmentModal({ open, onClose, cookedItem, onRefresh }
       await deleteCookingAssignment(existingAssignment.id)
       setQuantity("")
       onRefresh()
+      onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to remove assignment")
     } finally {
@@ -122,7 +129,7 @@ export default function AssignmentModal({ open, onClose, cookedItem, onRefresh }
             </div>
             <div className="text-center">
               <p className="text-xs text-admin-muted">Assigned</p>
-              <p className="text-lg font-semibold text-admin-header-text">{cookedItem.totalAssigned}</p>
+              <p className="text-lg font-semibold text-admin-header-text">{menuAssigned}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-admin-muted">Available</p>
@@ -149,7 +156,7 @@ export default function AssignmentModal({ open, onClose, cookedItem, onRefresh }
           {/* Quantity Input */}
           <div className="space-y-1">
             <Label className="text-xs">
-              Assign/Update Plates
+              {existingAssignment ? "Add More Plates" : "Assign Plates"}
             </Label>
             <input
               type="number"
@@ -167,7 +174,7 @@ export default function AssignmentModal({ open, onClose, cookedItem, onRefresh }
             )}
             {qtyNum > 0 && qtyNum <= maxAllowed && (
               <p className="text-[11px] text-green-600 mt-1">
-                {existingAssignment ? "Plates will be updated" : "Plates will be assigned"}
+                {existingAssignment ? `${existingAssignment.quantityPlates} + ${qtyNum} = ${existingAssignment.quantityPlates + qtyNum} plates total` : "Plates will be assigned"}
               </p>
             )}
           </div>
@@ -192,7 +199,7 @@ export default function AssignmentModal({ open, onClose, cookedItem, onRefresh }
             onClick={handleSave}
             disabled={!canSave}
           >
-            {submitting ? "Saving..." : existingAssignment ? <><Save size={14} className="mr-1" /> Update</> : <><Plus size={14} className="mr-1" /> Assign</>}
+            {submitting ? "Saving..." : existingAssignment ? <><Plus size={14} className="mr-1" /> Add More</> : <><Plus size={14} className="mr-1" /> Assign</>}
           </Button>
         </DialogFooter>
       </DialogContent>

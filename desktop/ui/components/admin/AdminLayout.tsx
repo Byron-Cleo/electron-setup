@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getCurrentShift, getPendingStockRequestCount } from "@/lib/api"
+import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getReadyForServingCount, getLowStockCount, getRunningLowCount } from "@/lib/api"
 
 const allNavItems: {
   label: string
@@ -13,12 +13,16 @@ const allNavItems: {
   roles: User["role"][]
   accent?: boolean
   pending?: boolean
+  partial?: boolean
+  ready?: boolean
+  lowstock?: boolean
+  runninglow?: boolean
 }[] = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
   { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager"], accent: true },
-  { label: "Store/Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"], pending: true },
-  { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"] },
-  { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"] },
+  { label: "Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"], pending: true, partial: true, lowstock: true },
+  { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"], pending: true, partial: true },
+  { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"], ready: true, runninglow: true },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager"] },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
@@ -29,26 +33,55 @@ function AdminLayout() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
+  const [shiftType, setShiftType] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
+  const [partialCount, setPartialCount] = useState(0)
+  const [readyCount, setReadyCount] = useState(0)
+  const [lowStockCount, setLowStockCount] = useState(0)
+  const [runningLowCount, setRunningLowCount] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     function checkShift() {
       getCurrentShift()
         .then((shift) => {
-          if (!cancelled) setHasOpenShift(!!shift)
+          if (!cancelled) {
+            setHasOpenShift(!!shift)
+            setShiftType(shift?.type ?? null)
+          }
         })
         .catch(() => {
-          if (!cancelled) setHasOpenShift(false)
+          if (!cancelled) {
+            setHasOpenShift(false)
+            setShiftType(null)
+          }
         })
     }
     function checkPending() {
-      getPendingStockRequestCount()
-        .then((count) => {
-          if (!cancelled) setPendingCount(count)
+      Promise.all([
+        getPendingStockRequestCount(),
+        getPartialStockRequestCount(),
+        getReadyForServingCount(),
+        getLowStockCount(),
+        getRunningLowCount(),
+      ])
+        .then(([pending, partial, ready, lowStock, runningLow]) => {
+          if (!cancelled) {
+            setPendingCount(pending)
+            setPartialCount(partial)
+            setReadyCount(ready)
+            setLowStockCount(lowStock.count)
+            setRunningLowCount(runningLow)
+          }
         })
         .catch(() => {
-          if (!cancelled) setPendingCount(0)
+          if (!cancelled) {
+            setPendingCount(0)
+            setPartialCount(0)
+            setReadyCount(0)
+            setLowStockCount(0)
+            setRunningLowCount(0)
+          }
         })
     }
     checkShift()
@@ -56,7 +89,7 @@ function AdminLayout() {
     const interval = setInterval(() => {
       checkShift()
       checkPending()
-    }, 30000)
+    }, 5000)
     return () => {
       cancelled = true
       clearInterval(interval)
@@ -90,23 +123,56 @@ function AdminLayout() {
                       : isActive
                         ? "bg-red-600/15 text-red-400 font-semibold"
                         : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
-                    : item.pending && pendingCount > 0
-                      ? isActive
-                        ? "bg-amber-500/15 text-amber-400 font-semibold"
-                        : "text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 font-semibold"
-                      : isActive
-                        ? "bg-admin-accent text-admin-accent-text"
-                        : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
+                    : isActive
+                      ? "bg-admin-accent text-admin-accent-text"
+                      : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
                 }`
               }
             >
               <item.icon size={18} />
               {item.label}
-              {item.pending && pendingCount > 0 && (
-                <span className="ml-auto inline-flex items-center justify-center h-5 min-w-5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">
-                  {pendingCount}
-                </span>
+              {item.accent && (
+                hasOpenShift && shiftType ? (
+                  <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    shiftType === "DAY"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                  }`}>
+                    {shiftType === "DAY" ? "DayShift" : "NightShift"}
+                  </span>
+                ) : (
+                  <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                    NoShift
+                  </span>
+                )
               )}
+              <span className="ml-auto inline-flex items-center gap-0.5">
+                {item.pending && pendingCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-amber-500 text-white text-[9px] font-bold px-1" title={`${pendingCount} pending`}>
+                    {pendingCount}
+                  </span>
+                )}
+                {item.partial && partialCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-blue-500 text-white text-[9px] font-bold px-1" title={`${partialCount} partial`}>
+                    {partialCount}
+                  </span>
+                )}
+                {item.ready && readyCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-green-500 text-white text-[9px] font-bold px-1" title={`${readyCount} ready`}>
+                    {readyCount}
+                  </span>
+                )}
+                {item.runninglow && runningLowCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${runningLowCount} running low`}>
+                    {runningLowCount}
+                  </span>
+                )}
+                {item.lowstock && lowStockCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${lowStockCount} low stock`}>
+                    {lowStockCount}
+                  </span>
+                )}
+              </span>
             </NavLink>
           ))}
         </nav>

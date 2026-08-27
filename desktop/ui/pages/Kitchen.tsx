@@ -83,13 +83,16 @@ function Kitchen() {
   const [activeTab, setActiveTab] = useState<RequestTab>("stock")
   const [cookedTab, setCookedTab] = useState<CookedTab>("inventory")
   const [pendingCount, setPendingCount] = useState(0)
+  const [partialCount, setPartialCount] = useState(0)
 
   async function loadCounts() {
     try {
-      const [pending] = await Promise.all([
+      const [pending, partial] = await Promise.all([
         getStockRequests("PENDING"),
+        getStockRequests("PARTIAL"),
       ])
       setPendingCount(pending.length)
+      setPartialCount(partial.length)
     } catch (err) {
       console.error("Failed to load kitchen counts:", err)
     }
@@ -126,16 +129,26 @@ function Kitchen() {
               </div>
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">Request Food / Items</Heading>
-                <div className="flex items-center gap-2 mt-1">
-                  {pendingCount > 0 ? (
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {pendingCount > 0 && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
                       <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                       {pendingCount} pending
                     </span>
-                  ) : (
+                  )}
+                  {partialCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-status-partial-bg text-status-partial-text">
+                      <span className="h-1.5 w-1.5 rounded-full bg-status-partial-text" />
+                      {partialCount} partial
+                    </span>
+                  )}
+                  {pendingCount === 0 && partialCount === 0 && (
                     <span className="text-sm text-admin-muted">Request stock items from store</span>
                   )}
                 </div>
+                <p className="text-xs text-admin-muted mt-1.5 leading-snug">
+                  Raise a stock request needed from store for cooking
+                </p>
               </div>
             </div>
           </Card>

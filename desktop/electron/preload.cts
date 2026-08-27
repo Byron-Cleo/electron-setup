@@ -24,6 +24,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
     update: (id: string, data: any) =>
       electron.ipcRenderer.invoke("menu:update", id, data),
     delete: (id: string) => electron.ipcRenderer.invoke("menu:delete", id),
+    getRunningLowCount: () =>
+      electron.ipcRenderer.invoke("menu:get-running-low-count"),
   },
   auth: {
     login: (pin: string) => electron.ipcRenderer.invoke("auth:login", pin),

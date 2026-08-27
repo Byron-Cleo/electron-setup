@@ -26,6 +26,7 @@ function ShiftManagement() {
   const [newShiftType, setNewShiftType] = useState<ShiftType>("DAY")
   const [openingShift, setOpeningShift] = useState(false)
   const [shiftError, setShiftError] = useState("")
+  const [, setClock] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -41,6 +42,19 @@ function ShiftManagement() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!currentShift) return
+    const id = setInterval(() => setClock((c) => c + 1), 1000)
+    return () => clearInterval(id)
+  }, [currentShift])
+
+  // Close button only becomes enabled 1 second AFTER the scheduled auto-close time
+  // (only enforced when VITE_ENFORCE_SHIFT_CLOSE_TIME is truthy — i.e. production)
+  const enforceCloseTime = import.meta.env.VITE_ENFORCE_SHIFT_CLOSE_TIME === "true"
+  const canClose = currentShift
+    ? !enforceCloseTime || Date.now() > new Date(currentShift.autoCloseTime).getTime() + 1000
+    : false
 
   async function handleOpenCloseDialog() {
     try {
@@ -101,10 +115,34 @@ function ShiftManagement() {
                   by <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">{currentShift.openedBy?.name ?? "—"}</span>
                 </span>
               </div>
-              <Button type="button" variant="destructive" size="sm" className="px-8 py-4 text-lg" onClick={handleOpenCloseDialog}>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="px-8 py-4 text-lg"
+                onClick={handleOpenCloseDialog}
+                disabled={!canClose}
+                title={!canClose ? "Shift is still in its active window. It can only be closed after its scheduled close time." : ""}
+              >
                 <Square />
                 Close Shift
               </Button>
+              {!canClose && currentShift && (
+                <p className="text-xs text-admin-muted">
+                  Shifts can only be closed after the scheduled close time. Window:{" "}
+                  {new Date(currentShift.openingTime).toLocaleTimeString("en-KE", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}{" "}
+                  —{" "}
+                  {new Date(currentShift.autoCloseTime).toLocaleTimeString("en-KE", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
+                </p>
+              )}
             </>
           ) : (
             <>
