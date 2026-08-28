@@ -29,6 +29,7 @@ import {
   formatQuantityWithUnit,
   getDepartments,
   updateCookingRecord,
+  getUnderproducedCookingCount,
 } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
@@ -84,15 +85,18 @@ function Kitchen() {
   const [cookedTab, setCookedTab] = useState<CookedTab>("inventory")
   const [pendingCount, setPendingCount] = useState(0)
   const [partialCount, setPartialCount] = useState(0)
+  const [underproducedCount, setUnderproducedCount] = useState(0)
 
   async function loadCounts() {
     try {
-      const [pending, partial] = await Promise.all([
+      const [pending, partial, underproduced] = await Promise.all([
         getStockRequests("PENDING"),
         getStockRequests("PARTIAL"),
+        getUnderproducedCookingCount(),
       ])
       setPendingCount(pending.length)
       setPartialCount(partial.length)
+      setUnderproducedCount(underproduced.count)
     } catch (err) {
       console.error("Failed to load kitchen counts:", err)
     }
@@ -163,7 +167,20 @@ function Kitchen() {
               </div>
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">Kitchen Production/Cooked Food</Heading>
-                <p className="text-sm text-admin-muted">Manage prepared meals</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {underproducedCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                      {underproducedCount} underproduced
+                    </span>
+                  )}
+                  {underproducedCount === 0 && (
+                    <span className="text-sm text-admin-muted">Manage prepared meals</span>
+                  )}
+                </div>
+                <p className="text-xs text-admin-muted mt-1.5 leading-snug">
+                  Track cooking batches and plate production
+                </p>
               </div>
             </div>
           </Card>

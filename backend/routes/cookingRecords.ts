@@ -3,6 +3,29 @@ import prisma from "../db/db.js";
 
 const router = Router();
 
+// GET /api/cooking-records/underproduced-count - Count records where actual plates < expected
+// platesActual being null means production was exactly as expected (no variance to report)
+router.get("/underproduced-count", async (_req, res) => {
+  try {
+    const records = await prisma.cookingRecord.findMany({
+      where: {
+        platesActual: { not: null },
+        platesExpected: { gt: 0 },
+      },
+      select: { id: true, platesExpected: true, platesActual: true },
+    });
+
+    const underproduced = records.filter(
+      (r) => Number(r.platesActual) < Number(r.platesExpected)
+    );
+
+    res.json({ count: underproduced.length });
+  } catch (e) {
+    console.error("Error counting underproduced records:", e);
+    res.status(500).json({ error: "Failed to count underproduced records" });
+  }
+});
+
 // GET /api/cooking-records/carry-over - Raw stock carry over (PENDING COOK)
 router.get("/carry-over", async (_req, res) => {
   const today = new Date();
@@ -167,12 +190,17 @@ router.post("/", async (req, res) => {
 
   const platesExpected = qtyToCook * Number(stockSupply.platesPerUnit ?? 0);
 
+  // If platesActual not provided, assume production matched expected (variance = 0)
+  const finalPlatesActual = platesActual !== undefined && platesActual !== null
+    ? Number(platesActual)
+    : platesExpected;
+
   const record = await prisma.cookingRecord.create({
     data: {
       stockSupplyId,
       quantityCooked: qtyToCook,
       platesExpected,
-      platesActual: platesActual ? Number(platesActual) : null,
+      platesActual: finalPlatesActual,
       cookedById,
       notes,
     },
@@ -339,7 +367,11 @@ router.put("/:id", async (req, res) => {
     data: {
       quantityCooked: newQuantityCooked,
       platesExpected,
-      platesActual: platesActual !== undefined ? Number(platesActual) : existing.platesActual,
+      // If platesActual explicitly set to null/undefined, default to expected (variance = 0)
+      // If explicitly provided, use that value
+      platesActual: platesActual !== undefined && platesActual !== null
+        ? Number(platesActual)
+        : platesExpected,
       notes: notes !== undefined ? notes : existing.notes,
     },
     include: RECORD_INCLUDE,

@@ -198,7 +198,7 @@ interface User {
   email: string;
   emailVerified: string | null;
   image: string | null;
-  role: "admin" | "manager" | "waiter" | "store" | "kitchen";
+  role: "admin" | "manager" | "waiter" | "store" | "kitchen" | "cashier";
   isActive: boolean;
   platform: string | null;
   address: unknown;

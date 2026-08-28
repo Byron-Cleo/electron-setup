@@ -48,6 +48,12 @@ const ID = {
   whiteMilo: "e3f4a5b6-c7d8-4e9f-0a1b-2c3d4e5f6a7b",
   soda: "f4a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c",
   waterBottled: "a5b6c7d8-e9f0-4a1b-2c3d-4e5f6a7b8c9d",
+  // Chapati Staff (staff meal)
+  chapatiStaff: "b5c6d7e8-f9a0-4b1c-2d3e-4f5a6b7c8d9e",
+  // Departments (fixed UUIDs for consistent seeding)
+  kitchenDept: "da781c00-85a6-4aa3-be8f-e26b7bc0e847",
+  procurementDept: "873f1076-84f4-4daf-a4e1-2dc5c01d3b3e",
+  cashierDept: "abbb4673-ec29-45e1-a3f5-5d4117842685",
 
 } as const;
 
@@ -100,6 +106,17 @@ const sampleData = {
       pin: hashSync("3333", 10),
       role: "kitchen",
       platform: "kitchen",
+      isActive: true,
+      emailVerified: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      name: "Cashier One",
+      email: "cashier@example.com",
+      password: hashSync("12345", 10),
+      pin: hashSync("4444", 10),
+      role: "cashier",
+      platform: "cashier",
       isActive: true,
       emailVerified: new Date(),
       updatedAt: new Date(),
@@ -499,6 +516,20 @@ const sampleData = {
       vegetableId: null,
     },
 
+    // ── Chapati Staff (staff meal - discounted) ──────────────────────────────────
+    {
+      id: ID.chapatiStaff,
+      name: "Chapati Staff",
+      slug: "chapati-staff",
+      category: "Staff",
+      images: ["/uploads/menu-items/chapati.png"],
+      price: "40.00",
+      numReviews: 0,
+      banner: null,
+      starchId: null,
+      vegetableId: null,
+    },
+
     // ── Beverages (available at all meal periods) ────────────────────────────
     {
       id: ID.blackCoffee,
@@ -669,6 +700,10 @@ const sampleData = {
     { menuId: ID.chapati, mealType: ServiceTime.BREAKFAST },
     { menuId: ID.chapati, mealType: ServiceTime.LUNCH },
     { menuId: ID.chapati, mealType: ServiceTime.DINNER },
+    // Chapati Staff (staff meal) - available at all meal times
+    { menuId: ID.chapatiStaff, mealType: ServiceTime.BREAKFAST },
+    { menuId: ID.chapatiStaff, mealType: ServiceTime.LUNCH },
+    { menuId: ID.chapatiStaff, mealType: ServiceTime.DINNER },
     { menuId: ID.andazi, mealType: ServiceTime.BREAKFAST },
     { menuId: ID.nduma, mealType: ServiceTime.BREAKFAST },
     { menuId: ID.ngwashi, mealType: ServiceTime.BREAKFAST },
@@ -713,10 +748,11 @@ const sampleData = {
 
   // ── Departments ──────────────────────────────────────────────────────────
   departments: [
-    { name: "Kitchen", description: "Food preparation and cooking" },
-    { name: "Procurement", description: "Stock purchasing and supply management" },
-    { name: "Cashier", description: "Payment processing and receipt management" },
+    { id: ID.kitchenDept, name: "Kitchen", description: "Food preparation and cooking" },
+    { id: ID.procurementDept, name: "Procurement", description: "Stock purchasing and supply management" },
+    { id: ID.cashierDept, name: "Cashier", description: "Payment processing and receipt management" },
   ],
-};
+
+  };
 
 export default sampleData;

@@ -4,6 +4,7 @@ import prisma from "./db/db.js";
 import { startScheduler } from "./scheduler.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
+const ENABLE_SCHEDULER = process.env.ENABLE_SCHEDULER !== "false";
 
 async function main() {
   try {
@@ -18,7 +19,12 @@ async function main() {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
   });
 
-  startScheduler();
+  if (ENABLE_SCHEDULER) {
+    startScheduler();
+    console.log("Scheduler started (auto-close enabled)");
+  } else {
+    console.log("Scheduler DISABLED (set ENABLE_SCHEDULER=true to enable)");
+  }
 }
 
 main();

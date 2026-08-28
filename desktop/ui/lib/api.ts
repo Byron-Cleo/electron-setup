@@ -280,6 +280,10 @@ export async function topUpCookingRecordMenu(id: string, menuId: string, quantit
   })
 }
 
+export async function getUnderproducedCookingCount(): Promise<{ count: number }> {
+  return apiFetch("/cooking-records/underproduced-count")
+}
+
 // ─── Kitchen Inventory (new endpoint) ───────────────────────────────────────
 
 export async function getKitchenInventoryList(): Promise<KitchenStockItem[]> {
@@ -330,6 +334,16 @@ export async function uploadMenuImage(imageFile: File): Promise<{ url: string }>
   return apiFetch("/menu/upload", { method: "POST", body: formData })
 }
 
+export async function uploadAccompanimentImage(imageFile: File): Promise<{ url: string }> {
+  const formData = new FormData()
+  formData.append("image", imageFile)
+  return apiFetch("/accompaniments/upload", { method: "POST", body: formData })
+}
+
+export async function getAccompanimentImages(): Promise<{ images: string[] }> {
+  return apiFetch("/accompaniments/images")
+}
+
 export async function getCookedMenus(date?: string): Promise<CookedMenuItem[]> {
   const query = date ? `?date=${encodeURIComponent(date)}` : ""
   return apiFetch(`/menu/cooked${query}`)
@@ -351,6 +365,7 @@ export interface MenuStockStatusItem {
   produced: number
   sold: number
   remaining: number
+  opening: number
 }
 
 export interface MenuStockStatus {

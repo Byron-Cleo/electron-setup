@@ -117,6 +117,7 @@ async function getShiftBasedStockStatus(mealType?: string) {
       produced: cookedByMenu.get(menu.id) ?? 0,
       sold: soldByMenu.get(menu.id) ?? 0,
       remaining: onHand,
+      opening: openingByMenu.get(menu.id) ?? 0,
     };
   });
 
@@ -192,13 +193,20 @@ router.get("/cooked", async (req, res) => {
       orderBy: { cookedDate: "desc" },
     });
 
-    const result = records.map((record) => {
+    const result = await Promise.all(records.map(async (record) => {
       const produced = Number(record.platesActual ?? record.platesExpected);
       const linkableMenus = record.stockSupply.menus.map((sm) => sm.menu);
       const splitByMenu = new Map(record.cookingRecordMenus.map((crm) => [crm.menuId, crm]));
 
       const allocatedTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
       const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
+
+      // Get current stock for the primary menu (first linkable menu)
+      const primaryMenu = linkableMenus[0];
+      const primaryMenuStock = primaryMenu ? await prisma.menu.findUnique({
+        where: { id: primaryMenu.id },
+        select: { stock: true, name: true }
+      }) : null;
 
       return {
         id: record.id,
@@ -212,6 +220,9 @@ router.get("/cooked", async (req, res) => {
           platesPerUnit: record.stockSupply.platesPerUnit,
           image: record.stockSupply.image,
         },
+        // Top-level fields for EditMenuDialog compatibility
+        name: primaryMenuStock?.name ?? record.stockSupply.name,
+        stock: primaryMenuStock?.stock ?? 0,
         menus: linkableMenus.map((menu) => {
           const split = splitByMenu.get(menu.id);
           return {
@@ -235,7 +246,7 @@ router.get("/cooked", async (req, res) => {
           platesRemaining: Number(crm.platesRemaining),
         })),
       };
-    });
+    }));
 
     res.json(result);
   } catch (e) {

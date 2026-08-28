@@ -32,6 +32,7 @@ async function main() {
   await prisma.session.deleteMany();
   await prisma.verificationToken.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.department.deleteMany();
   await prisma.category.deleteMany();
 
   // ── Insert in FK-safe order ───────────────────────────────────────────────

@@ -1,7 +1,8 @@
 import prisma from "./db/db.js";
 
-// Close all open shifts whose scheduled close time has passed.
-// Returns the closed shifts (with opening snapshots included).
+// Auto-capture snapshot at scheduled close time.
+// Does NOT close the shift - keeps isOpen=true so staff can manually close later.
+// Returns shifts that were auto-captured.
 export async function autoCloseExpiredShifts() {
   const now = new Date();
 
@@ -9,22 +10,25 @@ export async function autoCloseExpiredShifts() {
     where: {
       isOpen: true,
       autoCloseTime: { lte: now },
+      autoClosed: false,
     },
   });
 
-  const closedShifts: Awaited<ReturnType<typeof prisma.shift.findUnique>>[] = [];
+  const autoClosedShifts: Awaited<ReturnType<typeof prisma.shift.findUnique>>[] = [];
 
   for (const shift of expiredShifts) {
     try {
-      const closed = await prisma.$transaction(async (tx) => {
+      const autoClosed = await prisma.$transaction(async (tx) => {
+        // Mark shift as auto-closed but keep isOpen=true for manual close
         await tx.shift.update({
           where: { id: shift.id },
           data: {
-            isOpen: false,
-            actualCloseTime: shift.autoCloseTime,
+            autoClosed: true,
+            autoClosedAt: now,
           },
         });
 
+        // Capture auto-close snapshot (current menu stock at scheduled close time)
         const snapshots = await tx.shiftSnapshot.findMany({
           where: { shiftId: shift.id },
           include: { menu: { select: { id: true, stock: true } } },
@@ -34,7 +38,10 @@ export async function autoCloseExpiredShifts() {
           const currentStock = snapshot.menu.stock ?? 0;
           await tx.shiftSnapshot.update({
             where: { id: snapshot.id },
-            data: { closingPlates: currentStock },
+            data: {
+              autoClosePlates: currentStock,
+              autoCloseTime: now,
+            },
           });
         }
 
@@ -46,18 +53,18 @@ export async function autoCloseExpiredShifts() {
         });
       });
 
-      if (closed) {
-        closedShifts.push(closed);
+      if (autoClosed) {
+        autoClosedShifts.push(autoClosed);
         console.log(
-          `[scheduler] Auto-closed ${closed.type} shift ${closed.id} (scheduled close ${shift.autoCloseTime.toISOString()})`
+          `[scheduler] Auto-captured ${autoClosed.type} shift ${autoClosed.id} at ${now.toISOString()} (scheduled ${shift.autoCloseTime.toISOString()})`
         );
       }
     } catch (e) {
-      console.error(`Error auto-closing shift ${shift.id}:`, e);
+      console.error(`Error auto-capturing shift ${shift.id}:`, e);
     }
   }
 
-  return closedShifts;
+  return autoClosedShifts;
 }
 
 let running = false;
@@ -67,12 +74,12 @@ export function startScheduler(intervalMs = 60_000) {
     if (running) return;
     running = true;
     try {
-      const closedShifts = await autoCloseExpiredShifts();
-      if (closedShifts.length > 0) {
-        console.log(`[scheduler] Auto-closed ${closedShifts.length} shift(s)`);
+      const autoClosedShifts = await autoCloseExpiredShifts();
+      if (autoClosedShifts.length > 0) {
+        console.log(`[scheduler] Auto-captured ${autoClosedShifts.length} shift(s)`);
       }
     } catch (e) {
-      console.error("[scheduler] Auto-close tick failed:", e);
+      console.error("[scheduler] Auto-capture tick failed:", e);
     } finally {
       running = false;
     }

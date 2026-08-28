@@ -198,7 +198,8 @@ router.post("/open", async (req, res) => {
   }
 });
 
-// Close a shift
+// Close a shift (manual close by staff)
+// Allows closing even if shift was auto-captured by scheduler
 router.post("/:id/close", async (req, res) => {
   const { id } = req.params;
   const { closedById } = req.body;
@@ -214,35 +215,55 @@ router.post("/:id/close", async (req, res) => {
       return res.status(404).json({ error: "Shift not found" });
     }
 
-    if (!shift.isOpen) {
-      return res.status(400).json({ error: "Shift is already closed" });
+    if (!shift.isOpen && shift.finalClosedAt) {
+      return res.status(400).json({ error: "Shift is already finalized" });
     }
 
     const now = new Date();
 
-    // Close shift and take closing snapshot
+    // Close shift and take manual closing snapshot
     const closedShift = await prisma.$transaction(async (tx) => {
-      // Update shift
+      // Update shift - mark as finalized
       await tx.shift.update({
         where: { id },
         data: {
           isOpen: false,
           closedById,
           actualCloseTime: now,
+          finalClosedAt: now,
+          finalClosedById: closedById,
+          finalCloseSource: "MANUAL",
         },
       });
 
-      // Take closing snapshot
+      // Take manual closing snapshot and compute drift
       const snapshots = await tx.shiftSnapshot.findMany({
         where: { shiftId: id },
         include: { menu: { select: { id: true, stock: true } } },
       });
 
+      const autoCloseTime = shift.autoClosedAt ? new Date(shift.autoClosedAt) : null;
+
       for (const snapshot of snapshots) {
         const currentStock = snapshot.menu.stock ?? 0;
+        const autoPlates = snapshot.autoClosePlates ?? null;
+        const autoTime = snapshot.autoCloseTime ? new Date(snapshot.autoCloseTime) : null;
+
+        // Compute drift
+        const driftPlates = autoPlates !== null ? currentStock - autoPlates : null;
+        const driftMinutes = autoTime && autoCloseTime
+          ? Math.round((now.getTime() - autoTime.getTime()) / 60000)
+          : null;
+
         await tx.shiftSnapshot.update({
           where: { id: snapshot.id },
-          data: { closingPlates: currentStock },
+          data: {
+            closingPlates: currentStock,
+            manualClosePlates: currentStock,
+            manualCloseTime: now,
+            driftPlates,
+            driftMinutes,
+          },
         });
       }
 
@@ -251,6 +272,7 @@ router.post("/:id/close", async (req, res) => {
         include: {
           openedBy: { select: { id: true, name: true } },
           closedBy: { select: { id: true, name: true } },
+          finalClosedBy: { select: { id: true, name: true } },
           snapshots: { include: { menu: { select: { id: true, name: true } } } },
         },
       });
@@ -263,14 +285,14 @@ router.post("/:id/close", async (req, res) => {
   }
 });
 
-// Auto-close expired shifts (also called by the scheduler every minute)
-router.post("/auto-close", async (_req, res) => {
+// Auto-capture shifts at scheduled close time (called by scheduler)
+router.post("/auto-capture", async (_req, res) => {
   try {
-    const closedShifts = await autoCloseExpiredShifts();
-    res.json({ closed: closedShifts.length, shifts: closedShifts });
+    const capturedShifts = await autoCloseExpiredShifts();
+    res.json({ captured: capturedShifts.length, shifts: capturedShifts });
   } catch (e) {
-    console.error("Error auto-closing shifts:", e);
-    res.status(500).json({ error: "Failed to auto-close shifts" });
+    console.error("Error auto-capturing shifts:", e);
+    res.status(500).json({ error: "Failed to auto-capture shifts" });
   }
 });
 

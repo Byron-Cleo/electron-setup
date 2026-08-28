@@ -1,7 +1,8 @@
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useForm, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { ImagePlus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -30,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { createAccompaniment, updateAccompaniment } from "@/lib/api"
+import { createAccompaniment, updateAccompaniment, uploadAccompanimentImage, menuImageUrl } from "@/lib/api"
 
 const CATEGORIES = ["STARCH", "VEGETABLE"] as const
 
@@ -50,9 +51,76 @@ const formSchema = z.object({
   ),
   description: z.string().optional(),
   isDefault: z.boolean(),
+  image: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
+
+function AccompanimentImageField({
+  value,
+  onChange,
+  onError,
+}: {
+  value: string | undefined
+  onChange: (image: string) => void
+  onError: (message: string) => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const current = value ?? ""
+
+  return (
+    <div className="flex items-center gap-3">
+      {current ? (
+        <img
+          src={menuImageUrl(current) ?? undefined}
+          alt="Accompaniment"
+          className="h-16 w-16 rounded-md border object-cover"
+        />
+      ) : (
+        <div className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed text-muted-foreground">
+          <ImagePlus className="h-5 w-5" />
+        </div>
+      )}
+      <div className="flex flex-col gap-1">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ""
+            if (!file) return
+            try {
+              setUploading(true)
+              const { url } = await uploadAccompanimentImage(file)
+              onChange(url)
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Image upload failed")
+            } finally {
+              setUploading(false)
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? "Uploading..." : current ? "Change Image" : "Upload Image"}
+        </Button>
+        {current && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange("")}>
+            Remove
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function AccompanimentDialog({ open, onClose, editItem, onSaved }: Props) {
   const form = useForm<FormValues>({
@@ -63,6 +131,7 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
       price: undefined,
       description: "",
       isDefault: false,
+      image: "",
     },
   })
 
@@ -75,6 +144,7 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
         price: editItem.price === null ? undefined : Number(editItem.price),
         description: editItem.description ?? "",
         isDefault: editItem.isDefault,
+        image: editItem.image ?? "",
       })
     } else {
       form.reset({
@@ -83,6 +153,7 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
         price: undefined,
         description: "",
         isDefault: false,
+        image: "",
       })
     }
   }, [open, editItem, form])
@@ -94,6 +165,7 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
         category: data.category,
         ...(data.price !== undefined && { price: data.price }),
         ...(data.description !== undefined && data.description !== "" && { description: data.description }),
+        ...(data.image !== undefined && { image: data.image }),
         isDefault: data.isDefault,
       }
       if (editItem) {
@@ -187,20 +259,6 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
 
             <FormField
               control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} placeholder="Optional description" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name="isDefault"
               render={({ field }) => (
                 <FormItem className="flex items-center gap-2 space-y-0">
@@ -211,6 +269,36 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
                     />
                   </FormControl>
                   <Label className="text-sm font-normal cursor-pointer">Default accompaniment</Label>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="image"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Image</FormLabel>
+                  <AccompanimentImageField
+                    value={field.value}
+                    onChange={field.onChange}
+                    onError={(message) => form.setError("root", { message })}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} placeholder="Optional description" />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

@@ -53,6 +53,7 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
             existingAllocated: split ? Number(split.platesRemaining) : 0,
             currentStock: 0,
             soldThisShift: 0,
+            openingStock: 0,
           }
         })
         const initialDeltas: Record<string, number> = {}

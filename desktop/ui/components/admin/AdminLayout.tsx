@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount } from "@/lib/api"
+import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount } from "@/lib/api"
 
 const allNavItems: {
   label: string
@@ -17,11 +17,12 @@ const allNavItems: {
   ready?: boolean
   lowstock?: boolean
   runninglow?: boolean
+  underproduced?: boolean
 }[] = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
   { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager", "cashier"], accent: true },
   { label: "Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"], pending: true, partial: true, lowstock: true },
-  { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"], pending: true, partial: true },
+  { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"], pending: true, partial: true, underproduced: true },
   { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"], ready: true, runninglow: true },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager", "cashier"] },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
@@ -39,6 +40,7 @@ function AdminLayout() {
   const [readyCount, setReadyCount] = useState(0)
   const [lowStockCount, setLowStockCount] = useState(0)
   const [runningLowCount, setRunningLowCount] = useState(0)
+  const [underproducedCount, setUnderproducedCount] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -64,14 +66,16 @@ function AdminLayout() {
         getCookedMenus(),
         getLowStockCount(),
         getRunningLowCount(),
+        getUnderproducedCookingCount(),
       ])
-        .then(([pending, partial, cooked, lowStock, runningLow]) => {
+        .then(([pending, partial, cooked, lowStock, runningLow, underproduced]) => {
           if (!cancelled) {
             setPendingCount(pending)
             setPartialCount(partial)
             setReadyCount(cooked.length)
             setLowStockCount(lowStock.count)
             setRunningLowCount(runningLow)
+            setUnderproducedCount(underproduced.count)
           }
         })
         .catch(() => {
@@ -81,6 +85,7 @@ function AdminLayout() {
             setReadyCount(0)
             setLowStockCount(0)
             setRunningLowCount(0)
+            setUnderproducedCount(0)
           }
         })
     }
@@ -170,6 +175,11 @@ function AdminLayout() {
                 {item.lowstock && lowStockCount > 0 && (
                   <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${lowStockCount} low stock`}>
                     {lowStockCount}
+                  </span>
+                )}
+                {item.underproduced && underproducedCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-600 text-white text-[9px] font-bold px-1" title={`${underproducedCount} underproduced`}>
+                    {underproducedCount}
                   </span>
                 )}
               </span>
