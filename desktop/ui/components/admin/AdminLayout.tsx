@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getReadyForServingCount, getLowStockCount, getRunningLowCount } from "@/lib/api"
+import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount } from "@/lib/api"
 
 const allNavItems: {
   label: string
@@ -19,11 +19,11 @@ const allNavItems: {
   runninglow?: boolean
 }[] = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
-  { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager"], accent: true },
+  { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager", "cashier"], accent: true },
   { label: "Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"], pending: true, partial: true, lowstock: true },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"], pending: true, partial: true },
   { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"], ready: true, runninglow: true },
-  { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager"] },
+  { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager", "cashier"] },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
   { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
@@ -61,15 +61,15 @@ function AdminLayout() {
       Promise.all([
         getPendingStockRequestCount(),
         getPartialStockRequestCount(),
-        getReadyForServingCount(),
+        getCookedMenus(),
         getLowStockCount(),
         getRunningLowCount(),
       ])
-        .then(([pending, partial, ready, lowStock, runningLow]) => {
+        .then(([pending, partial, cooked, lowStock, runningLow]) => {
           if (!cancelled) {
             setPendingCount(pending)
             setPartialCount(partial)
-            setReadyCount(ready)
+            setReadyCount(cooked.length)
             setLowStockCount(lowStock.count)
             setRunningLowCount(runningLow)
           }

@@ -240,6 +240,10 @@ export async function getCookingRecords(stockSupplyId?: string): Promise<Cooking
   return apiFetch(`/cooking-records${query}`)
 }
 
+export async function getCookingRecord(id: string): Promise<CookingRecord> {
+  return apiFetch(`/cooking-records/${id}`)
+}
+
 export async function createCookingRecord(data: CreateCookingRecordData): Promise<CookingRecord> {
   if (window.electron?.cookingRecord?.create) {
     return window.electron.cookingRecord.create(data)
@@ -259,32 +263,27 @@ export async function deleteCookingRecord(id: string): Promise<void> {
   return apiFetch(`/cooking-records/${id}`, { method: "DELETE" })
 }
 
+export async function allocateCookingRecord(
+  id: string,
+  allocations: { menuId: string; plates: number }[]
+): Promise<{ record: CookingRecord; stockUpdates: { menuId: string; menuName?: string; stock: number }[] }> {
+  return apiFetch(`/cooking-records/${id}/allocate`, {
+    method: "POST",
+    body: JSON.stringify({ allocations }),
+  })
+}
+
+export async function topUpCookingRecordMenu(id: string, menuId: string, quantityPlates: number): Promise<CookingRecord> {
+  return apiFetch(`/cooking-records/${id}/menu/${menuId}/top-up`, {
+    method: "POST",
+    body: JSON.stringify({ quantityPlates }),
+  })
+}
+
 // ─── Kitchen Inventory (new endpoint) ───────────────────────────────────────
 
 export async function getKitchenInventoryList(): Promise<KitchenStockItem[]> {
   return apiFetch("/kitchen/inventory")
-}
-
-// ─── Cooking Assignments ────────────────────────────────────────────────────
-
-export async function getCookingAssignments(date?: string): Promise<CookingRecord[]> {
-  return apiFetch(`/cooking-assignments/available${date ? `?date=${date}` : ""}`)
-}
-
-export async function createCookingAssignment(data: { cookingRecordId?: string; stockSupplyId?: string; date?: string; menuId: string; quantityPlates: number }) {
-  return apiFetch("/cooking-assignments", { method: "POST", body: JSON.stringify(data) })
-}
-
-export async function updateCookingAssignment(id: string, data: { quantityPlates: number }) {
-  return apiFetch(`/cooking-assignments/${id}`, { method: "PUT", body: JSON.stringify(data) })
-}
-
-export async function deleteCookingAssignment(id: string) {
-  return apiFetch(`/cooking-assignments/${id}`, { method: "DELETE" })
-}
-
-export async function upsertCookingAssignment(data: { cookingRecordId: string; menuId: string; quantityPlates: number }) {
-  return apiFetch("/cooking-assignments/upsert", { method: "POST", body: JSON.stringify(data) })
 }
 
 // ─── Menu ───────────────────────────────────────────────────────────────────
@@ -334,11 +333,6 @@ export async function uploadMenuImage(imageFile: File): Promise<{ url: string }>
 export async function getCookedMenus(date?: string): Promise<CookedMenuItem[]> {
   const query = date ? `?date=${encodeURIComponent(date)}` : ""
   return apiFetch(`/menu/cooked${query}`)
-}
-
-export async function getReadyForServingCount(): Promise<number> {
-  const res = await apiFetch("/menu/ready-count") as { count: number }
-  return res.count
 }
 
 export async function getRunningLowCount(): Promise<number> {

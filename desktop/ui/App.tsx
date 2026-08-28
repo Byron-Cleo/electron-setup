@@ -113,7 +113,7 @@ function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute role={["admin", "manager", "store", "kitchen"]}>
+            <ProtectedRoute role={["admin", "manager", "cashier", "store", "kitchen"]}>
               <AdminLayout />
             </ProtectedRoute>
           }
@@ -125,7 +125,7 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="shift-management" element={
-            <ProtectedRoute role={["admin", "manager"]}>
+            <ProtectedRoute role={["admin", "manager", "cashier"]}>
               <AdminShiftManagement />
             </ProtectedRoute>
           } />
@@ -140,7 +140,14 @@ function App() {
               <AdminKitchen />
             </ProtectedRoute>
           } />
-          <Route path="cashier" element={<AdminCashier />} />
+          <Route
+            path="cashier"
+            element={
+              <ProtectedRoute role={["admin", "manager", "cashier"]}>
+                <AdminCashier />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="reports"
             element={

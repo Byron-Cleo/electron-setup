@@ -17,7 +17,6 @@ async function main() {
   await prisma.stockFulfillment.deleteMany();
   await prisma.stockRequestItem.deleteMany();
   await prisma.stockRequest.deleteMany();
-  await prisma.cookingRecordAssignment.deleteMany();
   await prisma.cookingRecord.deleteMany();
   await prisma.departmentStockSupply.deleteMany();
   await prisma.stockSupplyMenu.deleteMany();

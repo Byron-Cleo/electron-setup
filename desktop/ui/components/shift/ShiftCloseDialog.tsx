@@ -25,6 +25,20 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-KE", { dateStyle: "medium" })
 }
 
+function driftLabel(minutes: number | null, verb: "Opened" | "Closed"): string {
+  if (minutes === null) return "—"
+  if (minutes === 0) return `${verb} on time`
+  const magnitude = Math.abs(minutes)
+  const early = minutes < 0
+  const hours = Math.floor(magnitude / 60)
+  const mins = magnitude % 60
+  let duration: string
+  if (hours > 0 && mins > 0) duration = `${hours} h ${mins} min`
+  else if (hours > 0) duration = `${hours} h`
+  else duration = `${mins} min`
+  return `${verb} ${duration} ${early ? "early" : "late"}`
+}
+
 interface Props {
   shift: Shift
   closedById: string
@@ -106,7 +120,11 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
         date: r.shift.date,
         openingTime: r.shift.openingTime,
         autoCloseTime: r.shift.autoCloseTime,
+        actualOpeningTime: r.shift.actualOpeningTime,
         actualCloseTime: r.shift.actualCloseTime,
+        openingDriftMinutes: r.shift.openingDriftMinutes,
+        closingDriftMinutes: r.shift.closingDriftMinutes,
+        driftMinutes: r.shift.driftMinutes,
         openedBy: r.shift.openedBy?.name ?? "—",
         closedBy: r.shift.closedBy?.name,
       },
@@ -288,6 +306,33 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
 
               <div className="rounded-lg border border-admin-card-border p-4">
                 <p className="mb-2 text-sm font-medium text-admin-header-text">
+                  Shift Clocking Summary
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  <div className="text-admin-muted">Defined open time</div>
+                  <div>{formatTime(report.shift.openingTime)}</div>
+                  <div className="text-admin-muted">Actual open time</div>
+                  <div>{formatTime(report.shift.actualOpeningTime)}</div>
+                  <div className="text-admin-muted">Opening drift</div>
+                  <div className={cn(report.shift.openingDriftMinutes !== 0 && "text-amber-600")}>
+                    {driftLabel(report.shift.openingDriftMinutes, "Opened")}
+                  </div>
+
+                  <div className="col-span-2 border-t border-admin-card-border" />
+
+                  <div className="text-admin-muted">Defined close time</div>
+                  <div>{formatTime(report.shift.autoCloseTime)}</div>
+                  <div className="text-admin-muted">Actual close time</div>
+                  <div>{formatTime(report.shift.actualCloseTime)}</div>
+                  <div className="text-admin-muted">Closing drift</div>
+                  <div className={cn(report.shift.closingDriftMinutes !== 0 && "text-amber-600")}>
+                    {driftLabel(report.shift.closingDriftMinutes, "Closed")}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-admin-card-border p-4">
+                <p className="mb-2 text-sm font-medium text-admin-header-text">
                   Production vs Sales
                 </p>
                 <div className="space-y-1 text-sm">
@@ -316,7 +361,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                   <p className="text-sm text-admin-muted">No snapshots recorded.</p>
                 ) : (
                   <div className="space-y-1 text-sm">
-                    <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 text-xs font-semibold uppercase tracking-wide text-admin-muted">
+                    <div className="grid grid-cols-[1fr_56px_56px_56px_56px] gap-x-3 text-xs font-semibold uppercase tracking-wide text-admin-muted">
                       <span>Item</span>
                       <span className="text-right">Open</span>
                       <span className="text-right">Cooked</span>
@@ -326,7 +371,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                     {report.plateMovement.map((row) => (
                       <div
                         key={row.menuId}
-                        className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 border-t border-admin-card-border pt-1"
+                        className="grid grid-cols-[1fr_56px_56px_56px_56px] items-center gap-x-3 border-t border-admin-card-border pt-1"
                       >
                         <span className="truncate">{row.menuName}</span>
                         <span className="text-right tabular-nums">{row.openingPlates}</span>

@@ -90,7 +90,7 @@ export default function AllMenuTable() {
       ))
       setHideDialog({ open: false, item: null })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to hide menu")
+      setError(err instanceof Error ? err.message : "Failed to discontinue menu")
     } finally {
       setHiding(false)
     }
@@ -157,7 +157,7 @@ export default function AllMenuTable() {
               onClick={() => setHideDialog({ open: true, item: row })}
             >
               <EyeOff size={14} className="mr-1" />
-              Hide
+              Discontinue
             </Button>
           </div>
         )
@@ -258,10 +258,10 @@ export default function AllMenuTable() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
           <div className="bg-popover rounded-xl p-6 shadow-lg ring-1 ring-foreground/10 w-full max-w-sm space-y-4">
             <Heading as="h3" className="text-admin-header-text">
-              Hide Menu Item
+              Discontinue Menu Item
             </Heading>
             <p className="text-sm text-admin-muted">
-              Are you sure you want to hide &quot;{hideDialog.item.name}&quot;?
+              Are you sure you want to discontinue &quot;{hideDialog.item.name}&quot;?
             </p>
             <p className="text-sm text-admin-muted">It will move to Discontinued Menus.</p>
             <div className="flex justify-end gap-2 pt-2">
@@ -278,7 +278,7 @@ export default function AllMenuTable() {
                 onClick={handleHide}
                 disabled={hiding}
               >
-                {hiding ? "Hiding..." : "Hide"}
+                {hiding ? "Discontinuing..." : "Discontinue"}
               </Button>
             </div>
           </div>

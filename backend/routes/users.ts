@@ -5,7 +5,7 @@ import prisma from "../db/db.js";
 
 const router = Router();
 
-const ALLOWED_ROLES = ["admin", "manager", "waiter", "store", "kitchen"] as const;
+const ALLOWED_ROLES = ["admin", "manager", "waiter", "cashier", "store", "kitchen"] as const;
 type UserRole = (typeof ALLOWED_ROLES)[number];
 
 function isAllowedRole(role: string): role is UserRole {

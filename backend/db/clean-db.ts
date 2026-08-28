@@ -9,7 +9,7 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  console.log("Clearing transactional data (keeping Menu, StockSupply, Users)...\n");
+  console.log("Clearing transactional data (keeping Department, StockSupply, Menu, Users)...\n");
 
   // Delete in dependency order (children first)
   const steps: [string, Promise<unknown>][] = [
@@ -18,7 +18,7 @@ async function main() {
     ["Order", prisma.order.deleteMany()],
     ["Shift", prisma.shift.deleteMany()],
     ["Cart", prisma.cart.deleteMany()],
-    ["CookingRecordAssignment", prisma.cookingRecordAssignment.deleteMany()],
+    ["CookingRecordMenu", prisma.cookingRecordMenu.deleteMany()],
     ["CookingRecord", prisma.cookingRecord.deleteMany()],
     ["Review", prisma.review.deleteMany()],
     ["Session", prisma.session.deleteMany()],
@@ -28,8 +28,6 @@ async function main() {
     ["StockFulfillment", prisma.stockFulfillment.deleteMany()],
     ["StockRequestItem", prisma.stockRequestItem.deleteMany()],
     ["StockRequest", prisma.stockRequest.deleteMany()],
-    ["DepartmentStockSupply", prisma.departmentStockSupply.deleteMany()],
-    ["Department", prisma.department.deleteMany()],
   ];
 
   for (const [name, query] of steps) {
@@ -38,11 +36,11 @@ async function main() {
     if (count > 0) console.log(`  Deleted ${count} ${name}`);
   }
 
-  // Reset Menu.stock to null (clean slate for assignment flow)
+  // Reset Menu.stock to 0 (clean slate for assignment flow)
   const menuResult = await prisma.menu.updateMany({
-    data: { stock: null, isAvailable: true },
+    data: { stock: 0, isAvailable: true },
   });
-  console.log(`  Reset ${menuResult.count} Menu items (stock → null, isAvailable → true)`);
+  console.log(`  Reset ${menuResult.count} Menu items (stock → 0, isAvailable → true)`);
 
   // Reset StockSupply.currentStock to 0
   const stockResult = await prisma.stockSupply.updateMany({
@@ -50,7 +48,7 @@ async function main() {
   });
   console.log(`  Reset ${stockResult.count} StockSupply items (currentStock → 0)`);
 
-  console.log("\nDone! Database cleared. Menu, StockSupply, Users, and relationships preserved.");
+  console.log("\nDone! Database cleared. Department, StockSupply, Menu, Users, and relationships preserved.");
 }
 
 main()

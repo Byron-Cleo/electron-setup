@@ -56,7 +56,7 @@ function Menu() {
 
   function loadReadyCount() {
     getCookedMenus()
-      .then((items) => setReadyCount(items.filter((i) => i.cooking.totalAvailable > 0).length))
+      .then((items) => setReadyCount(items.length))
       .catch(() => {})
   }
 

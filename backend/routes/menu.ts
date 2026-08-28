@@ -68,40 +68,33 @@ async function getShiftBasedStockStatus(mealType?: string) {
   });
   const windowEnd = nextShift?.openingTime ?? shift.autoCloseTime;
 
-  const cookingRecords = await prisma.cookingRecord.findMany({
-    where: { createdAt: { gte: shift.openingTime, lt: windowEnd } },
+  // Plate-movement context for the current shift (used only to show produced /
+  // sold alongside the live stock — the Selling/Sold Out/Running Low buckets are
+  // driven purely by live Menu.stock so they match exactly what the waiter sees).
+  const menuSplits = await prisma.cookingRecordMenu.findMany({
+    where: {
+      cookingRecord: { createdAt: { gte: shift.openingTime, lt: windowEnd } },
+    },
     select: {
-      platesActual: true,
-      platesExpected: true,
-      assignments: { select: { menuId: true, quantityPlates: true } },
+      menuId: true,
+      platesRemaining: true,
     },
   });
-
-  // Plates cooked (assigned) per menu this shift
   const cookedByMenu = new Map<string, number>();
-  for (const record of cookingRecords) {
-    for (const a of record.assignments) {
-      cookedByMenu.set(a.menuId, (cookedByMenu.get(a.menuId) ?? 0) + Number(a.quantityPlates));
-    }
+  for (const split of menuSplits) {
+    cookedByMenu.set(split.menuId, (cookedByMenu.get(split.menuId) ?? 0) + Number(split.platesRemaining));
   }
 
-  // Plates opening/sold per menu from shift snapshots
-  const openingByMenu = new Map<string, number>();
   const soldByMenu = new Map<string, number>();
+  const openingByMenu = new Map<string, number>();
   for (const snap of shift.snapshots) {
     openingByMenu.set(snap.menuId, Number(snap.openingPlates) || 0);
     soldByMenu.set(snap.menuId, (soldByMenu.get(snap.menuId) ?? 0) + Number(snap.platesSold));
   }
 
-  const menuIds = new Set([
-    ...cookedByMenu.keys(),
-    ...openingByMenu.keys(),
-    ...soldByMenu.keys(),
-  ]);
-
+  // The menu pool — same availability + meal-period filter the waiter uses.
   const menus = await prisma.menu.findMany({
     where: {
-      id: { in: [...menuIds] },
       isAvailable: true,
       ...(mealType ? { MenuMealType: { some: { mealType: mealType as ServiceTime } } } : {}),
     },
@@ -109,34 +102,42 @@ async function getShiftBasedStockStatus(mealType?: string) {
       id: true,
       name: true,
       category: true,
+      stock: true,
       MenuMealType: { select: { mealType: true } },
     },
   });
 
-  const rows = menus
-    .map((menu) => {
-      const opening = openingByMenu.get(menu.id) ?? 0;
-      const cooked = cookedByMenu.get(menu.id) ?? 0;
-      const sold = soldByMenu.get(menu.id) ?? 0;
-      const remaining = Math.max(0, opening + cooked - sold);
-      return {
-        id: menu.id,
-        name: menu.name,
-        category: menu.category,
-        mealTypes: menu.MenuMealType.map((mt) => mt.mealType),
-        produced: cooked,
-        sold,
-        remaining,
-      };
-    })
-    // Only items actually part of this shift's production (cooked/assigned
-    // this shift, or carried-over as opening plates). Everything else is not
-    // on production and shouldn't appear in the summary.
-    .filter((r) => r.produced > 0 || (openingByMenu.get(r.id) ?? 0) > 0);
+  const rows = menus.map((menu) => {
+    const onHand = Number(menu.stock);
+    return {
+      id: menu.id,
+      name: menu.name,
+      category: menu.category,
+      mealTypes: menu.MenuMealType.map((mt) => mt.mealType),
+      produced: cookedByMenu.get(menu.id) ?? 0,
+      sold: soldByMenu.get(menu.id) ?? 0,
+      remaining: onHand,
+    };
+  });
 
+  // Selling = what the waiter can actually order right now (live stock > 0).
   const selling = rows.filter((r) => r.remaining > 0);
   const runningLow = selling.filter((r) => r.remaining <= RUNNING_LOW_THRESHOLD);
-  const soldOut = rows.filter((r) => r.remaining <= 0);
+  // Sold Out = dishes that have been on production (assigned plates / opened
+  // with stock) but currently have none left. Menus with ANY assigned split are
+  // included — not just splits within this shift's window — so carried-over
+  // dishes that sell out mid-shift are still captured. Menu that merely have an
+  // idle snapshot (openingPlates = 0) and no production are excluded.
+  const allocatedSplits = await prisma.cookingRecordMenu.findMany({
+    where: { platesAllocated: { gt: 0 } },
+    select: { menuId: true },
+  });
+  const inProduction = new Set<string>([
+    ...allocatedSplits.map((s) => s.menuId),
+    ...[...openingByMenu.entries()].filter(([, v]) => v > 0).map(([k]) => k),
+    ...selling.map((r) => r.id),
+  ]);
+  const soldOut = rows.filter((r) => r.remaining <= 0 && inProduction.has(r.id));
 
   return { shift, mealType: mealType ?? null, selling, soldOut, runningLow };
 }
@@ -159,175 +160,87 @@ router.get("/stock-status", async (req, res) => {
 router.get("/cooked", async (req, res) => {
   try {
     const { date } = req.query;
-    let dateFilter: Record<string, unknown> = {}
+    const dateFilter: Record<string, unknown> = {}
     if (date) {
       const d = new Date(date as string)
       if (isNaN(d.getTime())) {
         return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" })
       }
-      const nextDay = new Date(d)
-      nextDay.setDate(nextDay.getDate() + 1)
-      dateFilter.cookedDate = { gte: d, lt: nextDay }
+      dateFilter.cookedDate = d
     }
 
-    const menus = await prisma.menu.findMany({
-      where: {
-        isAvailable: true,
-        stockSupplyMenus: {
-          some: {
-            stockSupply: {
-              isMenuStock: true,
-              CookingRecord: { some: {} },
-            },
-          },
-        },
-      },
+    // Kitchen production = cooked batches. Show every batch produced (whether or
+    // not its plates have been allocated yet) so the admin can assign them.
+    const records = await prisma.cookingRecord.findMany({
+      where: dateFilter,
       include: {
-        stockSupplyMenus: {
-          where: { stockSupply: { isMenuStock: true } },
-          include: {
-            stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true, image: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const result = await Promise.all(
-      menus.map(async (menu) => {
-        const stockSupplyIds = menu.stockSupplyMenus.map((sm) => sm.stockSupply.id);
-
-        const cookingRecords = await prisma.cookingRecord.findMany({
-          where: { stockSupplyId: { in: stockSupplyIds }, ...dateFilter },
-          select: { id: true, platesActual: true, platesExpected: true, cookedDate: true },
-        });
-
-        const cookingRecordIds = cookingRecords.map((r) => r.id);
-
-        let totalProduced = 0;
-        for (const record of cookingRecords) {
-          totalProduced += Number(record.platesActual ?? record.platesExpected);
-        }
-
-        const allAssignments = await prisma.cookingRecordAssignment.findMany({
-          where: { cookingRecordId: { in: cookingRecordIds } },
+        stockSupply: {
           select: {
             id: true,
-            menuId: true,
-            quantityPlates: true,
-            menu: { select: { name: true } },
+            name: true,
+            unit: true,
+            platesPerUnit: true,
+            image: true,
+            menus: { include: { menu: { select: { id: true, name: true } } } },
           },
-        });
+        },
+        cookingRecordMenus: {
+          include: { menu: { select: { id: true, name: true } } },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+      orderBy: { cookedDate: "desc" },
+    });
 
-        const totalPoolAssigned = allAssignments.reduce(
-          (sum, a) => sum + Number(a.quantityPlates),
-          0
-        );
+    const result = records.map((record) => {
+      const produced = Number(record.platesActual ?? record.platesExpected);
+      const linkableMenus = record.stockSupply.menus.map((sm) => sm.menu);
+      const splitByMenu = new Map(record.cookingRecordMenus.map((crm) => [crm.menuId, crm]));
 
-        const menuAssignments = allAssignments.filter((a) => a.menuId === menu.id);
-        const menuAssigned = menuAssignments.reduce(
-          (sum, a) => sum + Number(a.quantityPlates),
-          0
-        );
+      const allocatedTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
+      const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
 
-        return {
-          id: menu.id,
-          name: menu.name,
-          slug: menu.slug,
-          category: menu.category,
-          price: Number(menu.price),
-          stock: menu.stock,
-          isAvailable: menu.isAvailable,
-          images: menu.images,
-          stockSupply: menu.stockSupplyMenus[0]?.stockSupply ?? null,
-          cooking: {
-            totalProduced,
-            totalAssigned: totalPoolAssigned,
-            totalAvailable: totalProduced - totalPoolAssigned,
-          },
-          cookingRecords: cookingRecords.map((r) => ({
-            id: r.id,
-            cookedDate: r.cookedDate.toISOString().slice(0, 10),
-            plates: Number(r.platesActual ?? r.platesExpected),
-          })),
-          menuAssigned,
-          assignments: menuAssignments.map((a) => ({
-            id: a.id,
-            menuId: a.menuId,
-            menuName: a.menu.name,
-            quantityPlates: Number(a.quantityPlates),
-          })),
-        };
-      })
-    );
+      return {
+        id: record.id,
+        cookedDate: record.cookedDate.toISOString().slice(0, 10),
+        quantityCooked: Number(record.quantityCooked),
+        produced,
+        stockSupply: {
+          id: record.stockSupply.id,
+          name: record.stockSupply.name,
+          unit: record.stockSupply.unit,
+          platesPerUnit: record.stockSupply.platesPerUnit,
+          image: record.stockSupply.image,
+        },
+        menus: linkableMenus.map((menu) => {
+          const split = splitByMenu.get(menu.id);
+          return {
+            menuId: menu.id,
+            menuName: menu.name,
+            allocated: split ? Number(split.platesAllocated) : 0,
+            remaining: split ? Number(split.platesRemaining) : 0,
+          };
+        }),
+        cooking: {
+          totalProduced: produced,
+          totalAssigned: allocatedTotal,
+          totalAvailable: remainingTotal,
+        },
+        platesRemaining: remainingTotal,
+        cookingRecords: record.cookingRecordMenus.map((crm) => ({
+          id: crm.cookingRecordId,
+          menuId: crm.menuId,
+          cookedDate: record.cookedDate.toISOString().slice(0, 10),
+          plates: Number(crm.platesAllocated),
+          platesRemaining: Number(crm.platesRemaining),
+        })),
+      };
+    });
 
     res.json(result);
   } catch (e) {
     console.error("Error fetching cooked menus:", e);
     res.status(500).json({ error: "Failed to fetch cooked menus" });
-  }
-});
-
-// GET /api/menu/ready-count - Count items ready for serving (for sidebar badge)
-router.get("/ready-count", async (_req, res) => {
-  try {
-    // Find menus that have stock supply with isMenuStock and cooking records
-    const menus = await prisma.menu.findMany({
-      where: {
-        stockSupplyMenus: {
-          some: {
-            stockSupply: {
-              isMenuStock: true,
-              CookingRecord: { some: {} },
-            },
-          },
-        },
-      },
-      include: {
-        stockSupplyMenus: {
-          where: { stockSupply: { isMenuStock: true } },
-          include: {
-            stockSupply: { select: { id: true } },
-          },
-        },
-      },
-    });
-
-    let readyCount = 0;
-
-    for (const menu of menus) {
-      const stockSupplyIds = menu.stockSupplyMenus.map((sm) => sm.stockSupply.id);
-
-      const cookingRecords = await prisma.cookingRecord.findMany({
-        where: { stockSupplyId: { in: stockSupplyIds } },
-        select: { id: true, platesActual: true, platesExpected: true },
-      });
-
-      let totalProduced = 0;
-      for (const record of cookingRecords) {
-        totalProduced += Number(record.platesActual ?? record.platesExpected);
-      }
-
-      const cookingRecordIds = cookingRecords.map((r) => r.id);
-      const assignments = await prisma.cookingRecordAssignment.findMany({
-        where: { cookingRecordId: { in: cookingRecordIds } },
-        select: { quantityPlates: true },
-      });
-
-      const totalAssigned = assignments.reduce(
-        (sum, a) => sum + Number(a.quantityPlates),
-        0
-      );
-
-      if (totalProduced - totalAssigned > 0) {
-        readyCount++;
-      }
-    }
-
-    res.json({ count: readyCount });
-  } catch (e) {
-    console.error("Error counting ready items:", e);
-    res.status(500).json({ error: "Failed to count ready items" });
   }
 });
 

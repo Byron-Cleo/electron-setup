@@ -19,6 +19,20 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-KE", { dateStyle: "medium" })
 }
 
+function driftLabel(minutes: number | null, verb: "Opened" | "Closed"): string {
+  if (minutes === null) return "—"
+  if (minutes === 0) return `${verb} on time`
+  const magnitude = Math.abs(minutes)
+  const early = minutes < 0
+  const hours = Math.floor(magnitude / 60)
+  const mins = magnitude % 60
+  let duration: string
+  if (hours > 0 && mins > 0) duration = `${hours} h ${mins} min`
+  else if (hours > 0) duration = `${hours} h`
+  else duration = `${mins} min`
+  return `${verb} ${duration} ${early ? "early" : "late"}`
+}
+
 function buildShiftReportData(report: ShiftReport): ShiftReportData {
   return {
     restaurant: {
@@ -33,7 +47,11 @@ function buildShiftReportData(report: ShiftReport): ShiftReportData {
       date: report.shift.date,
       openingTime: report.shift.openingTime,
       autoCloseTime: report.shift.autoCloseTime,
+      actualOpeningTime: report.shift.actualOpeningTime,
       actualCloseTime: report.shift.actualCloseTime,
+      openingDriftMinutes: report.shift.openingDriftMinutes,
+      closingDriftMinutes: report.shift.closingDriftMinutes,
+      driftMinutes: report.shift.driftMinutes,
       openedBy: report.shift.openedBy?.name ?? "—",
       closedBy: report.shift.closedBy?.name,
     },
@@ -142,22 +160,65 @@ function ShiftReportView({ report }: Props) {
           <CardTitle className="text-base">Shift Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-            <div className="text-admin-muted">Period</div>
-            <div className="font-medium sm:col-span-2">
-              {shift.type === "DAY" ? "Day" : "Night"} shift · {formatDate(shift.date)}
+          <p className="mb-3 text-sm">
+            <span className="text-admin-muted">Period: </span>
+            <span className="font-medium">
+              {shift.type === "DAY" ? "Day" : "Night"} shift · {formatDate(shift.date)} · opened by{" "}
+              {shift.openedBy?.name ?? "—"}
+            </span>
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-md border border-admin-card-border p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-admin-muted">
+                Configured
+              </p>
+              <div className="space-y-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-admin-muted">Open time</span>
+                  <span className="font-medium">{formatTime(shift.openingTime)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-admin-muted">Close time</span>
+                  <span className="font-medium">{formatTime(shift.autoCloseTime)}</span>
+                </div>
+              </div>
             </div>
-            <div className="text-admin-muted">Opened</div>
-            <div className="font-medium sm:col-span-2">
-              {formatTime(shift.openingTime)} by {shift.openedBy?.name ?? "—"}
-            </div>
-            <div className="text-admin-muted">Scheduled close</div>
-            <div className="font-medium sm:col-span-2">{formatTime(shift.autoCloseTime)}</div>
-            <div className="text-admin-muted">Actually closed</div>
-            <div className="font-medium sm:col-span-2">
-              {shift.actualCloseTime
-                ? `${formatTime(shift.actualCloseTime)} by ${shift.closedBy?.name ?? "—"}`
-                : "—"}
+            <div className="rounded-md border border-admin-card-border p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-admin-muted">
+                Actual &amp; Drift
+              </p>
+              <div className="space-y-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-admin-muted">Open time</span>
+                  <span className="font-medium">{formatTime(shift.actualOpeningTime)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-admin-muted">Opening drift</span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      shift.openingDriftMinutes !== 0 && "text-amber-600",
+                    )}
+                  >
+                    {driftLabel(shift.openingDriftMinutes, "Opened")}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-admin-muted">Close time</span>
+                  <span className="font-medium">{formatTime(shift.actualCloseTime)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-admin-muted">Closing drift</span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      shift.closingDriftMinutes !== 0 && "text-amber-600",
+                    )}
+                  >
+                    {driftLabel(shift.closingDriftMinutes, "Closed")}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>

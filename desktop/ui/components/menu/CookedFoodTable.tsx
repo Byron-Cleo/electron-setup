@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Utensils, Trash2 } from "lucide-react"
+import { Utensils } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
-import { getCookedMenus, updateMenuAvailability, stockSupplyImageUrl } from "@/lib/api"
+import { getCookedMenus, stockSupplyImageUrl } from "@/lib/api"
 import AssignmentModal from "./AssignmentModal"
 
 interface Props {
@@ -21,11 +21,6 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     open: false,
     item: null,
   })
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item: CookedMenuItem | null }>({
-    open: false,
-    item: null,
-  })
-  const [deleting, setDeleting] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -34,7 +29,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
       const data = await getCookedMenus()
       setItems(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load cooked menus")
+      setError(err instanceof Error ? err.message : "Failed to load cooked foods")
     } finally {
       setLoading(false)
     }
@@ -53,9 +48,8 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     const q = search.toLowerCase()
     return items.filter(
       (item) =>
-        item.name.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q) ||
-        item.stockSupply?.name.toLowerCase().includes(q)
+        item.stockSupply?.name.toLowerCase().includes(q) ||
+        item.menus.some((m) => m.menuName.toLowerCase().includes(q))
     )
   }, [items, search])
 
@@ -69,38 +63,20 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     canPrev,
   } = usePagination(filteredItems)
 
-  async function handleDelete() {
-    if (!deleteDialog.item) return
-    try {
-      setDeleting(true)
-      await updateMenuAvailability(deleteDialog.item.id, false)
-      setItems((prev) => prev.filter((i) => i.id !== deleteDialog.item!.id))
-      setDeleteDialog({ open: false, item: null })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to hide menu")
-    } finally {
-      setDeleting(false)
-    }
-  }
-
   const columns: Column[] = [
     { label: "Stock Image", key: "stockImage" },
     { label: "Stock Item", key: "stockItem" },
-    { label: "Kitchen Produced Plates", key: "produced" },
-    { label: "Stock Menu", key: "name" },
-    { label: "Assigned Menu Plates", key: "assigned" },
+    { label: "Stock Item Menus", key: "stockItemMenus" },
+    { label: "Produced Plates", key: "produced" },
+    { label: "Assigned", key: "assigned" },
     { label: "Available", key: "available" },
     { label: "Actions", key: "actions", isAction: true, align: "right" },
   ]
 
   function renderCell(row: CookedMenuItem, column: Column) {
     switch (column.key) {
-      case "name":
-        return <span className="font-medium">{row.name}</span>
-      case "category":
-        return <span>{row.category}</span>
       case "stockItem":
-        return <span>{row.stockSupply?.name ?? "—"}</span>
+        return <span className="font-medium">{row.stockSupply?.name ?? "—"}</span>
       case "stockImage": {
         const url = stockSupplyImageUrl(row.stockSupply?.image ?? null)
         return (
@@ -116,7 +92,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
       case "produced":
         return <span>{row.cooking.totalProduced} plates</span>
       case "assigned": {
-        const assigned = row.menuAssigned
+        const assigned = row.cooking.totalAssigned
         return assigned === 0 ? (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
             {assigned} plates
@@ -127,11 +103,31 @@ export default function CookedFoodTable({ onRefresh }: Props) {
           </span>
         )
       }
+      case "stockItemMenus": {
+        if (!row.menus || row.menus.length === 0) {
+          return <span className="text-admin-muted text-xs">—</span>
+        }
+        return (
+          <div className="flex flex-col items-center gap-0.5">
+            {row.menus.map((m) => (
+              <span
+                key={m.menuId}
+                className="inline-flex items-center gap-1 px-2 py-0 rounded-full text-[10px] font-medium bg-admin-content border border-admin-card-border whitespace-nowrap leading-tight"
+              >
+                <span className="text-admin-header-text">{m.menuName}</span>
+                <span className="rounded-full bg-red-500/15 text-red-600 px-1.5 py-0 text-[9px] font-semibold tabular-nums leading-tight">
+                  {m.remaining}
+                </span>
+              </span>
+            ))}
+          </div>
+        )
+      }
       case "available": {
-        const available = row.cooking.totalAvailable
+        const available = row.cooking.totalProduced - row.cooking.totalAssigned
         return available <= 0 ? (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-            SOLD OUT
+            FULLY ASSIGNED
           </span>
         ) : (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
@@ -142,22 +138,9 @@ export default function CookedFoodTable({ onRefresh }: Props) {
       case "actions":
         return (
           <div className="flex items-center justify-end gap-1">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setEditDialog({ open: true, item: row })}
-            >
+            <Button size="sm" variant="outline" onClick={() => setEditDialog({ open: true, item: row })}>
               <Utensils size={14} className="mr-1" />
               Assign Plates
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-red-600 border-red-200 hover:bg-red-50"
-              onClick={() => setDeleteDialog({ open: true, item: row })}
-            >
-              <Trash2 size={14} className="mr-1" />
-              Hide
             </Button>
           </div>
         )
@@ -166,7 +149,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     }
   }
 
-  if (loading) return <div className="text-admin-muted">Loading cooked menus...</div>
+  if (loading) return <div className="text-admin-muted">Loading cooked foods...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
@@ -182,8 +165,8 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         keyExtractor={(row) => row.id}
         emptyMessage={
           search
-            ? "No menu items match your search."
-            : "No cooked menu items. Cook items in Kitchen first."
+            ? "No cooked foods match your search."
+            : "No cooked foods. Cook items in Kitchen first."
         }
         pagination={{
           currentPage,
@@ -195,7 +178,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         }}
         header={
           <Input
-            placeholder="Search cooked menu items..."
+            placeholder="Search cooked foods..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
@@ -206,57 +189,10 @@ export default function CookedFoodTable({ onRefresh }: Props) {
       <AssignmentModal
         open={editDialog.open}
         onClose={() => setEditDialog({ open: false, item: null })}
-        cookedItem={
-          editDialog.item
-            ? {
-                menuId: editDialog.item.id,
-                menuName: editDialog.item.name,
-                stockSupplyId: editDialog.item.stockSupply?.id ?? "",
-                stockSupplyName: editDialog.item.stockSupply?.name ?? "",
-                cookedDate: editDialog.item.cookingRecords[0]?.cookedDate ?? new Date().toISOString().slice(0, 10),
-                totalProduced: editDialog.item.cooking.totalProduced,
-                totalAssigned: editDialog.item.cooking.totalAssigned,
-                totalAvailable: editDialog.item.cooking.totalAvailable,
-                cookingRecordId: editDialog.item.cookingRecords[0]?.id,
-                assignments: editDialog.item.assignments,
-                menuAssigned: editDialog.item.menuAssigned,
-              }
-            : null
-        }
+        batchId={editDialog.item?.id ?? null}
+        title={editDialog.item?.stockSupply?.name ?? ""}
         onRefresh={loadData}
       />
-
-      {deleteDialog.open && deleteDialog.item && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
-          <div className="bg-popover rounded-xl p-6 shadow-lg ring-1 ring-foreground/10 w-full max-w-sm space-y-4">
-            <Heading as="h3" className="text-admin-header-text">
-              Hide Menu Item
-            </Heading>
-            <p className="text-sm text-admin-muted">
-              Are you sure you want to hide &quot;{deleteDialog.item.name}&quot; from the waiter
-              screen?
-            </p>
-            <p className="text-sm text-admin-muted">You can restore it later from this table.</p>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setDeleteDialog({ open: false, item: null })}
-                disabled={deleting}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                className="text-red-600 border-red-200 hover:bg-red-50"
-                onClick={handleDelete}
-                disabled={deleting}
-              >
-                {deleting ? "Hiding..." : "Hide"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

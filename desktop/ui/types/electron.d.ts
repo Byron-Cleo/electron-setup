@@ -211,7 +211,7 @@ interface LoginResponse {
   user: User;
 }
 
-type AdminUserRole = "admin" | "manager" | "waiter" | "store" | "kitchen";
+type AdminUserRole = "admin" | "manager" | "waiter" | "cashier" | "store" | "kitchen";
 
 interface AdminUser {
   id: string;
@@ -378,6 +378,16 @@ interface StockFulfillmentItem {
   createdAt: string;
 }
 
+interface CookingRecordMenu {
+  id: string;
+  cookingRecordId: string;
+  menuId: string;
+  platesAllocated: number;
+  platesRemaining: number;
+  createdAt: string;
+  menu: { id: string; name: string; slug: string; images: string[] };
+}
+
 interface CookingRecord {
   id: string;
   stockSupplyId: string;
@@ -388,19 +398,16 @@ interface CookingRecord {
   cookedById: string;
   notes: string | null;
   createdAt: string;
-  stockSupply: { id: string; name: string; unit: string; platesPerUnit: number | null; menus: { id: string; name: string }[] };
+  stockSupply: {
+    id: string;
+    name: string;
+    unit: string;
+    platesPerUnit: number | null;
+    menus: { menu: { id: string; name: string; slug: string; images: string[] } }[];
+  };
   cookedBy: { id: string; name: string };
-  assignments: CookingRecordAssignment[];
+  cookingRecordMenus: CookingRecordMenu[];
   availablePlates?: number;
-}
-
-interface CookingRecordAssignment {
-  id: string;
-  cookingRecordId: string;
-  menuId: string;
-  quantityPlates: number;
-  createdAt: string;
-  menu: { id: string; name: string; slug: string; images: string[] };
 }
 
 interface CreateCookingRecordData {
@@ -417,15 +424,15 @@ interface UpdateCookingRecordData {
   notes?: string;
 }
 
+interface AllocateCookingRecordData {
+  allocations: { menuId: string; plates: number }[];
+}
+
 interface CookedMenuItem {
   id: string;
-  name: string;
-  slug: string;
-  category: string;
-  price: number;
-  stock: number;
-  isAvailable: boolean;
-  images: string[];
+  cookedDate: string;
+  quantityCooked: number;
+  produced: number;
   stockSupply: {
     id: string;
     name: string;
@@ -433,22 +440,24 @@ interface CookedMenuItem {
     platesPerUnit: number | null;
     image: string | null;
   } | null;
+  menus: {
+    menuId: string;
+    menuName: string;
+    allocated: number;
+    remaining: number;
+  }[];
   cooking: {
     totalProduced: number;
     totalAssigned: number;
     totalAvailable: number;
   };
+  platesRemaining: number;
   cookingRecords: {
     id: string;
+    menuId: string;
     cookedDate: string;
     plates: number;
-  }[];
-  menuAssigned: number;
-  assignments: {
-    id: string;
-    menuId: string;
-    menuName: string;
-    quantityPlates: number;
+    platesRemaining: number;
   }[];
 }
 
@@ -460,7 +469,7 @@ interface KitchenStockItem {
   isMenuStock: boolean;
   platesPerUnit: number | null;
   image: string | null;
-  menu: { id: string; name: string; slug: string; images: string[] } | null;
+  menus: { id: string; name: string; slug: string; images: string[] }[];
   totalOrdered: number;
   totalCooked: number;
   rawStockPending: number;
@@ -550,6 +559,7 @@ interface Shift {
   date: string;
   openingTime: string;
   autoCloseTime: string;
+  actualOpeningTime: string | null;
   actualCloseTime: string | null;
   isOpen: boolean;
   openedById: string;
@@ -589,7 +599,10 @@ interface ShiftReportMeta {
   date: string;
   openingTime: string;
   autoCloseTime: string;
+  actualOpeningTime: string | null;
   actualCloseTime: string | null;
+  openingDriftMinutes: number | null;
+  closingDriftMinutes: number | null;
   driftMinutes: number;
   isOpen: boolean;
   openedBy: { id: string; name: string };
@@ -654,7 +667,11 @@ interface ShiftReportData {
     date: string;
     openingTime: string;
     autoCloseTime: string;
+    actualOpeningTime: string | null;
     actualCloseTime: string | null;
+    openingDriftMinutes: number | null;
+    closingDriftMinutes: number | null;
+    driftMinutes: number;
     openedBy: string;
     closedBy?: string;
   };

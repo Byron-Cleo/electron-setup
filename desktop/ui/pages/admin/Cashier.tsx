@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
-import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark } from "lucide-react"
+import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark, Lock } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -114,6 +114,8 @@ function Cashier() {
 
 function DashboardView({ onNavigate }: { onNavigate: (v: CashierView) => void }) {
   const [counts, setCounts] = useState({ total: 0, unpaid: 0, voided: 0 })
+  const user = useAuthStore((s) => s.user)
+  const isCashier = user?.role === "cashier"
 
   useEffect(() => {
     let cancelled = false
@@ -184,17 +186,31 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView) => void })
       </Card>
 
       <Card
-        className="p-6 cursor-pointer border-2 border-red-400 bg-red-50/50 hover:border-red-600 transition-colors"
-        onClick={() => onNavigate("void")}
+        className={`p-6 transition-colors ${
+          isCashier
+            ? "opacity-50 cursor-not-allowed border-2 border-gray-300 bg-gray-100"
+            : "cursor-pointer border-2 border-red-400 bg-red-50/50 hover:border-red-600"
+        }`}
+        onClick={isCashier ? undefined : () => onNavigate("void")}
       >
         <div className="flex items-center gap-4">
           <div className="h-12 w-12 rounded-lg bg-red-500/10 flex items-center justify-center">
             <XCircle size={24} className="text-red-600" />
           </div>
-          <div>
-            <Heading as="h3" className="text-lg text-red-700">Void Order</Heading>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <Heading as="h3" className="text-lg text-red-700">Void Order</Heading>
+              {isCashier && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600">
+                  <Lock size={10} />
+                  Manager only
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 mt-1">
-              {counts.unpaid > 0 ? (
+              {isCashier ? (
+                <span className="text-sm text-admin-muted">Requires manager role</span>
+              ) : counts.unpaid > 0 ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                   {counts.unpaid} voidable
@@ -203,7 +219,9 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView) => void })
                 <span className="text-sm text-admin-muted">No voidable orders</span>
               )}
             </div>
-            <p className="text-xs text-admin-muted mt-1">Select and void an unpaid order.</p>
+            <p className="text-xs text-admin-muted mt-1">
+              {isCashier ? "Contact manager to void orders." : "Select and void an unpaid order."}
+            </p>
           </div>
         </div>
       </Card>
@@ -465,6 +483,9 @@ function OrdersView() {
 }
 
 function VoidView() {
+  const user = useAuthStore((s) => s.user)
+  const isCashier = user?.role === "cashier"
+
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -472,9 +493,9 @@ function VoidView() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [voiding, setVoiding] = useState(false)
-  const user = useAuthStore((s) => s.user)
 
   useEffect(() => {
+    if (isCashier) return
     let cancelled = false
     async function loadOrders() {
       setLoading(true)
@@ -489,7 +510,7 @@ function VoidView() {
     }
     loadOrders()
     return () => { cancelled = true }
-  }, [])
+  }, [isCashier])
 
   const filtered = useMemo(() => {
     if (!searchInput) return orders
@@ -506,6 +527,20 @@ function VoidView() {
     canNext,
     canPrev,
   } = usePagination(filtered)
+
+  if (isCashier) {
+    return (
+      <div className="space-y-4">
+        <Heading as="h2" className="text-admin-header-text text-center text-xl">Void Order</Heading>
+        <Card className="p-6 text-center border-gray-300 bg-gray-50">
+          <Lock size={48} className="mx-auto text-gray-400 mb-4" />
+          <Heading as="h3" className="text-lg text-gray-600 mb-2">Manager Only</Heading>
+          <p className="text-gray-500">Void order functionality requires manager role.</p>
+          <p className="text-xs text-gray-400 mt-2">Contact your manager to void orders.</p>
+        </Card>
+      </div>
+    )
+  }
 
   async function handleVoidOrder() {
     if (!selectedOrder || !user) return

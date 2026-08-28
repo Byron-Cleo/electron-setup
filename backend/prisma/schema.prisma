@@ -56,7 +56,7 @@ model Menu {
   starchId                                              String?                   @db.Uuid
   vegetableId                                           String?                   @db.Uuid
   isAvailable                                           Boolean                   @default(true)
-  CookingRecordAssignment                               CookingRecordAssignment[]
+  cookingRecordMenus                                    CookingRecordMenu[]
   MenuAccompaniment_Menu_starchIdToMenuAccompaniment    MenuAccompaniment?        @relation("Menu_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
   MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment?        @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
   MenuMealType                                          MenuMealType[]
@@ -295,32 +295,32 @@ model StockFulfillmentItem {
 }
 
 model CookingRecord {
-  id             String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  stockSupplyId  String                    @db.Uuid
-  quantityCooked Decimal                   @db.Decimal(12, 2)
-  platesExpected Decimal                   @db.Decimal(12, 2)
-  cookedById     String                    @db.Uuid
-  notes          String?
-  createdAt      DateTime                  @default(now())
-  cookedDate     DateTime                  @default(now()) @db.Date
-  platesActual   Decimal?                  @db.Decimal(12, 2)
-  cookedBy       User                      @relation(fields: [cookedById], references: [id])
-  stockSupply    StockSupply               @relation(fields: [stockSupplyId], references: [id])
-  assignments    CookingRecordAssignment[]
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockSupplyId     String                @db.Uuid
+  quantityCooked    Decimal               @db.Decimal(12, 2)
+  platesExpected    Decimal               @db.Decimal(12, 2)
+  cookedById        String                @db.Uuid
+  notes             String?
+  createdAt         DateTime              @default(now())
+  cookedDate        DateTime              @default(now()) @db.Date
+  platesActual      Decimal?              @db.Decimal(12, 2)
+  cookedBy          User                  @relation(fields: [cookedById], references: [id])
+  stockSupply       StockSupply           @relation(fields: [stockSupplyId], references: [id])
+  cookingRecordMenus CookingRecordMenu[]
 }
 
-model CookingRecordAssignment {
-  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  cookingRecordId String        @db.Uuid
-  menuId          String        @db.Uuid
-  quantityPlates  Decimal       @db.Decimal(12, 2)
-  createdAt       DateTime      @default(now())
-  cookingRecord   CookingRecord @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
-  menu            Menu          @relation(fields: [menuId], references: [id])
+model CookingRecordMenu {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cookingRecordId   String         @db.Uuid
+  menuId            String         @db.Uuid
+  platesAllocated   Decimal        @db.Decimal(12, 2)
+  platesRemaining   Decimal        @default(0) @db.Decimal(12, 2)
+  createdAt         DateTime       @default(now())
+  cookingRecord     CookingRecord  @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
+  menu              Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
 
   @@unique([cookingRecordId, menuId])
 }
-
 model StockSupplyMenu {
   stockSupplyId String      @db.Uuid
   menuId        String      @db.Uuid
@@ -334,9 +334,10 @@ model Shift {
   id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   type            ShiftType
   date            DateTime        @db.Date
-  openingTime     DateTime
-  autoCloseTime   DateTime
-  actualCloseTime DateTime?       @db.Timestamp(6)
+  openingTime       DateTime
+  autoCloseTime     DateTime
+  actualOpeningTime DateTime?      @db.Timestamp(6)
+  actualCloseTime   DateTime?      @db.Timestamp(6)
   isOpen          Boolean         @default(true)
   openedById      String          @db.Uuid
   closedById      String?         @db.Uuid

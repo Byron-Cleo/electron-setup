@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Trash2, Plus } from "lucide-react"
+import { RefreshCw, Plus, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -9,197 +9,299 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import {
-  upsertCookingAssignment,
-  deleteCookingAssignment,
-} from "@/lib/api"
-
-interface AssignmentRow {
-  id: string
-  menuId: string
-  menuName: string
-  quantityPlates: number
-}
-
-interface CookedItemData {
-  menuId: string
-  menuName: string
-  stockSupplyId: string
-  stockSupplyName: string
-  cookedDate: string
-  totalProduced: number
-  totalAssigned: number
-  totalAvailable: number
-  assignments: AssignmentRow[]
-  cookingRecordId?: string
-  menuAssigned: number
-}
+import { Input } from "@/components/ui/input"
+import { getCookingRecord, allocateCookingRecord, getMenus, getMenuStockStatus } from "@/lib/api"
 
 interface Props {
   open: boolean
   onClose: () => void
-  cookedItem: CookedItemData | null
+  batchId: string | null
+  title: string
   onRefresh: () => void
 }
 
-export default function AssignmentModal({ open, onClose, cookedItem, onRefresh }: Props) {
-  const [quantity, setQuantity] = useState("")
+interface MenuWithStock {
+  id: string
+  name: string
+  existingAllocated: number
+  currentStock: number
+  soldThisShift: number
+  openingStock: number
+}
+
+export default function AssignmentModal({ open, onClose, batchId, title, onRefresh }: Props) {
+  const [deltas, setDeltas] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [removing, setRemoving] = useState(false)
+  const [produced, setProduced] = useState(0)
+  const [menus, setMenus] = useState<MenuWithStock[]>([])
 
   useEffect(() => {
-    if (open && cookedItem) {
-      const existing = cookedItem.assignments.find((a) => a.menuId === cookedItem.menuId)
-      setQuantity(existing ? String(existing.quantityPlates) : "")
-      setError("")
+    if (!open || !batchId) return
+    let cancelled = false
+    getCookingRecord(batchId)
+      .then((record) => {
+        if (cancelled) return
+        const producedTotal = Number(record.platesActual ?? record.platesExpected)
+        const linkedMenus: MenuWithStock[] = record.stockSupply.menus.map((sm) => {
+          const split = record.cookingRecordMenus.find((crm) => crm.menuId === sm.menu.id)
+          return {
+            id: sm.menu.id,
+            name: sm.menu.name,
+            existingAllocated: split ? Number(split.platesRemaining) : 0,
+            currentStock: 0,
+            soldThisShift: 0,
+          }
+        })
+        const initialDeltas: Record<string, number> = {}
+        for (const menu of linkedMenus) {
+          initialDeltas[menu.id] = 0
+        }
+        setLoading(false)
+        setError("")
+        setProduced(producedTotal)
+        setMenus(linkedMenus)
+        setDeltas(initialDeltas)
+
+        // Fetch current menu stock for each linked menu
+        getMenus().then((allMenus) => {
+          if (cancelled) return
+          const menuStockMap = new Map(allMenus.map((m) => [m.id, m.stock ?? 0]))
+          setMenus((prev) =>
+            prev.map((menu) => ({
+              ...menu,
+              currentStock: menuStockMap.get(menu.id) ?? 0,
+            }))
+          )
+        }).catch(() => {})
+
+        // Fetch shift-based sold count and opening stock for each menu
+        getMenuStockStatus().then((status) => {
+          if (cancelled) return
+          const soldMap = new Map<string, number>()
+          const openingMap = new Map<string, number>()
+          for (const item of status.selling) {
+            soldMap.set(item.id, item.sold)
+            openingMap.set(item.id, item.opening)
+          }
+          for (const item of status.soldOut) {
+            soldMap.set(item.id, item.sold)
+            openingMap.set(item.id, item.opening)
+          }
+          for (const item of status.runningLow) {
+            soldMap.set(item.id, item.sold)
+            openingMap.set(item.id, item.opening)
+          }
+          setMenus((prev) =>
+            prev.map((menu) => ({
+              ...menu,
+              soldThisShift: soldMap.get(menu.id) ?? 0,
+              openingStock: openingMap.get(menu.id) ?? 0,
+            }))
+          )
+        }).catch(() => {})
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setLoading(false)
+          setError(e instanceof Error ? e.message : "Failed to load batch")
+        }
+      })
+    return () => {
+      cancelled = true
     }
-  }, [open, cookedItem])
+  }, [open, batchId])
 
-  if (!cookedItem) return null
+  if (!open) return null
 
-  const existingAssignment = cookedItem.assignments.find((a) => a.menuId === cookedItem.menuId)
-  const menuAssigned = cookedItem.assignments.reduce(
-    (sum, a) => sum + a.quantityPlates,
-    0
-  )
+  const totalExisting = menus.reduce((sum, menu) => sum + menu.existingAllocated, 0)
+  const totalSold = menus.reduce((sum, menu) => sum + menu.soldThisShift, 0)
+  const totalOpening = menus.reduce((sum, menu) => sum + menu.openingStock, 0)
+  const totalCurrent = menus.reduce((sum, menu) => sum + menu.currentStock, 0)
+  const totalRemainingFromShift = menus.reduce((sum, menu) => {
+    const remaining = menu.currentStock - menu.openingStock
+    return sum + (remaining > 0 ? remaining : 0)
+  }, 0)
+  const totalAllocatedFromShift = totalSold + totalRemainingFromShift
+  const totalAllocated = totalAllocatedFromShift || totalExisting
+  const totalDelta = menus.reduce((sum, menu) => sum + (deltas[menu.id] ?? 0), 0)
+  const newTotalAllocated = totalAllocated + totalDelta
+  const remaining = produced - newTotalAllocated
+  const overCap = newTotalAllocated > produced
 
-  // Available from kitchen pool (produced minus all assigned across all menus)
-  const kitchenAvailable = cookedItem.totalAvailable
-  // For validation: allow editing this menu's own assignment (free it back into the pool)
-  const maxAllowed = kitchenAvailable + (existingAssignment ? existingAssignment.quantityPlates : 0)
+  // Drift check: currentStock + sold should equal openingStock + produced
+  const expectedTotal = totalOpening + produced
+  const actualTotal = totalCurrent + totalSold
+  const drift = actualTotal - expectedTotal
 
-  async function handleSave() {
-    if (!cookedItem?.cookingRecordId) { setError("No cooking record found"); return }
-    const qty = parseInt(quantity, 10)
-    if (!qty || qty <= 0) { setError("Enter a valid quantity"); return }
-    if (qty > maxAllowed) { setError(`Cannot assign more plates than the produced amount (${maxAllowed})`); return }
+  const canSave = totalDelta !== 0 && !overCap && !submitting && menus.length > 0
 
+  const updateDelta = (menuId: string, value: number) => {
+    const menu = menus.find((m) => m.id === menuId)
+    if (!menu) return
+    const maxDelta = remaining + (deltas[menuId] ?? 0)
+    const minDelta = -menu.currentStock
+    const clamped = Math.max(minDelta, Math.min(value, maxDelta))
+    setDeltas((prev) => ({ ...prev, [menuId]: clamped }))
+  }
+
+  const increment = (menuId: string) => {
+    const current = deltas[menuId] ?? 0
+    if (current < remaining + current) {
+      updateDelta(menuId, current + 1)
+    }
+  }
+
+  const decrement = (menuId: string) => {
+    const current = deltas[menuId] ?? 0
+    const menu = menus.find((m) => m.id === menuId)
+    const newTotalStock = (menu?.currentStock ?? 0) + current - 1
+    if (newTotalStock >= 0) {
+      updateDelta(menuId, current - 1)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!batchId) return
     setError("")
     setSubmitting(true)
     try {
-      await upsertCookingAssignment({
-        cookingRecordId: cookedItem.cookingRecordId,
-        menuId: cookedItem.menuId,
-        quantityPlates: qty,
-      })
+      const payload = menus.map((menu) => ({
+        menuId: menu.id,
+        plates: menu.existingAllocated + (deltas[menu.id] ?? 0),
+      }))
+      await allocateCookingRecord(batchId, payload)
       onRefresh()
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save assignment")
+      setError(e instanceof Error ? e.message : "Failed to allocate plates")
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function handleRemove() {
-    if (!existingAssignment) return
-    setError("")
-    setRemoving(true)
-    try {
-      await deleteCookingAssignment(existingAssignment.id)
-      setQuantity("")
-      onRefresh()
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to remove assignment")
-    } finally {
-      setRemoving(false)
-    }
-  }
-
-  const qtyNum = quantity === "" ? 0 : parseInt(quantity, 10)
-  const canSave = qtyNum > 0 && qtyNum <= maxAllowed && !submitting
-
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-sm text-admin-header-text">
-            Assign Plates: <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{cookedItem.menuName}</span>
+            Assign Plates:{" "}
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold">
+              {title}
+            </span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Summary */}
-          <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-admin-content border border-admin-card-border">
-            <div className="text-center">
-              <p className="text-xs text-admin-muted">Produced</p>
-              <p className="text-lg font-semibold text-admin-header-text">{cookedItem.totalProduced}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-admin-muted">Assigned</p>
-              <p className="text-lg font-semibold text-admin-header-text">{menuAssigned}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-admin-muted">Available</p>
-              <p className={`text-lg font-semibold ${kitchenAvailable <= 0 ? "text-red-600" : "text-green-600"}`}>
-                {kitchenAvailable}
-              </p>
-            </div>
+        {loading ? (
+          <div className="flex items-center gap-2 text-admin-muted text-sm">
+            <RefreshCw size={14} className="animate-spin" /> Loading batch...
           </div>
-
-          {/* Current Assignment Info */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-admin-content border border-admin-card-border">
-            <div>
-              <p className="text-xs text-admin-muted">Menu Item</p>
-              <p className="text-sm font-medium text-admin-header-text">{cookedItem.menuName}</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-md bg-muted p-3 text-sm">
+              <div>Produced: <span className="font-medium">{produced} plates</span></div>
+              <div>
+                Allocated This Shift:{" "}
+                <span className="font-medium text-blue-600">{totalAllocated} plates</span>
+              </div>
+              <div>
+                Sold This Shift:{" "}
+                <span className="font-medium text-orange-600">{totalSold} plates</span>
+              </div>
+              <div>
+                Remaining This Shift:{" "}
+                <span className="font-medium text-green-600">{totalRemainingFromShift} plates</span>
+              </div>
+              <div>
+                After Changes:{" "}
+                <span className={`font-medium ${overCap ? "text-red-600" : "text-blue-600"}`}>
+                  {newTotalAllocated} / {produced} plates
+                </span>
+              </div>
+              <div>
+                Remaining:{" "}
+                <span className={`font-medium ${remaining <= 0 ? "text-red-600" : "text-blue-600"}`}>
+                  {remaining} plates
+                </span>
+              </div>
+              <div className="border-t pt-2 mt-2">
+                <div className="text-xs text-admin-muted">Opening Stk: {totalOpening}</div>
+                <div className="text-xs text-admin-muted">Current Stk: {totalCurrent}</div>
+                <div className="text-xs text-admin-muted">
+                  Unallocated: {drift >= 0 ? "+" : ""}{drift} plates
+                </div>
+              </div>
+              {overCap && (
+                <p className="text-xs text-red-600 mt-1">
+                  Cannot allocate more than {produced} produced plates.
+                </p>
+              )}
             </div>
-            <div className="text-right">
-              <p className="text-xs text-admin-muted">Current Plates</p>
-              <p className={`text-sm font-semibold ${existingAssignment ? "text-green-600" : "text-admin-muted"}`}>
-                {existingAssignment ? existingAssignment.quantityPlates : "Not assigned"}
-              </p>
+
+            <div className="space-y-3">
+              {menus.length === 0 ? (
+                <p className="text-sm text-admin-muted">
+                  No menu items are linked to this batch&apos;s stock item.
+                </p>
+              ) : (
+                menus.map((menu) => (
+                  <div key={menu.id} className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <Label className="text-xs font-medium truncate">{menu.name}</Label>
+                      <div className="flex items-center gap-3 text-[11px] text-admin-muted">
+                        <span>Open Stk: <span className="font-medium text-admin-header-text">{menu.openingStock}</span></span>
+                        <span>Cur. Stk: <span className="font-medium text-admin-header-text">{menu.currentStock}</span></span>
+                        <span>Sold Stk: <span className="font-medium text-orange-600">{menu.soldThisShift}</span></span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => decrement(menu.id)}
+                          disabled={submitting || (menu.currentStock + (deltas[menu.id] ?? 0)) <= 0}
+                          className="h-8 w-8"
+                        >
+                          <Minus size={14} />
+                        </Button>
+                        <Input
+                          type="number"
+                          step={1}
+                          value={deltas[menu.id] ?? 0}
+                          onChange={(e) => updateDelta(menu.id, parseInt(e.target.value) || 0)}
+                          className="w-20 text-center"
+                          readOnly
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => increment(menu.id)}
+                          disabled={submitting || (deltas[menu.id] ?? 0) >= remaining + (deltas[menu.id] ?? 0)}
+                          className="h-8 w-8"
+                        >
+                          <Plus size={14} />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          </div>
 
-          {/* Quantity Input */}
-          <div className="space-y-1">
-            <Label className="text-xs">
-              {existingAssignment ? "Add More Plates" : "Assign Plates"}
-            </Label>
-            <input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder={`Max ${maxAllowed}`}
-              min={1}
-              max={maxAllowed}
-              className="w-full border border-input bg-background rounded-md px-3 py-2 text-sm"
-            />
-            {qtyNum > 0 && qtyNum > maxAllowed && (
-              <p className="text-[11px] text-red-500 font-semibold uppercase mt-1">
-                Cannot assign more plates than the produced amount
-              </p>
-            )}
-            {qtyNum > 0 && qtyNum <= maxAllowed && (
-              <p className="text-[11px] text-green-600 mt-1">
-                {existingAssignment ? `${existingAssignment.quantityPlates} + ${qtyNum} = ${existingAssignment.quantityPlates + qtyNum} plates total` : "Plates will be assigned"}
-              </p>
-            )}
+            {error && <p className="text-xs text-red-500">{error}</p>}
           </div>
-
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
+        )}
 
         <DialogFooter className="gap-2">
-          {existingAssignment && (
-            <Button
-              variant="outline"
-              className="text-red-600 border-red-200 hover:bg-red-50"
-              onClick={handleRemove}
-              disabled={removing || submitting}
-            >
-              <Trash2 size={14} className="mr-1" />
-              {removing ? "Removing..." : "Remove"}
-            </Button>
-          )}
           <Button
-            className="bg-amber-600 hover:bg-amber-700 text-white"
             onClick={handleSave}
-            disabled={!canSave}
+            disabled={!canSave || loading}
           >
-            {submitting ? "Saving..." : existingAssignment ? <><Plus size={14} className="mr-1" /> Add More</> : <><Plus size={14} className="mr-1" /> Assign</>}
+            {submitting ? <><RefreshCw size={14} className="mr-1 animate-spin" /> Saving...</> : "Save Menu Allocation"}
           </Button>
         </DialogFooter>
       </DialogContent>

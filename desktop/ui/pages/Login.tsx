@@ -111,6 +111,7 @@ function Login() {
         admin: "/admin",
         manager: "/admin",
         waiter: "/waiter",
+        cashier: "/admin",
         store: "/admin",
         kitchen: "/admin",
       };

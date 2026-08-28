@@ -6,24 +6,44 @@ fullstack
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-- Menu Category Management: replace hardcoded `CATEGORIES` array with a dynamic DB-backed Category model
-- Settings card for admin/manager to add, edit, and delete menu categories
-- Seed DB with existing categories (Beef, Chicken, Vegetable, Drinks, Beverages, Starch, Fish, 1/2 Fish, Liver, Matumbo, Snacks) + Staff
-- Menu create/edit forms fetch categories from API instead of hardcoded list
-- Ref: `context/fix-plan/menu-category-management.md`
+- One cooking record = one menu item: a stock item no longer produces many menu variants from one shared pot
+- Drop the `CookingRecordAssignment` table; store live `platesRemaining` directly on `CookingRecord`
+- Assigning/top-up plates increments BOTH `Menu.stock` AND `CookingRecord.platesRemaining` in one transaction
+- Placing a waiter order decrements BOTH `Menu.stock` AND `CookingRecord.platesRemaining` in one transaction
+- Cooked table + assignment modal show the live remaining (never the stale original assigned value)
+- Waiter feed hides a menu only when `Menu.stock ≤ 0` (unchanged)
+- Wipe and re-seed existing kitchen/cooking/assignment data onto the new model
+- Ref: `context/fix-plan/cooked-food-one-record-per-menu.md`
 
 ## Notes
 
-- 7 phases: Schema → API → Seed → Frontend API → Category Manager UI → MenuForm update → Verify
-- Menu.category stays as String (no FK) — categories are a flat dropdown list
-- Follows DepartmentManager pattern for the Settings card
-- Verification gates: tsc --noEmit (root + backend), npm run lint, seed populates 12 categories, dynamic dropdown in MenuForm
+- Per user: (1) drop assignment table → store platesRemaining on CookingRecord; (2) one record per menu (direct, cleanest); (3) wipe & re-seed existing kitchen/assignment data onto the new model.
+- No cross-menu shared-pool math; each menu is independent.
+- Order decrement picks the menu's earliest active (remaining>0) record for that date (FIFO), never below 0.
+- Assumption to confirm during impl: the cooked "assign" modal is rewritten to just top-up `platesRemaining` (no pool-capped validation).
+- Verification gates: tsc -b (root) + backend tsc, npm run lint (changed UI), E2E (create record → assign → order → both decrement → waiter feed).
 
 ## History
+### fullstack - 2026-08-28 — One Cooking Record Per Menu (Cooked Food Pool Consistency)
+- Dropped `CookingRecordAssignment` table entirely; `CookingRecordMenu` now stores `platesAllocated` + `platesRemaining` directly (was `quantityPlates`)
+- `recomputeMenuStock()` recalculates `Menu.stock` as sum of all `platesRemaining` per menu (FIFO across splits)
+- Order decrement picks the menu's earliest active split (remaining > 0) for that date — never below 0
+- Assignment modal rewritten: pool-cap display, delta +/- per menu, drift check, top-up support
+- Cooked food table: single row per cooking record with per-menu split breakdown
+- Plate movement report: Cooked column from `CookingRecordMenu.platesAllocated`, variance highlighting
+- Schema: `CookingRecordMenu` replaces composite PK with single `id`, unique index on `[cookingRecordId, menuId]`; `platesRemaining` added; `quantityPlates` removed
+- Deleted `backend/routes/cookingAssignments.ts` (382 lines) — all logic merged into `cookingRecords.ts`
+- DB wipe + re-seed of kitchen/cooking/assignment data onto new model
+- `ShiftReport.tsx` + `ShiftCloseDialog.tsx` plate movement: opened/closed section, Cooked column, variance highlight
+- `lib/api.ts` + `electron.d.ts`: `allocateCookingRecord`, `topUpCookingRecord`, updated types
+- `WaiterMenuGrid.tsx` + `Menu.tsx` minor fixes
+- Branch: `feature/kitchen/one-record-per-menu`
+- Ref: `context/fix-plan/cooked-food-one-record-per-menu.md`
+
 - ✅ Gap B DONE — shift functions in lib/api.ts (openShift/closeShift/getCurrentShift/getShift/autoCloseShifts, plain apiFetch like voidOrder) + ShiftType/Shift/ShiftSnapshot/AutoCloseResult types in electron.d.ts
 - ✅ Phase 8 DONE — POST /api/orders accepts+validates voidedOrderId (must reference isVoid order); waiter flow links oldest void via context (WaiterOrderContext owns voidedOrders state + clearVoidedOrder; WaiterPOS consumes; fetch excludes already-replaced voids so count drop persists across re-login). Verified E2E: link persisted in DB, card gone after placement
 - ⚠️ DB repaired mid-session: eraevadb was missing OrderItem.id PK (schema drift broke all order reads); synced manually (drop composite PK → add SERIAL id → new PK + 4-col unique index + StockSupplyMenu FK). `prisma db push` chokes on this diff (Prisma 7 RENAME CONSTRAINT bug) — applied equivalent SQL by hand

@@ -205,6 +205,7 @@ export function WaiterMenuGrid({
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
   const [activeOrderKey, setActiveOrderKey] = useState<string | null>(null)
   const [syncedOrderKey, setSyncedOrderKey] = useState<string | null>(null)
+  const [lastMealPeriod, setLastMealPeriod] = useState<string | null>(null)
 
   const handleSelectPeriod = (period: string) => {
     if (period !== mealPeriod) {
@@ -214,11 +215,16 @@ export function WaiterMenuGrid({
     }
   }
 
-  if (processedItems !== items) {
+  // Only reset selection when meal period actually changes (not on polling updates)
+  if (mealPeriod !== lastMealPeriod) {
+    setLastMealPeriod(mealPeriod)
     setProcessedItems(items)
     setSelectedItem(null)
     setActiveOrderKey(null)
     setSyncedOrderKey(null)
+  } else if (processedItems !== items) {
+    // Polling update: just update processedItems, preserve selection
+    setProcessedItems(items)
   }
 
   useEffect(() => {

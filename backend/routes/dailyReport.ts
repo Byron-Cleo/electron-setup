@@ -27,8 +27,11 @@ router.get("/", async (req, res) => {
     where: { cookedDate: targetDate },
     include: {
       stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true } },
-      assignments: {
-        include: {
+      cookingRecordMenus: {
+        select: {
+          menuId: true,
+          platesAllocated: true,
+          platesRemaining: true,
           menu: { select: { id: true, name: true } },
         },
       },
@@ -74,16 +77,17 @@ router.get("/", async (req, res) => {
     const stockSupplyId = record.stockSupplyId;
     const qty = Number(record.quantityCooked);
     const plates = Number(record.platesActual ?? record.platesExpected);
-    const totalAssigned = record.assignments.reduce(
-      (sum, a) => sum + Number(a.quantityPlates),
+    const platesRemaining = record.cookingRecordMenus.reduce(
+      (sum, crm) => sum + Number(crm.platesRemaining),
       0
     );
+    const platesConsumed = Math.max(0, plates - platesRemaining);
 
     const existing = stockSupplyMap.get(stockSupplyId);
     if (existing) {
       existing.cooked += qty;
       existing.platesProduced += plates;
-      existing.platesSold += totalAssigned;
+      existing.platesSold += platesConsumed;
       existing.name = record.stockSupply.name;
     } else {
       stockSupplyMap.set(stockSupplyId, {
@@ -91,7 +95,7 @@ router.get("/", async (req, res) => {
         ordered: 0,
         cooked: qty,
         platesProduced: plates,
-        platesSold: totalAssigned,
+        platesSold: platesConsumed,
       });
     }
   }
@@ -108,41 +112,26 @@ router.get("/", async (req, res) => {
     platesRemaining: data.platesProduced - data.platesSold,
   }));
 
-  // Aggregate by menu variant
+  // Aggregate by menu item (each split feeds exactly one menu)
   const menuVariantMap = new Map<string, { name: string; platesProduced: number; platesSold: number }>();
 
   for (const record of cookingRecords) {
-    for (const assignment of record.assignments) {
-      const menuId = assignment.menuId;
-      const qtyAssigned = Number(assignment.quantityPlates);
+    for (const crm of record.cookingRecordMenus) {
+      const menuId = crm.menuId;
+      const plates = Number(crm.platesAllocated);
+      const platesRemaining = Number(crm.platesRemaining);
+      const platesConsumed = Math.max(0, plates - platesRemaining);
+
       const existing = menuVariantMap.get(menuId);
       if (existing) {
-        existing.platesSold += qtyAssigned;
+        existing.platesProduced += plates;
+        existing.platesSold += platesConsumed;
       } else {
         menuVariantMap.set(menuId, {
-          name: assignment.menu.name,
-          platesProduced: 0,
-          platesSold: qtyAssigned,
+          name: crm.menu.name,
+          platesProduced: plates,
+          platesSold: platesConsumed,
         });
-      }
-    }
-  }
-
-  // Calculate plates produced per menu variant based on proportional assignment
-  for (const record of cookingRecords) {
-    const totalAssigned = record.assignments.reduce(
-      (sum, a) => sum + Number(a.quantityPlates),
-      0
-    );
-    if (totalAssigned === 0) continue;
-
-    const platesActual = Number(record.platesActual ?? record.platesExpected);
-    for (const assignment of record.assignments) {
-      const proportion = Number(assignment.quantityPlates) / totalAssigned;
-      const platesForVariant = platesActual * proportion;
-      const existing = menuVariantMap.get(assignment.menuId);
-      if (existing) {
-        existing.platesProduced += platesForVariant;
       }
     }
   }
@@ -169,8 +158,10 @@ router.get("/", async (req, res) => {
     where: { cookedDate: { lt: targetDate } },
     include: {
       stockSupply: { select: { id: true, name: true } },
-      assignments: {
-        include: {
+      cookingRecordMenus: {
+        select: {
+          menuId: true,
+          platesRemaining: true,
           menu: { select: { id: true, name: true } },
         },
       },
@@ -218,39 +209,20 @@ router.get("/", async (req, res) => {
     }))
     .filter((item) => item.quantity > 0);
 
-  // Calculate carry over cooked plates
-  const carryOverPlatesMap = new Map<string, { name: string; produced: number; sold: number }>();
+  // Calculate carry over cooked plates per menu = live remaining on previous splits
+  const carryOverPlatesMap = new Map<string, { name: string; plates: number }>();
   for (const record of allPreviousRecords) {
-    const plates = Number(record.platesActual ?? record.platesExpected);
-
-    for (const assignment of record.assignments) {
-      const menuId = assignment.menuId;
-      const qtyAssigned = Number(assignment.quantityPlates);
-      const existing = carryOverPlatesMap.get(menuId);
+    for (const crm of record.cookingRecordMenus) {
+      const platesCarried = Number(crm.platesRemaining);
+      if (platesCarried <= 0) continue;
+      const existing = carryOverPlatesMap.get(crm.menuId);
       if (existing) {
-        existing.sold += qtyAssigned;
+        existing.plates += platesCarried;
       } else {
-        carryOverPlatesMap.set(menuId, {
-          name: assignment.menu.name,
-          produced: 0,
-          sold: qtyAssigned,
+        carryOverPlatesMap.set(crm.menuId, {
+          name: crm.menu.name,
+          plates: platesCarried,
         });
-      }
-    }
-
-    // Add proportional plates produced
-    const totalAssignedForRecord = record.assignments.reduce(
-      (sum, a) => sum + Number(a.quantityPlates),
-      0
-    );
-    if (totalAssignedForRecord > 0) {
-      for (const assignment of record.assignments) {
-        const proportion = Number(assignment.quantityPlates) / totalAssignedForRecord;
-        const platesForVariant = plates * proportion;
-        const existing = carryOverPlatesMap.get(assignment.menuId);
-        if (existing) {
-          existing.produced += platesForVariant;
-        }
       }
     }
   }
@@ -258,7 +230,7 @@ router.get("/", async (req, res) => {
   const carryOverCookedPlates = Array.from(carryOverPlatesMap.values())
     .map((data) => ({
       name: data.name,
-      plates: Math.round(data.produced) - data.sold,
+      plates: Math.round(data.plates),
     }))
     .filter((item) => item.plates > 0);
 
@@ -343,7 +315,7 @@ router.get("/shift/:id", async (req, res) => {
       },
       include: {
         stockSupply: { select: { costPrice: true } },
-        assignments: { select: { menuId: true, quantityPlates: true } },
+        cookingRecordMenus: { select: { menuId: true, platesAllocated: true } },
       },
     });
 
@@ -353,12 +325,12 @@ router.get("/shift/:id", async (req, res) => {
       return sum + costPrice * quantityCooked;
     }, 0);
 
-    // Aggregate plates cooked per menu item from cooking record assignments
+    // Aggregate plates cooked per menu item from splits
     const platesCookedByMenu = new Map<string, number>();
     for (const record of cookingRecords) {
-      for (const assignment of record.assignments) {
-        const prev = platesCookedByMenu.get(assignment.menuId) ?? 0;
-        platesCookedByMenu.set(assignment.menuId, prev + Number(assignment.quantityPlates));
+      for (const crm of record.cookingRecordMenus) {
+        const plates = Number(crm.platesAllocated);
+        platesCookedByMenu.set(crm.menuId, (platesCookedByMenu.get(crm.menuId) ?? 0) + plates);
       }
     }
 
@@ -387,6 +359,15 @@ router.get("/shift/:id", async (req, res) => {
       ? Math.round((shift.actualCloseTime.getTime() - shift.autoCloseTime.getTime()) / 60000)
       : 0;
 
+    // Clocking drift (signed, early = negative / late = positive) for the Shift Clocking Summary
+    const msPerMinute = 60000;
+    const openingDriftMinutes = shift.actualOpeningTime
+      ? Math.round((shift.actualOpeningTime.getTime() - shift.openingTime.getTime()) / msPerMinute)
+      : null;
+    const closingDriftMinutes = shift.actualCloseTime
+      ? Math.round((shift.actualCloseTime.getTime() - shift.autoCloseTime.getTime()) / msPerMinute)
+      : null;
+
     // Drift records: created after autoCloseTime but before actualCloseTime (carried forward to next shift)
     let driftRecords: { menuName: string; quantityCooked: number; platesProduced: number; costPrice: number }[] = [];
     if (driftMinutes > 0 && shift.actualCloseTime) {
@@ -399,7 +380,6 @@ router.get("/shift/:id", async (req, res) => {
         },
         include: {
           stockSupply: { select: { name: true, costPrice: true } },
-          assignments: { select: { menuId: true, quantityPlates: true } },
         },
       });
 
@@ -418,7 +398,10 @@ router.get("/shift/:id", async (req, res) => {
         date: shift.date,
         openingTime: shift.openingTime,
         autoCloseTime: shift.autoCloseTime,
+        actualOpeningTime: shift.actualOpeningTime,
         actualCloseTime: shift.actualCloseTime,
+        openingDriftMinutes,
+        closingDriftMinutes,
         driftMinutes,
         isOpen: shift.isOpen,
         openedBy: shift.openedBy,

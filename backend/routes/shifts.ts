@@ -136,6 +136,7 @@ router.post("/open", async (req, res) => {
           date: today,
           openingTime,
           autoCloseTime,
+          actualOpeningTime: now,
           isOpen: true,
           openedById,
         },

@@ -146,9 +146,26 @@ router.post("/", async (req, res) => {
           where: { id: item.menuId },
           data: {
             stock: remaining,
-            isAvailable: remaining > 0,
           },
         });
+
+        // Decrement the menu's split platesRemaining in lock-step with Menu.stock
+        // (FIFO across the menu's splits, never below 0)
+        let toDeduct = item.qty;
+        const activeSplits = await tx.cookingRecordMenu.findMany({
+          where: { menuId: item.menuId, platesRemaining: { gt: 0 } },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, platesRemaining: true },
+        });
+        for (const split of activeSplits) {
+          if (toDeduct <= 0) break;
+          const deductNow = Math.min(Number(split.platesRemaining), toDeduct);
+          await tx.cookingRecordMenu.update({
+            where: { id: split.id },
+            data: { platesRemaining: { decrement: deductNow } },
+          });
+          toDeduct -= deductNow;
+        }
 
         // Track plates sold on the shift snapshot (openingPlates falls back to
         // pre-sale stock when the item has no snapshot — e.g. added mid-shift)
@@ -269,9 +286,25 @@ router.post("/:id/void", async (req, res) => {
             where: { id: item.menuId },
             data: {
               stock: currentStock + item.qty,
-              isAvailable: true,
             },
           });
+        }
+
+        // Restore the menu's split platesRemaining in lock-step with Menu.stock
+        // (reverse of the FIFO order decrement: restore to the newest split first)
+        let toRestore = item.qty;
+        const splits = await tx.cookingRecordMenu.findMany({
+          where: { menuId: item.menuId },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, platesRemaining: true },
+        });
+        for (const split of splits) {
+          if (toRestore <= 0) break;
+          await tx.cookingRecordMenu.update({
+            where: { id: split.id },
+            data: { platesRemaining: { increment: toRestore } },
+          });
+          toRestore = 0;
         }
 
         // Update shift snapshot if exists
