@@ -538,6 +538,10 @@ export async function getShiftReport(shiftId: string): Promise<ShiftReport> {
   return apiFetch(`/reports/shift/${shiftId}`)
 }
 
+export async function getStockRemaining(): Promise<StockRemaining> {
+  return apiFetch("/stock/remaining")
+}
+
 export async function getVoidReport(date: string): Promise<VoidReportWaiter[]> {
   const data = (await apiFetch(
     `/reports/voids?date=${encodeURIComponent(date)}`

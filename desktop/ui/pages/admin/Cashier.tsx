@@ -188,7 +188,7 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView) => void })
       <Card
         className={`p-6 transition-colors ${
           isCashier
-            ? "opacity-50 cursor-not-allowed border-2 border-gray-300 bg-gray-100"
+            ? "opacity-40 cursor-not-allowed border-2 border-red-300 bg-red-200/60"
             : "cursor-pointer border-2 border-red-400 bg-red-50/50 hover:border-red-600"
         }`}
         onClick={isCashier ? undefined : () => onNavigate("void")}

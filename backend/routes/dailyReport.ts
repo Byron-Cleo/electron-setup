@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
+import { computeShiftUnassignedBatches } from "./shiftCarryOver.js";
 
 const router = Router();
 
@@ -391,6 +392,31 @@ router.get("/shift/:id", async (req, res) => {
       }));
     }
 
+    // Unassigned carry-over brought in from the previous shift. These plates are
+    // produced but not yet allocated, and stay independent until assigned via the
+    // cooking-record allocation UI.
+    const previousShift = await prisma.shift.findFirst({
+      where: { isOpen: false, openingTime: { lt: shift.openingTime } },
+      orderBy: { openingTime: "desc" },
+      include: { snapshots: { select: { menuId: true, closingPlates: true } } },
+    });
+    let unassignedCarryOver: {
+      total: number;
+      batches: { stockSupplyName: string; totalProduced: number; totalAssigned: number; unassigned: number }[];
+    } = { total: 0, batches: [] };
+    if (previousShift) {
+      const prevBatches = await computeShiftUnassignedBatches(previousShift);
+      unassignedCarryOver = {
+        total: prevBatches.total,
+        batches: prevBatches.batches.map((b) => ({
+          stockSupplyName: b.stockSupplyName,
+          totalProduced: b.totalProduced,
+          totalAssigned: b.totalAssigned,
+          unassigned: b.unassigned,
+        })),
+      };
+    }
+
     res.json({
       shift: {
         id: shift.id,
@@ -426,6 +452,7 @@ router.get("/shift/:id", async (req, res) => {
         minutes: driftMinutes,
         records: driftRecords,
       },
+      unassignedCarryOver,
     });
   } catch (e) {
     console.error("Error getting shift report:", e);

@@ -582,6 +582,41 @@ interface AutoCloseResult {
   shifts: Shift[];
 }
 
+interface StockRemainingPreviousShift {
+  id: string;
+  type: ShiftType;
+  date: string;
+  closeTime: string | null;
+}
+
+interface StockRemainingCarryForward {
+  menuId: string;
+  menuName: string;
+  closingPlates: number;
+  stockSupplyId: string | null;
+  stockSupplyName: string | null;
+}
+
+interface StockRemainingUnassignedBatch {
+  cookingRecordId: string;
+  stockSupplyId: string;
+  stockSupplyName: string;
+  totalProduced: number;
+  totalAssigned: number;
+  unassigned: number;
+  menus: {
+    menuId: string;
+    menuName: string;
+    platesAllocated: number;
+  }[];
+}
+
+interface StockRemaining {
+  previousShift: StockRemainingPreviousShift | null;
+  carryForwardPerMenu: StockRemainingCarryForward[];
+  unassignedBatches: StockRemainingUnassignedBatch[];
+}
+
 interface VoidReportWaiter {
   waiterId: string;
   name: string;
@@ -632,6 +667,13 @@ interface ShiftProduction {
   profitMargin: string;
 }
 
+interface ShiftUnassignedCarryOverBatch {
+  stockSupplyName: string;
+  totalProduced: number;
+  totalAssigned: number;
+  unassigned: number;
+}
+
 interface ShiftReport {
   shift: ShiftReportMeta;
   plateMovement: ShiftPlateMovementRow[];
@@ -649,6 +691,10 @@ interface ShiftReport {
       platesProduced: number;
       costPrice: number;
     }[];
+  };
+  unassignedCarryOver: {
+    total: number;
+    batches: ShiftUnassignedCarryOverBatch[];
   };
 }
 
@@ -692,6 +738,15 @@ interface ShiftReportData {
     expectedClosing: number;
     variance: number;
   }[];
+  unassignedCarryOver?: {
+    total: number;
+    batches: {
+      stockSupplyName: string;
+      totalProduced: number;
+      totalAssigned: number;
+      unassigned: number;
+    }[];
+  };
   production: {
     totalCost: number;
     totalSales: number;

@@ -132,6 +132,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
       revenue: r.revenue,
       plateMovement: r.plateMovement,
       production: r.production,
+      unassignedCarryOver: r.unassignedCarryOver,
     }
   }
 
@@ -363,7 +364,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                   <div className="space-y-1 text-sm">
                     <div className="grid grid-cols-[1fr_56px_56px_56px_56px] gap-x-3 text-xs font-semibold uppercase tracking-wide text-admin-muted">
                       <span>Item</span>
-                      <span className="text-right">Open</span>
+                      <span className="text-right">Open*</span>
                       <span className="text-right">Cooked</span>
                       <span className="text-right">Sold</span>
                       <span className="text-right">Close</span>
@@ -387,6 +388,14 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                         </span>
                       </div>
                     ))}
+                    {report.unassignedCarryOver && report.unassignedCarryOver.total > 0 && (
+                      <div className="border-t border-orange-200 bg-orange-50 px-2 py-1.5 text-xs font-medium text-orange-700">
+                        Total Unassigned Carry-Over: {report.unassignedCarryOver.total} plates
+                      </div>
+                    )}
+                    <p className="pt-1 text-[10px] text-admin-muted">
+                      * Opening = carry-forward closing stock from the previous shift.
+                    </p>
                   </div>
                 )}
               </div>
