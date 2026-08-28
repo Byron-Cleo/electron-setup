@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { getCookingRecord, allocateCookingRecord, getMenus, getMenuStockStatus } from "@/lib/api"
+import { getCookingRecord, allocateCookingRecord, getMenus, getMenuStockStatus, getCurrentShift } from "@/lib/api"
 
 interface Props {
   open: boolean
@@ -36,6 +36,7 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
   const [submitting, setSubmitting] = useState(false)
   const [produced, setProduced] = useState(0)
   const [menus, setMenus] = useState<MenuWithStock[]>([])
+  const [isCarryOver, setIsCarryOver] = useState(false)
 
   useEffect(() => {
     if (!open || !batchId) return
@@ -63,6 +64,17 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
         setProduced(producedTotal)
         setMenus(linkedMenus)
         setDeltas(initialDeltas)
+        setIsCarryOver(false)
+
+        // A batch produced outside the current shift's time window is carry-over
+        // from the previous shift — label it as such instead of "Produced".
+        getCurrentShift().then((shift) => {
+          if (cancelled || !shift) return
+          const start = new Date(shift.openingTime).getTime()
+          const end = new Date(shift.autoCloseTime).getTime()
+          const createdAt = new Date(record.createdAt).getTime()
+          setIsCarryOver(!(createdAt >= start && createdAt < end))
+        }).catch(() => {})
 
         // Fetch current menu stock for each linked menu
         getMenus().then((allMenus) => {
@@ -124,7 +136,7 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
     return sum + (remaining > 0 ? remaining : 0)
   }, 0)
   const totalAllocatedFromShift = totalSold + totalRemainingFromShift
-  const totalAllocated = totalAllocatedFromShift || totalExisting
+  const totalAllocated = isCarryOver ? totalExisting : totalAllocatedFromShift || totalExisting
   const totalDelta = menus.reduce((sum, menu) => sum + (deltas[menu.id] ?? 0), 0)
   const newTotalAllocated = totalAllocated + totalDelta
   const remaining = produced - newTotalAllocated
@@ -200,9 +212,22 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
         ) : (
           <div className="space-y-4">
             <div className="rounded-md bg-muted p-3 text-sm">
-              <div>Produced: <span className="font-medium">{produced} plates</span></div>
+              {isCarryOver ? (
+                <div>
+                  Carry-over: <span className="font-medium">{produced} plates</span>
+                </div>
+              ) : (
+                <div>
+                  Produced: <span className="font-medium">{produced} plates</span>
+                </div>
+              )}
+              <div className="text-xs text-admin-muted">
+                {isCarryOver
+                  ? "This batch is from the previous shift. Assign its plates to restock menu items in the current shift."
+                  : "Batch produced within the current shift."}
+              </div>
               <div>
-                Allocated This Shift:{" "}
+                Allocated {isCarryOver ? "(carry-over)" : "This Shift"}:{" "}
                 <span className="font-medium text-blue-600">{totalAllocated} plates</span>
               </div>
               <div>

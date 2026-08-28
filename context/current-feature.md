@@ -10,22 +10,27 @@ In Progress
 
 ## Goals
 
-- One cooking record = one menu item: a stock item no longer produces many menu variants from one shared pot
-- Drop the `CookingRecordAssignment` table; store live `platesRemaining` directly on `CookingRecord`
-- Assigning/top-up plates increments BOTH `Menu.stock` AND `CookingRecord.platesRemaining` in one transaction
-- Placing a waiter order decrements BOTH `Menu.stock` AND `CookingRecord.platesRemaining` in one transaction
-- Cooked table + assignment modal show the live remaining (never the stale original assigned value)
-- Waiter feed hides a menu only when `Menu.stock ≤ 0` (unchanged)
-- Wipe and re-seed existing kitchen/cooking/assignment data onto the new model
-- Ref: `context/fix-plan/cooked-food-one-record-per-menu.md`
+- Opening stock at shift start is the previous shift's `closingPlates` per menu — unassigned production is NEVER merged into opening (falls back to `Menu.stock` when no previous shift)
+- Unassigned production from the previous shift stays independent and is carried forward; admin assigns it later (increasing `Menu.stock`) via the new Remaining Stock screen
+- New "Remaining Stock from Previous Shift" dashboard card (admin Menu page) navigates to its own standalone view (RemainingStockCard): per-menu carry-forward (previous closing), unassigned batches by stock supply, and "Assign Plates" that opens AssignmentModal for each batch
+- AssignmentModal labels previous-shift batches "Carry-over: X plates" (vs "Produced" for current-shift batches) and uses totalExisting for their allocated count
+- Shift open snapshot: `openingPlates` = previous shift's `closingPlates` only (fallback `Menu.stock`)
+- Plate movement report: Opening column labeled "(carry-forward)", plus an "Unassigned Carry-over" summary row in UI and printed shift report
+- CookedFoodTable is NOT modified — it keeps showing today's cooked food exactly as before
+- No schema changes — all data derives from existing tables (`ShiftSnapshot`, `CookingRecord`, `CookingRecordMenu`, `StockSupplyMenu`)
+- Branch: `feature/admin/shift-scoped-stock-assignment`
+- Ref: `context/fix-plan/shift-scoped-stock-assignment.md`
 
 ## Notes
 
-- Per user: (1) drop assignment table → store platesRemaining on CookingRecord; (2) one record per menu (direct, cleanest); (3) wipe & re-seed existing kitchen/assignment data onto the new model.
-- No cross-menu shared-pool math; each menu is independent.
-- Order decrement picks the menu's earliest active (remaining>0) record for that date (FIFO), never below 0.
-- Assumption to confirm during impl: the cooked "assign" modal is rewritten to just top-up `platesRemaining` (no pool-capped validation).
-- Verification gates: tsc -b (root) + backend tsc, npm run lint (changed UI), E2E (create record → assign → order → both decrement → waiter feed).
+- Three distinct numbers with separate lifecycles: opening stock (set once at shift open = prev closing only), produced this shift (records in current shift window, starts at 0), sold this shift (`ShiftSnapshot.platesSold`).
+- Backend: new `GET /api/stock/remaining` endpoint (`backend/routes/stockRemaining.ts`) → carryForwardPerMenu (from prev closed shift snapshots) + unassignedBatches grouped by stock supply; shared helper `backend/routes/shiftCarryOver.ts` (`findPreviousClosedShift`, `computeShiftUnassignedBatches`).
+- Shift open (POST /api/shifts open) sets openingPlates = prev shift closingPlates per menu (map by menuId), else `Menu.stock`. Unassigned is NOT folded in.
+- Frontend: `RemainingStockCard.tsx` is a standalone view (own heading + tables + empty state) rendered from a new dashboard card in `pages/admin/Menu.tsx` (view `remaining-stock`) — NOT embedded in CookedFoodTable.
+- AssignmentModal fetches `getCurrentShift()` and compares `record.createdAt` to `[openingTime, autoCloseTime)` to pick Carry-over vs Produced label; `totalAllocated = totalExisting` for carry-over batches.
+- Shift report UI (`ShiftReport.tsx`, `ShiftCloseDialog.tsx`) + printed report (`receiptTemplate.ts`, `receipt.ts`) surface `unassignedCarryOver` and label Opening as carry-forward.
+- Reuse existing carry-over calculation pattern in `dailyReport.ts` and `allocateCookingRecord` for assigning carry-over plates.
+- Verification gates: tsc -b (root) + backend tsc, npm run lint (changed UI), E2E (open shift after prev close → opening = closing; RemainingStockCard shows carry-forward + unassigned; assign carry-over → Menu.stock increases; closed report shows unassigned summary).
 
 ## History
 ### fullstack - 2026-08-28 — One Cooking Record Per Menu (Cooked Food Pool Consistency)
@@ -44,8 +49,9 @@ In Progress
 - Branch: `feature/kitchen/one-record-per-menu`
 - Ref: `context/fix-plan/cooked-food-one-record-per-menu.md`
 
-- ✅ Gap B DONE — shift functions in lib/api.ts (openShift/closeShift/getCurrentShift/getShift/autoCloseShifts, plain apiFetch like voidOrder) + ShiftType/Shift/ShiftSnapshot/AutoCloseResult types in electron.d.ts
-- ✅ Phase 8 DONE — POST /api/orders accepts+validates voidedOrderId (must reference isVoid order); waiter flow links oldest void via context (WaiterOrderContext owns voidedOrders state + clearVoidedOrder; WaiterPOS consumes; fetch excludes already-replaced voids so count drop persists across re-login). Verified E2E: link persisted in DB, card gone after placement
+### fullstack - 2026-08-28 — Shift Management Completion (Gap B + Phases 8–12)
+
+- ✅ Gap B DONE — shift functions in lib/api.ts (openShift/closeShift/getCurrentShift/getShift/autoCloseShifts, plain apiFetch like voidOrder) + ShiftType/Shift/ShiftSnapshot/AutoCloseResult types in electron.d.ts — POST /api/orders accepts+validates voidedOrderId (must reference isVoid order); waiter flow links oldest void via context (WaiterOrderContext owns voidedOrders state + clearVoidedOrder; WaiterPOS consumes; fetch excludes already-replaced voids so count drop persists across re-login). Verified E2E: link persisted in DB, card gone after placement
 - ⚠️ DB repaired mid-session: eraevadb was missing OrderItem.id PK (schema drift broke all order reads); synced manually (drop composite PK → add SERIAL id → new PK + 4-col unique index + StockSupplyMenu FK). `prisma db push` chokes on this diff (Prisma 7 RENAME CONSTRAINT bug) — applied equivalent SQL by hand
 - ⚠️ Pre-existing fixes included: SERVER_STORAGE_KEY constant was missing in lib/api.ts (browser server config broken), eslint `any`s in orders.ts/electron.d.ts
 - ✅ Phase 9 DONE — ShiftCloseDialog (`desktop/ui/components/shift/ShiftCloseDialog.tsx`, confirm view: stats grid + revenue-by-period + amber drift warning past autoCloseTime → report view: summary tiles incl. drift, production vs sales, plate movement w/ variance highlight) wired into Cashier.tsx shift status bar (Open Shift dialog DAY/NIGHT radio, Close Shift button, handleOpenCloseDialog refetches getCurrentShift for fresh stats)
@@ -64,8 +70,6 @@ In Progress
 - Deep logic reference: context/features/shift-management.md (§5–7), plan phases 8–12
 - Verification gates per phase: tsc --noEmit (root + backend), npm run lint, browser/E2E acceptance check
 - Ollama models must be stopped (`ollama stop <model>`) immediately after each generation run
-
-## History
 
 ### fullstack - 2026-08-27 — Menu category edit "save doesn't stick" fix (MenuForm)
 - Root cause: editing a menu item left the Category dropdown blank (showed "Select category") even though `getMenuById` returns the correct category and it's a valid option. `form.reset({ category })` didn't propagate the value into the Radix `Select`, so RHF's `category` field stayed empty → required-field validation ("Category is required") blocked the Save → **no PUT was sent → changes didn't persist**. This is the classic Radix Select + react-hook-form async-`reset()` sync bug.

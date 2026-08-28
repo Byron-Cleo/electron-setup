@@ -150,8 +150,20 @@ function shiftReportLines(data: ShiftReportData): Line[] {
       const close = String(p.closingPlates ?? "—").padStart(6);
       push(name + open + cooked + sold + close);
     }
+    push("OPEN = carry-forward closing plates from previous shift");
   }
   push(line);
+
+  if (data.unassignedCarryOver && data.unassignedCarryOver.total > 0) {
+    pushCenter("UNASSIGNED CARRY-OVER", true);
+    push(line);
+    for (const b of data.unassignedCarryOver.batches) {
+      pushRow(b.stockSupplyName, `${b.unassigned} of ${b.totalProduced} produced`);
+    }
+    push(line);
+    pushRow("Total unassigned plates", String(data.unassignedCarryOver.total), true);
+    push(line);
+  }
 
   pushCenter("PRODUCTION vs SALES", true);
   push(line);

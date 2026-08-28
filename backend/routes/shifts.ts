@@ -142,6 +142,25 @@ router.post("/open", async (req, res) => {
         },
       });
 
+      // Carry-forward from the most recent closed shift: a menu's opening plates
+      // are its previous shift's closing plates (assigned carry-over). Unassigned
+      // production from the previous shift is kept independent and assigned later
+      // via the cooking-record allocation UI, so it is NOT folded into the opening
+      // snapshot.
+      const previousShift = await tx.shift.findFirst({
+        where: { isOpen: false },
+        orderBy: { openingTime: "desc" },
+        select: { snapshots: { select: { menuId: true, closingPlates: true } } },
+      });
+      const prevClosingByMenu = new Map<string, number>();
+      if (previousShift) {
+        for (const snap of previousShift.snapshots) {
+          if (snap.closingPlates != null) {
+            prevClosingByMenu.set(snap.menuId, Number(snap.closingPlates));
+          }
+        }
+      }
+
       // Take opening snapshot of all active menu items
       const activeMenus = await tx.menu.findMany({
         where: { isAvailable: true },
@@ -153,7 +172,9 @@ router.post("/open", async (req, res) => {
           data: activeMenus.map((menu) => ({
             shiftId: created.id,
             menuId: menu.id,
-            openingPlates: menu.stock ?? 0,
+            openingPlates: prevClosingByMenu.has(menu.id)
+              ? (prevClosingByMenu.get(menu.id) ?? 0)
+              : (menu.stock ?? 0),
           })),
         });
       }

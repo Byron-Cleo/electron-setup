@@ -59,6 +59,7 @@ function buildShiftReportData(report: ShiftReport): ShiftReportData {
     revenue: report.revenue,
     plateMovement: report.plateMovement,
     production: report.production,
+    unassignedCarryOver: report.unassignedCarryOver,
   }
 }
 
@@ -310,7 +311,7 @@ function ShiftReportView({ report }: Props) {
                   <div className="mb-2 text-base font-bold text-admin-header-text">{row.menuName}</div>
                   <div className="grid grid-cols-3 gap-2 text-xs sm:grid-cols-6">
                     <div>
-                      <span className="text-admin-muted">Opening</span>
+                      <span className="text-admin-muted">Opening (carry-forward)</span>
                       <p className="text-sm font-semibold tabular-nums">{row.openingPlates}</p>
                     </div>
                     <div>
@@ -347,6 +348,22 @@ function ShiftReportView({ report }: Props) {
                   </div>
                 </div>
               ))}
+              {report.unassignedCarryOver && report.unassignedCarryOver.total > 0 && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                  <div className="text-sm font-semibold text-orange-700">
+                    Total Unassigned Carry-Over:{" "}
+                    {report.unassignedCarryOver.total} plates
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {report.unassignedCarryOver.batches.map((b) => (
+                      <div key={b.stockSupplyName} className="text-xs text-admin-muted">
+                        {b.stockSupplyName}: {b.unassigned} of {b.totalProduced} produced still
+                        unassigned
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

@@ -240,6 +240,15 @@ export interface ShiftReportData {
     variance: number;
     profitMargin: string;
   };
+  unassignedCarryOver?: {
+    total: number;
+    batches: {
+      stockSupplyName: string;
+      totalProduced: number;
+      totalAssigned: number;
+      unassigned: number;
+    }[];
+  };
 }
 
 function shiftReportBody(data: ShiftReportData): string {
@@ -288,8 +297,16 @@ function shiftReportBody(data: ShiftReportData): string {
 ${"─".repeat(38)}
 ${data.plateMovement.map((p) =>
   `<b>${p.menuName.slice(0, 14).padEnd(14)}</b>${String(p.openingPlates).padStart(5)}${String(p.platesCooked).padStart(7)}${String(p.platesSold).padStart(6)}${String(p.closingPlates ?? "—").padStart(6)}`
-).join("\n")}</pre>` : ""}
+).join("\n")}
+OPEN = carry-forward closing plates from previous shift</pre>` : ""}
   ${data.plateMovement.length > 0 ? divider() : ""}
+  ${data.unassignedCarryOver && data.unassignedCarryOver.total > 0 ? `${divider()}
+  ${blockCenter("UNASSIGNED CARRY-OVER", "font-weight:bold; font-size:13px;")}
+  ${divider()}
+  ${data.unassignedCarryOver.batches.map((b) => row(b.stockSupplyName, `${b.unassigned} of ${b.totalProduced} produced`)).join("")}
+  ${divider()}
+  ${row("Total unassigned plates", String(data.unassignedCarryOver.total), "font-weight:bold;", "font-weight:bold;")}
+  ${divider()}` : ""}
   ${blockCenter("PRODUCTION vs SALES", "font-weight:bold; font-size:13px;")}
   ${divider()}
   ${row("Production cost", money(data.production.totalCost))}
