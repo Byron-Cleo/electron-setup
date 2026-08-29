@@ -221,7 +221,7 @@ export default function RemainingStockCard({ onAssigned }: Props) {
                           {batch.menus.length === 0 ? (
                             <span className="text-admin-muted text-xs">—</span>
                           ) : (
-                            <div className="flex flex-row items-center justify-between gap-1 flex-wrap">
+                            <div className="flex flex-row items-center gap-1 flex-wrap">
                               <div className="flex flex-col items-start gap-1">
                                 {batch.menus.map((m) => (
                                   <span
