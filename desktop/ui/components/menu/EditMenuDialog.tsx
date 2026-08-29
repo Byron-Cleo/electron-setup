@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -22,13 +22,13 @@ export default function EditMenuDialog({ open, onClose, item, onSaved }: Props) 
   const [platesToAdd, setPlatesToAdd] = useState("")
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
+  const [prevItemId, setPrevItemId] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (item) {
-      setPlatesToAdd("")
-      setError("")
-    }
-  }, [item])
+  if (item && item.id !== prevItemId) {
+    setPrevItemId(item.id)
+    setPlatesToAdd("")
+    setError("")
+  }
 
   const totalProduced = item?.cooking.totalProduced ?? 0
   const currentStock = item?.stock ?? 0

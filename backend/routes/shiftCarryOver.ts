@@ -58,10 +58,30 @@ export async function computeShiftUnassignedBatches(shift: {
   });
   const windowEnd = nextShift?.openingTime ?? shift.autoCloseTime;
 
+  // Sold per menu for THIS shift window, straight from the shift's snapshots
+  // (authoritative DB rows, never derived). A batch's sold = sum of the menus it
+  // feeds; sold plates have physically left the restaurant so they must be
+  // deducted from the unassigned carry-over — same math the AssignmentModal and
+  // Today's Cooked Food table use.
+  const shiftSnapshots = await prisma.shiftSnapshot.findMany({
+    where: { shiftId: shift.id },
+    select: { menuId: true, platesSold: true },
+  });
+  const soldByMenu = new Map<string, number>();
+  for (const snap of shiftSnapshots) {
+    soldByMenu.set(snap.menuId, (soldByMenu.get(snap.menuId) ?? 0) + Number(snap.platesSold));
+  }
+
   const records = await prisma.cookingRecord.findMany({
     where: { createdAt: { gte: shift.openingTime, lt: windowEnd } },
     include: {
-      stockSupply: { select: { id: true, name: true } },
+      stockSupply: {
+        select: {
+          id: true,
+          name: true,
+          menus: { select: { menuId: true } },
+        },
+      },
       cookingRecordMenus: {
         include: { menu: { select: { id: true, name: true } } },
         orderBy: { createdAt: "asc" },
@@ -76,7 +96,11 @@ export async function computeShiftUnassignedBatches(shift: {
       (sum, crm) => sum + Number(crm.platesAllocated),
       0
     );
-    const unassigned = produced - totalAssigned;
+    const batchSold = record.stockSupply.menus.reduce(
+      (sum, sm) => sum + (soldByMenu.get(sm.menuId) ?? 0),
+      0
+    );
+    const unassigned = produced - totalAssigned - batchSold;
     if (unassigned <= 0) continue;
     batches.push({
       cookingRecordId: record.id,

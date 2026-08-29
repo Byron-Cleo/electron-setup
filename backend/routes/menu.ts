@@ -193,6 +193,21 @@ router.get("/cooked", async (req, res) => {
       orderBy: { cookedDate: "desc" },
     });
 
+    // Sold is captured per shift in the current open shift's snapshots. The
+    // modal's "Remaining Plates" = produced - allocated - sold, so the table's
+    // "Available" must subtract the same sold value to stay consistent.
+    const openShift = await prisma.shift.findFirst({
+      where: { isOpen: true },
+      orderBy: { createdAt: "desc" },
+      include: { snapshots: true },
+    });
+    const soldByMenu = new Map<string, number>();
+    if (openShift) {
+      for (const snap of openShift.snapshots) {
+        soldByMenu.set(snap.menuId, (soldByMenu.get(snap.menuId) ?? 0) + Number(snap.platesSold));
+      }
+    }
+
     const result = await Promise.all(records.map(async (record) => {
       const produced = Number(record.platesActual ?? record.platesExpected);
       const linkableMenus = record.stockSupply.menus.map((sm) => sm.menu);
@@ -200,6 +215,17 @@ router.get("/cooked", async (req, res) => {
 
       const allocatedTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
       const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
+
+      // Sold applies only when the batch has been assigned (a plate cannot be
+      // sold before it is put on a menu). Available mirrors the AssignmentModal's
+      // Remaining Plates: produced - allocated - sold (or all produced when
+      // unassigned since nothing could have been sold yet).
+      const soldTotal = allocatedTotal > 0
+        ? linkableMenus.reduce((sum, menu) => sum + (soldByMenu.get(menu.id) ?? 0), 0)
+        : 0;
+      const availableTotal = allocatedTotal > 0
+        ? produced - allocatedTotal - soldTotal
+        : produced;
 
       // Get current stock for the primary menu (first linkable menu)
       const primaryMenu = linkableMenus[0];
@@ -235,7 +261,8 @@ router.get("/cooked", async (req, res) => {
         cooking: {
           totalProduced: produced,
           totalAssigned: allocatedTotal,
-          totalAvailable: remainingTotal,
+          totalAvailable: availableTotal,
+          totalSold: soldTotal,
         },
         platesRemaining: remainingTotal,
         cookingRecords: record.cookingRecordMenus.map((crm) => ({

@@ -127,6 +127,9 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/cooking-records/:id - Single cooking record (batch) with its menu splits
+// Sold + opening for each linked menu come straight from the open shift's
+// snapshots (authoritative DB rows) — consumers never derive them from
+// availability buckets, which can silently drop menus.
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const record = await prisma.cookingRecord.findUnique({
@@ -134,7 +137,45 @@ router.get("/:id", async (req, res) => {
     include: RECORD_INCLUDE,
   });
   if (!record) return res.status(404).json({ error: "Cooking record not found" });
-  res.json(record);
+
+  const shift = await prisma.shift.findFirst({
+    where: { isOpen: true },
+    orderBy: { createdAt: "desc" },
+    include: { snapshots: true },
+  });
+  const snapshots = shift?.snapshots ?? [];
+  const soldByMenu = new Map<string, number>();
+  const openingByMenu = new Map<string, number>();
+  for (const snap of snapshots) {
+    soldByMenu.set(snap.menuId, (soldByMenu.get(snap.menuId) ?? 0) + Number(snap.platesSold));
+    if (!openingByMenu.has(snap.menuId)) {
+      openingByMenu.set(snap.menuId, Number(snap.openingPlates) || 0);
+    }
+  }
+
+  // Attach sold/opening per linked menu from the snapshots; 0 when no snapshot
+  // exists (menu not opened this shift / produced outside the shift).
+  const menuSolds: Record<string, number> = {};
+  const menuOpenings: Record<string, number> = {};
+  for (const sm of record.stockSupply.menus) {
+    const menuId = sm.menu.id;
+    menuSolds[menuId] = Number(soldByMenu.get(menuId) ?? 0);
+    menuOpenings[menuId] = Number(openingByMenu.get(menuId) ?? 0);
+  }
+
+  res.json({
+    ...record,
+    menuSolds,
+    menuOpenings,
+    shift: shift
+      ? {
+          id: shift.id,
+          type: shift.type,
+          openingTime: shift.openingTime,
+          autoCloseTime: shift.autoCloseTime,
+        }
+      : null,
+  });
 });
 
 // POST /api/cooking-records - Create a cooking BATCH (feeds zero+ menu items via splits)

@@ -408,6 +408,14 @@ interface CookingRecord {
   cookedBy: { id: string; name: string };
   cookingRecordMenus: CookingRecordMenu[];
   availablePlates?: number;
+  menuSolds?: Record<string, number>;
+  menuOpenings?: Record<string, number>;
+  shift?: {
+    id: string;
+    type: string;
+    openingTime: string;
+    autoCloseTime: string;
+  } | null;
 }
 
 interface CreateCookingRecordData {
@@ -430,6 +438,8 @@ interface AllocateCookingRecordData {
 
 interface CookedMenuItem {
   id: string;
+  name: string;
+  stock: number;
   cookedDate: string;
   quantityCooked: number;
   produced: number;
@@ -450,6 +460,7 @@ interface CookedMenuItem {
     totalProduced: number;
     totalAssigned: number;
     totalAvailable: number;
+    totalSold?: number;
   };
   platesRemaining: number;
   cookingRecords: {
