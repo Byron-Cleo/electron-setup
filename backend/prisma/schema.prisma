@@ -106,6 +106,9 @@ model Order {
   voidedOrderId     String?     @db.Uuid
   paymentType       String?     // "SINGLE" or "BATCH"
   batchId           String?     // groups orders paid together in a batch
+  unpaidAcknowledged Boolean    @default(false) // manager-marked unpaid (not voided); allows shift close
+  unpaidAcknowledgedById String? @db.Uuid
+  unpaidAcknowledgedAt DateTime? @db.Timestamptz(6)
   User              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   OrderItem         OrderItem[]
   shift             Shift?      @relation(fields: [shiftId], references: [id])
@@ -349,6 +352,8 @@ model Shift {
   finalClosedAt   DateTime?       @db.Timestamptz(6)
   finalClosedById String?         @db.Uuid
   finalCloseSource String?        // "AUTO" | "MANUAL"
+  declaredCash    Decimal?        @db.Decimal(12, 2) // manager-declared cash received at close
+  declaredMpesa   Decimal?        @db.Decimal(12, 2) // manager-declared M-Pesa received at close
   openedBy        User            @relation("ShiftOpenedBy", fields: [openedById], references: [id])
   closedBy        User?           @relation("ShiftClosedBy", fields: [closedById], references: [id])
   finalClosedBy   User?           @relation("ShiftFinalClosedBy", fields: [finalClosedById], references: [id])
