@@ -233,6 +233,9 @@ export default function RemainingStockCard({ onAssigned }: Props) {
                                   </span>
                                 </span>
                               ))}
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-700 border border-blue-200 whitespace-nowrap leading-tight">
+                                Total: <span className="tabular-nums">{batch.menus.reduce((sum, m) => sum + (m.platesSold ?? 0), 0)}</span>
+                              </span>
                             </div>
                           )}
                         </td>
