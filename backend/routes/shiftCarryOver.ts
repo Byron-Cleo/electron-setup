@@ -7,7 +7,7 @@ export interface UnassignedBatch {
   totalProduced: number;
   totalAssigned: number;
   unassigned: number;
-  menus: { menuId: string; menuName: string; platesAllocated: number }[];
+  menus: { menuId: string; menuName: string; platesAllocated: number; platesSold: number }[];
 }
 
 // Find the most recent closed shift, optionally scoped to those whose window
@@ -122,6 +122,7 @@ export async function computeShiftUnassignedBatches(shift: {
         menuId: crm.menu.id,
         menuName: crm.menu.name,
         platesAllocated: Number(crm.platesAllocated),
+        platesSold: soldByMenu.get(crm.menu.id) ?? 0,
       })),
     });
   }

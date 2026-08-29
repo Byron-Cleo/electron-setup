@@ -624,6 +624,7 @@ interface StockRemainingUnassignedBatch {
     menuId: string;
     menuName: string;
     platesAllocated: number;
+    platesSold: number;
   }[];
 }
 

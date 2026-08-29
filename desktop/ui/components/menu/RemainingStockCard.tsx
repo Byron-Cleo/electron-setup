@@ -172,6 +172,7 @@ export default function RemainingStockCard({ onAssigned }: Props) {
                       <th className="px-3 py-2 text-left font-semibold">Stock Item Menus</th>
                       <th className="px-3 py-2 text-right font-semibold">Produced Plates</th>
                       <th className="px-3 py-2 text-right font-semibold">Assigned</th>
+                      <th className="px-3 py-2 text-right font-semibold text-blue-600">Previous Sold</th>
                       <th className="px-3 py-2 text-right font-semibold">Available</th>
                       <th className="px-3 py-2 text-right font-semibold">Actions</th>
                     </tr>
@@ -215,6 +216,9 @@ export default function RemainingStockCard({ onAssigned }: Props) {
                               {batch.totalAssigned} plates
                             </span>
                           )}
+                        </td>
+                        <td className="px-3 py-2 text-right text-blue-600 font-medium tabular-nums">
+                          {batch.menus.reduce((sum, m) => sum + (m.platesSold ?? 0), 0)}
                         </td>
                         <td className="px-3 py-2 text-right">
                           <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
