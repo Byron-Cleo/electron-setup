@@ -30,7 +30,7 @@ router.get("/remaining", async (_req, res) => {
           stockSupplyMenus: { select: { stockSupply: { select: { id: true, name: true } } } },
         },
       });
-      const carryForwardPerMenu: CarryForwardRow[] = activeMenus.flatMap((menu) => {
+      const carryForwardPerMenu: CarryForwardRow[] = activeMenus.flatMap((menu): CarryForwardRow[] => {
         const links = menu.stockSupplyMenus ?? [];
         if (links.length === 0) {
           return [
