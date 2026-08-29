@@ -72,7 +72,7 @@ function AdminLayout() {
           if (!cancelled) {
             setPendingCount(pending)
             setPartialCount(partial)
-            setReadyCount(cooked.length)
+            setReadyCount(cooked.filter((item) => item.cooking.totalAvailable > 0).length)
             setLowStockCount(lowStock.count)
             setRunningLowCount(runningLow)
             setUnderproducedCount(underproduced.count)

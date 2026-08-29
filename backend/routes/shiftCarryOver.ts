@@ -63,11 +63,11 @@ export async function computeShiftUnassignedBatches(shift: {
   const windowStart = shift.actualOpeningTime ?? shift.openingTime;
   const windowEnd = nextShift?.openingTime ?? shift.actualCloseTime ?? shift.autoCloseTime;
 
-  // Sold per menu for THIS shift window, straight from the shift's snapshots
-  // (authoritative DB rows, never derived). A batch's sold = sum of the menus it
-  // feeds; sold plates have physically left the restaurant so they must be
-  // deducted from the unassigned carry-over — same math the AssignmentModal and
-  // Today's Cooked Food table use.
+  // Sold is captured per menu in this shift's snapshots. Unassigned must
+  // replicate the AssignmentModal's Remaining Pool exactly: produced minus the
+  // plates still on menus (Σ platesRemaining) minus the plates sold. Using
+  // platesAllocated here would include sold plates (allocated = remaining +
+  // sold) and subtract them twice.
   const shiftSnapshots = await prisma.shiftSnapshot.findMany({
     where: { shiftId: shift.id },
     select: { menuId: true, platesSold: true },
@@ -97,15 +97,15 @@ export async function computeShiftUnassignedBatches(shift: {
   const batches: UnassignedBatch[] = [];
   for (const record of records) {
     const produced = Number(record.platesActual ?? record.platesExpected);
-    const totalAssigned = record.cookingRecordMenus.reduce(
-      (sum, crm) => sum + Number(crm.platesAllocated),
+    const remainingTotal = record.cookingRecordMenus.reduce(
+      (sum, crm) => sum + Number(crm.platesRemaining),
       0
     );
     const batchSold = record.stockSupply.menus.reduce(
       (sum, sm) => sum + (soldByMenu.get(sm.menuId) ?? 0),
       0
     );
-    const unassigned = produced - totalAssigned - batchSold;
+    const unassigned = produced - remainingTotal - batchSold;
     if (unassigned <= 0) continue;
     batches.push({
       cookingRecordId: record.id,

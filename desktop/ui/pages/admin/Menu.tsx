@@ -57,7 +57,7 @@ function Menu() {
 
   function loadReadyCount() {
     getCookedMenus()
-      .then((items) => setReadyCount(items.length))
+      .then((items) => setReadyCount(items.filter((item) => item.cooking.totalAvailable > 0).length))
       .catch(() => {})
   }
 
@@ -155,7 +155,7 @@ function Menu() {
       {view === "cooked-food" && (
         <div className="space-y-4">
           <BackButton onClick={handleBackToDashboard} />
-          <CookedFoodTable />
+          <CookedFoodTable onRefresh={() => loadReadyCount()} />
         </div>
       )}
 

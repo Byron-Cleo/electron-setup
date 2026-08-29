@@ -218,13 +218,15 @@ router.get("/cooked", async (req, res) => {
 
       // Sold applies only when the batch has been assigned (a plate cannot be
       // sold before it is put on a menu). Available mirrors the AssignmentModal's
-      // Remaining Plates: produced - allocated - sold (or all produced when
-      // unassigned since nothing could have been sold yet).
+      // Remaining Plates: produced - remaining - sold (or all produced when
+      // unassigned since nothing could have been sold yet). platesAllocated
+      // already includes sold plates (allocated = remaining + sold), so using
+      // allocatedTotal here would subtract the sold plates twice.
       const soldTotal = allocatedTotal > 0
         ? linkableMenus.reduce((sum, menu) => sum + (soldByMenu.get(menu.id) ?? 0), 0)
         : 0;
       const availableTotal = allocatedTotal > 0
-        ? produced - allocatedTotal - soldTotal
+        ? produced - remainingTotal - soldTotal
         : produced;
 
       // Get current stock for the primary menu (first linkable menu)

@@ -53,6 +53,15 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     )
   }, [items, search])
 
+  const sortedItems = useMemo(() => {
+    return [...filteredItems].sort((a, b) => {
+      const aHas = a.cooking.totalAvailable > 0 ? 1 : 0
+      const bHas = b.cooking.totalAvailable > 0 ? 1 : 0
+      if (aHas !== bHas) return bHas - aHas
+      return b.cooking.totalProduced - a.cooking.totalProduced
+    })
+  }, [filteredItems])
+
   const {
     currentPage,
     totalPages,
@@ -61,7 +70,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     prevPage,
     canNext,
     canPrev,
-  } = usePagination(filteredItems)
+  } = usePagination(sortedItems)
 
   const columns: Column[] = [
     { label: "Stock Image", key: "stockImage" },
@@ -149,7 +158,12 @@ export default function CookedFoodTable({ onRefresh }: Props) {
       case "actions":
         return (
           <div className="flex items-center justify-end gap-1">
-            <Button size="sm" variant="outline" onClick={() => setEditDialog({ open: true, item: row })}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={row.cooking.totalAvailable <= 0}
+              onClick={() => setEditDialog({ open: true, item: row })}
+            >
               <Utensils size={14} className="mr-1" />
               Assign Plates
             </Button>
@@ -174,6 +188,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         data={paginatedItems}
         renderCell={renderCell}
         keyExtractor={(row) => row.id}
+        rowClassName={(row) => (row.cooking.totalAvailable <= 0 ? "opacity-40" : "")}
         emptyMessage={
           search
             ? "No cooked foods match your search."
