@@ -221,19 +221,21 @@ export default function RemainingStockCard({ onAssigned }: Props) {
                           {batch.menus.length === 0 ? (
                             <span className="text-admin-muted text-xs">—</span>
                           ) : (
-                            <div className="flex flex-col items-end gap-0.5">
-                              {batch.menus.map((m) => (
-                                <span
-                                  key={m.menuId}
-                                  className="inline-flex items-center gap-1 px-2 py-0 rounded-full text-[10px] font-medium bg-admin-content border border-admin-card-border whitespace-nowrap leading-tight"
-                                >
-                                  <span className="text-admin-header-text">{m.menuName}</span>
-                                  <span className="rounded-full bg-blue-500/15 text-blue-600 px-1.5 py-0 text-[9px] font-semibold tabular-nums leading-tight">
-                                    {m.platesSold ?? 0}
+                            <div className="flex flex-row items-center justify-between gap-2 flex-wrap">
+                              <div className="flex flex-row items-center gap-1 flex-wrap">
+                                {batch.menus.map((m) => (
+                                  <span
+                                    key={m.menuId}
+                                    className="inline-flex items-center gap-1 px-2 py-0 rounded-full text-[10px] font-medium bg-admin-content border border-admin-card-border whitespace-nowrap leading-tight"
+                                  >
+                                    <span className="text-admin-header-text">{m.menuName}</span>
+                                    <span className="rounded-full bg-blue-500/15 text-blue-600 px-1.5 py-0 text-[9px] font-semibold tabular-nums leading-tight">
+                                      {m.platesSold ?? 0}
+                                    </span>
                                   </span>
-                                </span>
-                              ))}
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-700 border border-blue-200 whitespace-nowrap leading-tight">
+                                ))}
+                              </div>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-700 border border-blue-200 whitespace-nowrap leading-tight shrink-0">
                                 Total: <span className="tabular-nums">{batch.menus.reduce((sum, m) => sum + (m.platesSold ?? 0), 0)}</span>
                               </span>
                             </div>
