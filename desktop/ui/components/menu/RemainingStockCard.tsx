@@ -172,7 +172,7 @@ export default function RemainingStockCard({ onAssigned }: Props) {
                       <th className="px-3 py-2 text-left font-semibold">Stock Item Menus</th>
                       <th className="px-3 py-2 text-right font-semibold">Produced Plates</th>
                       <th className="px-3 py-2 text-right font-semibold">Assigned</th>
-                      <th className="px-3 py-2 text-right font-semibold text-blue-600">Previous Sold</th>
+                      <th className="px-3 py-2 text-center font-semibold text-blue-600">Previous Sold</th>
                       <th className="px-3 py-2 text-right font-semibold">Available</th>
                       <th className="px-3 py-2 text-right font-semibold">Actions</th>
                     </tr>
