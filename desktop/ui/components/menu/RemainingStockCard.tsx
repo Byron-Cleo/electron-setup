@@ -217,8 +217,24 @@ export default function RemainingStockCard({ onAssigned }: Props) {
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-right text-blue-600 font-medium tabular-nums">
-                          {batch.menus.reduce((sum, m) => sum + (m.platesSold ?? 0), 0)}
+                        <td className="px-3 py-2">
+                          {batch.menus.length === 0 ? (
+                            <span className="text-admin-muted text-xs">—</span>
+                          ) : (
+                            <div className="flex flex-col items-end gap-0.5">
+                              {batch.menus.map((m) => (
+                                <span
+                                  key={m.menuId}
+                                  className="inline-flex items-center gap-1 px-2 py-0 rounded-full text-[10px] font-medium bg-admin-content border border-admin-card-border whitespace-nowrap leading-tight"
+                                >
+                                  <span className="text-admin-header-text">{m.menuName}</span>
+                                  <span className="rounded-full bg-blue-500/15 text-blue-600 px-1.5 py-0 text-[9px] font-semibold tabular-nums leading-tight">
+                                    {m.platesSold ?? 0}
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-right">
                           <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
