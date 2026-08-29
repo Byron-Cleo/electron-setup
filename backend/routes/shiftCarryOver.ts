@@ -45,6 +45,8 @@ export async function computeShiftUnassignedBatches(shift: {
   id: string;
   openingTime: Date;
   autoCloseTime: Date;
+  actualOpeningTime: Date | null;
+  actualCloseTime: Date | null;
   date: Date;
 }): Promise<{
   windowEnd: Date;
@@ -56,7 +58,10 @@ export async function computeShiftUnassignedBatches(shift: {
     orderBy: { openingTime: "asc" },
     select: { openingTime: true },
   });
-  const windowEnd = nextShift?.openingTime ?? shift.autoCloseTime;
+  // Use the shift's ACTUAL open/close as the batch window when available, so
+  // anything cooked while the shift was really running counts toward it.
+  const windowStart = shift.actualOpeningTime ?? shift.openingTime;
+  const windowEnd = nextShift?.openingTime ?? shift.actualCloseTime ?? shift.autoCloseTime;
 
   // Sold per menu for THIS shift window, straight from the shift's snapshots
   // (authoritative DB rows, never derived). A batch's sold = sum of the menus it
@@ -73,7 +78,7 @@ export async function computeShiftUnassignedBatches(shift: {
   }
 
   const records = await prisma.cookingRecord.findMany({
-    where: { createdAt: { gte: shift.openingTime, lt: windowEnd } },
+    where: { createdAt: { gte: windowStart, lt: windowEnd } },
     include: {
       stockSupply: {
         select: {
