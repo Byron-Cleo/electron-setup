@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { AlertTriangle, CheckCircle2, Eye, Printer } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Eye, Printer, Wallet, Landmark, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -71,7 +71,7 @@ interface Props {
 function ShiftReportView({ report }: Props) {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [printing, setPrinting] = useState(false)
-  const { shift, plateMovement, revenue, production, summary } = report
+  const { shift, plateMovement, revenue, production, summary, payments } = report
   const revenueEntries = (
     Object.entries(revenue) as [string, ShiftRevenueEntry][]
   ).filter(([key]) => key !== "total")
@@ -293,6 +293,82 @@ function ShiftReportView({ report }: Props) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Payment Reconciliation */}
+      {payments && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Payment Reconciliation</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+              <p className="text-xs text-green-700 font-medium flex items-center gap-1 mb-2">
+                <Wallet className="h-3 w-3" /> M-Pesa
+              </p>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-green-600">System Total</span>
+                  <span className="font-medium text-green-700">{money(payments.mpesaTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-600">Declared</span>
+                  <span className="font-medium text-green-700">
+                    {payments.declaredMpesa !== null ? money(payments.declaredMpesa) : "—"}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-green-200 pt-1">
+                  <span className="font-medium text-green-600">Variance</span>
+                  <span className={`font-bold ${payments.mpesaVariance !== null && payments.mpesaVariance < 0 ? "text-red-600" : "text-green-700"}`}>
+                    {payments.mpesaVariance !== null ? money(payments.mpesaVariance) : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+              <p className="text-xs text-orange-700 font-medium flex items-center gap-1 mb-2">
+                <Landmark className="h-3 w-3" /> Cash
+              </p>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-orange-600">System Total</span>
+                  <span className="font-medium text-orange-700">{money(payments.cashTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-orange-600">Declared</span>
+                  <span className="font-medium text-orange-700">
+                    {payments.declaredCash !== null ? money(payments.declaredCash) : "—"}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-orange-200 pt-1">
+                  <span className="font-medium text-orange-600">Variance</span>
+                  <span className={`font-bold ${payments.cashVariance !== null && payments.cashVariance < 0 ? "text-red-600" : "text-orange-700"}`}>
+                    {payments.cashVariance !== null ? money(payments.cashVariance) : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs text-amber-700 font-medium flex items-center gap-1 mb-2">
+                <AlertCircle className="h-3 w-3" /> Unpaid
+              </p>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-amber-600">Unpaid Orders</span>
+                  <span className="font-medium text-amber-700">{payments.unpaid.count}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-amber-600">Unpaid Total</span>
+                  <span className="font-medium text-amber-700">{money(payments.unpaid.total)}</span>
+                </div>
+                <div className="flex justify-between border-t border-amber-200 pt-1">
+                  <span className="font-medium text-amber-600">System Revenue (Paid Only)</span>
+                  <span className="font-bold text-amber-700">{money(payments.cashTotal + payments.mpesaTotal)}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Plate movement */}
       <Card>
