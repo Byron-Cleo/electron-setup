@@ -276,13 +276,17 @@ router.get("/shift/:id", async (req, res) => {
       return res.status(404).json({ error: "Shift not found" });
     }
 
-    // Revenue is computed from non-void orders only
+    // Revenue is computed from paid non-void orders only. Unpaid (including
+    // manager-marked-unpaid) orders stay in the total count but are excluded
+    // from revenue and reported separately in the payment summary.
     const activeOrders = shift.orders.filter((o) => !o.isVoid);
+    const paidOrders = activeOrders.filter((o) => o.isPaid);
+    const unpaidOrders = activeOrders.filter((o) => !o.isPaid);
 
     // Calculate revenue breakdown by meal period
     const revenueByMealType: Record<string, { orders: number; total: number }> = {};
 
-    for (const order of activeOrders) {
+    for (const order of paidOrders) {
       const mealType = order.mealType;
       if (!revenueByMealType[mealType]) {
         revenueByMealType[mealType] = { orders: 0, total: 0 };
@@ -292,7 +296,35 @@ router.get("/shift/:id", async (req, res) => {
     }
 
     // Calculate production cost
-    const totalSales = activeOrders.reduce((sum, order) => sum + Number(order.totalPrice), 0);
+    const totalSales = paidOrders.reduce((sum, order) => sum + Number(order.totalPrice), 0);
+
+    // Payment summary: cash / mpesa collected per system, unpaid tracked amount,
+    // manager-declared amounts and per-mode variance.
+    const cashTotal = paidOrders
+      .filter((o) => o.paymentMethod === "cash")
+      .reduce((sum, o) => sum + Number(o.totalPrice), 0);
+    const mpesaTotal = paidOrders
+      .filter((o) => o.paymentMethod === "mpesa")
+      .reduce((sum, o) => sum + Number(o.totalPrice), 0);
+    const unpaidTotal = unpaidOrders.reduce((sum, o) => sum + Number(o.totalPrice), 0);
+    const declaredCash = shift.declaredCash !== null && shift.declaredCash !== undefined
+      ? Number(shift.declaredCash)
+      : null;
+    const declaredMpesa = shift.declaredMpesa !== null && shift.declaredMpesa !== undefined
+      ? Number(shift.declaredMpesa)
+      : null;
+    const payments = {
+      cashTotal,
+      mpesaTotal,
+      unpaid: {
+        count: unpaidOrders.length,
+        total: unpaidTotal,
+      },
+      declaredCash,
+      declaredMpesa,
+      cashVariance: declaredCash !== null ? declaredCash - cashTotal : null,
+      mpesaVariance: declaredMpesa !== null ? declaredMpesa - mpesaTotal : null,
+    };
 
     // Find the next shift's openingTime to define the upper boundary of this shift's window
     const nextShift = await prisma.shift.findFirst({
@@ -448,6 +480,7 @@ router.get("/shift/:id", async (req, res) => {
         totalOrders: shift.orders.length,
         voidedOrders: shift.orders.filter((o) => o.isVoid).length,
       },
+      payments,
       drift: {
         minutes: driftMinutes,
         records: driftRecords,

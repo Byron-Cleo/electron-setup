@@ -97,6 +97,10 @@ export async function computeShiftUnassignedBatches(shift: {
   const batches: UnassignedBatch[] = [];
   for (const record of records) {
     const produced = Number(record.platesActual ?? record.platesExpected);
+    const totalAssigned = record.cookingRecordMenus.reduce(
+      (sum, crm) => sum + Number(crm.platesAllocated),
+      0
+    );
     const remainingTotal = record.cookingRecordMenus.reduce(
       (sum, crm) => sum + Number(crm.platesRemaining),
       0

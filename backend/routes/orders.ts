@@ -241,6 +241,68 @@ router.patch("/:id/payment", async (req, res) => {
   }
 });
 
+// Mark an order as acknowledged-unpaid (manager confirmation; NOT a void).
+// Once marked, it no longer blocks the shift from closing and is reported in
+// the shift's payment summary as an unpaid tracked order.
+router.post("/:id/unpaid-ack", async (req, res) => {
+  const { id } = req.params;
+  const { acknowledgedById } = req.body;
+
+  if (!acknowledgedById) {
+    return res.status(400).json({ error: "acknowledgedById is required" });
+  }
+
+  try {
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.isPaid) {
+      return res.status(400).json({ error: "Only unpaid orders can be marked as unpaid" });
+    }
+    if (order.isVoid) {
+      return res.status(400).json({ error: "Voided orders cannot be marked as unpaid" });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        unpaidAcknowledged: true,
+        unpaidAcknowledgedById: acknowledgedById,
+        unpaidAcknowledgedAt: new Date(),
+      },
+    });
+    res.json(updated);
+  } catch (e) {
+    console.error("Error acknowledging unpaid order:", e);
+    res.status(500).json({ error: "Failed to acknowledge unpaid order" });
+  }
+});
+
+// Undo an unpaid acknowledgement (reopens the close-block if currently closing)
+router.post("/:id/unpaid-ack-undo", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (!order.unpaidAcknowledged) {
+      return res.status(400).json({ error: "Order is not marked as unpaid" });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        unpaidAcknowledged: false,
+        unpaidAcknowledgedById: null,
+        unpaidAcknowledgedAt: null,
+      },
+    });
+    res.json(updated);
+  } catch (e) {
+    console.error("Error undoing unpaid acknowledgement:", e);
+    res.status(500).json({ error: "Failed to undo unpaid acknowledgement" });
+  }
+});
+
 // Void an order
 router.post("/:id/void", async (req, res) => {
   const { id } = req.params;

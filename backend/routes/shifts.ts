@@ -202,14 +202,17 @@ router.post("/open", async (req, res) => {
 // Allows closing even if shift was auto-captured by scheduler
 router.post("/:id/close", async (req, res) => {
   const { id } = req.params;
-  const { closedById } = req.body;
+  const { closedById, declaredCash, declaredMpesa } = req.body;
 
   if (!closedById) {
     return res.status(400).json({ error: "closedById is required" });
   }
 
   try {
-    const shift = await prisma.shift.findUnique({ where: { id } });
+    const shift = await prisma.shift.findUnique({
+      where: { id },
+      include: { orders: true },
+    });
 
     if (!shift) {
       return res.status(404).json({ error: "Shift not found" });
@@ -219,11 +222,26 @@ router.post("/:id/close", async (req, res) => {
       return res.status(400).json({ error: "Shift is already finalized" });
     }
 
+    // Block close while any order is unpaid and not marked-as-unpaid by a manager.
+    // Unpaid orders can only be resolved by marking them as unpaid (never voided here).
+    const blockingUnpaid = shift.orders.filter(
+      (o) => !o.isVoid && !o.isPaid && !o.unpaidAcknowledged
+    );
+    if (blockingUnpaid.length > 0) {
+      return res.status(409).json({
+        error: `Cannot close shift: ${blockingUnpaid.length} unpaid order(s) are not marked as unpaid. Resolve them before closing.`,
+        blockingUnpaid: blockingUnpaid.map((o) => ({
+          id: o.id,
+          orderNumber: o.orderNumber,
+          totalPrice: o.totalPrice,
+        })),
+      });
+    }
+
     const now = new Date();
 
     // Close shift and take manual closing snapshot
     const closedShift = await prisma.$transaction(async (tx) => {
-      // Update shift - mark as finalized
       await tx.shift.update({
         where: { id },
         data: {
@@ -233,6 +251,12 @@ router.post("/:id/close", async (req, res) => {
           finalClosedAt: now,
           finalClosedById: closedById,
           finalCloseSource: "MANUAL",
+          ...(declaredCash !== undefined && declaredCash !== null && declaredCash !== ""
+            ? { declaredCash: Number(declaredCash) }
+            : {}),
+          ...(declaredMpesa !== undefined && declaredMpesa !== null && declaredMpesa !== ""
+            ? { declaredMpesa: Number(declaredMpesa) }
+            : {}),
         },
       });
 
