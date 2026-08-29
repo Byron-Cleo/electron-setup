@@ -43,7 +43,7 @@ function StatusBadge({ isPaid }: { isPaid: boolean }) {
 
 type CashierView = "dashboard" | "orders" | "void" | "payment"
 
-type OrderTab = "ALL" | "MPESA" | "CASH" | "VOID" | "UNPAID" | "BATCH"
+type OrderTab = "ALL" | "MPESA" | "CASH" | "VOID" | "UNPAID" | "MARKED_UNPAID" | "BATCH"
 
 const TAB_LABELS: Record<OrderTab, string> = {
   ALL: "All",
@@ -51,6 +51,7 @@ const TAB_LABELS: Record<OrderTab, string> = {
   CASH: "Cash",
   VOID: "Void",
   UNPAID: "Unpaid",
+  MARKED_UNPAID: "Marked Unpaid",
   BATCH: "Batch",
 }
 
@@ -78,6 +79,10 @@ const TAB_COLORS: Record<OrderTab, { active: string; inactive: string }> = {
   BATCH: {
     active: "bg-purple-100 text-purple-700",
     inactive: "text-purple-400 hover:text-purple-600",
+  },
+  MARKED_UNPAID: {
+    active: "bg-amber-100 text-amber-700",
+    inactive: "text-amber-400 hover:text-amber-600",
   },
 }
 
@@ -283,6 +288,9 @@ function OrdersView() {
       case "BATCH":
         source = source.filter((o) => o.isPaid && o.paymentType === "BATCH")
         break
+      case "MARKED_UNPAID":
+        source = source.filter((o) => o.unpaidAcknowledged)
+        break
     }
     if (searchInput) {
       const q = searchInput.toLowerCase()
@@ -304,6 +312,7 @@ function OrdersView() {
     CASH: orders.filter((o) => o.isPaid && o.paymentMethod === "cash").length,
     VOID: orders.filter((o) => o.isVoid).length,
     UNPAID: orders.filter((o) => !o.isPaid && !o.isVoid).length,
+    MARKED_UNPAID: orders.filter((o) => o.unpaidAcknowledged).length,
     BATCH: orders.filter((o) => o.isPaid && o.paymentType === "BATCH").length,
   }), [orders])
 
@@ -378,7 +387,7 @@ function OrdersView() {
       <Heading as="h2" className="text-admin-header-text text-center text-xl">Orders</Heading>
 
       <div className="flex flex-wrap gap-2">
-        {(["ALL", "MPESA", "CASH", "VOID", "UNPAID", "BATCH"] as OrderTab[]).map((tab) => (
+        {(["ALL", "MPESA", "CASH", "VOID", "UNPAID", "MARKED_UNPAID", "BATCH"] as OrderTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}

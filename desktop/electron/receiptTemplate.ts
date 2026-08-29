@@ -249,6 +249,15 @@ export interface ShiftReportData {
       unassigned: number;
     }[];
   };
+  payments?: {
+    cashTotal: number;
+    mpesaTotal: number;
+    unpaid: { count: number; total: number };
+    declaredCash: number | null;
+    declaredMpesa: number | null;
+    cashVariance: number | null;
+    mpesaVariance: number | null;
+  };
 }
 
 function shiftReportBody(data: ShiftReportData): string {
@@ -313,7 +322,25 @@ OPEN = carry-forward closing plates from previous shift</pre>` : ""}
   ${row("Sales", money(data.production.totalSales))}
   ${row("Variance", money(data.production.variance), "font-weight:bold;", "font-weight:bold;")}
   ${row("Profit margin", data.production.profitMargin)}
-  ${divider()}`;
+  ${divider()}
+
+  ${data.payments ? `
+  ${divider()}
+  ${blockCenter("PAYMENT RECONCILIATION", "font-weight:bold; font-size:13px;")}
+  ${divider()}
+  ${row("M-Pesa (System)", money(data.payments.mpesaTotal))}
+  ${row("M-Pesa (Declared)", data.payments.declaredMpesa !== null ? money(data.payments.declaredMpesa) : "—")}
+  ${row("M-Pesa Variance", data.payments.mpesaVariance !== null ? money(data.payments.mpesaVariance) : "—", "font-weight:bold;", data.payments.mpesaVariance !== null && data.payments.mpesaVariance < 0 ? "color:red;" : "font-weight:bold;")}
+  ${divider()}
+  ${row("Cash (System)", money(data.payments.cashTotal))}
+  ${row("Cash (Declared)", data.payments.declaredCash !== null ? money(data.payments.declaredCash) : "—")}
+  ${row("Cash Variance", data.payments.cashVariance !== null ? money(data.payments.cashVariance) : "—", "font-weight:bold;", data.payments.cashVariance !== null && data.payments.cashVariance < 0 ? "color:red;" : "font-weight:bold;")}
+  ${divider()}
+  ${row("Unpaid Orders", String(data.payments.unpaid.count))}
+  ${row("Unpaid Total", money(data.payments.unpaid.total))}
+  ${divider()}
+  ` : ""}
+`;
 }
 
 export function shiftReportHtml(data: ShiftReportData): string {

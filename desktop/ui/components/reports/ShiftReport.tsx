@@ -60,6 +60,7 @@ function buildShiftReportData(report: ShiftReport): ShiftReportData {
     plateMovement: report.plateMovement,
     production: report.production,
     unassignedCarryOver: report.unassignedCarryOver,
+    payments: report.payments,
   }
 }
 

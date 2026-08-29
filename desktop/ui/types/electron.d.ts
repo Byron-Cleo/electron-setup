@@ -116,6 +116,9 @@ interface Order {
   paymentType: string | null;
   batchId: string | null;
   shiftId: string | null;
+  unpaidAcknowledged: boolean;
+  unpaidAcknowledgedAt: string | null;
+  unpaidAcknowledgedById: string | null;
   OrderItem: OrderItem[];
   User?: { name: string } | null;
 }
@@ -586,6 +589,8 @@ interface Shift {
   } | null;
   snapshots: ShiftSnapshot[];
   orders?: Order[];
+  declaredCash: number | null;
+  declaredMpesa: number | null;
 }
 
 interface AutoCloseResult {
@@ -707,6 +712,15 @@ interface ShiftReport {
     total: number;
     batches: ShiftUnassignedCarryOverBatch[];
   };
+  payments: {
+    cashTotal: number;
+    mpesaTotal: number;
+    unpaid: { count: number; total: number };
+    declaredCash: number | null;
+    declaredMpesa: number | null;
+    cashVariance: number | null;
+    mpesaVariance: number | null;
+  };
 }
 
 interface ShiftReportData {
@@ -763,6 +777,15 @@ interface ShiftReportData {
     totalSales: number;
     variance: number;
     profitMargin: string;
+  };
+  payments: {
+    cashTotal: number;
+    mpesaTotal: number;
+    unpaid: { count: number; total: number };
+    declaredCash: number | null;
+    declaredMpesa: number | null;
+    cashVariance: number | null;
+    mpesaVariance: number | null;
   };
 }
 

@@ -488,6 +488,19 @@ export async function updateOrderPayment(orderId: string, paymentMethod: "cash" 
   })
 }
 
+export async function markOrderAsUnpaid(orderId: string, acknowledgedById: string): Promise<Order> {
+  return apiFetch(`/orders/${orderId}/unpaid-ack`, {
+    method: "POST",
+    body: JSON.stringify({ acknowledgedById }),
+  })
+}
+
+export async function unmarkOrderAsUnpaid(orderId: string): Promise<Order> {
+  return apiFetch(`/orders/${orderId}/unpaid-ack-undo`, {
+    method: "POST",
+  })
+}
+
 export async function previewReceipt(data: ReceiptData): Promise<string> {
   if (window.electron?.print?.preview) {
     return window.electron.print.preview(data)
@@ -525,10 +538,13 @@ export async function openShift(type: ShiftType, openedById: string): Promise<Sh
   })
 }
 
-export async function closeShift(shiftId: string, closedById: string): Promise<Shift> {
+export async function closeShift(shiftId: string, closedById: string, declaredCash?: number, declaredMpesa?: number): Promise<Shift> {
+  const body: { closedById: string; declaredCash?: number; declaredMpesa?: number } = { closedById };
+  if (declaredCash !== undefined) body.declaredCash = declaredCash;
+  if (declaredMpesa !== undefined) body.declaredMpesa = declaredMpesa;
   return apiFetch(`/shifts/${shiftId}/close`, {
     method: "POST",
-    body: JSON.stringify({ closedById }),
+    body: JSON.stringify(body),
   })
 }
 
