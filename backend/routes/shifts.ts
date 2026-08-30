@@ -48,7 +48,22 @@ router.get("/current", async (_req, res) => {
         openedBy: { select: { id: true, name: true } },
         snapshots: { include: { menu: { select: { id: true, name: true } } } },
         orders: {
-          select: { id: true, mealType: true, totalPrice: true, isVoid: true, createdAt: true },
+          select: {
+            id: true,
+            orderNumber: true,
+            mealType: true,
+            totalPrice: true,
+            paymentMethod: true,
+            paymentType: true,
+            isPaid: true,
+            isVoid: true,
+            unpaidAcknowledged: true,
+            unpaidAcknowledgedById: true,
+            unpaidAcknowledgedAt: true,
+            shiftId: true,
+            createdAt: true,
+            User: { select: { id: true, name: true } },
+          },
         },
       },
     });

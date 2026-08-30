@@ -19,8 +19,8 @@ const allNavItems: {
   runninglow?: boolean
   underproduced?: boolean
 }[] = [
-  { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager"] },
-  { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager", "cashier"], accent: true },
+  { label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true, roles: ["admin", "manager", "cashier"] },
+  { label: "Shift Management", path: "/admin/shift-management", icon: Clock, roles: ["admin", "manager"], accent: true },
   { label: "Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"], pending: true, partial: true, lowstock: true },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"], pending: true, partial: true, underproduced: true },
   { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"], ready: true, runninglow: true },

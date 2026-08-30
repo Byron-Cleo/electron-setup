@@ -300,7 +300,7 @@ function ShiftReportView({ report }: Props) {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Payment Reconciliation</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-lg border border-green-200 bg-green-50 p-3">
               <p className="text-xs text-green-700 font-medium flex items-center gap-1 mb-2">
                 <Wallet className="h-3 w-3" /> M-Pesa
