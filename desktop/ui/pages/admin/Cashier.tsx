@@ -13,13 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getOrders, voidOrder, updateOrderPayment } from "@/lib/api"
+import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, type ShiftType } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { usePagination } from "@/hooks/usePagination"
 import BackButton from "@/components/shared/BackButton"
+import CurrentShiftIndicator from "@/components/shared/CurrentShiftIndicator"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DatePicker } from "@/components/ui/date-picker"
 
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`
@@ -41,7 +43,7 @@ function StatusBadge({ isPaid }: { isPaid: boolean }) {
   )
 }
 
-type CashierView = "dashboard" | "orders" | "void" | "payment"
+type CashierView = "dashboard" | "orders-entry" | "orders" | "payment-entry" | "payment" | "void-entry" | "void"
 
 type OrderTab = "ALL" | "MPESA" | "CASH" | "VOID" | "UNPAID" | "MARKED_UNPAID" | "BATCH"
 
@@ -50,7 +52,7 @@ const TAB_LABELS: Record<OrderTab, string> = {
   MPESA: "M-Pesa",
   CASH: "Cash",
   VOID: "Void",
-  UNPAID: "Unpaid",
+  UNPAID: "New Unpaid",
   MARKED_UNPAID: "Marked Unpaid",
   BATCH: "Batch",
 }
@@ -73,16 +75,16 @@ const TAB_COLORS: Record<OrderTab, { active: string; inactive: string }> = {
     inactive: "text-red-400 hover:text-red-600",
   },
   UNPAID: {
-    active: "bg-gray-100 text-gray-700",
-    inactive: "text-gray-400 hover:text-gray-600",
+    active: "bg-green-100 text-green-700",
+    inactive: "text-green-400 hover:text-green-600",
   },
   BATCH: {
     active: "bg-purple-100 text-purple-700",
     inactive: "text-purple-400 hover:text-purple-600",
   },
   MARKED_UNPAID: {
-    active: "bg-amber-100 text-amber-700",
-    inactive: "text-amber-400 hover:text-amber-600",
+    active: "bg-red-100 text-red-700",
+    inactive: "text-red-400 hover:text-red-600",
   },
 }
 
@@ -98,6 +100,24 @@ const ORDER_COLUMNS: Column[] = [
 
 function Cashier() {
   const [view, setView] = useState<CashierView>("dashboard")
+  const [selectedShiftType, setSelectedShiftType] = useState<ShiftType | undefined>()
+  const [selectedPaymentShiftType, setSelectedPaymentShiftType] = useState<ShiftType | undefined>()
+  const [selectedVoidShiftType, setSelectedVoidShiftType] = useState<ShiftType | undefined>()
+  const [currentShiftType, setCurrentShiftType] = useState<ShiftType | undefined>()
+  const user = useAuthStore((s) => s.user)
+  const isCashier = user?.role === "cashier"
+
+  useEffect(() => {
+    let cancelled = false
+    getCurrentShift()
+      .then((shift) => {
+        if (!cancelled) setCurrentShiftType(shift?.type)
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentShiftType(undefined)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div className="space-y-2">
@@ -105,140 +125,204 @@ function Cashier() {
         Cashier
       </Heading>
 
+      <CurrentShiftIndicator roles={["cashier"]} />
+
       {view !== "dashboard" && (
-        <BackButton onClick={() => setView("dashboard")} />
+        <BackButton onClick={() => {
+          if (view === "orders") {
+            setView("orders-entry")
+          } else if (view === "payment") {
+            setView("payment-entry")
+          } else if (view === "void") {
+            setView("void-entry")
+          } else {
+            setView("dashboard")
+            setSelectedShiftType(undefined)
+            setSelectedPaymentShiftType(undefined)
+            setSelectedVoidShiftType(undefined)
+          }
+        }} />
       )}
 
-      {view === "dashboard" && <DashboardView onNavigate={setView} />}
-      {view === "orders" && <OrdersView />}
-      {view === "void" && <VoidView />}
-      {view === "payment" && <PaymentView />}
+      {view === "dashboard" && <DashboardView onNavigate={(v, s) => { setView(v); if (v === "orders-entry") setSelectedShiftType(s); if (v === "payment-entry") setSelectedPaymentShiftType(s); if (v === "void-entry") setSelectedVoidShiftType(s); }} />}
+      {view === "orders-entry" && <OrdersEntryView isCashier={isCashier} currentShiftType={currentShiftType} onSelectShift={(s) => { setSelectedShiftType(s); setView("orders") }} />}
+      {view === "orders" && <OrdersView shiftType={selectedShiftType} />}
+      {view === "payment-entry" && <PaymentEntryView isCashier={isCashier} currentShiftType={currentShiftType} onSelectShift={(s) => { setSelectedPaymentShiftType(s); setView("payment") }} />}
+      {view === "payment" && <PaymentView shiftType={selectedPaymentShiftType} />}
+      {view === "void-entry" && <VoidEntryView isCashier={isCashier} currentShiftType={currentShiftType} onSelectShift={(s) => { setSelectedVoidShiftType(s); setView("void") }} />}
+      {view === "void" && <VoidView shiftType={selectedVoidShiftType} />}
     </div>
   )
 }
 
-function DashboardView({ onNavigate }: { onNavigate: (v: CashierView) => void }) {
-  const [counts, setCounts] = useState({ total: 0, unpaid: 0, voided: 0 })
+function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?: ShiftType) => void }) {
+  const [counts, setCounts] = useState({ total: 0, unpaid: 0, voided: 0, dayShift: 0, nightShift: 0 })
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
 
   useEffect(() => {
     let cancelled = false
-    getOrders()
-      .then((data) => {
+    async function loadData() {
+      try {
+        const [orders, shifts] = await Promise.all([getOrders(), listShifts()])
         if (cancelled) return
+
+        const shiftTypeById = new Map(shifts.map((s) => [s.id, s.type]))
+
+        const dayShiftOrders = orders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === "DAY")
+        const nightShiftOrders = orders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === "NIGHT")
+
         setCounts({
-          total: data.length,
-          unpaid: data.filter((o) => !o.isPaid && !o.isVoid).length,
-          voided: data.filter((o) => o.isVoid).length,
+          total: orders.length,
+          unpaid: orders.filter((o) => !o.isPaid && !o.isVoid).length,
+          voided: orders.filter((o) => o.isVoid).length,
+          dayShift: dayShiftOrders.length,
+          nightShift: nightShiftOrders.length,
         })
-      })
-      .catch(() => {})
+      } catch { /* ignore */ }
+    }
+    loadData()
     return () => { cancelled = true }
   }, [])
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <Card
-        className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
-        onClick={() => onNavigate("orders")}
-      >
-        <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
-            <Receipt size={24} className="text-green-600" />
-          </div>
-          <div>
-            <Heading as="h3" className="text-lg text-admin-header-text">Orders</Heading>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                {counts.total} total
-              </span>
-              {counts.unpaid > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
-                  {counts.unpaid} unpaid
-                </span>
-              )}
+        <Card
+          className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+          onClick={() => onNavigate("orders-entry")}
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <Receipt size={24} className="text-green-600" />
             </div>
-            <p className="text-xs text-admin-muted mt-1">View all orders with filters and search.</p>
+            <div>
+              <Heading as="h3" className="text-lg text-admin-header-text">Orders</Heading>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  {counts.total} total
+                </span>
+                {counts.unpaid > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                    {counts.unpaid} unpaid
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-admin-muted mt-1">View all orders with filters and search.</p>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
 
-      <Card
-        className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
-        onClick={() => onNavigate("payment")}
-      >
-        <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
-            <Wallet size={24} className="text-blue-600" />
-          </div>
-          <div>
-            <Heading as="h3" className="text-lg text-admin-header-text">Payment</Heading>
-            <div className="flex items-center gap-2 mt-1">
-              {counts.unpaid > 0 ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-                  {counts.unpaid} unpaid
-                </span>
-              ) : (
-                <span className="text-sm text-admin-muted">All orders paid</span>
-              )}
+        <Card
+          className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+          onClick={() => onNavigate("payment-entry")}
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <Wallet size={24} className="text-blue-600" />
             </div>
-            <p className="text-xs text-admin-muted mt-1">Mark an order as paid via M-Pesa or Cash.</p>
+            <div>
+              <Heading as="h3" className="text-lg text-admin-header-text">Payment</Heading>
+              <div className="flex items-center gap-2 mt-1">
+                {counts.unpaid > 0 ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                    {counts.unpaid} unpaid
+                  </span>
+                ) : (
+                  <span className="text-sm text-admin-muted">All orders paid</span>
+                )}
+              </div>
+              <p className="text-xs text-admin-muted mt-1">Mark an order as paid via M-Pesa or Cash.</p>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
 
-      <Card
-        className={`p-6 transition-colors ${
-          isCashier
-            ? "opacity-40 cursor-not-allowed border-2 border-red-300 bg-red-200/60"
-            : "cursor-pointer border-2 border-red-400 bg-red-50/50 hover:border-red-600"
-        }`}
-        onClick={isCashier ? undefined : () => onNavigate("void")}
-      >
-        <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-lg bg-red-500/10 flex items-center justify-center">
-            <XCircle size={24} className="text-red-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <Heading as="h3" className="text-lg text-red-700">Void Order</Heading>
-              {isCashier && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600">
-                  <Lock size={10} />
-                  Manager only
-                </span>
-              )}
+        <Card
+          className={`p-6 transition-colors ${
+            isCashier
+              ? "opacity-40 cursor-not-allowed border-2 border-red-300 bg-red-200/60"
+              : "cursor-pointer border-2 border-red-400 bg-red-50/50 hover:border-red-600"
+          }`}
+          onClick={isCashier ? undefined : () => onNavigate("void-entry")}
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <XCircle size={24} className="text-red-600" />
             </div>
-            <div className="flex items-center gap-2 mt-1">
-              {isCashier ? (
-                <span className="text-sm text-admin-muted">Requires manager role</span>
-              ) : counts.unpaid > 0 ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  {counts.unpaid} voidable
-                </span>
-              ) : (
-                <span className="text-sm text-admin-muted">No voidable orders</span>
-              )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <Heading as="h3" className="text-lg text-red-700">Void Order</Heading>
+                {isCashier && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600">
+                    <Lock size={10} />
+                    Manager only
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                {isCashier ? (
+                  <span className="text-sm text-admin-muted">Requires manager role</span>
+                ) : counts.unpaid > 0 ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    {counts.unpaid} voidable
+                  </span>
+                ) : (
+                  <span className="text-sm text-admin-muted">No voidable orders</span>
+                )}
+              </div>
+              <p className="text-xs text-admin-muted mt-1">
+                {isCashier ? "Contact manager to void orders." : "Select and void an unpaid order."}
+              </p>
             </div>
-            <p className="text-xs text-admin-muted mt-1">
-              {isCashier ? "Contact manager to void orders." : "Select and void an unpaid order."}
-            </p>
           </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
+    )
+  }
+
+function OrdersEntryView({ onSelectShift, isCashier, currentShiftType }: { onSelectShift: (shiftType: ShiftType) => void; isCashier: boolean; currentShiftType?: ShiftType }) {
+  function isDisabled(shift: ShiftType) {
+    return isCashier && !!currentShiftType && shift !== currentShiftType
+  }
+  return (
+    <div className="space-y-4">
+      <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Orders</Heading>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
+        <Card className={`p-6 text-center transition-colors ${
+          isDisabled("DAY")
+            ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
+            : "cursor-pointer hover:border-admin-accent"
+        }`} onClick={isDisabled("DAY") ? undefined : () => onSelectShift("DAY")}>
+          <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
+            <Receipt size={32} className="text-yellow-600" />
+          </div>
+          <Heading as="h3" className="text-lg text-admin-header-text mb-2">Day Shift Orders</Heading>
+          <p className="text-sm text-admin-muted">View Day shift orders (Breakfast, Lunch)</p>
+        </Card>
+        <Card className={`p-6 text-center transition-colors ${
+          isDisabled("NIGHT")
+            ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
+            : "cursor-pointer hover:border-admin-accent"
+        }`} onClick={isDisabled("NIGHT") ? undefined : () => onSelectShift("NIGHT")}>
+          <div className="h-16 w-16 rounded-lg bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
+            <Receipt size={32} className="text-indigo-600" />
+          </div>
+          <Heading as="h3" className="text-lg text-admin-header-text mb-2">Night Shift Orders</Heading>
+          <p className="text-sm text-admin-muted">View Night shift orders (Dinner, Dessert, Beverage)</p>
+        </Card>
+      </div>
     </div>
   )
 }
 
-function OrdersView() {
+function OrdersView({ shiftType }: { shiftType?: ShiftType }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchInput, setSearchInput] = useState("")
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
   const [activeTab, setActiveTab] = useState<OrderTab>("ALL")
 
@@ -248,8 +332,15 @@ function OrdersView() {
       setLoading(true)
       setError("")
       try {
-        const data = await getOrders()
-        if (!cancelled) setOrders(data)
+        const [allOrders, shifts] = await Promise.all([getOrders(), listShifts()])
+        if (cancelled) return
+
+        const shiftTypeById = new Map(shifts.map((s) => [s.id, s.type]))
+        const filteredOrders = shiftType
+          ? allOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+          : allOrders
+
+        setOrders(filteredOrders)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
       } finally {
@@ -258,7 +349,7 @@ function OrdersView() {
     }
     loadOrders()
     return () => { cancelled = true }
-  }, [])
+  }, [shiftType])
 
   const batchTotals = useMemo(() => {
     const totals: Record<string, number> = {}
@@ -283,7 +374,7 @@ function OrdersView() {
         source = source.filter((o) => o.isVoid)
         break
       case "UNPAID":
-        source = source.filter((o) => !o.isPaid && !o.isVoid)
+        source = source.filter((o) => !o.isPaid && !o.isVoid && !o.unpaidAcknowledged)
         break
       case "BATCH":
         source = source.filter((o) => o.isPaid && o.paymentType === "BATCH")
@@ -303,15 +394,22 @@ function OrdersView() {
         return false
       })
     }
+    if (selectedDate) {
+      const year = selectedDate.getFullYear()
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0")
+      const day = String(selectedDate.getDate()).padStart(2, "0")
+      const dateStr = `${year}-${month}-${day}`
+      source = source.filter((o) => o.createdAt.startsWith(dateStr))
+    }
     return source
-  }, [orders, activeTab, searchInput, batchTotals])
+  }, [orders, activeTab, searchInput, batchTotals, selectedDate])
 
   const counts = useMemo(() => ({
     ALL: orders.length,
     MPESA: orders.filter((o) => o.isPaid && o.paymentMethod === "mpesa").length,
     CASH: orders.filter((o) => o.isPaid && o.paymentMethod === "cash").length,
     VOID: orders.filter((o) => o.isVoid).length,
-    UNPAID: orders.filter((o) => !o.isPaid && !o.isVoid).length,
+    UNPAID: orders.filter((o) => !o.isPaid && !o.isVoid && !o.unpaidAcknowledged).length,
     MARKED_UNPAID: orders.filter((o) => o.unpaidAcknowledged).length,
     BATCH: orders.filter((o) => o.isPaid && o.paymentType === "BATCH").length,
   }), [orders])
@@ -332,6 +430,16 @@ function OrdersView() {
         return (
           <div className="flex items-center justify-center gap-2">
             <span className="font-semibold">#{order.orderNumber}</span>
+            {!order.isVoid && !order.isPaid && !order.unpaidAcknowledged && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                NEW
+              </span>
+            )}
+            {!order.isVoid && !order.isPaid && order.unpaidAcknowledged && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                CLOSED
+              </span>
+            )}
             {order.isVoid && (
               <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
                 VOIDED
@@ -347,8 +455,31 @@ function OrdersView() {
       case "mealType":
         return order.mealType
       case "paymentMethod":
+        if (order.isVoid) {
+          return (
+            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+              Cancelled
+            </span>
+          )
+        }
         if (!order.isPaid) {
-          return <span className="text-admin-muted">Unpaid</span>
+          if (!order.unpaidAcknowledged) {
+            return (
+              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                NOT YET
+              </span>
+            )
+          }
+          return (
+            <div className="flex items-center justify-center gap-1.5">
+              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                Unpaid
+              </span>
+              <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                Manager Marked
+              </span>
+            </div>
+          )
         }
         return (
           <div className="flex items-center justify-center gap-1.5">
@@ -384,10 +515,26 @@ function OrdersView() {
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center text-xl">Orders</Heading>
+      {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap gap-2">
-        {(["ALL", "MPESA", "CASH", "VOID", "UNPAID", "MARKED_UNPAID", "BATCH"] as OrderTab[]).map((tab) => (
+      {!loading && !error && (
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <Heading as="h2" className="text-admin-header-text text-xl">
+            {shiftType ? `${shiftType} Shift Orders` : "Orders"}
+          </Heading>
+          {shiftType && (
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+              shiftType === "DAY" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"
+            }`}>
+              {shiftType} Shift
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 justify-center">
+        {(["ALL", "UNPAID", "MPESA", "CASH", "VOID", "BATCH", "MARKED_UNPAID"] as OrderTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -402,9 +549,6 @@ function OrdersView() {
           </button>
         ))}
       </div>
-
-      {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
 
       {!loading && !error && (
         <DataTable
@@ -422,12 +566,19 @@ function OrdersView() {
             canNext,
           }}
           header={
-            <Input
-              placeholder="Search by order number..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="max-w-sm"
-            />
+            <div className="flex items-center justify-between gap-2">
+              <Input
+                placeholder="Search by order number..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="max-w-sm"
+              />
+              <DatePicker
+                value={selectedDate}
+                onChange={setSelectedDate}
+                placeholder="Filter by date"
+              />
+            </div>
           }
         />
       )}
@@ -491,7 +642,38 @@ function OrdersView() {
   )
 }
 
-function VoidView() {
+function VoidEntryView({ onSelectShift, isCashier, currentShiftType }: { onSelectShift: (shiftType: ShiftType) => void; isCashier: boolean; currentShiftType?: ShiftType }) {
+  function isDisabled(shift: ShiftType) {
+    return isCashier && !!currentShiftType && shift !== currentShiftType
+  }
+  return (
+    <div className="space-y-4">
+      <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Voids</Heading>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
+        <Card className={`p-6 border-2 border-red-400 bg-red-50/50 text-center transition-colors ${
+          isDisabled("DAY") ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-red-600 cursor-pointer"
+        }`} onClick={isDisabled("DAY") ? undefined : () => onSelectShift("DAY")}>
+          <div className="h-16 w-16 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+            <XCircle size={32} className="text-red-600" />
+          </div>
+          <Heading as="h3" className="text-lg text-red-700 mb-2">Day Shift Voids</Heading>
+          <p className="text-sm text-admin-muted">View Day shift voidable orders (Breakfast, Lunch)</p>
+        </Card>
+        <Card className={`p-6 border-2 border-red-400 bg-red-50/50 text-center transition-colors ${
+          isDisabled("NIGHT") ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-red-600 cursor-pointer"
+        }`} onClick={isDisabled("NIGHT") ? undefined : () => onSelectShift("NIGHT")}>
+          <div className="h-16 w-16 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+            <XCircle size={32} className="text-red-600" />
+          </div>
+          <Heading as="h3" className="text-lg text-red-700 mb-2">Night Shift Voids</Heading>
+          <p className="text-sm text-admin-muted">View Night shift voidable orders (Dinner, Dessert, Beverage)</p>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function VoidView({ shiftType }: { shiftType?: ShiftType }) {
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
 
@@ -499,6 +681,7 @@ function VoidView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchInput, setSearchInput] = useState("")
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [voiding, setVoiding] = useState(false)
@@ -509,8 +692,16 @@ function VoidView() {
     async function loadOrders() {
       setLoading(true)
       try {
-        const data = await getOrders()
-        if (!cancelled) setOrders(data.filter((o) => !o.isPaid && !o.isVoid))
+        const [allOrders, shifts] = await Promise.all([getOrders(), listShifts()])
+        if (cancelled) return
+
+        const shiftTypeById = new Map(shifts.map((s) => [s.id, s.type]))
+        const voidableOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
+        const filteredOrders = shiftType
+          ? voidableOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+          : voidableOrders
+
+        setOrders(filteredOrders)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
       } finally {
@@ -519,13 +710,23 @@ function VoidView() {
     }
     loadOrders()
     return () => { cancelled = true }
-  }, [isCashier])
+  }, [isCashier, shiftType])
 
   const filtered = useMemo(() => {
-    if (!searchInput) return orders
-    const q = searchInput.toLowerCase()
-    return orders.filter((o) => String(o.orderNumber).includes(q))
-  }, [orders, searchInput])
+    let source = orders
+    if (searchInput) {
+      const q = searchInput.toLowerCase()
+      source = source.filter((o) => String(o.orderNumber).includes(q))
+    }
+    if (selectedDate) {
+      const year = selectedDate.getFullYear()
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0")
+      const day = String(selectedDate.getDate()).padStart(2, "0")
+      const dateStr = `${year}-${month}-${day}`
+      source = source.filter((o) => o.createdAt.startsWith(dateStr))
+    }
+    return source
+  }, [orders, searchInput, selectedDate])
 
   const {
     currentPage,
@@ -548,8 +749,8 @@ function VoidView() {
           <p className="text-xs text-gray-400 mt-2">Contact your manager to void orders.</p>
         </Card>
       </div>
-    )
-  }
+  )
+}
 
   async function handleVoidOrder() {
     if (!selectedOrder || !user) return
@@ -607,10 +808,23 @@ function VoidView() {
 
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center text-xl">Void Order</Heading>
-
       {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!loading && !error && (
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <Heading as="h2" className="text-admin-header-text text-xl">
+            {shiftType ? `${shiftType} Shift Voids` : "Void Order"}
+          </Heading>
+          {shiftType && (
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+              shiftType === "DAY" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"
+            }`}>
+              {shiftType} Shift
+            </span>
+          )}
+        </div>
+      )}
 
       {!loading && !error && (
         <DataTable
@@ -628,12 +842,19 @@ function VoidView() {
             canNext,
           }}
           header={
-            <Input
-              placeholder="Search by order number..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="max-w-sm"
-            />
+            <div className="flex items-center justify-between gap-2">
+              <Input
+                placeholder="Search by order number..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="max-w-sm"
+              />
+              <DatePicker
+                value={selectedDate}
+                onChange={setSelectedDate}
+                placeholder="Filter by date"
+              />
+            </div>
           }
         />
       )}
@@ -649,15 +870,39 @@ function VoidView() {
 
           {selectedOrder && (
             <div className="space-y-4">
-              <div className="rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="text-admin-muted">Waiter</div>
-                  <div className="font-medium">{selectedOrder.User?.name ?? "—"}</div>
-                  <div className="text-admin-muted">Total</div>
-                  <div className="font-medium">{money(selectedOrder.totalPrice)}</div>
-                  <div className="text-admin-muted">Items</div>
-                  <div className="font-medium">{selectedOrder.OrderItem.length}</div>
-                </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
+                <div className="text-admin-muted">Waiter</div>
+                <div className="font-medium">{selectedOrder.User?.name ?? "—"}</div>
+                <div className="text-admin-muted">Total</div>
+                <div className="font-medium">{money(selectedOrder.totalPrice)}</div>
+                <div className="text-admin-muted">Items</div>
+                <div className="font-medium">{selectedOrder.OrderItem.length}</div>
+              </div>
+
+              <div className="space-y-2">
+                {selectedOrder.OrderItem.map((item) => {
+                  const accomp = [item.Starch?.name, item.Vegetable?.name].filter(Boolean).join(", ")
+                  return (
+                    <div
+                      key={`${item.orderId}-${item.menuId}`}
+                      className="flex items-start justify-between gap-3 rounded-lg border-2 border-red-300 bg-red-50/50 p-3"
+                    >
+                      <div>
+                        <div className="font-medium text-red-700">{item.name}</div>
+                        <div className="mt-0.5 text-xs text-red-600">
+                          {item.qty} x {money(item.price)}
+                          {accomp ? ` — ${accomp}` : ""}
+                        </div>
+                      </div>
+                      <div className="font-semibold text-red-700">{money(item.qty * item.price)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg bg-red-100 p-4">
+                <span className="font-medium text-admin-header-text">Total</span>
+                <span className="text-lg font-bold text-admin-header-text">{money(selectedOrder.totalPrice)}</span>
               </div>
 
               <div className="space-y-2">
@@ -702,7 +947,42 @@ function VoidView() {
   )
 }
 
-function PaymentView() {
+function PaymentEntryView({ onSelectShift, isCashier, currentShiftType }: { onSelectShift: (shiftType: ShiftType) => void; isCashier: boolean; currentShiftType?: ShiftType }) {
+  function isDisabled(shift: ShiftType) {
+    return isCashier && !!currentShiftType && shift !== currentShiftType
+  }
+  return (
+    <div className="space-y-4">
+      <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Payments</Heading>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
+        <Card className={`p-6 text-center transition-colors ${
+          isDisabled("DAY")
+            ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
+            : "cursor-pointer hover:border-admin-accent"
+        }`} onClick={isDisabled("DAY") ? undefined : () => onSelectShift("DAY")}>
+          <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
+            <Wallet size={32} className="text-yellow-600" />
+          </div>
+          <Heading as="h3" className="text-lg text-admin-header-text mb-2">Day Shift Payments</Heading>
+          <p className="text-sm text-admin-muted">View Day shift unpaid orders (Breakfast, Lunch)</p>
+        </Card>
+        <Card className={`p-6 text-center transition-colors ${
+          isDisabled("NIGHT")
+            ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
+            : "cursor-pointer hover:border-admin-accent"
+        }`} onClick={isDisabled("NIGHT") ? undefined : () => onSelectShift("NIGHT")}>
+          <div className="h-16 w-16 rounded-lg bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
+            <Wallet size={32} className="text-indigo-600" />
+          </div>
+          <Heading as="h3" className="text-lg text-admin-header-text mb-2">Night Shift Payments</Heading>
+          <p className="text-sm text-admin-muted">View Night shift unpaid orders (Dinner, Dessert, Beverage)</p>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function PaymentView({ shiftType }: { shiftType?: ShiftType }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -711,18 +991,28 @@ function PaymentView() {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | null>(null)
   const [selectedOrders, setSelectedOrders] = useState<Order[]>([])
   const [orderSearch, setOrderSearch] = useState("")
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [processing, setProcessing] = useState(false)
   const [payOrder, setPayOrder] = useState<Order | null>(null)
   const [payMethod, setPayMethod] = useState<"cash" | "mpesa" | null>(null)
   const [payProcessing, setPayProcessing] = useState(false)
+  const [payCategory, setPayCategory] = useState<"NEW" | "MARKED">("NEW")
 
   useEffect(() => {
     let cancelled = false
     async function loadOrders() {
       setLoading(true)
       try {
-        const data = await getOrders()
-        if (!cancelled) setOrders(data.filter((o) => !o.isPaid && !o.isVoid))
+        const [allOrders, shifts] = await Promise.all([getOrders(), listShifts()])
+        if (cancelled) return
+
+        const shiftTypeById = new Map(shifts.map((s) => [s.id, s.type]))
+        const unpaidOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
+        const filteredOrders = shiftType
+          ? unpaidOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+          : unpaidOrders
+
+        setOrders(filteredOrders)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
       } finally {
@@ -731,13 +1021,28 @@ function PaymentView() {
     }
     loadOrders()
     return () => { cancelled = true }
-  }, [])
+  }, [shiftType])
 
   const filtered = useMemo(() => {
-    if (!orderSearch) return orders
-    const q = orderSearch.toLowerCase()
-    return orders.filter((o) => String(o.orderNumber).includes(q))
-  }, [orders, orderSearch])
+    let source = orders
+    if (payCategory === "NEW") {
+      source = source.filter((o) => !o.unpaidAcknowledged)
+    } else if (payCategory === "MARKED") {
+      source = source.filter((o) => o.unpaidAcknowledged)
+    }
+    if (orderSearch) {
+      const q = orderSearch.toLowerCase()
+      source = source.filter((o) => String(o.orderNumber).includes(q))
+    }
+    if (selectedDate) {
+      const year = selectedDate.getFullYear()
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0")
+      const day = String(selectedDate.getDate()).padStart(2, "0")
+      const dateStr = `${year}-${month}-${day}`
+      source = source.filter((o) => o.createdAt.startsWith(dateStr))
+    }
+    return source
+  }, [orders, orderSearch, selectedDate, payCategory])
 
   const {
     currentPage,
@@ -833,8 +1138,25 @@ function PaymentView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Heading as="h2" className="text-admin-header-text text-center text-xl flex-1">Payment</Heading>
+      {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!loading && !error && (
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <Heading as="h2" className="text-admin-header-text text-xl">
+            {shiftType ? `${shiftType} Shift Payments` : "Payment"}
+          </Heading>
+          {shiftType && (
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+              shiftType === "DAY" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"
+            }`}>
+              {shiftType} Shift
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center justify-end">
         <Button
           className="px-6 py-6 bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200"
           onClick={openWizard}
@@ -844,8 +1166,28 @@ function PaymentView() {
         </Button>
       </div>
 
-      {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex flex-wrap gap-2 justify-center">
+        {([
+          { key: "NEW" as const, label: "New Orders" },
+          { key: "MARKED" as const, label: "Marked Unpaid" },
+        ]).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setPayCategory(tab.key)}
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase transition-colors ${
+              payCategory === tab.key
+                ? tab.key === "NEW"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+                : tab.key === "NEW"
+                ? "text-green-400 hover:text-green-600"
+                : "text-red-400 hover:text-red-600"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {!loading && !error && (
         <DataTable
@@ -863,54 +1205,96 @@ function PaymentView() {
             canNext,
           }}
           header={
-            <Input
-              placeholder="Search by order number..."
-              value={orderSearch}
-              onChange={(e) => setOrderSearch(e.target.value)}
-              className="max-w-sm"
-            />
+            <div className="flex items-center justify-between gap-2">
+              <Input
+                placeholder="Search by order number..."
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                className="max-w-sm"
+              />
+              <DatePicker
+                value={selectedDate}
+                onChange={setSelectedDate}
+                placeholder="Filter by date"
+              />
+            </div>
           }
         />
       )}
 
       {/* Single Order Payment Dialog */}
       <Dialog open={payOrder !== null} onOpenChange={(open) => { if (!open) setPayOrder(null) }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-center text-xs font-black uppercase tracking-widest text-green-600">Pay Order #{payOrder?.orderNumber}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
-            <div className="rounded-lg border border-admin-card-border p-3 text-sm">
-              <div className="flex justify-between"><span className="text-admin-muted">Meal</span><span className="font-medium">{payOrder?.mealType}</span></div>
-              <div className="flex justify-between"><span className="text-admin-muted">Waiter</span><span className="font-medium">{payOrder?.User?.name ?? "—"}</span></div>
-              <div className="flex justify-between"><span className="text-admin-muted">Total</span><span className="font-bold">{payOrder ? money(payOrder.totalPrice) : ""}</span></div>
-            </div>
+          {payOrder && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
+                <div className="text-admin-muted">Meal</div>
+                <div className="font-medium">{payOrder.mealType}</div>
+                <div className="text-admin-muted">Waiter</div>
+                <div className="font-medium">{payOrder.User?.name ?? "—"}</div>
+              </div>
 
-            <p className="text-sm font-medium text-admin-header-text mb-2">Select payment method</p>
-            <RadioGroup value={payMethod ?? ""} onValueChange={(v) => setPayMethod(v as "cash" | "mpesa")} className="flex flex-row gap-4">
-              <Label
-                htmlFor="single-mpesa"
-                className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-3 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
-              >
-                <RadioGroupItem value="mpesa" id="single-mpesa" className="mt-0.5" />
-                <span>
-                  <span className="block mb-1 font-medium text-admin-header-text">M-Pesa</span>
-                  <span className="block text-xs text-admin-muted">Mobile money</span>
-                </span>
-              </Label>
-              <Label
-                htmlFor="single-cash"
-                className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-3 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
-              >
-                <RadioGroupItem value="cash" id="single-cash" className="mt-0.5" />
-                <span>
-                  <span className="block mb-1 font-medium text-admin-header-text">Cash</span>
-                  <span className="block text-xs text-admin-muted">Physical cash</span>
-                </span>
-              </Label>
-            </RadioGroup>
-          </div>
+              <div className="space-y-2">
+                {payOrder.OrderItem.map((item) => {
+                  const accomp = [item.Starch?.name, item.Vegetable?.name].filter(Boolean).join(", ")
+                  return (
+                    <div
+                      key={`${item.orderId}-${item.menuId}`}
+                      className="flex items-start justify-between gap-3 rounded-lg border border-admin-card-border p-3"
+                    >
+                      <div>
+                        <div className="font-medium">{item.name}</div>
+                        <div className="mt-0.5 text-xs text-admin-muted">
+                          {item.qty} x {money(item.price)}
+                          {accomp ? ` — ${accomp}` : ""}
+                        </div>
+                      </div>
+                      <div className="font-semibold">{money(item.qty * item.price)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg bg-admin-accent/10 p-4">
+                <span className="font-medium text-admin-header-text">Total</span>
+                <span className="text-lg font-bold text-admin-header-text">{money(payOrder.totalPrice)}</span>
+              </div>
+
+              <p className="text-sm font-medium text-admin-header-text mb-2">Select payment method</p>
+              <RadioGroup value={payMethod ?? ""} onValueChange={(v) => setPayMethod(v as "cash" | "mpesa")} className="flex flex-row gap-4">
+                <Label
+                  htmlFor="single-mpesa"
+                  className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-4 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+                >
+                  <RadioGroupItem value="mpesa" id="single-mpesa" className="mt-0.5" />
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">M</span>
+                    <span>
+                      <span className="block mb-1 font-medium text-admin-header-text">M-Pesa</span>
+                      <span className="block text-xs text-admin-muted">Mobile money payment</span>
+                    </span>
+                  </span>
+                </Label>
+                <Label
+                  htmlFor="single-cash"
+                  className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-4 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+                >
+                  <RadioGroupItem value="cash" id="single-cash" className="mt-0.5" />
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">C</span>
+                    <span>
+                      <span className="block mb-1 font-medium text-admin-header-text">Cash</span>
+                      <span className="block text-xs text-admin-muted">Physical cash payment</span>
+                    </span>
+                  </span>
+                </Label>
+              </RadioGroup>
+            </div>
+          )}
 
           <DialogFooter>
             <Button

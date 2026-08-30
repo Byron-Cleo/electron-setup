@@ -306,8 +306,8 @@ function shiftReportBody(data: ShiftReportData): string {
 ${"─".repeat(38)}
 ${data.plateMovement.map((p) =>
   `<b>${p.menuName.slice(0, 14).padEnd(14)}</b>${String(p.openingPlates).padStart(5)}${String(p.platesCooked).padStart(7)}${String(p.platesSold).padStart(6)}${String(p.closingPlates ?? "—").padStart(6)}`
-).join("\n")}
-OPEN = carry-forward closing plates from previous shift</pre>` : ""}
+).join("\n")}</pre>
+${blockCenter("OPEN = carry-forward closing plates from previous shift", "font-size:11px; margin-top:4px;")}` : ""}
   ${data.plateMovement.length > 0 ? divider() : ""}
   ${data.unassignedCarryOver && data.unassignedCarryOver.total > 0 ? `${divider()}
   ${blockCenter("UNASSIGNED CARRY-OVER", "font-weight:bold; font-size:13px;")}

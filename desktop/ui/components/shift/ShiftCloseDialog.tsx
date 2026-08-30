@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { AlertTriangle, CheckCircle2, Loader2, Eye, Printer, AlertCircle, Wallet, Landmark, CheckCheck } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Loader2, Eye, Printer, AlertCircle, Wallet, Landmark, CheckCheck, ChevronLeft, ChevronRight, Search } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -11,9 +11,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import {
   closeShift,
+  getCurrentShift,
   getShiftReport,
   previewShiftReport,
   printShiftReport,
@@ -23,6 +24,14 @@ import { cn } from "@/lib/utils"
 
 function money(amount: number): string {
   return `KSH ${Number(amount).toLocaleString("en-KE", { maximumFractionDigits: 2 })}`
+}
+
+function formatAmountInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d.]/g, "")
+  const [intPart, ...rest] = cleaned.split(".")
+  const decimal = rest.length > 0 ? `.${rest.join("")}` : ""
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+  return `${grouped}${decimal}`
 }
 
 function formatTime(iso: string | null): string {
@@ -57,6 +66,7 @@ interface Props {
 }
 
 function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: Props) {
+  const [liveShift, setLiveShift] = useState<Shift>(shift)
   const [closing, setClosing] = useState(false)
   const [markingUnpaid, setMarkingUnpaid] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -65,9 +75,11 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
   const [printing, setPrinting] = useState(false)
   const [declaredCash, setDeclaredCash] = useState("")
   const [declaredMpesa, setDeclaredMpesa] = useState("")
+  const [step, setStep] = useState(1)
+  const [search, setSearch] = useState("")
 
   const stats = useMemo(() => {
-    const orders = shift.orders ?? []
+    const orders = liveShift.orders ?? []
     const active = orders.filter((o) => !o.isVoid)
     const paid = active.filter((o) => o.isPaid)
     const unpaid = active.filter((o) => !o.isPaid)
@@ -94,7 +106,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
       entry.total += Number(order.totalPrice)
     }
     return {
-      totalOrders: shift.orders?.length ?? 0,
+      totalOrders: liveShift.orders?.length ?? 0,
       voidedOrders: orders.length - active.length,
       unvoidedOrders: active.length,
       paidOrders: paid.length,
@@ -109,11 +121,24 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
       cashOrders,
       mpesaOrders,
     }
-  }, [shift])
+  }, [liveShift])
+
+  const filteredUnpaid = useMemo(() => {
+    if (!search.trim()) return stats.blockingUnpaid
+    const q = search.trim().toLowerCase()
+    return stats.blockingUnpaid.filter((o) => {
+      const numberMatch = String(o.orderNumber).includes(q)
+      const mealMatch = o.mealType.toLowerCase().includes(q)
+      const nameMatch = (o.User?.name ?? "").toLowerCase().includes(q)
+      return numberMatch || mealMatch || nameMatch
+    })
+  }, [search, stats.blockingUnpaid])
+
+  const totalSteps = 3
 
   const enforceCloseTime = import.meta.env.VITE_ENFORCE_SHIFT_CLOSE_TIME === "true"
   const pastAutoClose = enforceCloseTime
-    ? new Date() > new Date(shift.autoCloseTime)
+    ? new Date() > new Date(liveShift.autoCloseTime)
     : true
 
   const canClose = pastAutoClose && stats.blockingUnpaidCount === 0
@@ -123,8 +148,8 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
     setError(null)
     try {
       await markOrderAsUnpaid(orderId, closedById)
-      // Force re-render by toggling a key or let the parent refresh
-      onClosed()
+      const fresh = await getCurrentShift()
+      if (fresh) setLiveShift(fresh)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to mark order as unpaid")
     } finally {
@@ -136,10 +161,10 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
     setClosing(true)
     setError(null)
     try {
-      const cash = declaredCash ? Number(declaredCash) : undefined
-      const mpesa = declaredMpesa ? Number(declaredMpesa) : undefined
-      await closeShift(shift.id, closedById, cash, mpesa)
-      const data = await getShiftReport(shift.id)
+      const cash = declaredCash ? Number(declaredCash.replace(/,/g, "")) : undefined
+      const mpesa = declaredMpesa ? Number(declaredMpesa.replace(/,/g, "")) : undefined
+      await closeShift(liveShift.id, closedById, cash, mpesa)
+      const data = await getShiftReport(liveShift.id)
       setReport(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to close shift")
@@ -158,6 +183,8 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
       setPreviewHtml(null)
       setDeclaredCash("")
       setDeclaredMpesa("")
+      setStep(1)
+      setSearch("")
     }, 200)
   }
 
@@ -231,7 +258,10 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
           <>
             <DialogHeader>
               <DialogTitle>
-                Close {shift.type === "DAY" ? "Day" : "Night"} Shift
+                Close {liveShift.type === "DAY" ? "Day" : "Night"} Shift
+                {liveShift.type === "DAY"
+                  ? <span className="ml-2 text-2xl">🌅</span>
+                  : <span className="ml-2 text-2xl">🌃</span>}
               </DialogTitle>
               <DialogDescription>
                 Review payment summary, mark any unpaid orders as tracked, and declare cash/M-Pesa
@@ -240,164 +270,253 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
             </DialogHeader>
 
             <div className="space-y-4">
+              {/* Step Indicator */}
+              <div className="mx-auto flex max-w-md items-center gap-2">
+                {[
+                  { num: 1, label: "Payment" },
+                  { num: 2, label: "Unpaid Orders" },
+                  { num: 3, label: "Declaration" },
+                ].map((s) => (
+                  <div key={s.num} className="flex flex-1 items-center gap-1.5">
+                    <div
+                      className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                        step > s.num
+                          ? "bg-green-600 text-white"
+                          : step === s.num
+                          ? "bg-blue-600 text-white"
+                          : "bg-admin-card-border text-admin-muted",
+                      )}
+                    >
+                      {step > s.num ? <CheckCircle2 className="h-3.5 w-3.5" /> : s.num}
+                    </div>
+                    <span
+                      className={cn(
+                        "hidden text-xs font-medium sm:block",
+                        step === s.num ? "text-admin-header-text" : "text-admin-muted",
+                      )}
+                    >
+                      {s.label}
+                    </span>
+                    {s.num < totalSteps && <div className="h-px flex-1 bg-admin-card-border" />}
+                  </div>
+                ))}
+              </div>
+
               {pastAutoClose && (
-                <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    This shift is past its scheduled close time ({formatTime(shift.autoCloseTime)}
+                    This shift is past its scheduled close time ({formatTime(liveShift.autoCloseTime)}
                     ). Closing now will record a drift against it.
                   </span>
                 </div>
               )}
 
-              {/* Payment Summary */}
-              <Card className="p-4">
-                <p className="mb-3 text-sm font-medium text-admin-header-text">Payment Summary (System)</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-                    <p className="text-xs text-green-700 font-medium flex items-center gap-1">
-                      <Wallet className="h-3 w-3" /> M-Pesa
-                    </p>
-                    <p className="text-lg font-bold text-green-700">{money(stats.mpesaTotal)}</p>
-                    <p className="text-xs text-green-600">{stats.mpesaOrders} orders</p>
+              {/* Step 1: Payment Summary */}
+              {step === 1 && (
+                <Card className="p-4">
+                  <p className="mb-3 text-sm font-medium text-admin-header-text">Payment Summary (System)</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                      <p className="text-xs text-green-700 font-medium flex items-center gap-1">
+                        <Wallet className="h-3 w-3" /> M-Pesa
+                      </p>
+                      <p className="text-lg font-bold text-green-700">{money(stats.mpesaTotal)}</p>
+                      <p className="text-xs text-green-600">{stats.mpesaOrders} orders</p>
+                    </div>
+                    <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                      <p className="text-xs text-orange-700 font-medium flex items-center gap-1">
+                        <Landmark className="h-3 w-3" /> Cash
+                      </p>
+                      <p className="text-lg font-bold text-orange-700">{money(stats.cashTotal)}</p>
+                      <p className="text-xs text-orange-600">{stats.cashOrders} orders</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-xs text-amber-700 font-medium flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" /> Unpaid
+                      </p>
+                      <p className="text-lg font-bold text-amber-700">{money(stats.unpaidTotal)}</p>
+                      <p className="text-xs text-amber-600">{stats.unpaidOrders} order{stats.unpaidOrders !== 1 ? "s" : ""}</p>
+                    </div>
                   </div>
-                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
-                    <p className="text-xs text-orange-700 font-medium flex items-center gap-1">
-                      <Landmark className="h-3 w-3" /> Cash
-                    </p>
-                    <p className="text-lg font-bold text-orange-700">{money(stats.cashTotal)}</p>
-                    <p className="text-xs text-orange-600">{stats.cashOrders} orders</p>
+                  <div className="mt-3 flex items-center justify-between border-t border-admin-card-border pt-3 text-xs text-blue-700">
+                    <span className="font-medium">Revenue (paid only)</span>
+                    <span className="font-semibold">{money(stats.revenue)}</span>
                   </div>
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <p className="text-xs text-amber-700 font-medium flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" /> Unpaid
-                    </p>
-                    <p className="text-lg font-bold text-amber-700">{money(stats.unpaidTotal)}</p>
-                    <p className="text-xs text-amber-600">{stats.unpaidOrders} order{stats.unpaidOrders !== 1 ? "s" : ""}</p>
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-admin-muted">
-                  <span>Revenue (paid only)</span>
-                  <span className="font-semibold">{money(stats.revenue)}</span>
-                </div>
-              </Card>
+                </Card>
+              )}
 
-              {/* Unpaid Orders Blocking Close */}
-              {stats.blockingUnpaidCount > 0 && (
-                <Card className="p-4 border-amber-300 bg-amber-50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <AlertCircle className="h-5 w-5 text-amber-600" />
-                    <p className="text-sm font-medium text-amber-800">
-                      {stats.blockingUnpaidCount} unpaid order{stats.blockingUnpaidCount !== 1 ? "s" : ""} must be marked as unpaid before closing.
-                    </p>
+              {/* Step 2: Unpaid Orders */}
+              {step === 2 && (
+                <Card className="p-4">
+                  {stats.blockingUnpaidCount === 0 ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <span className="font-medium">No unpaid orders — you can proceed to close. <span className="text-xl">😊 💵 ❤️</span></span>
+                    </div>
+                  ) : (
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5 text-amber-600" />
+                      <p className="text-sm font-medium text-admin-header-text">
+                        {stats.blockingUnpaidCount} unpaid order{stats.blockingUnpaidCount !== 1 ? "s" : ""} must be marked as unpaid before closing.
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {stats.blockingUnpaid.map((order) => (
-                      <div
-                        key={order.id}
-                        className="flex items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50/50 p-2 text-sm"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="font-medium">#{order.orderNumber}</div>
-                          <div className="text-xs text-amber-700">{order.mealType}</div>
-                          <div className="text-xs text-amber-700">{money(Number(order.totalPrice))}</div>
-                          <div className="text-xs text-amber-600">{order.User?.name ?? "—"}</div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant={markingUnpaid === order.id ? "default" : "outline"}
-                          className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200"
-                          onClick={() => handleMarkUnpaid(order.id)}
-                          disabled={markingUnpaid !== null && markingUnpaid !== order.id}
-                        >
-                          {markingUnpaid === order.id ? (
-                            <>
-                              <Loader2 className="animate-spin mr-1 h-3 w-3" /> Marking...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCheck className="mr-1 h-3 w-3" /> Mark Unpaid
-                            </>
-                          )}
-                        </Button>
+                  )}
+
+                  {stats.blockingUnpaidCount > 0 && (
+                    <>
+                      <div className="relative mb-3">
+                        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-admin-muted" />
+                        <Input
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder="Search by order #, meal period, or customer..."
+                          className="pl-8"
+                        />
                       </div>
-                    ))}
-                  </div>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {filteredUnpaid.length === 0 ? (
+                          <p className="py-4 text-center text-sm text-admin-muted">No unpaid orders match your search.</p>
+                        ) : (
+                          filteredUnpaid.slice(0, 5).map((order) => (
+                            <div
+                              key={order.id}
+                              className="grid grid-cols-1 sm:grid-cols-[110px_1fr_1fr_1fr_auto] sm:items-center gap-2 sm:gap-3 rounded border border-red-300 bg-red-50/50 p-2 text-sm"
+                            >
+                              <div className="font-semibold text-red-900">#{order.orderNumber}</div>
+                              <div className="text-red-800">{order.User?.name ?? "—"}</div>
+                              <div className="text-red-800">{order.mealType}</div>
+                              <div className="font-semibold text-red-900">{money(Number(order.totalPrice))}</div>
+                              <Button
+                                size="sm"
+                                variant={markingUnpaid === order.id ? "default" : "outline"}
+                                className="bg-red-600 text-white hover:bg-red-700 border-red-600"
+                                onClick={() => handleMarkUnpaid(order.id)}
+                                disabled={markingUnpaid !== null && markingUnpaid !== order.id}
+                              >
+                                {markingUnpaid === order.id ? (
+                                  <>
+                                    <Loader2 className="animate-spin mr-1 h-3 w-3" /> Marking...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCheck className="mr-1 h-3 w-3" /> Mark Unpaid
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {filteredUnpaid.length > 5 && (
+                        <p className="mt-2 text-xs text-admin-muted">
+                          Showing 5 of {filteredUnpaid.length}. Refine your search to see the rest.
+                        </p>
+                      )}
+                    </>
+                  )}
+
                   {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
                 </Card>
               )}
 
-              {/* Declared Amounts Inputs */}
-              <Card className="p-4">
-                <p className="mb-3 text-sm font-medium text-admin-header-text">Manager Declaration (Actual Received)</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="declaredCash" className="text-xs text-orange-700 font-medium">
-                      Actual Cash Received
-                    </Label>
-                    <Input
-                      id="declaredCash"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={declaredCash}
-                      onChange={(e) => setDeclaredCash(e.target.value)}
-                      placeholder="e.g. 12500"
-                      className="text-right"
-                    />
+              {/* Step 3: Manager Declaration */}
+              {step === 3 && (
+                <Card className="p-4">
+                  <p className="mb-3 text-sm font-medium text-admin-header-text">Manager Declaration (Actual Received)</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="declaredCash" className="text-xs text-orange-700 font-medium">
+                        Actual Cash Received
+                      </Label>
+                      <Input
+                        id="declaredCash"
+                        type="text"
+                        inputMode="decimal"
+                        value={declaredCash}
+                        onChange={(e) => setDeclaredCash(formatAmountInput(e.target.value))}
+                        placeholder="e.g. 12,500"
+                        className="text-right"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="declaredMpesa" className="text-xs text-green-700 font-medium">
+                        Actual M-Pesa Received
+                      </Label>
+                      <Input
+                        id="declaredMpesa"
+                        type="text"
+                        inputMode="decimal"
+                        value={declaredMpesa}
+                        onChange={(e) => setDeclaredMpesa(formatAmountInput(e.target.value))}
+                        placeholder="e.g. 18,000"
+                        className="text-right"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="declaredMpesa" className="text-xs text-green-700 font-medium">
-                      Actual M-Pesa Received
-                    </Label>
-                    <Input
-                      id="declaredMpesa"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={declaredMpesa}
-                      onChange={(e) => setDeclaredMpesa(e.target.value)}
-                      placeholder="e.g. 18000"
-                      className="text-right"
-                    />
-                  </div>
-                </div>
-                <p className="mt-2 text-xs text-admin-muted">
-                  Enter the actual cash and M-Pesa you have counted. Variances will be shown in the report.
-                </p>
-              </Card>
+                  <p className="mt-2 text-xs text-admin-muted">
+                    Enter the actual cash and M-Pesa you have counted. Variances will be shown in the report.
+                  </p>
+                </Card>
+              )}
 
               {error && <p className="text-sm text-red-600">{error}</p>}
 
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={handleDismiss} disabled={closing}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleCloseShift}
-                  disabled={closing || !canClose}
-                  title={
-                    !pastAutoClose
-                      ? "Shift can only be closed after its scheduled close time."
-                      : stats.blockingUnpaidCount > 0
-                      ? `${stats.blockingUnpaidCount} unpaid order(s) must be marked as unpaid first.`
-                      : ""
-                  }
-                >
-                  {closing ? (
-                    <>
-                      <Loader2 className="animate-spin" />
-                      Closing...
-                    </>
-                  ) : pastAutoClose && canClose ? (
-                    "Confirm Close"
-                  ) : pastAutoClose ? (
-                    `${stats.blockingUnpaidCount} unpaid order(s) blocking close`
-                  ) : (
-                    `Closes ${formatTime(shift.autoCloseTime)}`
+              <DialogFooter className="flex-row justify-between gap-2 sm:justify-between">
+                <div className="flex gap-2">
+                  {step > 1 && (
+                    <Button type="button" variant="outline" onClick={() => setStep(step - 1)} disabled={closing}>
+                      <ChevronLeft />
+                      Back
+                    </Button>
                   )}
-                </Button>
+                </div>
+                <div className="flex gap-2">
+                  {step < totalSteps ? (
+                    <Button
+                      type="button"
+                      onClick={() => setStep(step + 1)}
+                      disabled={step === 2 && stats.blockingUnpaidCount > 0}
+                      title={
+                        step === 2 && stats.blockingUnpaidCount > 0
+                          ? "Mark all unpaid orders before continuing."
+                          : ""
+                      }
+                    >
+                      Next
+                      <ChevronRight />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={handleCloseShift}
+                      disabled={closing || !canClose}
+                      title={
+                        !pastAutoClose
+                          ? "Shift can only be closed after its scheduled close time."
+                          : stats.blockingUnpaidCount > 0
+                          ? `${stats.blockingUnpaidCount} unpaid order(s) must be marked as unpaid first.`
+                          : ""
+                      }
+                    >
+                      {closing ? (
+                        <>
+                          <Loader2 className="animate-spin" />
+                          Closing...
+                        </>
+                      ) : pastAutoClose && canClose ? (
+                        "Confirm Close"
+                      ) : pastAutoClose ? (
+                        `${stats.blockingUnpaidCount} unpaid order(s) blocking close`
+                      ) : (
+                        `Closes ${formatTime(liveShift.autoCloseTime)}`
+                      )}
+                    </Button>
+                  )}
+                </div>
               </DialogFooter>
             </div>
           </>
@@ -416,41 +535,67 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
             </DialogHeader>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm sm:grid-cols-4">
-                <div>
-                  <p className="text-xs text-admin-muted">Orders</p>
-                  <p className="text-lg font-bold text-admin-header-text">
-                    {report.summary.totalOrders}
-                  </p>
+              {/* Summary Stats + Revenue by Meal Period */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm sm:grid-cols-4">
+                  <div>
+                    <p className="text-xs text-admin-muted">Orders</p>
+                    <p className="text-lg font-bold text-admin-header-text">
+                      {report.summary.totalOrders}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-admin-muted">Voided</p>
+                    <p
+                      className={cn(
+                        "text-lg font-bold",
+                        report.summary.voidedOrders > 0 ? "text-red-600" : "text-admin-header-text",
+                      )}
+                    >
+                      {report.summary.voidedOrders}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-admin-muted">Revenue</p>
+                    <p className="text-lg font-bold text-admin-header-text">
+                      {money(report.revenue.total)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-admin-muted">Drift</p>
+                    <p
+                      className={cn(
+                        "text-lg font-bold",
+                        report.shift.driftMinutes > 15 ? "text-amber-600" : "text-green-600",
+                      )}
+                    >
+                      {report.shift.driftMinutes > 0 ? `${report.shift.driftMinutes}m` : "On time"}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-admin-muted">Voided</p>
-                  <p
-                    className={cn(
-                      "text-lg font-bold",
-                      report.summary.voidedOrders > 0 ? "text-red-600" : "text-admin-header-text",
-                    )}
-                  >
-                    {report.summary.voidedOrders}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-admin-muted">Revenue</p>
-                  <p className="text-lg font-bold text-admin-header-text">
-                    {money(report.revenue.total)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-admin-muted">Drift</p>
-                  <p
-                    className={cn(
-                      "text-lg font-bold",
-                      report.shift.driftMinutes > 15 ? "text-amber-600" : "text-green-600",
-                    )}
-                  >
-                    {report.shift.driftMinutes > 0 ? `${report.shift.driftMinutes}m` : "On time"}
-                  </p>
-                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Revenue by Meal Period</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(report.revenue)
+                      .filter(([k]) => k !== "total")
+                      .map(([mealType, entry]) => {
+                        const e = entry as { orders: number; total: number };
+                        return (
+                          <div key={mealType} className="flex justify-between text-sm">
+                            <span className="text-admin-muted">{mealType} ({e.orders})</span>
+                            <span className="font-medium">{money(e.total)}</span>
+                          </div>
+                        );
+                      })}
+                    <div className="border-t border-admin-card-border pt-2 flex justify-between font-semibold">
+                      <span>Total</span>
+                      <span>{money(report.revenue.total)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
               {/* Payment Reconciliation */}
@@ -623,7 +768,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                         Total Unassigned Carry-Over: {report.unassignedCarryOver.total} plates
                       </div>
                     )}
-                    <p className="pt-1 text-[10px] text-admin-muted">
+                    <p className="pt-1 text-center text-[10px] leading-snug text-admin-muted">
                       * Opening = carry-forward closing stock from the previous shift.
                     </p>
                   </div>

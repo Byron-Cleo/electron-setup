@@ -150,7 +150,7 @@ function shiftReportLines(data: ShiftReportData): Line[] {
       const close = String(p.closingPlates ?? "—").padStart(6);
       push(name + open + cooked + sold + close);
     }
-    push("OPEN = carry-forward closing plates from previous shift");
+    pushCenter("OPEN = carry-forward closing plates from previous shift");
   }
   push(line);
 
