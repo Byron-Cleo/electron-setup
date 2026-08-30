@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { CalendarDays, FileText, Printer, ShieldX, ClipboardList } from "lucide-react"
+import { CalendarDays, FileText, Printer, ShieldX, ClipboardList, Receipt } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import { getShiftReport, getVoidReport, listShifts } from "@/lib/api"
 import ShiftReportView from "@/components/reports/ShiftReport"
 
 type ActiveView = "shift-report" | "waiters-report" | null
+type ShiftReportViewState = "shift-selection" | "report-view"
 
 const cards: {
   title: string
@@ -74,15 +75,12 @@ function Reports() {
 
       {activeView && (
         <div className="space-y-4">
-          <BackButton onClick={() => setActiveView(null)} />
           {activeView === "shift-report" && (
-            <>
-              <Heading as="h2" className="text-admin-header-text text-center">Shift Report</Heading>
-              <ShiftReportSection />
-            </>
+            <ShiftReportSection />
           )}
           {activeView === "waiters-report" && (
             <>
+              <BackButton onClick={() => setActiveView(null)} />
               <Heading as="h2" className="text-admin-header-text text-center">Waiters Report</Heading>
               <WaitersReportSection />
             </>
@@ -94,6 +92,8 @@ function Reports() {
 }
 
 function ShiftReportSection() {
+  const [viewState, setViewState] = useState<ShiftReportViewState>("shift-selection")
+  const [selectedShiftType, setSelectedShiftType] = useState<"DAY" | "NIGHT" | null>(null)
   const [date, setDate] = useState(todayISO())
   const [shifts, setShifts] = useState<Shift[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
@@ -123,11 +123,13 @@ function ShiftReportSection() {
       }
     }
 
-    loadShifts()
+    if (viewState === "report-view" && selectedShiftType) {
+      loadShifts()
+    }
     return () => {
       cancelled = true
     }
-  }, [date])
+  }, [date, viewState, selectedShiftType])
 
   async function handleSelectShift(shiftId: string) {
     setSelectedId(shiftId)
@@ -141,7 +143,7 @@ function ShiftReportSection() {
     }
   }
 
-  const closedShifts = shifts.filter((s) => !s.isOpen)
+  const closedShifts = shifts.filter((s) => !s.isOpen && s.type === selectedShiftType)
 
   function shiftLabel(shift: Shift): string {
     const period = shift.type === "DAY" ? "Day" : "Night"
@@ -149,9 +151,34 @@ function ShiftReportSection() {
     return `${period} Shift — ${new Date(shift.openingTime).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}${status}`
   }
 
+  if (viewState === "shift-selection") {
+    return (
+      <div className="space-y-4">
+        <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Report</Heading>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
+          <Card className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent" onClick={() => { setSelectedShiftType("DAY"); setViewState("report-view"); }}>
+            <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
+              <Receipt size={32} className="text-yellow-600" />
+            </div>
+            <Heading as="h3" className="text-lg text-admin-header-text mb-2">Day Shift Report</Heading>
+            <p className="text-sm text-admin-muted">View Day shift report (Breakfast, Lunch)</p>
+          </Card>
+          <Card className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent" onClick={() => { setSelectedShiftType("NIGHT"); setViewState("report-view"); }}>
+            <div className="h-16 w-16 rounded-lg bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
+              <Receipt size={32} className="text-indigo-600" />
+            </div>
+            <Heading as="h3" className="text-lg text-admin-header-text mb-2">Night Shift Report</Heading>
+            <p className="text-sm text-admin-muted">View Night shift report (Dinner, Dessert, Beverage)</p>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+      <div className="flex items-center justify-between gap-3 print:hidden">
+        <BackButton onClick={() => { setViewState("shift-selection"); setSelectedShiftType(null); setReport(null); }} />
         {report && (
           <Button variant="outline" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />
@@ -171,6 +198,11 @@ function ShiftReportSection() {
               className="w-44"
             />
           </div>
+          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+            selectedShiftType === "DAY" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"
+          }`}>
+            {selectedShiftType} Shift
+          </span>
           <Select
             value={selectedId}
             onValueChange={handleSelectShift}

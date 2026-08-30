@@ -28,7 +28,13 @@ function money(amount: number): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("en-KE", { dateStyle: "short", timeStyle: "short" })
+  const d = new Date(iso)
+  const datePart = d.toLocaleDateString("en-KE", { dateStyle: "short" })
+  const hour = d.getHours()
+  const minute = String(d.getMinutes()).padStart(2, "0")
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12
+  const suffix = hour < 12 ? "AM" : "PM"
+  return `${datePart}, ${hour12}:${minute} ${suffix}`
 }
 
 function StatusBadge({ isPaid }: { isPaid: boolean }) {
@@ -322,7 +328,7 @@ function OrdersView({ shiftType }: { shiftType?: ShiftType }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchInput, setSearchInput] = useState("")
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
   const [activeTab, setActiveTab] = useState<OrderTab>("ALL")
 
@@ -566,7 +572,7 @@ function OrdersView({ shiftType }: { shiftType?: ShiftType }) {
             canNext,
           }}
           header={
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
               <Input
                 placeholder="Search by order number..."
                 value={searchInput}
@@ -842,7 +848,7 @@ function VoidView({ shiftType }: { shiftType?: ShiftType }) {
             canNext,
           }}
           header={
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
               <Input
                 placeholder="Search by order number..."
                 value={searchInput}
@@ -991,7 +997,7 @@ function PaymentView({ shiftType }: { shiftType?: ShiftType }) {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | null>(null)
   const [selectedOrders, setSelectedOrders] = useState<Order[]>([])
   const [orderSearch, setOrderSearch] = useState("")
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
   const [processing, setProcessing] = useState(false)
   const [payOrder, setPayOrder] = useState<Order | null>(null)
   const [payMethod, setPayMethod] = useState<"cash" | "mpesa" | null>(null)
@@ -1205,7 +1211,7 @@ function PaymentView({ shiftType }: { shiftType?: ShiftType }) {
             canNext,
           }}
           header={
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
               <Input
                 placeholder="Search by order number..."
                 value={orderSearch}

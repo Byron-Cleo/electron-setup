@@ -148,7 +148,7 @@ router.post("/open", async (req, res) => {
       const created = await tx.shift.create({
         data: {
           type,
-          date: today,
+          date: now,
           openingTime,
           autoCloseTime,
           actualOpeningTime: now,
