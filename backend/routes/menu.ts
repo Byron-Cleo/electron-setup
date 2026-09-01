@@ -48,7 +48,7 @@ const RUNNING_LOW_THRESHOLD = 5;
 // Builds the current shift's stock status per menu item. If mealType is
 // provided, only menus linked to that meal period are included. Mirrors the
 // shift report's plate-movement attribution: cooking records are attributed to
-// the shift whose [openingTime, nextShift.openingTime ?? autoCloseTime) window
+// the shift whose [autoOpenTime, nextShift.autoOpenTime ?? autoCloseTime) window
 // their createdAt falls in.
 async function getShiftBasedStockStatus(mealType?: string) {
   const shift = await prisma.shift.findFirst({
@@ -62,18 +62,18 @@ async function getShiftBasedStockStatus(mealType?: string) {
   }
 
   const nextShift = await prisma.shift.findFirst({
-    where: { openingTime: { gt: shift.openingTime }, date: shift.date },
-    orderBy: { openingTime: "asc" },
-    select: { openingTime: true },
+    where: { autoOpenTime: { gt: shift.autoOpenTime }, date: shift.date },
+    orderBy: { autoOpenTime: "asc" },
+    select: { autoOpenTime: true },
   });
-  const windowEnd = nextShift?.openingTime ?? shift.autoCloseTime;
+  const windowEnd = nextShift?.autoOpenTime ?? shift.autoCloseTime;
 
   // Plate-movement context for the current shift (used only to show produced /
   // sold alongside the live stock — the Selling/Sold Out/Running Low buckets are
   // driven purely by live Menu.stock so they match exactly what the waiter sees).
   const menuSplits = await prisma.cookingRecordMenu.findMany({
     where: {
-      cookingRecord: { createdAt: { gte: shift.openingTime, lt: windowEnd } },
+      cookingRecord: { createdAt: { gte: shift.autoOpenTime, lt: windowEnd } },
     },
     select: {
       menuId: true,

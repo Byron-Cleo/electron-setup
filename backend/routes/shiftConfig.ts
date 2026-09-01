@@ -1,0 +1,91 @@
+import { Router } from "express";
+import prisma from "../db/db.js";
+
+const router = Router();
+
+const HHMM_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+router.get("/", async (_req, res) => {
+  try {
+    const configs = await prisma.shiftConfig.findMany({ orderBy: [{ isActive: "desc" }, { type: "asc" }] });
+    res.json(configs);
+  } catch (e) {
+    console.error("Error listing shift configs:", e);
+    res.status(500).json({ error: "Failed to list shift configs" });
+  }
+});
+
+router.post("/", async (req, res) => {
+  const { type, autoOpenTime, autoCloseTime } = req.body;
+
+  if (!type || typeof type !== "string" || type.trim().length === 0) {
+    return res.status(400).json({ error: "type is required and must be a non-empty string" });
+  }
+  if (type.length > 50) {
+    return res.status(400).json({ error: "type must not exceed 50 characters" });
+  }
+  if (!autoOpenTime || !HHMM_REGEX.test(autoOpenTime)) {
+    return res.status(400).json({ error: "autoOpenTime must match HH:MM format" });
+  }
+  if (!autoCloseTime || !HHMM_REGEX.test(autoCloseTime)) {
+    return res.status(400).json({ error: "autoCloseTime must match HH:MM format" });
+  }
+
+  try {
+    const config = await prisma.shiftConfig.create({
+      data: { type: type.trim(), autoOpenTime, autoCloseTime, isActive: true },
+    });
+    res.status(201).json(config);
+  } catch (e) {
+    console.error("Error creating shift config:", e);
+    res.status(500).json({ error: "Failed to create shift config" });
+  }
+});
+
+router.put("/:id", async (req, res) => {
+  const { id } = req.params;
+  const { type, autoOpenTime, autoCloseTime, isActive } = req.body;
+
+  if (type !== undefined) {
+    if (typeof type !== "string" || type.trim().length === 0) {
+      return res.status(400).json({ error: "type must be a non-empty string" });
+    }
+    if (type.trim().length > 50) {
+      return res.status(400).json({ error: "type must not exceed 50 characters" });
+    }
+  }
+  if (autoOpenTime !== undefined && !HHMM_REGEX.test(autoOpenTime)) {
+    return res.status(400).json({ error: "autoOpenTime must match HH:MM format" });
+  }
+  if (autoCloseTime !== undefined && !HHMM_REGEX.test(autoCloseTime)) {
+    return res.status(400).json({ error: "autoCloseTime must match HH:MM format" });
+  }
+
+  try {
+    const updated = await prisma.shiftConfig.update({
+      where: { id },
+      data: { type: type !== undefined ? type.trim() : undefined, autoOpenTime, autoCloseTime, isActive },
+    });
+    res.json(updated);
+  } catch (e) {
+    console.error("Error updating shift config:", e);
+    res.status(500).json({ error: "Failed to update shift config" });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const count = await prisma.shiftConfig.count();
+    if (count <= 1) {
+      return res.status(400).json({ error: "Cannot delete the last shift config" });
+    }
+    await prisma.shiftConfig.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (e) {
+    console.error("Error deleting shift config:", e);
+    res.status(500).json({ error: "Failed to delete shift config" });
+  }
+});
+
+export default router;

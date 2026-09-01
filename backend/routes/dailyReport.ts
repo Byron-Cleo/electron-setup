@@ -326,23 +326,23 @@ router.get("/shift/:id", async (req, res) => {
       mpesaVariance: declaredMpesa !== null ? declaredMpesa - mpesaTotal : null,
     };
 
-    // Find the next shift's openingTime to define the upper boundary of this shift's window
+    // Find the next shift's autoOpenTime to define the upper boundary of this shift's window
     const nextShift = await prisma.shift.findFirst({
       where: {
-        openingTime: { gt: shift.openingTime },
+        autoOpenTime: { gt: shift.autoOpenTime },
         date: shift.date,
       },
-      orderBy: { openingTime: "asc" },
-      select: { openingTime: true },
+      orderBy: { autoOpenTime: "asc" },
+      select: { autoOpenTime: true },
     });
 
-    const windowEnd = nextShift?.openingTime ?? shift.autoCloseTime;
+    const windowEnd = nextShift?.autoOpenTime ?? shift.autoCloseTime;
 
     // Core cooking records: within the shift's scheduled time window
     const cookingRecords = await prisma.cookingRecord.findMany({
       where: {
         createdAt: {
-          gte: shift.openingTime,
+          gte: shift.autoOpenTime,
           lt: windowEnd,
         },
       },
@@ -395,7 +395,7 @@ router.get("/shift/:id", async (req, res) => {
     // Clocking drift (signed, early = negative / late = positive) for the Shift Clocking Summary
     const msPerMinute = 60000;
     const openingDriftMinutes = shift.actualOpeningTime
-      ? Math.round((shift.actualOpeningTime.getTime() - shift.openingTime.getTime()) / msPerMinute)
+      ? Math.round((shift.actualOpeningTime.getTime() - shift.autoOpenTime.getTime()) / msPerMinute)
       : null;
     const closingDriftMinutes = shift.actualCloseTime
       ? Math.round((shift.actualCloseTime.getTime() - shift.autoCloseTime.getTime()) / msPerMinute)
@@ -428,8 +428,8 @@ router.get("/shift/:id", async (req, res) => {
     // produced but not yet allocated, and stay independent until assigned via the
     // cooking-record allocation UI.
     const previousShift = await prisma.shift.findFirst({
-      where: { isOpen: false, openingTime: { lt: shift.openingTime } },
-      orderBy: { openingTime: "desc" },
+      where: { isOpen: false, autoOpenTime: { lt: shift.autoOpenTime } },
+      orderBy: { autoOpenTime: "desc" },
       include: { snapshots: { select: { menuId: true, closingPlates: true } } },
     });
     let unassignedCarryOver: {
@@ -454,7 +454,7 @@ router.get("/shift/:id", async (req, res) => {
         id: shift.id,
         type: shift.type,
         date: shift.date,
-        openingTime: shift.openingTime,
+        autoOpenTime: shift.autoOpenTime,
         autoCloseTime: shift.autoCloseTime,
         actualOpeningTime: shift.actualOpeningTime,
         actualCloseTime: shift.actualCloseTime,

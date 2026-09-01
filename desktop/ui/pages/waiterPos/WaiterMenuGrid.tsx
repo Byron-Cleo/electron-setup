@@ -17,7 +17,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { getAccompaniments, menuImageUrl } from "@/lib/api"
+import { getAccompaniments, menuImageUrl, getCurrentShift } from "@/lib/api"
 import { useWaiterOrder, orderLineKey, lineKey } from "./WaiterOrderContext"
 
 interface Props {
@@ -206,6 +206,22 @@ export function WaiterMenuGrid({
   const [activeOrderKey, setActiveOrderKey] = useState<string | null>(null)
   const [syncedOrderKey, setSyncedOrderKey] = useState<string | null>(null)
   const [lastMealPeriod, setLastMealPeriod] = useState<string | null>(null)
+  const [noShift, setNoShift] = useState(false)
+
+  // Poll active shift status (proactive no-shift warning)
+  useEffect(() => {
+    async function checkShift() {
+      try {
+        const shift = await getCurrentShift()
+        setNoShift(!shift)
+      } catch {
+        setNoShift(false)
+      }
+    }
+    checkShift()
+    const interval = setInterval(checkShift, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleSelectPeriod = (period: string) => {
     if (period !== mealPeriod) {
@@ -330,9 +346,19 @@ export function WaiterMenuGrid({
       nextStarch = starches.find((s) => s.id === stored.starch?.id) ?? null
       nextVegetable = vegetables.find((v) => v.id === stored.vegetable?.id) ?? null
     } else {
-      const first = galleryLinks[0]
-      nextStarch = first?.starch ?? null
-      nextVegetable = first?.vegetable ?? null
+      // Use the menu item's DB-configured default starch/vegetable first
+      nextStarch = selectedItem.starchId
+        ? starches.find((s) => s.id === selectedItem.starchId) ?? null
+        : null
+      nextVegetable = selectedItem.vegetableId
+        ? vegetables.find((v) => v.id === selectedItem.vegetableId) ?? null
+        : null
+      // Fall back to gallery image matching only if no defaults configured
+      if (!nextStarch && !nextVegetable) {
+        const first = galleryLinks[0]
+        nextStarch = first?.starch ?? null
+        nextVegetable = first?.vegetable ?? null
+      }
     }
     setSelectedStarch(nextStarch)
     setSelectedVegetable(nextVegetable)
@@ -382,6 +408,12 @@ export function WaiterMenuGrid({
 
   return (
     <div className="h-full flex flex-col">
+      {/* No active shift warning */}
+      {noShift && (
+        <div className="w-full mb-3 rounded-md bg-red-50 border border-red-300 px-4 py-3 text-sm font-medium text-red-700">
+          ⚠ No active shift — orders are disabled. Please notify the manager to open a shift.
+        </div>
+      )}
       <div className="flex items-center justify-between shrink-0 mb-4 gap-3">
         <Button
           variant="ghost"
@@ -528,7 +560,11 @@ export function WaiterMenuGrid({
                   size="lg"
                   className="w-[28%] h-12 text-base bg-brand-red hover:bg-brand-red/90 text-white"
                   onClick={() => addToOrder(selectedItem, selectedStarch, selectedVegetable)}
-                  disabled={platesFor(selectedItem) === 0}
+                  disabled={
+                    platesFor(selectedItem) === 0 ||
+                    (selectedItem.starchId != null && !selectedStarch) ||
+                    (selectedItem.vegetableId != null && !selectedVegetable)
+                  }
                 >
                   {platesFor(selectedItem) === 0 ? "Sold Out" : "Add to Order"}
                 </Button>

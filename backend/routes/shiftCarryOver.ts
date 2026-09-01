@@ -17,9 +17,9 @@ export async function findPreviousClosedShift(before?: Date) {
   return prisma.shift.findFirst({
     where: {
       isOpen: false,
-      ...(before ? { openingTime: { lt: before } } : {}),
+      ...(before ? { autoOpenTime: { lt: before } } : {}),
     },
-    orderBy: { openingTime: "desc" },
+    orderBy: { autoOpenTime: "desc" },
     include: {
       snapshots: {
         include: {
@@ -43,7 +43,7 @@ export async function findPreviousClosedShift(before?: Date) {
 // the plates allocated via its CookingRecordMenu splits.
 export async function computeShiftUnassignedBatches(shift: {
   id: string;
-  openingTime: Date;
+  autoOpenTime: Date;
   autoCloseTime: Date;
   actualOpeningTime: Date | null;
   actualCloseTime: Date | null;
@@ -54,14 +54,14 @@ export async function computeShiftUnassignedBatches(shift: {
   total: number;
 }> {
   const nextShift = await prisma.shift.findFirst({
-    where: { openingTime: { gt: shift.openingTime }, date: shift.date },
-    orderBy: { openingTime: "asc" },
-    select: { openingTime: true },
+    where: { autoOpenTime: { gt: shift.autoOpenTime }, date: shift.date },
+    orderBy: { autoOpenTime: "asc" },
+    select: { autoOpenTime: true },
   });
   // Use the shift's ACTUAL open/close as the batch window when available, so
   // anything cooked while the shift was really running counts toward it.
-  const windowStart = shift.actualOpeningTime ?? shift.openingTime;
-  const windowEnd = nextShift?.openingTime ?? shift.actualCloseTime ?? shift.autoCloseTime;
+  const windowStart = shift.actualOpeningTime ?? shift.autoOpenTime;
+  const windowEnd = nextShift?.autoOpenTime ?? shift.actualCloseTime ?? shift.autoCloseTime;
 
   // Sold is captured per menu in this shift's snapshots. Unassigned must
   // replicate the AssignmentModal's Remaining Pool exactly: produced minus the

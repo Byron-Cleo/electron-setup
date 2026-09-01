@@ -17,6 +17,7 @@ import dailyReportRouter from "./routes/dailyReport.js";
 import ordersRouter from "./routes/orders.js";
 import usersRouter from "./routes/users.js";
 import shiftsRouter from "./routes/shifts.js";
+import shiftConfigRouter from "./routes/shiftConfig.js";
 import stockRemainingRouter from "./routes/stockRemaining.js";
 import categoriesRouter from "./routes/categories.js";
 import { uploadsRoot } from "./db/uploads.js";
@@ -70,6 +71,7 @@ app.use("/api/reports", dailyReportRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/shifts", shiftsRouter);
+app.use("/api/shift-config", shiftConfigRouter);
 app.use("/api/stock", stockRemainingRouter);
 app.use("/api/categories", categoriesRouter);
 

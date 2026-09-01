@@ -416,7 +416,7 @@ interface CookingRecord {
   shift?: {
     id: string;
     type: string;
-    openingTime: string;
+    autoOpenTime: string;
     autoCloseTime: string;
   } | null;
 }
@@ -551,7 +551,7 @@ interface ServerStatus {
   reason: string;
 }
 
-type ShiftType = "DAY" | "NIGHT";
+type ShiftType = string;
 
 interface ShiftSnapshot {
   id: string;
@@ -571,7 +571,7 @@ interface Shift {
   id: string;
   type: ShiftType;
   date: string;
-  openingTime: string;
+  autoOpenTime: string;
   autoCloseTime: string;
   actualOpeningTime: string | null;
   actualCloseTime: string | null;
@@ -649,7 +649,7 @@ interface ShiftReportMeta {
   id: string;
   type: ShiftType;
   date: string;
-  openingTime: string;
+  autoOpenTime: string;
   autoCloseTime: string;
   actualOpeningTime: string | null;
   actualCloseTime: string | null;
@@ -737,7 +737,7 @@ interface ShiftReportData {
   shift: {
     type: string;
     date: string;
-    openingTime: string;
+    autoOpenTime: string;
     autoCloseTime: string;
     actualOpeningTime: string | null;
     actualCloseTime: string | null;
@@ -876,3 +876,4 @@ interface ElectronAPI {
 interface Window {
   electron: ElectronAPI;
 }
+export {}

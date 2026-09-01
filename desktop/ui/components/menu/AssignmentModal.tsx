@@ -73,7 +73,7 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
         // from the previous shift — label it as such instead of "Produced".
         // The shift window comes from the batch endpoint (snapshot-derived).
         if (record.shift) {
-          const start = new Date(record.shift.openingTime).getTime()
+          const start = new Date(record.shift.autoOpenTime).getTime()
           const end = new Date(record.shift.autoCloseTime).getTime()
           const createdAt = new Date(record.createdAt).getTime()
           setIsCarryOver(!(createdAt >= start && createdAt < end))

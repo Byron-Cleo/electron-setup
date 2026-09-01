@@ -239,6 +239,8 @@ export function WaiterMenu() {
     } catch (err) {
       setPlaceError(err instanceof Error ? err.message : "Failed to place order")
       setPlacing(false)
+      // Auto-refresh menu grid after rejection (sold out / no shift updates)
+      setTimeout(() => window.location.reload(), 1500)
     }
   }
 

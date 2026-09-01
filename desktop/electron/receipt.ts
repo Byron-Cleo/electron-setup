@@ -118,7 +118,7 @@ function shiftReportLines(data: ShiftReportData): Line[] {
   if (r.city) pushCenter(r.city);
   push(line);
   pushRow("Shift", `${shiftLabel} · ${fmtDate(s.date)}`);
-  pushRow("Opened", `${fmtTime(s.openingTime)} by ${s.openedBy}`);
+  pushRow("Opened", `${fmtTime(s.autoOpenTime)} by ${s.openedBy}`);
   pushRow("Scheduled close", fmtTime(s.autoCloseTime));
   pushRow("Closed", `${fmtTime(s.actualCloseTime)}${s.closedBy ? ` by ${s.closedBy}` : ""}`);
   push(line);

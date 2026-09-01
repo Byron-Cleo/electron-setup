@@ -35,6 +35,7 @@ function AdminLayout() {
   const logout = useAuthStore((s) => s.logout)
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
   const [shiftType, setShiftType] = useState<string | null>(null)
+  const [currentShiftName, setCurrentShiftName] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [partialCount, setPartialCount] = useState(0)
   const [readyCount, setReadyCount] = useState(0)
@@ -138,16 +139,18 @@ function AdminLayout() {
               {item.label}
               {item.accent && (
                 hasOpenShift && shiftType ? (
-                  <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  <span className={`ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border ${
                     shiftType === "DAY"
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                      : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                      ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700"
+                      : shiftType === "NIGHT"
+                        ? "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
+                        : "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700"
                   }`}>
-                    {shiftType === "DAY" ? "DayShift" : "NightShift"}
+                    Shift: {shiftType}
                   </span>
                 ) : (
-                  <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                    NoShift
+                  <span className="ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600">
+                    No Shift
                   </span>
                 )
               )}

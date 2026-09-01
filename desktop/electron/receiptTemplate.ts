@@ -211,7 +211,7 @@ export interface ShiftReportData {
   shift: {
     type: string;
     date: string;
-    openingTime: string;
+    autoOpenTime: string;
     autoCloseTime: string;
     actualCloseTime: string | null;
     openedBy: string;
@@ -289,7 +289,7 @@ function shiftReportBody(data: ShiftReportData): string {
   ${r.city ? blockCenter(r.city, "font-size:11px;") : ""}
   ${divider()}
   ${row("Shift", `${shiftLabel} · ${fmtDate(s.date)}`)}
-  ${row("Opened", `${fmtTime(s.openingTime)} by ${s.openedBy}`)}
+  ${row("Opened", `${fmtTime(s.autoOpenTime)} by ${s.openedBy}`)}
   ${row("Scheduled close", fmtTime(s.autoCloseTime))}
   ${row("Closed", `${fmtTime(s.actualCloseTime)}${s.closedBy ? ` by ${s.closedBy}` : ""}`)}
   ${divider()}

@@ -45,7 +45,7 @@ function buildShiftReportData(report: ShiftReport): ShiftReportData {
     shift: {
       type: report.shift.type,
       date: report.shift.date,
-      openingTime: report.shift.openingTime,
+      autoOpenTime: report.shift.autoOpenTime,
       autoCloseTime: report.shift.autoCloseTime,
       actualOpeningTime: report.shift.actualOpeningTime,
       actualCloseTime: report.shift.actualCloseTime,
@@ -177,7 +177,7 @@ function ShiftReportView({ report }: Props) {
               <div className="space-y-1 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-admin-muted">Open time</span>
-                  <span className="font-medium">{formatTime(shift.openingTime)}</span>
+                  <span className="font-medium">{formatTime(shift.autoOpenTime)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-admin-muted">Close time</span>

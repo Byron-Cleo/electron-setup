@@ -3,7 +3,7 @@ import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, La
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, type ShiftType } from "@/lib/api"
+import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { usePagination } from "@/hooks/usePagination"
 import BackButton from "@/components/shared/BackButton"
@@ -106,10 +106,10 @@ const ORDER_COLUMNS: Column[] = [
 
 function Cashier() {
   const [view, setView] = useState<CashierView>("dashboard")
-  const [selectedShiftType, setSelectedShiftType] = useState<ShiftType | undefined>()
-  const [selectedPaymentShiftType, setSelectedPaymentShiftType] = useState<ShiftType | undefined>()
-  const [selectedVoidShiftType, setSelectedVoidShiftType] = useState<ShiftType | undefined>()
-  const [currentShiftType, setCurrentShiftType] = useState<ShiftType | undefined>()
+  const [selectedstring, setSelectedstring] = useState<string | undefined>()
+  const [selectedPaymentstring, setSelectedPaymentstring] = useState<string | undefined>()
+  const [selectedVoidstring, setSelectedVoidstring] = useState<string | undefined>()
+  const [currentstring, setCurrentstring] = useState<string | undefined>()
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
 
@@ -117,10 +117,10 @@ function Cashier() {
     let cancelled = false
     getCurrentShift()
       .then((shift) => {
-        if (!cancelled) setCurrentShiftType(shift?.type)
+        if (!cancelled) setCurrentstring(shift?.type)
       })
       .catch(() => {
-        if (!cancelled) setCurrentShiftType(undefined)
+        if (!cancelled) setCurrentstring(undefined)
       })
     return () => { cancelled = true }
   }, [])
@@ -143,25 +143,25 @@ function Cashier() {
             setView("void-entry")
           } else {
             setView("dashboard")
-            setSelectedShiftType(undefined)
-            setSelectedPaymentShiftType(undefined)
-            setSelectedVoidShiftType(undefined)
+            setSelectedstring(undefined)
+            setSelectedPaymentstring(undefined)
+            setSelectedVoidstring(undefined)
           }
         }} />
       )}
 
-      {view === "dashboard" && <DashboardView onNavigate={(v, s) => { setView(v); if (v === "orders-entry") setSelectedShiftType(s); if (v === "payment-entry") setSelectedPaymentShiftType(s); if (v === "void-entry") setSelectedVoidShiftType(s); }} />}
-      {view === "orders-entry" && <OrdersEntryView isCashier={isCashier} currentShiftType={currentShiftType} onSelectShift={(s) => { setSelectedShiftType(s); setView("orders") }} />}
-      {view === "orders" && <OrdersView shiftType={selectedShiftType} />}
-      {view === "payment-entry" && <PaymentEntryView isCashier={isCashier} currentShiftType={currentShiftType} onSelectShift={(s) => { setSelectedPaymentShiftType(s); setView("payment") }} />}
-      {view === "payment" && <PaymentView shiftType={selectedPaymentShiftType} />}
-      {view === "void-entry" && <VoidEntryView isCashier={isCashier} currentShiftType={currentShiftType} onSelectShift={(s) => { setSelectedVoidShiftType(s); setView("void") }} />}
-      {view === "void" && <VoidView shiftType={selectedVoidShiftType} />}
+      {view === "dashboard" && <DashboardView onNavigate={(v, s) => { setView(v); if (v === "orders-entry") setSelectedstring(s); if (v === "payment-entry") setSelectedPaymentstring(s); if (v === "void-entry") setSelectedVoidstring(s); }} />}
+      {view === "orders-entry" && <OrdersEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s) => { setSelectedstring(s); setView("orders") }} />}
+      {view === "orders" && <OrdersView shiftType={selectedstring} />}
+      {view === "payment-entry" && <PaymentEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s) => { setSelectedPaymentstring(s); setView("payment") }} />}
+      {view === "payment" && <PaymentView shiftType={selectedPaymentstring} />}
+      {view === "void-entry" && <VoidEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s) => { setSelectedVoidstring(s); setView("void") }} />}
+      {view === "void" && <VoidView shiftType={selectedVoidstring} />}
     </div>
   )
 }
 
-function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?: ShiftType) => void }) {
+function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?: string) => void }) {
   const [counts, setCounts] = useState({ total: 0, unpaid: 0, voided: 0, dayShift: 0, nightShift: 0 })
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
@@ -288,42 +288,48 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
     )
   }
 
-function OrdersEntryView({ onSelectShift, isCashier, currentShiftType }: { onSelectShift: (shiftType: ShiftType) => void; isCashier: boolean; currentShiftType?: ShiftType }) {
-  function isDisabled(shift: ShiftType) {
-    return isCashier && !!currentShiftType && shift !== currentShiftType
+function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
+  const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
+  useEffect(() => {
+    getShiftConfigs().then(setShiftConfigs).catch(() => {})
+  }, [])
+
+  function isDisabled(shift: string) {
+    return isCashier && !!currentstring && shift !== currentstring
   }
+  const activeConfigs = shiftConfigs.filter((c) => c.isActive)
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Orders</Heading>
+      {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Orders</Heading>}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-        <Card className={`p-6 text-center transition-colors ${
-          isDisabled("DAY")
-            ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
-            : "cursor-pointer hover:border-admin-accent"
-        }`} onClick={isDisabled("DAY") ? undefined : () => onSelectShift("DAY")}>
-          <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
-            <Receipt size={32} className="text-yellow-600" />
-          </div>
-          <Heading as="h3" className="text-lg text-admin-header-text mb-2">Day Shift Orders</Heading>
-          <p className="text-sm text-admin-muted">View Day shift orders (Breakfast, Lunch)</p>
-        </Card>
-        <Card className={`p-6 text-center transition-colors ${
-          isDisabled("NIGHT")
-            ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
-            : "cursor-pointer hover:border-admin-accent"
-        }`} onClick={isDisabled("NIGHT") ? undefined : () => onSelectShift("NIGHT")}>
-          <div className="h-16 w-16 rounded-lg bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
-            <Receipt size={32} className="text-indigo-600" />
-          </div>
-          <Heading as="h3" className="text-lg text-admin-header-text mb-2">Night Shift Orders</Heading>
-          <p className="text-sm text-admin-muted">View Night shift orders (Dinner, Dessert, Beverage)</p>
-        </Card>
+        {activeConfigs.length === 0 && (
+          <Card className="col-span-full border-red-500/30 bg-red-50/40 shadow-red-100/40">
+            <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
+              <Lock className="h-6 w-6 text-red-600" />
+              <p className="text-sm font-semibold text-red-700">No shifts configured</p>
+              <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
+            </CardContent>
+          </Card>
+        )}
+        {activeConfigs.map((c) => (
+          <Card key={c.id} className={`p-6 text-center transition-colors ${
+            isDisabled(c.type)
+              ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
+              : "cursor-pointer hover:border-admin-accent"
+          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type)}>
+            <div className="h-16 w-16 rounded-lg bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
+              <Receipt size={32} className="text-blue-600" />
+            </div>
+            <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Orders</Heading>
+            <p className="text-sm text-admin-muted">{new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()}</p>
+          </Card>
+        ))}
       </div>
     </div>
   )
 }
 
-function OrdersView({ shiftType }: { shiftType?: ShiftType }) {
+function OrdersView({ shiftType }: { shiftType?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -648,38 +654,45 @@ function OrdersView({ shiftType }: { shiftType?: ShiftType }) {
   )
 }
 
-function VoidEntryView({ onSelectShift, isCashier, currentShiftType }: { onSelectShift: (shiftType: ShiftType) => void; isCashier: boolean; currentShiftType?: ShiftType }) {
-  function isDisabled(shift: ShiftType) {
-    return isCashier && !!currentShiftType && shift !== currentShiftType
+function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
+  const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
+  useEffect(() => {
+    getShiftConfigs().then(setShiftConfigs).catch(() => {})
+  }, [])
+  function isDisabled(shift: string) {
+    return isCashier && !!currentstring && shift !== currentstring
   }
+  const activeConfigs = shiftConfigs.filter((c) => c.isActive)
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Voids</Heading>
+      {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Voids</Heading>}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-        <Card className={`p-6 border-2 border-red-400 bg-red-50/50 text-center transition-colors ${
-          isDisabled("DAY") ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-red-600 cursor-pointer"
-        }`} onClick={isDisabled("DAY") ? undefined : () => onSelectShift("DAY")}>
-          <div className="h-16 w-16 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
-            <XCircle size={32} className="text-red-600" />
-          </div>
-          <Heading as="h3" className="text-lg text-red-700 mb-2">Day Shift Voids</Heading>
-          <p className="text-sm text-admin-muted">View Day shift voidable orders (Breakfast, Lunch)</p>
-        </Card>
-        <Card className={`p-6 border-2 border-red-400 bg-red-50/50 text-center transition-colors ${
-          isDisabled("NIGHT") ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-red-600 cursor-pointer"
-        }`} onClick={isDisabled("NIGHT") ? undefined : () => onSelectShift("NIGHT")}>
-          <div className="h-16 w-16 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
-            <XCircle size={32} className="text-red-600" />
-          </div>
-          <Heading as="h3" className="text-lg text-red-700 mb-2">Night Shift Voids</Heading>
-          <p className="text-sm text-admin-muted">View Night shift voidable orders (Dinner, Dessert, Beverage)</p>
-        </Card>
+        {activeConfigs.length === 0 && (
+          <Card className="col-span-full border-red-500/30 bg-red-50/40 shadow-red-100/40">
+            <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
+              <Lock className="h-6 w-6 text-red-600" />
+              <p className="text-sm font-semibold text-red-700">No shifts configured</p>
+              <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
+            </CardContent>
+          </Card>
+        )}
+        {activeConfigs.map((c) => (
+          <Card key={c.id} className={`p-6 border-2 border-red-400 bg-red-50/50 text-center transition-colors ${
+            isDisabled(c.type) ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-red-600 cursor-pointer"
+          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type)}>
+            <div className="h-16 w-16 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+              <XCircle size={32} className="text-red-600" />
+            </div>
+            <Heading as="h3" className="text-lg text-red-700 mb-2">{c.type} Shift Voids</Heading>
+            <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift voidable orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
+          </Card>
+        ))}
       </div>
     </div>
   )
 }
 
-function VoidView({ shiftType }: { shiftType?: ShiftType }) {
+function VoidView({ shiftType }: { shiftType?: string }) {
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
 
@@ -953,42 +966,45 @@ function VoidView({ shiftType }: { shiftType?: ShiftType }) {
   )
 }
 
-function PaymentEntryView({ onSelectShift, isCashier, currentShiftType }: { onSelectShift: (shiftType: ShiftType) => void; isCashier: boolean; currentShiftType?: ShiftType }) {
-  function isDisabled(shift: ShiftType) {
-    return isCashier && !!currentShiftType && shift !== currentShiftType
+function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
+  const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
+  useEffect(() => {
+    getShiftConfigs().then(setShiftConfigs).catch(() => {})
+  }, [])
+  function isDisabled(shift: string) {
+    return isCashier && !!currentstring && shift !== currentstring
   }
+  const activeConfigs = shiftConfigs.filter((c) => c.isActive)
   return (
     <div className="space-y-4">
-      <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Payments</Heading>
+      {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Payments</Heading>}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-        <Card className={`p-6 text-center transition-colors ${
-          isDisabled("DAY")
-            ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
-            : "cursor-pointer hover:border-admin-accent"
-        }`} onClick={isDisabled("DAY") ? undefined : () => onSelectShift("DAY")}>
-          <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
-            <Wallet size={32} className="text-yellow-600" />
-          </div>
-          <Heading as="h3" className="text-lg text-admin-header-text mb-2">Day Shift Payments</Heading>
-          <p className="text-sm text-admin-muted">View Day shift unpaid orders (Breakfast, Lunch)</p>
-        </Card>
-        <Card className={`p-6 text-center transition-colors ${
-          isDisabled("NIGHT")
-            ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
-            : "cursor-pointer hover:border-admin-accent"
-        }`} onClick={isDisabled("NIGHT") ? undefined : () => onSelectShift("NIGHT")}>
-          <div className="h-16 w-16 rounded-lg bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
-            <Wallet size={32} className="text-indigo-600" />
-          </div>
-          <Heading as="h3" className="text-lg text-admin-header-text mb-2">Night Shift Payments</Heading>
-          <p className="text-sm text-admin-muted">View Night shift unpaid orders (Dinner, Dessert, Beverage)</p>
-        </Card>
+        {activeConfigs.length === 0 && (
+          <Card className="col-span-full border-red-500/30 bg-red-50/40 shadow-red-100/40">
+            <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
+              <Lock className="h-6 w-6 text-red-600" />
+              <p className="text-sm font-semibold text-red-700">No shifts configured</p>
+              <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
+            </CardContent>
+          </Card>
+        )}
+        {activeConfigs.map((c) => (
+          <Card key={c.id} className={`p-6 text-center transition-colors ${
+            isDisabled(c.type) ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50" : "cursor-pointer hover:border-admin-accent"
+          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type)}>
+            <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
+              <Wallet size={32} className="text-yellow-600" />
+            </div>
+            <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Payments</Heading>
+            <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift unpaid orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
+          </Card>
+        ))}
       </div>
     </div>
   )
 }
 
-function PaymentView({ shiftType }: { shiftType?: ShiftType }) {
+function PaymentView({ shiftType }: { shiftType?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")

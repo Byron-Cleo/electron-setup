@@ -163,7 +163,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
     try {
       const cash = declaredCash ? Number(declaredCash.replace(/,/g, "")) : undefined
       const mpesa = declaredMpesa ? Number(declaredMpesa.replace(/,/g, "")) : undefined
-      await closeShift(liveShift.id, closedById, cash, mpesa)
+      await closeShift(liveShift.id, closedById, cash, mpesa, [])
       const data = await getShiftReport(liveShift.id)
       setReport(data)
     } catch (err) {
@@ -200,7 +200,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
       shift: {
         type: r.shift.type,
         date: r.shift.date,
-        openingTime: r.shift.openingTime,
+        autoOpenTime: r.shift.autoOpenTime,
         autoCloseTime: r.shift.autoCloseTime,
         actualOpeningTime: r.shift.actualOpeningTime,
         actualCloseTime: r.shift.actualCloseTime,
@@ -528,7 +528,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                 Shift Report — {report.shift.type === "DAY" ? "Day" : "Night"}
               </DialogTitle>
               <DialogDescription>
-                {formatDate(report.shift.date)} · opened {formatTime(report.shift.openingTime)} ·
+                {formatDate(report.shift.date)} · opened {formatTime(report.shift.autoOpenTime)} ·
                 closed {formatTime(report.shift.actualCloseTime)} by{" "}
                 {report.shift.closedBy?.name ?? "—"}
               </DialogDescription>
@@ -686,7 +686,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                 </p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   <div className="text-admin-muted">Defined open time</div>
-                  <div>{formatTime(report.shift.openingTime)}</div>
+                  <div>{formatTime(report.shift.autoOpenTime)}</div>
                   <div className="text-admin-muted">Actual open time</div>
                   <div>{formatTime(report.shift.actualOpeningTime)}</div>
                   <div className="text-admin-muted">Opening drift</div>

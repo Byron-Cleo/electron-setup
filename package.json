@@ -29,6 +29,9 @@
     "build:win:network": "node scripts/build-network.mjs --platform win",
     "build:mac:network": "node scripts/build-network.mjs --platform mac",
     "build:web": "node scripts/build-web.mjs",
+    "test:backend": "npm run test --prefix backend",
+    "test:frontend": "vitest run",
+    "test": "npm run test:backend && npm run test:frontend",
     "icon": "node scripts/icon.mjs"
   },
   "dependencies": {
@@ -75,6 +78,11 @@
     "to-ico": "^1.1.5",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/jest-dom": "^6.4.0",
+    "jsdom": "^25.0.0"
   }
 }

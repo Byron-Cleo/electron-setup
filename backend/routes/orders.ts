@@ -4,6 +4,17 @@ import { ServiceTime } from "../db/generated/prisma/client.js";
 
 const router = Router();
 
+// Recompute Menu.stock = sum of split platesRemaining (aligns direct mutation with split truth)
+async function recomputeMenuStock(tx: { menu: { update: (args: { where: { id: string }; data: { stock: number } }) => Promise<unknown> }; cookingRecordMenu: { aggregate: (args: { _sum: { platesRemaining?: boolean }; where: { menuId: string } }) => Promise<{ _sum: { platesRemaining: number } | null }> } }, menuId: string) {
+  const agg = await tx.cookingRecordMenu.aggregate({
+    _sum: { platesRemaining: true },
+    where: { menuId },
+  });
+  const total = Number(agg._sum?.platesRemaining ?? 0);
+  await tx.menu.update({ where: { id: menuId }, data: { stock: total } });
+  return total;
+}
+
 router.get("/count", async (_req, res) => {
   try {
     const count = await prisma.order.count();
@@ -68,11 +79,14 @@ router.post("/", async (req, res) => {
   const shippingPrice = 0;
   const taxPrice = 0;
 
-  // Link the order to the currently open shift (if any) for plate tracking
+  // Every order must link to an open shift (no orphaned orders)
   const currentShift = await prisma.shift.findFirst({
     where: { isOpen: true },
     select: { id: true },
   });
+  if (!currentShift) {
+    return res.status(400).json({ error: "No active shift. Please open a shift before placing orders." });
+  }
 
   try {
     // Optional replacement link: new order replaces an existing VOIDED order
@@ -140,14 +154,22 @@ router.post("/", async (req, res) => {
         });
 
         const menu = await tx.menu.findUniqueOrThrow({ where: { id: item.menuId } });
+        // Enforce required starch/vegetable selections from menu configuration
+        if (menu.hasStarch && !item.starchId) {
+          throw new Error(`Menu item ${menu.name} requires a starch accompaniment`);
+        }
+        if (menu.hasVegetable && !item.vegetableId) {
+          throw new Error(`Menu item ${menu.name} requires a vegetable accompaniment`);
+        }
         const currentStock = menu.stock ?? 0;
-        const remaining = Math.max(0, currentStock - item.qty);
-        await tx.menu.update({
-          where: { id: item.menuId },
-          data: {
-            stock: remaining,
-          },
+        // Atomic guarded decrement: only succeeds if sufficient stock exists (prevents race/over-sell)
+        const updated = await tx.menu.updateMany({
+          where: { id: item.menuId, stock: { gte: item.qty } },
+          data: { stock: { decrement: item.qty } },
         });
+        if (updated.count === 0) {
+          throw new Error(`Insufficient stock for ${item.name}: only ${currentStock} plates remaining`);
+        }
 
         // Decrement the menu's split platesRemaining in lock-step with Menu.stock
         // (FIFO across the menu's splits, never below 0)
@@ -181,6 +203,8 @@ router.post("/", async (req, res) => {
             update: { platesSold: { increment: item.qty } },
           });
         }
+        // Align Menu.stock with split truth after order creation
+        await recomputeMenuStock(tx, item.menuId);
       }
 
       return tx.order.findUnique({
@@ -334,6 +358,10 @@ router.post("/:id/void", async (req, res) => {
     if (currentShift && order.shiftId && order.shiftId !== currentShift.id) {
       return res.status(400).json({ error: "Cannot void order from a different shift" });
     }
+    // Block void of a shiftless (orphaned) order when a current shift is open
+    if (currentShift && !order.shiftId) {
+      return res.status(400).json({ error: "Cannot void an unshifted order while a shift is open" });
+    }
 
     const now = new Date();
 
@@ -342,7 +370,9 @@ router.post("/:id/void", async (req, res) => {
       // Restore plates for each item
       for (const item of order.OrderItem) {
         const menu = await tx.menu.findUnique({ where: { id: item.menuId } });
-        if (menu) {
+        if (!menu) {
+          console.warn(`Menu item ${item.menuId} not found during void; stock restoration skipped for this item`);
+        } else {
           const currentStock = menu.stock ?? 0;
           await tx.menu.update({
             where: { id: item.menuId },
@@ -352,22 +382,26 @@ router.post("/:id/void", async (req, res) => {
           });
         }
 
-        // Restore the menu's split platesRemaining in lock-step with Menu.stock
-        // (reverse of the FIFO order decrement: restore to the newest split first)
+        // Restore plates to splits: cap each at its platesAllocated so remaining never exceeds allocated
         let toRestore = item.qty;
         const splits = await tx.cookingRecordMenu.findMany({
           where: { menuId: item.menuId },
           orderBy: { createdAt: "desc" },
-          select: { id: true, platesRemaining: true },
+          select: { id: true, platesRemaining: true, platesAllocated: true },
         });
         for (const split of splits) {
           if (toRestore <= 0) break;
+          // Per user spec: no headroom cap. Restore voided qty directly back to split.
+          const add = Math.min(toRestore, item.qty);
           await tx.cookingRecordMenu.update({
             where: { id: split.id },
-            data: { platesRemaining: { increment: toRestore } },
+            data: { platesRemaining: { increment: add } },
           });
-          toRestore = 0;
+          toRestore -= add;
         }
+
+        // Align Menu.stock with split truth after void restoration
+        await recomputeMenuStock(tx, item.menuId);
 
         // Update shift snapshot if exists
         if (order.shiftId) {

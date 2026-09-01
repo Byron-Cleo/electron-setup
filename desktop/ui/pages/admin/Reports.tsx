@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { CalendarDays, FileText, Printer, ShieldX, ClipboardList, Receipt } from "lucide-react"
+import { CalendarDays, FileText, Printer, ShieldX, ClipboardList } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select"
 import { DataTable } from "@/components/ui/data-table"
 import BackButton from "@/components/shared/BackButton"
-import { getShiftReport, getVoidReport, listShifts } from "@/lib/api"
+import { getShiftReport, getVoidReport, listShifts, getShiftConfigs } from "@/lib/api"
 import ShiftReportView from "@/components/reports/ShiftReport"
 
 type ActiveView = "shift-report" | "waiters-report" | null
@@ -93,13 +93,18 @@ function Reports() {
 
 function ShiftReportSection() {
   const [viewState, setViewState] = useState<ShiftReportViewState>("shift-selection")
-  const [selectedShiftType, setSelectedShiftType] = useState<"DAY" | "NIGHT" | null>(null)
+  const [selectedShiftType, setSelectedShiftType] = useState<string | null>(null)
   const [date, setDate] = useState(todayISO())
   const [shifts, setShifts] = useState<Shift[]>([])
+  const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
   const [report, setReport] = useState<ShiftReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getShiftConfigs().then(setShiftConfigs).catch(() => {})
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -146,9 +151,8 @@ function ShiftReportSection() {
   const closedShifts = shifts.filter((s) => !s.isOpen && s.type === selectedShiftType)
 
   function shiftLabel(shift: Shift): string {
-    const period = shift.type === "DAY" ? "Day" : "Night"
     const status = shift.isOpen ? " (open)" : ""
-    return `${period} Shift — ${new Date(shift.openingTime).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}${status}`
+    return `${shift.type} Shift — ${new Date(shift.autoOpenTime).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}${status}`
   }
 
   if (viewState === "shift-selection") {
@@ -156,20 +160,15 @@ function ShiftReportSection() {
       <div className="space-y-4">
         <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Report</Heading>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-          <Card className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent" onClick={() => { setSelectedShiftType("DAY"); setViewState("report-view"); }}>
-            <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
-              <Receipt size={32} className="text-yellow-600" />
-            </div>
-            <Heading as="h3" className="text-lg text-admin-header-text mb-2">Day Shift Report</Heading>
-            <p className="text-sm text-admin-muted">View Day shift report (Breakfast, Lunch)</p>
-          </Card>
-          <Card className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent" onClick={() => { setSelectedShiftType("NIGHT"); setViewState("report-view"); }}>
-            <div className="h-16 w-16 rounded-lg bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
-              <Receipt size={32} className="text-indigo-600" />
-            </div>
-            <Heading as="h3" className="text-lg text-admin-header-text mb-2">Night Shift Report</Heading>
-            <p className="text-sm text-admin-muted">View Night shift report (Dinner, Dessert, Beverage)</p>
-          </Card>
+          {shiftConfigs.filter((c) => c.isActive).map((c, idx) => (
+            <Card key={c.id} className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent" onClick={() => { setSelectedShiftType(c.type); setViewState("report-view"); }}>
+              <div className={`h-16 w-16 rounded-lg flex items-center justify-center mx-auto mb-4 ${idx === 0 ? "bg-yellow-500/10" : idx === 1 ? "bg-indigo-500/10" : "bg-blue-500/10"}`}>
+                <ClipboardList size={32} className={idx === 0 ? "text-yellow-600" : idx === 1 ? "text-indigo-600" : "text-blue-600"} />
+              </div>
+              <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Report</Heading>
+              <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift report ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
+            </Card>
+          ))}
         </div>
       </div>
     )
@@ -199,7 +198,7 @@ function ShiftReportSection() {
             />
           </div>
           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-            selectedShiftType === "DAY" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"
+            selectedShiftType === "DAY" ? "bg-yellow-100 text-yellow-700" : selectedShiftType === "NIGHT" ? "bg-indigo-100 text-indigo-700" : "bg-blue-100 text-blue-700"
           }`}>
             {selectedShiftType} Shift
           </span>

@@ -171,7 +171,7 @@ router.get("/:id", async (req, res) => {
       ? {
           id: shift.id,
           type: shift.type,
-          openingTime: shift.openingTime,
+          autoOpenTime: shift.autoOpenTime,
           autoCloseTime: shift.autoCloseTime,
         }
       : null,

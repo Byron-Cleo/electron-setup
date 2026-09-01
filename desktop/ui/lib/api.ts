@@ -369,7 +369,7 @@ export interface MenuStockStatusItem {
 }
 
 export interface MenuStockStatus {
-  shift: { id: string; type: string; openingTime: string } | null
+  shift: { id: string; type: string; autoOpenTime: string } | null
   mealType: string | null
   selling: MenuStockStatusItem[]
   soldOut: MenuStockStatusItem[]
@@ -531,17 +531,11 @@ export async function printShiftReport(data: ShiftReportData): Promise<PrintResu
 
 // ─── Shifts ──────────────────────────────────────────────────────────────────
 
-export async function openShift(type: ShiftType, openedById: string): Promise<Shift> {
-  return apiFetch("/shifts/open", {
-    method: "POST",
-    body: JSON.stringify({ type, openedById }),
-  })
-}
-
-export async function closeShift(shiftId: string, closedById: string, declaredCash?: number, declaredMpesa?: number): Promise<Shift> {
-  const body: { closedById: string; declaredCash?: number; declaredMpesa?: number } = { closedById };
+export async function closeShift(shiftId: string, closedById: string, declaredCash?: number, declaredMpesa?: number, waste?: Array<{ menuId?: string; plates?: number }>): Promise<Shift> {
+  const body: { closedById: string; declaredCash?: number; declaredMpesa?: number; waste?: Array<{ menuId?: string; plates?: number }> } = { closedById };
   if (declaredCash !== undefined) body.declaredCash = declaredCash;
   if (declaredMpesa !== undefined) body.declaredMpesa = declaredMpesa;
+  if (waste && waste.length > 0) body.waste = waste;
   return apiFetch(`/shifts/${shiftId}/close`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -682,6 +676,22 @@ export async function testServerConnection(): Promise<ServerStatus> {
 }
 
 // ─── User Management ────────────────────────────────────────────────────────
+
+export async function getShiftConfigs(): Promise<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]> {
+  return apiFetch("/shift-config")
+}
+
+export async function createShiftConfig(data: { type: string; autoOpenTime: string; autoCloseTime: string }): Promise<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }> {
+  return apiFetch("/shift-config", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function updateShiftConfig(id: string, data: { autoOpenTime?: string; autoCloseTime?: string; isActive?: boolean }): Promise<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }> {
+  return apiFetch(`/shift-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export async function deleteShiftConfig(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/shift-config/${id}`, { method: "DELETE" })
+}
 
 export async function getUsers(): Promise<AdminUser[]> {
   return apiFetch("/users")

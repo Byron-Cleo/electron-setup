@@ -1,6 +1,5 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
-import { ShiftType } from "../db/generated/prisma/client.js";
 import { autoCloseExpiredShifts } from "../scheduler.js";
 
 const router = Router();
@@ -24,7 +23,7 @@ router.get("/", async (req, res) => {
 
     const shifts = await prisma.shift.findMany({
       where,
-      orderBy: [{ date: "desc" }, { openingTime: "asc" }],
+      orderBy: [{ date: "desc" }, { autoOpenTime: "asc" }],
       include: {
         openedBy: { select: { id: true, name: true } },
         closedBy: { select: { id: true, name: true } },
@@ -102,122 +101,11 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Open a new shift
-router.post("/open", async (req, res) => {
-  const { type, openedById } = req.body;
-
-  if (!type || !openedById) {
-    return res.status(400).json({ error: "type and openedById are required" });
-  }
-
-  if (!Object.values(ShiftType).includes(type)) {
-    return res.status(400).json({ error: `Invalid shift type. Must be one of: ${Object.values(ShiftType).join(", ")}` });
-  }
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  try {
-    // Check if shift already open for this type+date
-    const existing = await prisma.shift.findUnique({
-      where: { type_date: { type, date: today } },
-    });
-
-    if (existing) {
-      if (existing.isOpen) {
-        return res.json(existing);
-      }
-      return res.status(409).json({ error: "Shift already closed for this period" });
-    }
-
-    // Calculate times based on shift type
-    let openingTime: Date;
-    let autoCloseTime: Date;
-
-    if (type === ShiftType.DAY) {
-      openingTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 5, 30, 0);
-      autoCloseTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 17, 30, 0);
-    } else {
-      openingTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 17, 30, 0);
-      // Night shift closes at 5:30 AM next day
-      autoCloseTime = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 5, 30, 0);
-    }
-
-    // Create shift with opening snapshot
-    const shift = await prisma.$transaction(async (tx) => {
-      const created = await tx.shift.create({
-        data: {
-          type,
-          date: now,
-          openingTime,
-          autoCloseTime,
-          actualOpeningTime: now,
-          isOpen: true,
-          openedById,
-        },
-      });
-
-      // Carry-forward from the most recent closed shift: a menu's opening plates
-      // are its previous shift's closing plates (assigned carry-over). Unassigned
-      // production from the previous shift is kept independent and assigned later
-      // via the cooking-record allocation UI, so it is NOT folded into the opening
-      // snapshot.
-      const previousShift = await tx.shift.findFirst({
-        where: { isOpen: false },
-        orderBy: { openingTime: "desc" },
-        select: { snapshots: { select: { menuId: true, closingPlates: true } } },
-      });
-      const prevClosingByMenu = new Map<string, number>();
-      if (previousShift) {
-        for (const snap of previousShift.snapshots) {
-          if (snap.closingPlates != null) {
-            prevClosingByMenu.set(snap.menuId, Number(snap.closingPlates));
-          }
-        }
-      }
-
-      // Take opening snapshot of all active menu items
-      const activeMenus = await tx.menu.findMany({
-        where: { isAvailable: true },
-        select: { id: true, stock: true },
-      });
-
-      if (activeMenus.length > 0) {
-        await tx.shiftSnapshot.createMany({
-          data: activeMenus.map((menu) => ({
-            shiftId: created.id,
-            menuId: menu.id,
-            openingPlates: prevClosingByMenu.has(menu.id)
-              ? (prevClosingByMenu.get(menu.id) ?? 0)
-              : (menu.stock ?? 0),
-          })),
-        });
-      }
-
-      return tx.shift.findUnique({
-        where: { id: created.id },
-        include: {
-          openedBy: { select: { id: true, name: true } },
-          snapshots: { include: { menu: { select: { id: true, name: true } } } },
-        },
-      });
-    });
-
-    res.status(201).json(shift);
-  } catch (e: unknown) {
-    if ((e as { code?: string })?.code === "P2002") {
-      return res.status(409).json({ error: "Shift already exists for this period" });
-    }
-    console.error("Error opening shift:", e);
-    res.status(500).json({ error: "Failed to open shift" });
-  }
-});
-
 // Close a shift (manual close by staff)
 // Allows closing even if shift was auto-captured by scheduler
 router.post("/:id/close", async (req, res) => {
   const { id } = req.params;
-  const { closedById, declaredCash, declaredMpesa } = req.body;
+  const { closedById, declaredCash, declaredMpesa, waste } = req.body;
 
   if (!closedById) {
     return res.status(400).json({ error: "closedById is required" });
@@ -283,6 +171,28 @@ router.post("/:id/close", async (req, res) => {
 
       const autoCloseTime = shift.autoClosedAt ? new Date(shift.autoClosedAt) : null;
 
+      // Apply declared waste per menu item (removes wasted plates from inventory)
+      const wasteEntries: Array<{ menuId?: string; plates?: number }> = Array.isArray(waste) ? waste : [];
+      for (const w of wasteEntries) {
+        if (!w.menuId) continue;
+        const wastedPlates = Number(w.plates ?? 0) || 0;
+        const snap = snapshots.find((s) => s.menuId === w.menuId);
+        if (snap) {
+          await tx.shiftSnapshot.update({
+            where: { id: snap.id },
+            data: { platesWasted: wastedPlates },
+          });
+        }
+        // Reduce live Menu.stock by wasted plates (wasted = removed from sellable pool)
+        const menuRow = await tx.menu.findUnique({ where: { id: w.menuId } });
+        if (menuRow) {
+          await tx.menu.update({
+            where: { id: w.menuId },
+            data: { stock: Math.max(0, (menuRow.stock ?? 0) - wastedPlates) },
+          });
+        }
+      }
+
       for (const snapshot of snapshots) {
         const currentStock = snapshot.menu.stock ?? 0;
         const autoPlates = snapshot.autoClosePlates ?? null;
@@ -299,6 +209,7 @@ router.post("/:id/close", async (req, res) => {
           data: {
             closingPlates: currentStock,
             manualClosePlates: currentStock,
+            platesSoldAfterAutoClose: snapshot.platesSold,
             manualCloseTime: now,
             driftPlates,
             driftMinutes,
