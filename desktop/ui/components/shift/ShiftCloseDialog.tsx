@@ -59,13 +59,13 @@ function driftLabel(minutes: number | null, verb: "Opened" | "Closed"): string {
 
 interface Props {
   shift: Shift
-  closedById: string
+  finalClosedById: string
   open: boolean
   onOpenChange: (open: boolean) => void
   onClosed: () => void
 }
 
-function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: Props) {
+function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed }: Props) {
   const [liveShift, setLiveShift] = useState<Shift>(shift)
   const [closing, setClosing] = useState(false)
   const [markingUnpaid, setMarkingUnpaid] = useState<string | null>(null)
@@ -147,7 +147,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
     setMarkingUnpaid(orderId)
     setError(null)
     try {
-      await markOrderAsUnpaid(orderId, closedById)
+      await markOrderAsUnpaid(orderId, finalClosedById)
       const fresh = await getCurrentShift()
       if (fresh) setLiveShift(fresh)
     } catch (err) {
@@ -163,7 +163,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
     try {
       const cash = declaredCash ? Number(declaredCash.replace(/,/g, "")) : undefined
       const mpesa = declaredMpesa ? Number(declaredMpesa.replace(/,/g, "")) : undefined
-      await closeShift(liveShift.id, closedById, cash, mpesa, [])
+      await closeShift(liveShift.id, finalClosedById, cash, mpesa, [])
       const data = await getShiftReport(liveShift.id)
       setReport(data)
     } catch (err) {
@@ -199,16 +199,13 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
       },
       shift: {
         type: r.shift.type,
-        date: r.shift.date,
+        operationDay: r.shift.operationDay,
         autoOpenTime: r.shift.autoOpenTime,
         autoCloseTime: r.shift.autoCloseTime,
-        actualOpeningTime: r.shift.actualOpeningTime,
-        actualCloseTime: r.shift.actualCloseTime,
         openingDriftMinutes: r.shift.openingDriftMinutes,
         closingDriftMinutes: r.shift.closingDriftMinutes,
         driftMinutes: r.shift.driftMinutes,
-        openedBy: r.shift.openedBy?.name ?? "—",
-        closedBy: r.shift.closedBy?.name,
+        finalClosedBy: r.shift.finalClosedBy?.name ?? "—",
       },
       summary: r.summary,
       revenue: r.revenue,
@@ -528,9 +525,9 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                 Shift Report — {report.shift.type === "DAY" ? "Day" : "Night"}
               </DialogTitle>
               <DialogDescription>
-                {formatDate(report.shift.date)} · opened {formatTime(report.shift.autoOpenTime)} ·
-                closed {formatTime(report.shift.actualCloseTime)} by{" "}
-                {report.shift.closedBy?.name ?? "—"}
+                {formatDate(report.shift.operationDay)} · opened {formatTime(report.shift.autoOpenTime)} ·
+                closed {formatTime(report.shift.autoClosedAt ?? report.shift.autoCloseTime)} by{" "}
+                {report.shift.finalClosedBy?.name ?? "—"}
               </DialogDescription>
             </DialogHeader>
 
@@ -688,7 +685,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                   <div className="text-admin-muted">Defined open time</div>
                   <div>{formatTime(report.shift.autoOpenTime)}</div>
                   <div className="text-admin-muted">Actual open time</div>
-                  <div>{formatTime(report.shift.actualOpeningTime)}</div>
+                  <div>{formatTime(report.shift.autoOpenTime)}</div>
                   <div className="text-admin-muted">Opening drift</div>
                   <div className={cn(report.shift.openingDriftMinutes !== 0 && "text-amber-600")}>
                     {driftLabel(report.shift.openingDriftMinutes, "Opened")}
@@ -699,7 +696,7 @@ function ShiftCloseDialog({ shift, closedById, open, onOpenChange, onClosed }: P
                   <div className="text-admin-muted">Defined close time</div>
                   <div>{formatTime(report.shift.autoCloseTime)}</div>
                   <div className="text-admin-muted">Actual close time</div>
-                  <div>{formatTime(report.shift.actualCloseTime)}</div>
+                  <div>{formatTime(report.shift.autoClosedAt ?? report.shift.autoCloseTime)}</div>
                   <div className="text-admin-muted">Closing drift</div>
                   <div className={cn(report.shift.closingDriftMinutes !== 0 && "text-amber-600")}>
                     {driftLabel(report.shift.closingDriftMinutes, "Closed")}

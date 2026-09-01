@@ -45,23 +45,21 @@ export async function computeShiftUnassignedBatches(shift: {
   id: string;
   autoOpenTime: Date;
   autoCloseTime: Date;
-  actualOpeningTime: Date | null;
-  actualCloseTime: Date | null;
-  date: Date;
+  createdAt: Date;
+  operationDay: Date;
+  autoClosedAt: Date | null;
 }): Promise<{
   windowEnd: Date;
   batches: UnassignedBatch[];
   total: number;
 }> {
   const nextShift = await prisma.shift.findFirst({
-    where: { autoOpenTime: { gt: shift.autoOpenTime }, date: shift.date },
+    where: { autoOpenTime: { gt: shift.autoOpenTime }, operationDay: shift.operationDay },
     orderBy: { autoOpenTime: "asc" },
     select: { autoOpenTime: true },
   });
-  // Use the shift's ACTUAL open/close as the batch window when available, so
-  // anything cooked while the shift was really running counts toward it.
-  const windowStart = shift.actualOpeningTime ?? shift.autoOpenTime;
-  const windowEnd = nextShift?.autoOpenTime ?? shift.actualCloseTime ?? shift.autoCloseTime;
+  const windowStart = shift.createdAt ?? shift.autoOpenTime;
+  const windowEnd = nextShift?.autoOpenTime ?? shift.autoClosedAt ?? shift.autoCloseTime;
 
   // Sold is captured per menu in this shift's snapshots. Unassigned must
   // replicate the AssignmentModal's Remaining Pool exactly: produced minus the

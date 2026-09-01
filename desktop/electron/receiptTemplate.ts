@@ -210,12 +210,11 @@ export interface ShiftReportData {
   };
   shift: {
     type: string;
-    date: string;
+    operationDay: string;
     autoOpenTime: string;
     autoCloseTime: string;
-    actualCloseTime: string | null;
-    openedBy: string;
-    closedBy?: string;
+    autoClosedAt: string | null;
+    finalClosedBy?: string;
   };
   summary: {
     totalOrders: number;
@@ -288,10 +287,10 @@ function shiftReportBody(data: ShiftReportData): string {
   ${r.address ? blockCenter(r.address, "font-size:11px;") : ""}
   ${r.city ? blockCenter(r.city, "font-size:11px;") : ""}
   ${divider()}
-  ${row("Shift", `${shiftLabel} · ${fmtDate(s.date)}`)}
-  ${row("Opened", `${fmtTime(s.autoOpenTime)} by ${s.openedBy}`)}
+  ${row("Shift", `${shiftLabel} · ${fmtDate(s.operationDay)}`)}
+  ${row("Opened", `${fmtTime(s.autoOpenTime)}`)}
   ${row("Scheduled close", fmtTime(s.autoCloseTime))}
-  ${row("Closed", `${fmtTime(s.actualCloseTime)}${s.closedBy ? ` by ${s.closedBy}` : ""}`)}
+  ${row("Closed", `${fmtTime(s.autoClosedAt ?? s.autoCloseTime)}${s.finalClosedBy ? ` by ${s.finalClosedBy}` : ""}`)}
   ${divider()}
   ${blockCenter("REVENUE BY MEAL PERIOD", "font-weight:bold; font-size:13px;")}
   ${divider()}

@@ -117,10 +117,10 @@ function shiftReportLines(data: ShiftReportData): Line[] {
   if (r.address) pushCenter(r.address);
   if (r.city) pushCenter(r.city);
   push(line);
-  pushRow("Shift", `${shiftLabel} · ${fmtDate(s.date)}`);
-  pushRow("Opened", `${fmtTime(s.autoOpenTime)} by ${s.openedBy}`);
+  pushRow("Shift", `${shiftLabel} · ${fmtDate(s.operationDay)}`);
+  pushRow("Opened", `${fmtTime(s.autoOpenTime)}`);
   pushRow("Scheduled close", fmtTime(s.autoCloseTime));
-  pushRow("Closed", `${fmtTime(s.actualCloseTime)}${s.closedBy ? ` by ${s.closedBy}` : ""}`);
+  pushRow("Closed", `${fmtTime(s.autoClosedAt ?? s.autoCloseTime)}${s.finalClosedBy ? ` by ${s.finalClosedBy}` : ""}`);
   push(line);
 
   pushCenter("REVENUE BY MEAL PERIOD", true);

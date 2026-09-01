@@ -178,8 +178,6 @@ model User {
   cookingRecords CookingRecord[]
   Order          Order[]
   voidedOrders   Order[]            @relation("VoidedBy")
-  openedShifts   Shift[]            @relation("ShiftOpenedBy")
-  closedShifts   Shift[]            @relation("ShiftClosedBy")
   finalClosedShifts Shift[]         @relation("ShiftFinalClosedBy")
   Review         Review[]
   Session        Session[]
@@ -338,14 +336,10 @@ model StockSupplyMenu {
 model Shift {
   id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   type            String
-  date            DateTime        @db.Date
+  operationDay    DateTime        @db.Date
   autoOpenTime     DateTime      @db.Timestamptz(3)
   autoCloseTime     DateTime      @db.Timestamptz(3)
-  actualOpeningTime DateTime?      @db.Timestamptz(6)
-  actualCloseTime   DateTime?      @db.Timestamptz(6)
   isOpen          Boolean         @default(true)
-  openedById      String?         @db.Uuid
-  closedById      String?         @db.Uuid
   createdAt       DateTime        @default(now()) @db.Timestamptz(6)
   autoClosed      Boolean         @default(false)
   autoClosedAt    DateTime?       @db.Timestamptz(6)
@@ -354,15 +348,14 @@ model Shift {
   finalCloseSource String?        // "AUTO" | "MANUAL"
   declaredCash    Decimal?        @db.Decimal(12, 2) // manager-declared cash received at close
   declaredMpesa   Decimal?        @db.Decimal(12, 2) // manager-declared M-Pesa received at close
-  openedBy        User?           @relation("ShiftOpenedBy", fields: [openedById], references: [id])
-  closedBy        User?           @relation("ShiftClosedBy", fields: [closedById], references: [id])
   finalClosedBy   User?           @relation("ShiftFinalClosedBy", fields: [finalClosedById], references: [id])
   snapshots       ShiftSnapshot[]
   orders          Order[]
 
-  @@unique([type, date])
+  @@unique([type, operationDay])
 }
 
+//this is the tallying table
 model ShiftSnapshot {
   id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   shiftId           String   @db.Uuid

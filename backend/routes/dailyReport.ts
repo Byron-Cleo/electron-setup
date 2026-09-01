@@ -260,8 +260,7 @@ router.get("/shift/:id", async (req, res) => {
     const shift = await prisma.shift.findUnique({
       where: { id },
       include: {
-        openedBy: { select: { id: true, name: true } },
-        closedBy: { select: { id: true, name: true } },
+        finalClosedBy: { select: { id: true, name: true } },
         snapshots: { include: { menu: { select: { id: true, name: true, price: true } } } },
         orders: {
           include: {
@@ -330,7 +329,7 @@ router.get("/shift/:id", async (req, res) => {
     const nextShift = await prisma.shift.findFirst({
       where: {
         autoOpenTime: { gt: shift.autoOpenTime },
-        date: shift.date,
+        operationDay: shift.operationDay,
       },
       orderBy: { autoOpenTime: "asc" },
       select: { autoOpenTime: true },
@@ -388,27 +387,27 @@ router.get("/shift/:id", async (req, res) => {
       .filter((row) => row.platesSold > 0 || row.platesCooked > 0);
 
     // Calculate drift
-    const driftMinutes = shift.actualCloseTime
-      ? Math.round((shift.actualCloseTime.getTime() - shift.autoCloseTime.getTime()) / 60000)
+    const driftMinutes = shift.autoClosedAt
+      ? Math.round((shift.autoClosedAt.getTime() - shift.autoCloseTime.getTime()) / 60000)
       : 0;
 
     // Clocking drift (signed, early = negative / late = positive) for the Shift Clocking Summary
     const msPerMinute = 60000;
-    const openingDriftMinutes = shift.actualOpeningTime
-      ? Math.round((shift.actualOpeningTime.getTime() - shift.autoOpenTime.getTime()) / msPerMinute)
+    const openingDriftMinutes = shift.createdAt
+      ? Math.round((shift.createdAt.getTime() - shift.autoOpenTime.getTime()) / msPerMinute)
       : null;
-    const closingDriftMinutes = shift.actualCloseTime
-      ? Math.round((shift.actualCloseTime.getTime() - shift.autoCloseTime.getTime()) / msPerMinute)
+    const closingDriftMinutes = shift.autoClosedAt
+      ? Math.round((shift.autoClosedAt.getTime() - shift.autoCloseTime.getTime()) / msPerMinute)
       : null;
 
     // Drift records: created after autoCloseTime but before actualCloseTime (carried forward to next shift)
     let driftRecords: { menuName: string; quantityCooked: number; platesProduced: number; costPrice: number }[] = [];
-    if (driftMinutes > 0 && shift.actualCloseTime) {
+    if (driftMinutes > 0 && shift.autoClosedAt) {
       const driftCookingRecords = await prisma.cookingRecord.findMany({
         where: {
           createdAt: {
             gte: shift.autoCloseTime,
-            lt: shift.actualCloseTime,
+            lt: shift.autoClosedAt,
           },
         },
         include: {
@@ -453,17 +452,14 @@ router.get("/shift/:id", async (req, res) => {
       shift: {
         id: shift.id,
         type: shift.type,
-        date: shift.date,
+        operationDay: shift.operationDay,
         autoOpenTime: shift.autoOpenTime,
         autoCloseTime: shift.autoCloseTime,
-        actualOpeningTime: shift.actualOpeningTime,
-        actualCloseTime: shift.actualCloseTime,
         openingDriftMinutes,
         closingDriftMinutes,
         driftMinutes,
         isOpen: shift.isOpen,
-        openedBy: shift.openedBy,
-        closedBy: shift.closedBy,
+        finalClosedBy: shift.finalClosedBy,
       },
       plateMovement,
       revenue: {

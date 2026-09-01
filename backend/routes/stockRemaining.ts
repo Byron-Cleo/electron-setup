@@ -90,8 +90,8 @@ router.get("/remaining", async (_req, res) => {
       previousShift: {
         id: previousShift.id,
         type: previousShift.type,
-        date: previousShift.date,
-        closeTime: previousShift.actualCloseTime,
+        operationDay: previousShift.operationDay,
+        closeTime: previousShift.autoClosedAt,
       },
       carryForwardPerMenu,
       unassignedBatches,

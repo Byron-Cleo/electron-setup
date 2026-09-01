@@ -126,7 +126,7 @@ function CurrentShiftIndicator({ roles, showManageButton = true, className }: Pr
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-sm text-admin-muted mt-1">
-              <span>Opened: {new Date(currentShift.actualOpeningTime || currentShift.autoOpenTime).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit", hour12: true }).toUpperCase()}</span>
+              <span>Opened: {new Date(currentShift.createdAt || currentShift.autoOpenTime).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit", hour12: true }).toUpperCase()}</span>
               <span>Auto-close: {new Date(currentShift.autoCloseTime).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit", hour12: true }).toUpperCase()}</span>
             </div>
           </div>

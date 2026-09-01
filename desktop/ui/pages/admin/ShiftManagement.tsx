@@ -158,7 +158,7 @@ function ShiftManagement() {
           <div className="flex items-center gap-2 shrink-0">
             <Clock className="h-5 w-5 text-admin-header-text" />
             <h2 className="text-lg font-bold text-admin-header-text whitespace-nowrap">
-              {currentShift ? `SHIFT: ${currentShift.type}` : activeConfigs.length > 0 ? `Active Config: ${activeConfigs.map((c) => c.type).join(", ")}` : "No Active Shift"}
+                {currentShift ? `SHIFT: ${currentShift.type}` : activeConfigs.length > 0 ? `Active Config: ${activeConfigs.map((c) => c.type).join(", ")}` : "No Active Shift"}
             </h2>
           </div>
           <div className="flex items-center gap-3 shrink-0">
@@ -172,7 +172,7 @@ function ShiftManagement() {
                   const ampm = h >= 12 ? "PM" : "AM";
                   const hour12 = h % 12 || 12;
                   return `${hour12}:${min} ${ampm}`;
-                })()} by{" "}<span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">{currentShift.openedBy?.name ?? "System"}</span>
+                })()} by{" "}<span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">System</span>
               </span>
             )}
             {!currentShift && activeConfigs.length > 0 && (
@@ -282,7 +282,7 @@ function ShiftManagement() {
       {currentShift && user && (
         <ShiftCloseDialog
           shift={currentShift}
-          closedById={user.id}
+          finalClosedById={user?.id ?? ""}
           open={closeShiftOpen}
           onOpenChange={setCloseShiftOpen}
           onClosed={() => setCurrentShift(null)}

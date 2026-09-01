@@ -531,8 +531,8 @@ export async function printShiftReport(data: ShiftReportData): Promise<PrintResu
 
 // ─── Shifts ──────────────────────────────────────────────────────────────────
 
-export async function closeShift(shiftId: string, closedById: string, declaredCash?: number, declaredMpesa?: number, waste?: Array<{ menuId?: string; plates?: number }>): Promise<Shift> {
-  const body: { closedById: string; declaredCash?: number; declaredMpesa?: number; waste?: Array<{ menuId?: string; plates?: number }> } = { closedById };
+export async function closeShift(shiftId: string, finalClosedById: string, declaredCash?: number, declaredMpesa?: number, waste?: Array<{ menuId?: string; plates?: number }>): Promise<Shift> {
+  const body: { finalClosedById: string; declaredCash?: number; declaredMpesa?: number; waste?: Array<{ menuId?: string; plates?: number }> } = { finalClosedById };
   if (declaredCash !== undefined) body.declaredCash = declaredCash;
   if (declaredMpesa !== undefined) body.declaredMpesa = declaredMpesa;
   if (waste && waste.length > 0) body.waste = waste;
@@ -550,8 +550,8 @@ export async function getShift(shiftId: string): Promise<Shift> {
   return apiFetch(`/shifts/${shiftId}`)
 }
 
-export async function listShifts(date?: string): Promise<Shift[]> {
-  const query = date ? `?date=${encodeURIComponent(date)}` : ""
+export async function listShifts(operationDay?: string): Promise<Shift[]> {
+  const query = operationDay ? `?date=${encodeURIComponent(operationDay)}` : ""
   return apiFetch(`/shifts${query}`)
 }
 

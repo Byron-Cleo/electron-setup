@@ -62,7 +62,7 @@ async function getShiftBasedStockStatus(mealType?: string) {
   }
 
   const nextShift = await prisma.shift.findFirst({
-    where: { autoOpenTime: { gt: shift.autoOpenTime }, date: shift.date },
+    where: { autoOpenTime: { gt: shift.autoOpenTime }, operationDay: shift.operationDay },
     orderBy: { autoOpenTime: "asc" },
     select: { autoOpenTime: true },
   });

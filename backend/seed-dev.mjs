@@ -8,7 +8,7 @@ async function run() {
   console.log("Created user:", user.id);
 
   const shift = await prisma.shift.create({
-    data: { type: "LUNCH", date: new Date(), autoOpenTime: new Date(), autoCloseTime: new Date(), isOpen: true, openedById: user.id },
+    data: { type: "LUNCH", operationDay: new Date(), autoOpenTime: new Date(), autoCloseTime: new Date(), isOpen: true },
   });
   console.log("Created shift:", shift.id);
 

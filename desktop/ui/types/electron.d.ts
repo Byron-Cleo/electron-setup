@@ -570,20 +570,13 @@ interface ShiftSnapshot {
 interface Shift {
   id: string;
   type: ShiftType;
-  date: string;
+  operationDay: string;
   autoOpenTime: string;
   autoCloseTime: string;
-  actualOpeningTime: string | null;
-  actualCloseTime: string | null;
   isOpen: boolean;
-  openedById: string;
-  closedById: string | null;
   createdAt: string;
-  openedBy: {
-    id: string;
-    name: string;
-  };
-  closedBy?: {
+  finalClosedById: string | null;
+  finalClosedBy?: {
     id: string;
     name: string;
   } | null;
@@ -591,6 +584,10 @@ interface Shift {
   orders?: Order[];
   declaredCash: number | null;
   declaredMpesa: number | null;
+  finalClosedAt: string | null;
+  finalCloseSource: string | null;
+  autoClosed: boolean;
+  autoClosedAt: string | null;
 }
 
 interface AutoCloseResult {
@@ -601,7 +598,7 @@ interface AutoCloseResult {
 interface StockRemainingPreviousShift {
   id: string;
   type: ShiftType;
-  date: string;
+  operationDay: string;
   closeTime: string | null;
 }
 
@@ -648,17 +645,14 @@ interface VoidReportWaiter {
 interface ShiftReportMeta {
   id: string;
   type: ShiftType;
-  date: string;
+  operationDay: string;
   autoOpenTime: string;
   autoCloseTime: string;
-  actualOpeningTime: string | null;
-  actualCloseTime: string | null;
   openingDriftMinutes: number | null;
   closingDriftMinutes: number | null;
   driftMinutes: number;
   isOpen: boolean;
-  openedBy: { id: string; name: string };
-  closedBy?: { id: string; name: string } | null;
+  finalClosedBy?: { id: string; name: string } | null;
 }
 
 interface ShiftPlateMovementRow {
@@ -736,16 +730,13 @@ interface ShiftReportData {
   };
   shift: {
     type: string;
-    date: string;
+    operationDay: string;
     autoOpenTime: string;
     autoCloseTime: string;
-    actualOpeningTime: string | null;
-    actualCloseTime: string | null;
     openingDriftMinutes: number | null;
     closingDriftMinutes: number | null;
     driftMinutes: number;
-    openedBy: string;
-    closedBy?: string;
+    finalClosedBy?: string;
   };
   summary: {
     totalOrders: number;

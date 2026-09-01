@@ -9,7 +9,7 @@ router.get("/", async (req, res) => {
   const { date } = req.query;
 
   try {
-    const where: { date?: { gte: Date; lt: Date } } = {};
+    const where: { operationDay?: { gte: Date; lt: Date } } = {};
 
     if (date) {
       const targetDate = new Date(String(date));
@@ -18,15 +18,14 @@ router.get("/", async (req, res) => {
       }
       const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
       const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
-      where.date = { gte: startOfDay, lt: endOfDay };
+      where.operationDay = { gte: startOfDay, lt: endOfDay };
     }
 
     const shifts = await prisma.shift.findMany({
       where,
-      orderBy: [{ date: "desc" }, { autoOpenTime: "asc" }],
+      orderBy: [{ operationDay: "desc" }, { autoOpenTime: "asc" }],
       include: {
-        openedBy: { select: { id: true, name: true } },
-        closedBy: { select: { id: true, name: true } },
+        finalClosedBy: { select: { id: true, name: true } },
       },
     });
 
@@ -44,7 +43,7 @@ router.get("/current", async (_req, res) => {
       where: { isOpen: true },
       orderBy: { createdAt: "desc" },
       include: {
-        openedBy: { select: { id: true, name: true } },
+        finalClosedBy: { select: { id: true, name: true } },
         snapshots: { include: { menu: { select: { id: true, name: true } } } },
         orders: {
           select: {
@@ -80,8 +79,7 @@ router.get("/:id", async (req, res) => {
     const shift = await prisma.shift.findUnique({
       where: { id },
       include: {
-        openedBy: { select: { id: true, name: true } },
-        closedBy: { select: { id: true, name: true } },
+        finalClosedBy: { select: { id: true, name: true } },
         snapshots: { include: { menu: { select: { id: true, name: true } } } },
         orders: {
           include: {
@@ -105,10 +103,10 @@ router.get("/:id", async (req, res) => {
 // Allows closing even if shift was auto-captured by scheduler
 router.post("/:id/close", async (req, res) => {
   const { id } = req.params;
-  const { closedById, declaredCash, declaredMpesa, waste } = req.body;
+  const { finalClosedById, declaredCash, declaredMpesa, waste } = req.body;
 
-  if (!closedById) {
-    return res.status(400).json({ error: "closedById is required" });
+  if (!finalClosedById) {
+    return res.status(400).json({ error: "finalClosedById is required" });
   }
 
   try {
@@ -149,10 +147,8 @@ router.post("/:id/close", async (req, res) => {
         where: { id },
         data: {
           isOpen: false,
-          closedById,
-          actualCloseTime: now,
+          finalClosedById,
           finalClosedAt: now,
-          finalClosedById: closedById,
           finalCloseSource: "MANUAL",
           ...(declaredCash !== undefined && declaredCash !== null && declaredCash !== ""
             ? { declaredCash: Number(declaredCash) }
@@ -220,8 +216,6 @@ router.post("/:id/close", async (req, res) => {
       return tx.shift.findUnique({
         where: { id },
         include: {
-          openedBy: { select: { id: true, name: true } },
-          closedBy: { select: { id: true, name: true } },
           finalClosedBy: { select: { id: true, name: true } },
           snapshots: { include: { menu: { select: { id: true, name: true } } } },
         },

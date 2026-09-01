@@ -44,16 +44,13 @@ function buildShiftReportData(report: ShiftReport): ShiftReportData {
     },
     shift: {
       type: report.shift.type,
-      date: report.shift.date,
+      operationDay: report.shift.operationDay,
       autoOpenTime: report.shift.autoOpenTime,
       autoCloseTime: report.shift.autoCloseTime,
-      actualOpeningTime: report.shift.actualOpeningTime,
-      actualCloseTime: report.shift.actualCloseTime,
       openingDriftMinutes: report.shift.openingDriftMinutes,
       closingDriftMinutes: report.shift.closingDriftMinutes,
       driftMinutes: report.shift.driftMinutes,
-      openedBy: report.shift.openedBy?.name ?? "—",
-      closedBy: report.shift.closedBy?.name,
+      finalClosedBy: report.shift.finalClosedBy?.name ?? "—",
     },
     summary: report.summary,
     revenue: report.revenue,
@@ -165,8 +162,8 @@ function ShiftReportView({ report }: Props) {
           <p className="mb-3 text-sm">
             <span className="text-admin-muted">Period: </span>
             <span className="font-medium">
-              {shift.type === "DAY" ? "Day" : "Night"} shift · {formatDate(shift.date)} · opened by{" "}
-              {shift.openedBy?.name ?? "—"}
+              {shift.type === "DAY" ? "Day" : "Night"} shift · {formatDate(shift.operationDay)} · opened by{" "}
+              "—"
             </span>
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -192,7 +189,7 @@ function ShiftReportView({ report }: Props) {
               <div className="space-y-1 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-admin-muted">Open time</span>
-                  <span className="font-medium">{formatTime(shift.actualOpeningTime)}</span>
+                  <span className="font-medium">{formatTime(shift.autoOpenTime)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-admin-muted">Opening drift</span>
@@ -207,7 +204,7 @@ function ShiftReportView({ report }: Props) {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-admin-muted">Close time</span>
-                  <span className="font-medium">{formatTime(shift.actualCloseTime)}</span>
+                  <span className="font-medium">{formatTime(shift.autoClosedAt ?? shift.autoCloseTime)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-admin-muted">Closing drift</span>
