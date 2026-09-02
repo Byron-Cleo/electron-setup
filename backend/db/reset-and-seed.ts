@@ -1,8 +1,7 @@
 import "dotenv/config";
 import pg from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, AccompanimentType, ItemUnit } from "./generated/prisma/client.js";
-import sampleData from "./sample-data.js";
+import { PrismaClient } from "./generated/prisma/client.js";
 
 const connectionString = process.env.DATABASE_URL!;
 const pool = new pg.Pool({ connectionString });
@@ -11,16 +10,19 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log(
-    "\nResetting DB: clearing all data EXCEPT Users, Departments, StockSupply...\n",
+    "\nResetting DB: clearing all data EXCEPT Users, Departments, StockSupply, and the menu catalog...\n",
   );
 
-  // Delete everything except User, Department, DepartmentStockSupply, StockSupply.
+  // Transactional/reset data only. Users, Departments, StockSupply, and the
+  // menu catalog (Menu, MenuAccompaniment, MenuMealType, StockSupplyMenu) are
+  // PRESERVED — only cleared data that is safe to wipe.
   // Children first (reverse-FK order) so constraints are never violated.
   const steps: [string, Promise<unknown>][] = [
     ["ShiftSnapshot", prisma.shiftSnapshot.deleteMany()],
     ["OrderItem", prisma.orderItem.deleteMany()],
     ["Order", prisma.order.deleteMany()],
     ["Shift", prisma.shift.deleteMany()],
+    ["ShiftConfig", prisma.shiftConfig.deleteMany()],
     ["Cart", prisma.cart.deleteMany()],
     ["StockFulfillmentItem", prisma.stockFulfillmentItem.deleteMany()],
     ["StockFulfillment", prisma.stockFulfillment.deleteMany()],
@@ -28,11 +30,7 @@ async function main() {
     ["StockRequest", prisma.stockRequest.deleteMany()],
     ["CookingRecordMenu", prisma.cookingRecordMenu.deleteMany()],
     ["CookingRecord", prisma.cookingRecord.deleteMany()],
-    ["StockSupplyMenu", prisma.stockSupplyMenu.deleteMany()],
     ["Review", prisma.review.deleteMany()],
-    ["MenuMealType", prisma.menuMealType.deleteMany()],
-    ["Menu", prisma.menu.deleteMany()],
-    ["MenuAccompaniment", prisma.menuAccompaniment.deleteMany()],
     ["Session", prisma.session.deleteMany()],
     ["Account", prisma.account.deleteMany()],
     ["VerificationToken", prisma.verificationToken.deleteMany()],
@@ -50,29 +48,8 @@ async function main() {
   });
   console.log(`  Reset ${stockResult.count} StockSupply items (currentStock → 0)`);
 
-  console.log("\nSeeding menu catalog (accompaniments, menus, meal types)...\n");
-
-  // 1. Accompaniments first — Menu.starchId/vegetableId point here.
-  await prisma.menuAccompaniment.createMany({
-    data: sampleData.accompaniments.map((a) => ({
-      ...a,
-      category: a.category as AccompanimentType,
-    })),
-  });
-  console.log("  Seeded accompaniments");
-
-  // 2. Menus — references starchId/vegetableId (already in DB above).
-  await prisma.menu.createMany({
-    data: sampleData.menus.map((m) => ({ ...m, stock: 0 })),
-  });
-  console.log("  Seeded menus");
-
-  // 3. MenuMealType last — menuId must already exist.
-  await prisma.menuMealType.createMany({ data: sampleData.menuMealTypes });
-  console.log("  Seeded menu meal type assignments");
-
   console.log(
-    "\nDone! Users, Departments, Department↔Stock links, and StockSupply preserved; menu catalog reseeded.",
+    "\nDone! Users, Departments, Department↔Stock links, StockSupply, and the menu catalog preserved; transactional data cleared.",
   );
 
   await pool.end();
