@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Sunrise, Sun, Moon, CakeSlice, CupSoda, Ban } from "lucide-react"
+import { Sunrise, Sun, Moon, CakeSlice, CupSoda, Ban, TriangleAlert } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
 import { getActiveMealPeriods, type ActiveMealPeriod, type MealPeriodLabel } from "@/lib/mealPeriod"
+import { getCurrentShift } from "@/lib/api"
 import { useWaiterOrder } from "./WaiterOrderContext"
 import VoidOrdersDialog from "@/components/waiterPos/VoidOrdersDialog"
 
@@ -22,11 +23,31 @@ export function WaiterPOS() {
   const navigate = useNavigate()
   const [hour, setHour] = useState(new Date().getHours())
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
+  const [noShift, setNoShift] = useState(false)
   const { voidedOrders } = useWaiterOrder()
 
   useEffect(() => {
     const id = setInterval(() => setHour(new Date().getHours()), 60000)
     return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    function checkShift() {
+      getCurrentShift()
+        .then((s) => {
+          if (!cancelled) setNoShift(!s)
+        })
+        .catch(() => {
+          if (!cancelled) setNoShift(true)
+        })
+    }
+    checkShift()
+    const id = setInterval(checkShift, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [])
 
   const periods: CardPeriod[] = getActiveMealPeriods(hour).map((p) => ({
@@ -81,6 +102,19 @@ export function WaiterPOS() {
 
   return (
     <div className="space-y-8">
+      {noShift && (
+        <Card className="mx-auto max-w-2xl border-red-200 bg-red-50/40">
+          <CardContent className="p-5 flex items-center gap-3">
+            <TriangleAlert className="h-7 w-7 text-red-600 shrink-0" />
+            <div>
+              <p className="text-base font-bold text-red-800">No Active Shift</p>
+              <p className="text-sm text-red-700/80">
+                There is a missed shift. Please alert the manager. Orders cannot be taken until a shift is open.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <section>
         <Heading as="h2" className="text-sm text-brand-green uppercase tracking-wider mb-4">Now Serving</Heading>
         <div className="flex flex-wrap justify-center gap-4">

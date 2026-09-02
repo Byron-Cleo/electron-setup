@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { UtensilsCrossed, List, Plus, Beef, Archive, PackageOpen, type LucideIcon } from "lucide-react"
+import { UtensilsCrossed, List, Plus, Beef, Archive, type LucideIcon } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -84,7 +84,7 @@ function Menu() {
       <Heading as="h1" className="text-admin-header-text">Menu/Dispatch</Heading>
 
       {view === "dashboard" && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <Card
             className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
             onClick={() => setView("cooked-food")}
@@ -108,24 +108,6 @@ function Menu() {
                   )}
                 </div>
                 <p className="text-xs text-admin-muted mt-1">View cooked menu items ready for serving</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card
-            className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
-            onClick={() => { setView("remaining-stock"); setSubView(null) }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <PackageOpen size={24} className="text-amber-600" />
-              </div>
-              <div>
-                <Heading as="h3" className="text-lg text-admin-header-text">
-                  Remaining Stock from Previous Shift
-                </Heading>
-                <p className="text-sm text-admin-muted">Carry-forward &amp; unassigned plates</p>
-                <p className="text-xs text-admin-muted mt-1">Assign carried-over production to menus</p>
               </div>
             </div>
           </Card>

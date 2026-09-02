@@ -37,6 +37,12 @@ function formatDate(iso: string): string {
   return `${datePart}, ${hour12}:${minute} ${suffix}`
 }
 
+function opDayLabel(iso?: string): string {
+  if (!iso) return "—"
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number)
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`
+}
+
 function StatusBadge({ isPaid }: { isPaid: boolean }) {
   return isPaid ? (
     <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
@@ -290,14 +296,31 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
 
 function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
+  const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
     getShiftConfigs().then(setShiftConfigs).catch(() => {})
+    listShifts()
+      .then((shifts) => {
+        const byType: Record<string, string> = {}
+        for (const s of shifts) {
+          const existing = byType[s.type]
+          if (!existing || s.operationDay > existing) byType[s.type] = s.operationDay
+        }
+        setOpDays(byType)
+      })
+      .catch(() => {})
   }, [])
 
   function isDisabled(shift: string) {
     return isCashier && !!currentstring && shift !== currentstring
   }
-  const activeConfigs = shiftConfigs.filter((c) => c.isActive)
+  const activeConfigs = shiftConfigs
+    .filter((c) => c.isActive)
+    .sort((a, b) => {
+      if (currentstring && a.type === currentstring) return -1
+      if (currentstring && b.type === currentstring) return 1
+      return b.autoOpenTime.localeCompare(a.autoOpenTime)
+    })
   return (
     <div className="space-y-4">
       {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Orders</Heading>}
@@ -311,7 +334,9 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
             </CardContent>
           </Card>
         )}
-        {activeConfigs.map((c) => (
+        {activeConfigs.map((c) => {
+          const isOpen = currentstring === c.type
+          return (
           <Card key={c.id} className={`p-6 text-center transition-colors ${
             isDisabled(c.type)
               ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
@@ -321,9 +346,18 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
               <Receipt size={32} className="text-blue-600" />
             </div>
             <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Orders</Heading>
+            <p className="text-sm font-semibold text-red-600 mt-1 mb-1">{opDays[c.type] ? `Op Day: ${opDayLabel(opDays[c.type])}` : "Op Day: —"}</p>
             <p className="text-sm text-admin-muted">{new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()}</p>
+            {isOpen && (
+              <span className="mt-3 flex w-full justify-center">
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 ring-1 ring-green-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN
+              </span>
+            </span>
+            )}
           </Card>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -407,11 +441,16 @@ function OrdersView({ shiftType }: { shiftType?: string }) {
       })
     }
     if (selectedDate) {
-      const year = selectedDate.getFullYear()
-      const month = String(selectedDate.getMonth() + 1).padStart(2, "0")
-      const day = String(selectedDate.getDate()).padStart(2, "0")
-      const dateStr = `${year}-${month}-${day}`
-      source = source.filter((o) => o.createdAt.startsWith(dateStr))
+      const selectedUTC = new Date(Date.UTC(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate()
+      ))
+      const nextDayUTC = new Date(selectedUTC.getTime() + 86400000)
+      source = source.filter((o) => {
+        const orderDate = new Date(o.createdAt)
+        return orderDate >= selectedUTC && orderDate < nextDayUTC
+      })
     }
     return source
   }, [orders, activeTab, searchInput, batchTotals, selectedDate])
@@ -656,13 +695,30 @@ function OrdersView({ shiftType }: { shiftType?: string }) {
 
 function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
+  const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
     getShiftConfigs().then(setShiftConfigs).catch(() => {})
+    listShifts()
+      .then((shifts) => {
+        const byType: Record<string, string> = {}
+        for (const s of shifts) {
+          const existing = byType[s.type]
+          if (!existing || s.operationDay > existing) byType[s.type] = s.operationDay
+        }
+        setOpDays(byType)
+      })
+      .catch(() => {})
   }, [])
   function isDisabled(shift: string) {
     return isCashier && !!currentstring && shift !== currentstring
   }
-  const activeConfigs = shiftConfigs.filter((c) => c.isActive)
+  const activeConfigs = shiftConfigs
+    .filter((c) => c.isActive)
+    .sort((a, b) => {
+      if (currentstring && a.type === currentstring) return -1
+      if (currentstring && b.type === currentstring) return 1
+      return b.autoOpenTime.localeCompare(a.autoOpenTime)
+    })
   return (
     <div className="space-y-4">
       {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Voids</Heading>}
@@ -676,7 +732,9 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
             </CardContent>
           </Card>
         )}
-        {activeConfigs.map((c) => (
+        {activeConfigs.map((c) => {
+          const isOpen = currentstring === c.type
+          return (
           <Card key={c.id} className={`p-6 border-2 border-red-400 bg-red-50/50 text-center transition-colors ${
             isDisabled(c.type) ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-red-600 cursor-pointer"
           }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type)}>
@@ -684,9 +742,18 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
               <XCircle size={32} className="text-red-600" />
             </div>
             <Heading as="h3" className="text-lg text-red-700 mb-2">{c.type} Shift Voids</Heading>
+            <p className="text-sm font-semibold text-red-600 mt-1 mb-1">{opDays[c.type] ? `Op Day: ${opDayLabel(opDays[c.type])}` : "Op Day: —"}</p>
             <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift voidable orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
+            {isOpen && (
+              <span className="mt-3 flex w-full justify-center">
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 ring-1 ring-green-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN
+              </span>
+            </span>
+            )}
           </Card>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -700,7 +767,7 @@ function VoidView({ shiftType }: { shiftType?: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchInput, setSearchInput] = useState("")
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [voiding, setVoiding] = useState(false)
@@ -738,11 +805,16 @@ function VoidView({ shiftType }: { shiftType?: string }) {
       source = source.filter((o) => String(o.orderNumber).includes(q))
     }
     if (selectedDate) {
-      const year = selectedDate.getFullYear()
-      const month = String(selectedDate.getMonth() + 1).padStart(2, "0")
-      const day = String(selectedDate.getDate()).padStart(2, "0")
-      const dateStr = `${year}-${month}-${day}`
-      source = source.filter((o) => o.createdAt.startsWith(dateStr))
+      const selectedUTC = new Date(Date.UTC(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate()
+      ))
+      const nextDayUTC = new Date(selectedUTC.getTime() + 86400000)
+      source = source.filter((o) => {
+        const orderDate = new Date(o.createdAt)
+        return orderDate >= selectedUTC && orderDate < nextDayUTC
+      })
     }
     return source
   }, [orders, searchInput, selectedDate])
@@ -968,13 +1040,30 @@ function VoidView({ shiftType }: { shiftType?: string }) {
 
 function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
+  const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
     getShiftConfigs().then(setShiftConfigs).catch(() => {})
+    listShifts()
+      .then((shifts) => {
+        const byType: Record<string, string> = {}
+        for (const s of shifts) {
+          const existing = byType[s.type]
+          if (!existing || s.operationDay > existing) byType[s.type] = s.operationDay
+        }
+        setOpDays(byType)
+      })
+      .catch(() => {})
   }, [])
   function isDisabled(shift: string) {
     return isCashier && !!currentstring && shift !== currentstring
   }
-  const activeConfigs = shiftConfigs.filter((c) => c.isActive)
+  const activeConfigs = shiftConfigs
+    .filter((c) => c.isActive)
+    .sort((a, b) => {
+      if (currentstring && a.type === currentstring) return -1
+      if (currentstring && b.type === currentstring) return 1
+      return b.autoOpenTime.localeCompare(a.autoOpenTime)
+    })
   return (
     <div className="space-y-4">
       {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Payments</Heading>}
@@ -988,7 +1077,9 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
             </CardContent>
           </Card>
         )}
-        {activeConfigs.map((c) => (
+        {activeConfigs.map((c) => {
+          const isOpen = currentstring === c.type
+          return (
           <Card key={c.id} className={`p-6 text-center transition-colors ${
             isDisabled(c.type) ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50" : "cursor-pointer hover:border-admin-accent"
           }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type)}>
@@ -996,9 +1087,18 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
               <Wallet size={32} className="text-yellow-600" />
             </div>
             <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Payments</Heading>
+            <p className="text-sm font-semibold text-red-600 mt-1 mb-1">{opDays[c.type] ? `Op Day: ${opDayLabel(opDays[c.type])}` : "Op Day: —"}</p>
             <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift unpaid orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
+            {isOpen && (
+              <span className="mt-3 flex w-full justify-center">
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 ring-1 ring-green-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN
+              </span>
+            </span>
+            )}
           </Card>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -1057,11 +1157,16 @@ function PaymentView({ shiftType }: { shiftType?: string }) {
       source = source.filter((o) => String(o.orderNumber).includes(q))
     }
     if (selectedDate) {
-      const year = selectedDate.getFullYear()
-      const month = String(selectedDate.getMonth() + 1).padStart(2, "0")
-      const day = String(selectedDate.getDate()).padStart(2, "0")
-      const dateStr = `${year}-${month}-${day}`
-      source = source.filter((o) => o.createdAt.startsWith(dateStr))
+      const selectedUTC = new Date(Date.UTC(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate()
+      ))
+      const nextDayUTC = new Date(selectedUTC.getTime() + 86400000)
+      source = source.filter((o) => {
+        const orderDate = new Date(o.createdAt)
+        return orderDate >= selectedUTC && orderDate < nextDayUTC
+      })
     }
     return source
   }, [orders, orderSearch, selectedDate, payCategory])

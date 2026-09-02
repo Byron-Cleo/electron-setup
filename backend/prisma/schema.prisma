@@ -405,11 +405,13 @@ enum StockRequestStatus {
 }
 
 model ShiftConfig {
-  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type          String
-  autoOpenTime  String     // HH:MM format for scheduled open
-  autoCloseTime String     // HH:MM format for scheduled close
-  isActive      Boolean    @default(true)
-  createdAt     DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime   @updatedAt @db.Timestamptz(6)
+  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type                 String
+  autoOpenTime         String     // HH:MM format for scheduled open
+  autoCloseTime        String     // HH:MM format for scheduled close
+  isActive             Boolean    @default(true)
+  manual               Boolean    @default(false) // false = auto-close at autoCloseTime, true = manager closes manually later
+  anchorIntervalMinutes Int       @default(1440)  // operational cycle window in minutes (1440 = 24h)
+  createdAt            DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime   @updatedAt @db.Timestamptz(6)
 }

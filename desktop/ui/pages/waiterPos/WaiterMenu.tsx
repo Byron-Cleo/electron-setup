@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react"
 import { useParams } from "react-router-dom"
-import { getMenuByMealType, createOrder, printReceipt, previewReceipt, getOrderCount } from "@/lib/api"
+import { TriangleAlert } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { getMenuByMealType, createOrder, printReceipt, previewReceipt, getOrderCount, getCurrentShift } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { useWaiterOrder } from "./WaiterOrderContext"
 import WaiterMenuGrid from "./WaiterMenuGrid"
@@ -141,7 +143,28 @@ export function WaiterMenu() {
   const [previewing, setPreviewing] = useState(false)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [noShift, setNoShift] = useState(false)
   const prefilledRef = useRef<string | null>(null)
+
+  // Block ordering when no shift is open — poll so waiters recover automatically.
+  useEffect(() => {
+    let cancelled = false
+    function checkShift() {
+      getCurrentShift()
+        .then((s) => {
+          if (!cancelled) setNoShift(!s)
+        })
+        .catch(() => {
+          if (!cancelled) setNoShift(true)
+        })
+    }
+    checkShift()
+    const id = setInterval(checkShift, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [])
 
   const replacementOrder = voidedOrders.find((o) => o.id === replacementTargetId)
 
@@ -237,6 +260,9 @@ export function WaiterMenu() {
       clearOrder()
       await logout()
     } catch (err) {
+      if (err instanceof Error && err.message.includes("No active shift")) {
+        setNoShift(true)
+      }
       setPlaceError(err instanceof Error ? err.message : "Failed to place order")
       setPlacing(false)
       // Auto-refresh menu grid after rejection (sold out / no shift updates)
@@ -268,6 +294,20 @@ export function WaiterMenu() {
   function closePreview() {
     setPreviewHtml(null)
     setPreviewError(null)
+  }
+
+  if (noShift) {
+    return (
+      <Card className="mx-auto mt-24 max-w-xl border-red-200 bg-red-50/40">
+        <CardContent className="p-8 flex flex-col items-center gap-3 text-center">
+          <TriangleAlert className="h-10 w-10 text-red-600" />
+          <p className="text-lg font-bold text-red-800">No Active Shift</p>
+          <p className="text-sm text-red-700/80">
+            There is a missed shift. Please alert the manager. Orders cannot be taken until a shift is open.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (

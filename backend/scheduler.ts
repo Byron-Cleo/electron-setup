@@ -1,10 +1,38 @@
 import prisma from "./db/db.js";
 
-// Daily shift auto-creation from active ShiftConfig.
-// Creates one shift per configured time for every single day (not once).
-// Operational date (Shift.operationDay) = calendar date of autoOpenTime, never today.
+// Shift scheduler using an anchor-based operational cycle.
+//
+// The anchor shift is the active ShiftConfig with the EARLIEST autoOpenTime.
+// operationDay is the anchor cycle's start date: the most recent anchor-open
+// boundary (every anchorIntervalMinutes) at or before "now". All shifts that
+// open inside the same cycle window share that one operationDay.
+//
+//   currentCycleStart = anchorToday - ceil((anchorToday - now) / interval) * interval
+//   operationDay      = date(currentCycleStart)
+//
+// Shifts are created exactly at their autoOpenTime. A config whose open time
+// fell inside an already-advanced cycle is reported as a missed shift and is NOT
+// created retroactively — the business keeps running with the current cycle.
+//
+// Auto-close: every shift is auto-captured at its autoCloseTime. Configs with
+// manual=false are also closed (finalCloseSource = "AUTO"); configs with
+// manual=true stay open so the manager closes them later ("MANUAL").
 // Midnight-crossing handled: if closeTime <= openTime, close is next-day.
-// Carry-forward opening snapshot uses previous same-type shift closingPlates.
+
+const DEFAULT_INTERVAL_MINUTES = 1440;
+const MISSED_SHIFT_LOG = new Map<string, Date>();
+
+function occurrenceOf(time: string, day: Date): Date {
+  const [h, m] = time.split(":").map(Number);
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0);
+}
+
+function dateOnly(d: Date): Date {
+  // Build as UTC midnight so Prisma's @db.Date stores the calendar date as-is
+  // (local midnight in a +UTC zone would otherwise be written one day early).
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
 export async function autoCreateShifts() {
   const now = new Date();
   const configs = await prisma.shiftConfig.findMany({
@@ -12,31 +40,56 @@ export async function autoCreateShifts() {
     orderBy: { autoOpenTime: "asc" },
   });
 
+  if (configs.length === 0) return;
+
+  // Anchor = earliest autoOpenTime; its config defines the cycle window
+  const anchor = configs[0];
+  const intervalMs =
+    (anchor.anchorIntervalMinutes > 0 ? anchor.anchorIntervalMinutes : DEFAULT_INTERVAL_MINUTES) * 60_000;
+
+  const anchorToday = occurrenceOf(anchor.autoOpenTime, now);
+
+  // Most recent anchor-open boundary at or before "now"
+  let currentCycleStart: Date;
+  if (now.getTime() >= anchorToday.getTime()) {
+    currentCycleStart = anchorToday;
+  } else {
+    const behind = anchorToday.getTime() - now.getTime();
+    const cyclesBehind = Math.ceil(behind / intervalMs);
+    currentCycleStart = new Date(anchorToday.getTime() - cyclesBehind * intervalMs);
+  }
+
+  const operationDay = dateOnly(currentCycleStart);
+
   for (const cfg of configs) {
     try {
-      const base = new Date();
-      // Parse HH:MM strings to Date objects anchored to "today"
-      const [openH, openM] = cfg.autoOpenTime.split(":").map(Number);
-      const [closeH, closeM] = cfg.autoCloseTime.split(":").map(Number);
-      const openTime = new Date(base.getFullYear(), base.getMonth(), base.getDate(), openH, openM, 0);
-      let closeTime = new Date(base.getFullYear(), base.getMonth(), base.getDate(), closeH, closeM, 0);
-
-      // Midnight crossing: if close <= open, close is next calendar day
+      const openTime = occurrenceOf(cfg.autoOpenTime, now);
+      const closeTime = occurrenceOf(cfg.autoCloseTime, now);
       if (closeTime.getTime() <= openTime.getTime()) {
         closeTime.setDate(closeTime.getDate() + 1);
       }
 
-      // Skip if shift hasn't opened yet (with 60s buffer for tick lag)
-      if (now.getTime() < openTime.getTime() - 60_000) {
+      // Missed: this config's open time belongs to a previous (advanced) cycle
+      if (openTime.getTime() < currentCycleStart.getTime()) {
+        const lastWarned = MISSED_SHIFT_LOG.get(cfg.type);
+        if (!lastWarned || now.getTime() - lastWarned.getTime() > 5 * 60_000) {
+          console.warn(
+            `[scheduler] Missed shift "${cfg.type}" (open ${cfg.autoOpenTime} falls in a previous cycle). ` +
+              `Orders stay blocked until a shift opens in the current cycle.`
+          );
+          MISSED_SHIFT_LOG.set(cfg.type, now);
+        }
         continue;
       }
 
-      // Operational day (Shift.operationDay) = calendar date of the open time, never "today"
-      const operationDay = new Date(openTime.getFullYear(), openTime.getMonth(), openTime.getDate());
+      // Not open yet — create exactly at autoOpenTime
+      if (now.getTime() < openTime.getTime()) {
+        continue;
+      }
 
       // Skip if shift already exists for this type + operational day
       const existing = await prisma.shift.findFirst({
-        where: { type: cfg.type, operationDay: operationDay },
+        where: { type: cfg.type, operationDay },
       });
       if (existing) {
         continue;
@@ -46,7 +99,7 @@ export async function autoCreateShifts() {
         const shift = await tx.shift.create({
           data: {
             type: cfg.type,
-            operationDay: operationDay,
+            operationDay,
             autoOpenTime: openTime,
             autoCloseTime: closeTime,
             isOpen: true,
@@ -90,7 +143,9 @@ export async function autoCreateShifts() {
         }
       });
 
-      console.log(`[scheduler] Auto-created ${cfg.type} shift for operational day ${operationDay.toISOString().split("T")[0]} (open ${cfg.autoOpenTime}, close ${cfg.autoCloseTime})`);
+      console.log(
+        `[scheduler] Auto-created ${cfg.type} shift for operational day ${operationDay.toISOString().split("T")[0]} (open ${cfg.autoOpenTime}, close ${cfg.autoCloseTime})`
+      );
     } catch (e) {
       console.error(`[scheduler] Auto-create failed for ${cfg.type} (${cfg.autoOpenTime}):`, e);
     }
@@ -98,7 +153,8 @@ export async function autoCreateShifts() {
 }
 
 // Auto-capture snapshot at scheduled close time.
-// Does NOT close the shift - keeps isOpen=true so staff can manually close later.
+// manual=false configs also close the shift (finalCloseSource="AUTO").
+// manual=true configs keep isOpen=true so staff can manually close later.
 // Returns shifts that were auto-captured.
 export async function autoCloseExpiredShifts() {
   const now = new Date();
@@ -111,19 +167,27 @@ export async function autoCloseExpiredShifts() {
     },
   });
 
+  if (expiredShifts.length === 0) return [];
+
+  const configs = await prisma.shiftConfig.findMany();
+  const manualByType = new Map(configs.map((c) => [c.type, c.manual]));
+
   const autoClosedShifts: Awaited<ReturnType<typeof prisma.shift.findUnique>>[] = [];
 
   for (const shift of expiredShifts) {
     try {
+      const manualClose =
+        (manualByType.get(shift.type) ?? false) === true;
+
       const autoClosed = await prisma.$transaction(async (tx) => {
-        // Mark shift as auto-closed but keep isOpen=true for manual close
+        // Always auto-capture at the scheduled close time
         await tx.shift.update({
           where: { id: shift.id },
           data: {
             autoClosed: true,
             autoClosedAt: now,
-            isOpen: shift.type === "NIGHT" ? false : true,
-            finalCloseSource: shift.type === "NIGHT" ? "AUTO" : null,
+            isOpen: manualClose ? true : false,
+            finalCloseSource: manualClose ? null : "AUTO",
           },
         });
 
@@ -155,7 +219,8 @@ export async function autoCloseExpiredShifts() {
       if (autoClosed) {
         autoClosedShifts.push(autoClosed);
         console.log(
-          `[scheduler] Auto-captured ${autoClosed.type} shift ${autoClosed.id} at ${now.toISOString()} (scheduled ${shift.autoCloseTime.toISOString()})`
+          `[scheduler] Auto-captured ${autoClosed.type} shift ${autoClosed.id} at ${now.toISOString()} ` +
+            `(scheduled ${shift.autoCloseTime.toISOString()}, manualClose=${manualClose})`
         );
       }
     } catch (e) {

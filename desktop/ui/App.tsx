@@ -125,7 +125,7 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="shift-management" element={
-            <ProtectedRoute role={["admin", "manager", "cashier"]}>
+            <ProtectedRoute role={["admin", "manager"]}>
               <AdminShiftManagement />
             </ProtectedRoute>
           } />

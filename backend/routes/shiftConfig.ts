@@ -5,6 +5,11 @@ const router = Router();
 
 const HHMM_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+function occurrenceOf(time: string, day: Date): Date {
+  const [h, m] = time.split(":").map(Number);
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0);
+}
+
 router.get("/", async (_req, res) => {
   try {
     const configs = await prisma.shiftConfig.findMany({ orderBy: [{ isActive: "desc" }, { type: "asc" }] });
@@ -16,7 +21,7 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { type, autoOpenTime, autoCloseTime } = req.body;
+  const { type, autoOpenTime, autoCloseTime, manual, anchorIntervalMinutes } = req.body;
 
   if (!type || typeof type !== "string" || type.trim().length === 0) {
     return res.status(400).json({ error: "type is required and must be a non-empty string" });
@@ -30,10 +35,23 @@ router.post("/", async (req, res) => {
   if (!autoCloseTime || !HHMM_REGEX.test(autoCloseTime)) {
     return res.status(400).json({ error: "autoCloseTime must match HH:MM format" });
   }
+  if (manual !== undefined && typeof manual !== "boolean") {
+    return res.status(400).json({ error: "manual must be a boolean" });
+  }
+  if (anchorIntervalMinutes !== undefined && (!Number.isInteger(anchorIntervalMinutes) || anchorIntervalMinutes < 1)) {
+    return res.status(400).json({ error: "anchorIntervalMinutes must be a positive integer (minutes)" });
+  }
 
   try {
     const config = await prisma.shiftConfig.create({
-      data: { type: type.trim(), autoOpenTime, autoCloseTime, isActive: true },
+      data: {
+        type: type.trim(),
+        autoOpenTime,
+        autoCloseTime,
+        isActive: true,
+        manual: manual ?? false,
+        anchorIntervalMinutes: anchorIntervalMinutes ?? 1440,
+      },
     });
     res.status(201).json(config);
   } catch (e) {
@@ -44,7 +62,7 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { type, autoOpenTime, autoCloseTime, isActive } = req.body;
+  const { type, autoOpenTime, autoCloseTime, isActive, manual, anchorIntervalMinutes } = req.body;
 
   if (type !== undefined) {
     if (typeof type !== "string" || type.trim().length === 0) {
@@ -60,12 +78,72 @@ router.put("/:id", async (req, res) => {
   if (autoCloseTime !== undefined && !HHMM_REGEX.test(autoCloseTime)) {
     return res.status(400).json({ error: "autoCloseTime must match HH:MM format" });
   }
+  if (manual !== undefined && typeof manual !== "boolean") {
+    return res.status(400).json({ error: "manual must be a boolean" });
+  }
+  if (anchorIntervalMinutes !== undefined && (!Number.isInteger(anchorIntervalMinutes) || anchorIntervalMinutes < 1)) {
+    return res.status(400).json({ error: "anchorIntervalMinutes must be a positive integer (minutes)" });
+  }
+
+  const now = new Date();
+
+  // Guard A: reject outright rather than ever setting a past time on a shift.
+  if (autoOpenTime !== undefined) {
+    const newOpen = occurrenceOf(autoOpenTime, now);
+    if (now.getTime() >= newOpen.getTime()) {
+      return res.status(400).json({ error: "autoOpenTime cannot be set to a past time" });
+    }
+  }
+  if (autoCloseTime !== undefined) {
+    const newClose = occurrenceOf(autoCloseTime, now);
+    if (now.getTime() >= newClose.getTime()) {
+      return res.status(400).json({ error: "autoCloseTime cannot be set to a past time" });
+    }
+  }
 
   try {
-    const updated = await prisma.shiftConfig.update({
-      where: { id },
-      data: { type: type !== undefined ? type.trim() : undefined, autoOpenTime, autoCloseTime, isActive },
+    const updated = await prisma.$transaction(async (tx) => {
+      const config = await tx.shiftConfig.update({
+        where: { id },
+        data: {
+          type: type !== undefined ? type.trim() : undefined,
+          autoOpenTime,
+          autoCloseTime,
+          isActive,
+          manual,
+          anchorIntervalMinutes,
+        },
+      });
+
+      // Sync timing changes to open shifts of this type only. Closed shifts
+      // (isOpen=false) are historical records and are never touched.
+      if (autoOpenTime !== undefined || autoCloseTime !== undefined) {
+        const openShifts = await tx.shift.findMany({
+          where: { type: config.type, isOpen: true },
+        });
+
+        for (const shift of openShifts) {
+          const newAutoOpen = occurrenceOf(config.autoOpenTime, shift.operationDay);
+          const newAutoClose = occurrenceOf(config.autoCloseTime, shift.operationDay);
+
+          // Midnight-crossing: if close <= open the shift spans into the next day.
+          if (newAutoClose.getTime() <= newAutoOpen.getTime()) {
+            newAutoClose.setDate(newAutoClose.getDate() + 1);
+          }
+
+          await tx.shift.update({
+            where: { id: shift.id },
+            data: {
+              autoOpenTime: newAutoOpen,
+              autoCloseTime: newAutoClose,
+            },
+          });
+        }
+      }
+
+      return config;
     });
+
     res.json(updated);
   } catch (e) {
     console.error("Error updating shift config:", e);

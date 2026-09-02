@@ -1,11 +1,11 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
-import { ServiceTime } from "../db/generated/prisma/client.js";
+import { type Prisma, ServiceTime } from "../db/generated/prisma/client.js";
 
 const router = Router();
 
 // Recompute Menu.stock = sum of split platesRemaining (aligns direct mutation with split truth)
-async function recomputeMenuStock(tx: { menu: { update: (args: { where: { id: string }; data: { stock: number } }) => Promise<unknown> }; cookingRecordMenu: { aggregate: (args: { _sum: { platesRemaining?: boolean }; where: { menuId: string } }) => Promise<{ _sum: { platesRemaining: number } | null }> } }, menuId: string) {
+async function recomputeMenuStock(tx: Prisma.TransactionClient, menuId: string) {
   const agg = await tx.cookingRecordMenu.aggregate({
     _sum: { platesRemaining: true },
     where: { menuId },
@@ -85,7 +85,7 @@ router.post("/", async (req, res) => {
     select: { id: true },
   });
   if (!currentShift) {
-    return res.status(400).json({ error: "No active shift. Please open a shift before placing orders." });
+    return res.status(400).json({ error: "No active shift. The system cannot take orders without an active shift. Please contact the manager." });
   }
 
   try {
@@ -133,7 +133,7 @@ router.post("/", async (req, res) => {
           totalPrice,
           mealType,
           ...(replacementOf ? { voidedOrderId: replacementOf.id } : {}),
-          ...(currentShift ? { shiftId: currentShift.id } : {}),
+          shiftId: currentShift.id,
         },
       });
 

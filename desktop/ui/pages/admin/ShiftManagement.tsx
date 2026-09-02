@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { getCurrentShift, getShiftConfigs, createShiftConfig, updateShiftConfig, deleteShiftConfig } from "@/lib/api"
+import { Checkbox } from "@/components/ui/checkbox"
+import { getCurrentShift, getShiftToClose, getShiftConfigs, createShiftConfig, updateShiftConfig, deleteShiftConfig, listShifts, type ShiftConfig } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import ShiftCloseDialog from "@/components/shift/ShiftCloseDialog"
 
@@ -28,23 +29,59 @@ function ShiftManagement() {
   const [configType, setConfigType] = useState("")
   const [configOpenTime, setConfigOpenTime] = useState("05:30")
   const [configCloseTime, setConfigCloseTime] = useState("17:30")
-  const [configs, setConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
+  const [configs, setConfigs] = useState<ShiftConfig[]>([])
+  const [roster, setRoster] = useState<Shift[]>([])
+  const [rosterLoading, setRosterLoading] = useState(true)
+  const [rosterTab, setRosterTab] = useState<"all" | "manual" | "auto">("all")
+  const [closeTargetShift, setCloseTargetShift] = useState<Shift | null>(null)
   const [deleteConfigId, setDeleteConfigId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [configManual, setConfigManual] = useState(false)
+  const [configIntervalMinutes, setConfigIntervalMinutes] = useState("1440")
+  const [nowTick, setNowTick] = useState(() => Date.now())
   const [, setClock] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    getCurrentShift()
-      .then((shift) => {
-        if (!cancelled) setCurrentShift(shift ?? null)
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setShiftLoading(false)
-      })
+    function checkShift() {
+      getCurrentShift()
+        .then((shift) => {
+          if (!cancelled) setCurrentShift(shift ?? null)
+        })
+        .catch(() => {
+          if (!cancelled) setCurrentShift(null)
+        })
+        .finally(() => {
+          if (!cancelled) setShiftLoading(false)
+        })
+      getShiftToClose()
+        .then((shift) => {
+          if (!cancelled) setCloseTargetShift(shift ?? null)
+        })
+        .catch(() => {
+          if (!cancelled) setCloseTargetShift(null)
+        })
+    }
+    checkShift()
     getShiftConfigs().then(setConfigs).catch(() => {})
-    return () => { cancelled = true }
+    const now = new Date()
+    const opDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+    listShifts(opDayStr)
+      .then(setRoster)
+      .catch(() => setRoster([]))
+      .finally(() => {
+        if (!cancelled) setRosterLoading(false)
+      })
+    const interval = setInterval(checkShift, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30000)
+    return () => clearInterval(id)
   }, [])
 
   useEffect(() => {
@@ -54,30 +91,32 @@ function ShiftManagement() {
   }, [currentShift])
 
   const enforceCloseTime = import.meta.env.VITE_ENFORCE_SHIFT_CLOSE_TIME === "true"
-  const canClose = currentShift
-    ? !enforceCloseTime || Date.now() > new Date(currentShift.autoCloseTime).getTime() + 1000
+  const canClose = closeTargetShift
+    ? !enforceCloseTime || Date.now() > new Date(closeTargetShift.autoCloseTime).getTime() + 1000
     : false
 
   async function handleOpenCloseDialog() {
-    try {
-      const fresh = await getCurrentShift()
-      setCurrentShift(fresh ?? null)
-      if (fresh) {
-        setCloseShiftOpen(true)
-        return
-      }
-    } catch {
-      // Fall through
+    const toClose = await getShiftToClose()
+    if (!toClose) {
+      alert("No open manual shift to close.")
+      return
     }
+    setCloseTargetShift(toClose)
     setCloseShiftOpen(true)
   }
 
   async function handleSaveConfig() {
+    const intervalMin = Number(configIntervalMinutes)
+    const intervalUpdate = Number.isInteger(intervalMin) && intervalMin > 0 ? intervalMin : null
+    if (!intervalUpdate) {
+      alert("Cycle interval must be a positive whole number of minutes (e.g. 5, 480 for 8h, 1440 for 24h).")
+      return
+    }
     try {
       if (isEditing && editConfigId) {
-        await updateShiftConfig(editConfigId, { type: configType, autoOpenTime: configOpenTime, autoCloseTime: configCloseTime, isActive: true })
+        await updateShiftConfig(editConfigId, { type: configType, autoOpenTime: configOpenTime, autoCloseTime: configCloseTime, isActive: true, manual: configManual, anchorIntervalMinutes: intervalUpdate })
       } else {
-        await createShiftConfig({ type: configType, autoOpenTime: configOpenTime, autoCloseTime: configCloseTime })
+        await createShiftConfig({ type: configType, autoOpenTime: configOpenTime, autoCloseTime: configCloseTime, manual: configManual, anchorIntervalMinutes: intervalUpdate })
       }
       setConfigOpen(false)
       setIsEditing(false)
@@ -85,6 +124,8 @@ function ShiftManagement() {
       setConfigType("")
       setConfigOpenTime("05:30")
       setConfigCloseTime("17:30")
+      setConfigManual(false)
+      setConfigIntervalMinutes("1440")
       getShiftConfigs().then(setConfigs).catch(() => {})
     } catch (e) {
       alert("Failed to save config: " + (e instanceof Error ? e.message : String(e)))
@@ -118,12 +159,14 @@ function ShiftManagement() {
     }
   }
 
-  function openEdit(config: { id: string; type: string; autoOpenTime: string; autoCloseTime: string }) {
+  function openEdit(config: ShiftConfig) {
     setIsEditing(true)
     setEditConfigId(config.id)
     setConfigType(config.type)
     setConfigOpenTime(config.autoOpenTime)
     setConfigCloseTime(config.autoCloseTime)
+    setConfigManual(config.manual)
+    setConfigIntervalMinutes(String(config.anchorIntervalMinutes))
     setConfigOpen(true)
   }
 
@@ -133,40 +176,61 @@ function ShiftManagement() {
     setConfigType("")
     setConfigOpenTime("05:30")
     setConfigCloseTime("17:30")
+    setConfigManual(false)
+    setConfigIntervalMinutes("1440")
     setConfigOpen(true)
   }
 
-  const activeConfigs = configs.filter((c) => c.isActive)
-  const nextScheduledTime = activeConfigs.length > 0
-    ? new Date(`1970-01-01T${activeConfigs[0].autoOpenTime}:00`)
-    : null
+  function rosterStatusFor(cfg: ShiftConfig, now: number): { label: string; cls: string } {
+    const shift = roster.find((s) => s.type === cfg.type)
+    if (shift) {
+      if (shift.isOpen) return { label: "OPEN", cls: "bg-red-100 text-red-700" }
+      return { label: "CLOSED", cls: "bg-gray-100 text-gray-600" }
+    }
+    const [h, m] = cfg.autoOpenTime.split(":").map(Number)
+    const openTime = new Date()
+    openTime.setHours(h, m, 0, 0)
+    if (openTime.getTime() <= now) return { label: "MISSED", cls: "bg-red-100 text-red-700" }
+    return { label: "UPCOMING", cls: "bg-amber-100 text-amber-700" }
+  }
+
+  function rosterSourceFor(cfg: ShiftConfig): string {
+    const shift = roster.find((s) => s.type === cfg.type)
+    if (!shift) return "—"
+    if (shift.isOpen) return shift.autoClosed ? "AUTO-CAPTURED" : "—"
+    return shift.finalCloseSource ?? "—"
+  }
+
+  function timeFormat(time: string): string {
+    return new Date("1970-01-01T" + time + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Heading as="h1" className="text-admin-header-text">Shift Management</Heading>
-        {activeConfigs.length > 0 && (
-          <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-            Active: {activeConfigs.map((c) => c.type).join(", ")}
+        {closeTargetShift && (
+          <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+            Running: {closeTargetShift.type}
           </span>
         )}
       </div>
 
       {/* Shift status card */}
-      <Card className={`mx-auto mt-24 max-w-3xl ${currentShift ? "border-green-500/30 bg-green-500/5" : !shiftLoading ? "border-amber-500/30 bg-amber-50/20" : ""}`}>
+      <Card className={`mx-auto mt-24 max-w-3xl ${closeTargetShift ? "border-red-500/30 bg-red-500/5" : currentShift && !shiftLoading ? "border-green-500/30 bg-green-500/5" : !shiftLoading ? "border-amber-500/30 bg-amber-50/20" : ""}`}>
         <div className="flex items-center px-6 py-4 sm:flex-row sm:items-center sm:gap-4">
           <div className="flex items-center gap-2 shrink-0">
             <Clock className="h-5 w-5 text-admin-header-text" />
             <h2 className="text-lg font-bold text-admin-header-text whitespace-nowrap">
-                {currentShift ? `SHIFT: ${currentShift.type}` : activeConfigs.length > 0 ? `Active Config: ${activeConfigs.map((c) => c.type).join(", ")}` : "No Active Shift"}
+                {closeTargetShift ? `SHIFT: ${closeTargetShift.type}` : currentShift ? `SHIFT: ${currentShift.type}` : "No Manual Shift to Close"}
             </h2>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {currentShift && (
+            {closeTargetShift && (
               <span className="text-sm text-admin-muted whitespace-nowrap">
                 Since{" "}
                 {(() => {
-                  const d = new Date(currentShift.autoOpenTime);
+                  const d = new Date(closeTargetShift.autoOpenTime);
                   const h = d.getHours();
                   const min = d.getMinutes().toString().padStart(2, "0");
                   const ampm = h >= 12 ? "PM" : "AM";
@@ -175,13 +239,8 @@ function ShiftManagement() {
                 })()} by{" "}<span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">System</span>
               </span>
             )}
-            {!currentShift && activeConfigs.length > 0 && (
-              <span className="text-sm text-admin-muted whitespace-nowrap">
-                Active: <span className="font-semibold text-admin-header-text">{activeConfigs.map((c) => c.type).join(", ")}</span>
-              </span>
-            )}
-            {!currentShift && activeConfigs.length === 0 && (
-              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 whitespace-nowrap">NO SHIFT OPEN</span>
+            {!closeTargetShift && !currentShift && !shiftLoading && (
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 whitespace-nowrap">No open manual shift to close</span>
             )}
           </div>
           {shiftLoading ? (
@@ -189,7 +248,7 @@ function ShiftManagement() {
               <Clock className="h-4 w-4 animate-spin" />
               Checking shift status...
             </div>
-          ) : currentShift ? (
+          ) : closeTargetShift ? (
             <>
               <Button
                 type="button"
@@ -202,9 +261,9 @@ function ShiftManagement() {
               >
                 <Lock className="h-4 w-4 mr-1" />Close Shift
               </Button>
-              {!canClose && currentShift && (
+              {!canClose && closeTargetShift && (
                 <div className="text-xs text-admin-muted shrink-0 whitespace-nowrap">
-                  Window: {(() => { const d1 = new Date(currentShift.autoOpenTime); const h1 = d1.getHours(), m1 = d1.getMinutes().toString().padStart(2,"0"); return `${h1%12||12}:${m1} ${h1>=12?"PM":"AM"}`; })()} — {(() => { const d2 = new Date(currentShift.autoCloseTime); const h2 = d2.getHours(), m2 = d2.getMinutes().toString().padStart(2,"0"); return `${h2%12||12}:${m2} ${h2>=12?"PM":"AM"}`; })()}
+                  Window: {(() => { const d1 = new Date(closeTargetShift.autoOpenTime); const h1 = d1.getHours(), m1 = d1.getMinutes().toString().padStart(2,"0"); return `${h1%12||12}:${m1} ${h1>=12?"PM":"AM"}`; })()} — {(() => { const d2 = new Date(closeTargetShift.autoCloseTime); const h2 = d2.getHours(), m2 = d2.getMinutes().toString().padStart(2,"0"); return `${h2%12||12}:${m2} ${h2>=12?"PM":"AM"}`; })()}
                 </div>
               )}
             </>
@@ -212,6 +271,134 @@ function ShiftManagement() {
             <div className="w-0 shrink-0" />
           )}
         </div>
+      </Card>
+
+      {/* Today's Shift Roster */}
+      <Card className="mx-auto max-w-3xl border-admin-card-border">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-admin-header-text">Today's Shift Roster</h3>
+              <p className="text-sm text-admin-muted">Shifts planned and created for the current operational day</p>
+            </div>
+            {rosterLoading ? (
+              <Clock className="h-4 w-4 animate-spin text-admin-muted" />
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                Cycle: {(() => {
+                  const anchor = [...configs].filter((c) => c.isActive).sort((a, b) => a.autoOpenTime.localeCompare(b.autoOpenTime))[0]
+                  return anchor ? `${anchor.anchorIntervalMinutes} min` : "—"
+                })()}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <button
+              onClick={() => setRosterTab("all")}
+              className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+                rosterTab === "all"
+                  ? "border-orange-600 bg-orange-500 text-white"
+                  : "border-admin-card-border bg-white text-admin-muted hover:bg-gray-50"
+              }`}
+            >
+              All
+            </button>
+            <div className="flex rounded-lg border border-admin-card-border overflow-hidden">
+              <button
+                onClick={() => setRosterTab("manual")}
+                className={`px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+                  rosterTab === "manual"
+                    ? "bg-orange-500 text-white"
+                    : "bg-white text-admin-muted hover:bg-gray-50"
+                }`}
+              >
+                Manual
+              </button>
+              <button
+                onClick={() => setRosterTab("auto")}
+                className={`px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+                  rosterTab === "auto"
+                    ? "bg-orange-500 text-white"
+                    : "bg-white text-admin-muted hover:bg-gray-50"
+                }`}
+              >
+                Auto
+              </button>
+            </div>
+          </div>
+
+          {configs.length === 0 ? (
+            <p className="text-sm text-admin-muted">No shift configurations. Shifts will not be created until a config is added.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-admin-card-border bg-admin-content text-admin-header-text/60">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Type</th>
+                    <th className="px-3 py-2 text-left font-medium text-red-600/80">Op Day</th>
+                    <th className="px-3 py-2 text-left font-medium">Open</th>
+                    <th className="px-3 py-2 text-left font-medium">Close</th>
+                    <th className="px-3 py-2 text-center font-medium">Status</th>
+                    <th className="px-3 py-2 text-center font-medium">Closed</th>
+                    <th className="px-3 py-2 text-center font-medium">Manual</th>
+                    <th className="px-3 py-2 text-center font-medium">Config</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...configs]
+                    .filter((c) => {
+                      if (rosterTab === "all") return true
+                      if (rosterTab === "manual") return c.manual
+                      return !c.manual
+                    })
+                    .sort((a, b) => {
+                      const aShift = roster.find((s) => s.type === a.type)
+                      const bShift = roster.find((s) => s.type === b.type)
+                      const aIsOpen = aShift ? aShift.isOpen : false
+                      const bIsOpen = bShift ? bShift.isOpen : false
+                      if (aIsOpen !== bIsOpen) return aIsOpen ? -1 : 1
+                      return a.autoOpenTime.localeCompare(b.autoOpenTime)
+                    })
+                    .map((c) => {
+                      const status = rosterStatusFor(c, nowTick)
+                      const isRunning = currentShift?.type === c.type
+                      return (
+                        <tr key={c.id} className={`border-b border-admin-card-border last:border-0 ${isRunning ? "bg-green-100/50 border-l-4 border-l-green-600" : ""}`}>
+                          <td className="px-3 py-3 font-medium text-admin-header-text">{c.type}</td>
+                          <td className="px-3 py-3 font-mono text-xs text-red-600 bg-red-100/40">{(() => {
+                            const shift = roster.find((s) => s.type === c.type)
+                            if (!shift) return "—"
+                            const [y, m, d] = shift.operationDay.slice(0, 10).split("-").map(Number)
+                            return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`
+                          })()}</td>
+                          <td className="px-3 py-3 text-admin-muted">{timeFormat(c.autoOpenTime)}</td>
+                          <td className="px-3 py-3 text-admin-muted">{timeFormat(c.autoCloseTime)}</td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.cls}`}>{status.label}</span>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className="text-xs font-mono text-admin-muted">{rosterSourceFor(c)}</span>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+<span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.manual ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>{c.manual ? "YES" : "NO"}</span>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <button
+                              onClick={() => handleToggleActive(c.id, c.isActive)}
+                              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${c.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
+                            >
+                              {c.isActive ? "Active" : "Inactive"}
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       {/* Shift Configurations */}
@@ -243,6 +430,8 @@ function ShiftManagement() {
                     <th className="px-3 py-2 text-left font-medium">Type</th>
                     <th className="px-3 py-2 text-left font-medium">Open</th>
                     <th className="px-3 py-2 text-left font-medium">Close</th>
+                    <th className="px-3 py-2 text-left font-medium">Manual</th>
+                    <th className="px-3 py-2 text-left font-medium">Cycle</th>
                     <th className="px-3 py-2 text-center font-medium">Status</th>
                     <th className="px-3 py-2 text-right font-medium">Actions</th>
                   </tr>
@@ -251,8 +440,12 @@ function ShiftManagement() {
                   {configs.map((c) => (
                     <tr key={c.id} className={`border-b border-admin-card-border last:border-0 hover:bg-admin-content/30 ${currentShift?.type === c.type ? "bg-blue-100/50 border-l-4 border-l-blue-600" : ""}`}>
                       <td className="px-3 py-3 font-medium text-admin-header-text">{c.type}</td>
-                      <td className="px-3 py-3 text-admin-muted">{new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()}</td>
-                      <td className="px-3 py-3 text-admin-muted">{new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()}</td>
+                      <td className="px-3 py-3 text-admin-muted">{timeFormat(c.autoOpenTime)}</td>
+                      <td className="px-3 py-3 text-admin-muted">{timeFormat(c.autoCloseTime)}</td>
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.manual ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>{c.manual ? "YES" : "NO"}</span>
+                      </td>
+                      <td className="px-3 py-3 text-admin-muted">{c.anchorIntervalMinutes} min</td>
                       <td className="px-3 py-3 text-center">
                         <button
                           onClick={() => handleToggleActive(c.id, c.isActive)}
@@ -311,11 +504,26 @@ function ShiftManagement() {
                 <Input id="close-time" type="time" value={configCloseTime} onChange={(e) => setConfigCloseTime(e.target.value)} className="w-full" />
               </div>
             </div>
+            <div>
+              <Label htmlFor="cycle-interval">Cycle Interval (minutes){(() => {
+                const mins = parseInt(configIntervalMinutes, 10)
+                if (!Number.isFinite(mins) || mins <= 0) return null
+                const h = Math.floor(mins / 60)
+                const m = mins % 60
+                const parts: string[] = []
+                if (h > 0) parts.push(`${h}h`)
+                if (m > 0) parts.push(`${m}m`)
+                return <span className="ml-2 text-xs font-semibold text-blue-600">({parts.length ? parts.join(" ") : "0m"})</span>
+              })()}</Label>
+              <Input id="cycle-interval" type="number" min={1} value={configIntervalMinutes} onChange={(e) => setConfigIntervalMinutes(e.target.value)} className="w-full" />
+              <p className="mt-1 text-xs text-admin-muted">Shared operational window. All shifts opening inside it share one operationDay. Examples: 5 (mins), 480 (8h), 1440 (24h).</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox id="config-manual" checked={configManual} onCheckedChange={(v) => setConfigManual(v === true)} />
+              <Label htmlFor="config-manual">Manual close — stays open after auto-capture so the manager closes &amp; declares sales later</Label>
+            </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => { setConfigOpen(false); setIsEditing(false); setEditConfigId(null); }}>
-              Cancel
-            </Button>
             <Button type="button" onClick={handleSaveConfig}>
               {isEditing ? "Update" : "Create"}
             </Button>

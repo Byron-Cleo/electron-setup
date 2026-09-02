@@ -12,12 +12,15 @@ router.get("/", async (req, res) => {
     const where: { operationDay?: { gte: Date; lt: Date } } = {};
 
     if (date) {
-      const targetDate = new Date(String(date));
-      if (isNaN(targetDate.getTime())) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date));
+      if (!match) {
         return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
       }
-      const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-      const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
+      const [, y, m, d] = match.map(Number);
+      // operationDay is stored as a date; build the boundary at UTC midnight so
+      // it aligns with the @db.Date column regardless of server timezone.
+      const startOfDay = new Date(Date.UTC(y, m - 1, d));
+      const endOfDay = new Date(Date.UTC(y, m - 1, d + 1));
       where.operationDay = { gte: startOfDay, lt: endOfDay };
     }
 
@@ -72,6 +75,38 @@ router.get("/current", async (_req, res) => {
   }
 });
 
+// Get the oldest open manual-config shift that needs to be closed next.
+// Only manual-config shifts with finalCloseSource = null are eligible (never manually closed yet).
+router.get("/to-close", async (_req, res) => {
+  try {
+    const manualConfigs = await prisma.shiftConfig.findMany({
+      where: { manual: true },
+      select: { type: true },
+    });
+    const manualTypes = manualConfigs.map((c) => c.type);
+
+    if (manualTypes.length === 0) {
+      return res.json(null);
+    }
+
+    const shift = await prisma.shift.findFirst({
+      where: {
+        isOpen: true,
+        finalCloseSource: null,
+        type: { in: manualTypes },
+      },
+      orderBy: { autoOpenTime: "asc" },
+      include: {
+        finalClosedBy: { select: { id: true, name: true } },
+      },
+    });
+    res.json(shift);
+  } catch (e) {
+    console.error("Error getting shift to close:", e);
+    res.status(500).json({ error: "Failed to get shift to close" });
+  }
+});
+
 // Get shift by ID
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
@@ -121,6 +156,14 @@ router.post("/:id/close", async (req, res) => {
 
     if (!shift.isOpen && shift.finalClosedAt) {
       return res.status(400).json({ error: "Shift is already finalized" });
+    }
+
+    // Manual close is only for shifts configured with manual close (manual=true).
+    // Auto-closed shifts are finalized by the scheduler at their autoCloseTime.
+    if (shift.finalCloseSource === "AUTO") {
+      return res.status(400).json({
+        error: "This shift was auto-closed at its scheduled close time. Manual close is only allowed for shifts configured with manual close.",
+      });
     }
 
     // Block close while any order is unpaid and not marked-as-unpaid by a manager.

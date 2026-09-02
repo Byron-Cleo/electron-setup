@@ -546,6 +546,10 @@ export async function getCurrentShift(): Promise<Shift | null> {
   return apiFetch("/shifts/current")
 }
 
+export async function getShiftToClose(): Promise<Shift | null> {
+  return apiFetch("/shifts/to-close")
+}
+
 export async function getShift(shiftId: string): Promise<Shift> {
   return apiFetch(`/shifts/${shiftId}`)
 }
@@ -677,15 +681,17 @@ export async function testServerConnection(): Promise<ServerStatus> {
 
 // ─── User Management ────────────────────────────────────────────────────────
 
-export async function getShiftConfigs(): Promise<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]> {
+export type ShiftConfig = { id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean; manual: boolean; anchorIntervalMinutes: number }
+
+export async function getShiftConfigs(): Promise<ShiftConfig[]> {
   return apiFetch("/shift-config")
 }
 
-export async function createShiftConfig(data: { type: string; autoOpenTime: string; autoCloseTime: string }): Promise<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }> {
+export async function createShiftConfig(data: { type: string; autoOpenTime: string; autoCloseTime: string; manual?: boolean; anchorIntervalMinutes?: number }): Promise<ShiftConfig> {
   return apiFetch("/shift-config", { method: "POST", body: JSON.stringify(data) })
 }
 
-export async function updateShiftConfig(id: string, data: { autoOpenTime?: string; autoCloseTime?: string; isActive?: boolean }): Promise<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }> {
+export async function updateShiftConfig(id: string, data: Partial<Omit<ShiftConfig, "id" | "type">> & { type?: string }): Promise<ShiftConfig> {
   return apiFetch(`/shift-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 

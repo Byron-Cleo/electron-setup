@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount } from "@/lib/api"
+import { getCurrentShift, getShiftToClose, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount } from "@/lib/api"
 
 const allNavItems: {
   label: string
@@ -35,6 +35,7 @@ function AdminLayout() {
   const logout = useAuthStore((s) => s.logout)
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
   const [shiftType, setShiftType] = useState<string | null>(null)
+  const [hasShiftToClose, setHasShiftToClose] = useState(false)
   const [currentShiftName, setCurrentShiftName] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [partialCount, setPartialCount] = useState(0)
@@ -90,11 +91,22 @@ function AdminLayout() {
           }
         })
     }
+    function checkToClose() {
+      getShiftToClose()
+        .then((shift) => {
+          if (!cancelled) setHasShiftToClose(!!shift)
+        })
+        .catch(() => {
+          if (!cancelled) setHasShiftToClose(false)
+        })
+    }
     checkShift()
     checkPending()
+    checkToClose()
     const interval = setInterval(() => {
       checkShift()
       checkPending()
+      checkToClose()
     }, 5000)
     return () => {
       cancelled = true
@@ -122,13 +134,17 @@ function AdminLayout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
                   item.accent
-                    ? hasOpenShift
+                    ? hasShiftToClose
                       ? isActive
-                        ? "bg-green-600/15 text-green-400 font-semibold"
-                        : "text-green-500 hover:bg-green-600/10 hover:text-green-400 font-semibold"
-                      : isActive
                         ? "bg-red-600/15 text-red-400 font-semibold"
                         : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
+                      : hasOpenShift
+                        ? isActive
+                          ? "bg-green-600/15 text-green-400 font-semibold"
+                          : "text-green-500 hover:bg-green-600/10 hover:text-green-400 font-semibold"
+                        : isActive
+                          ? "bg-red-600/15 text-red-400 font-semibold"
+                          : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
                     : isActive
                       ? "bg-admin-accent text-admin-accent-text"
                       : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
@@ -139,7 +155,7 @@ function AdminLayout() {
               {item.label}
               {item.accent && (
                 hasOpenShift && shiftType ? (
-                  <span className={`ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border ${
+                  <span className={`ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border text-center ${
                     shiftType === "DAY"
                       ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700"
                       : shiftType === "NIGHT"
@@ -149,7 +165,7 @@ function AdminLayout() {
                     Shift: {shiftType}
                   </span>
                 ) : (
-                  <span className="ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600">
+                  <span className="ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600 text-center">
                     No Shift
                   </span>
                 )
