@@ -115,6 +115,7 @@ function Cashier() {
   const [selectedstring, setSelectedstring] = useState<string | undefined>()
   const [selectedPaymentstring, setSelectedPaymentstring] = useState<string | undefined>()
   const [selectedVoidstring, setSelectedVoidstring] = useState<string | undefined>()
+  const [selectedOperationDay, setSelectedOperationDay] = useState<string | undefined>()
   const [currentstring, setCurrentstring] = useState<string | undefined>()
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
@@ -157,12 +158,12 @@ function Cashier() {
       )}
 
       {view === "dashboard" && <DashboardView onNavigate={(v, s) => { setView(v); if (v === "orders-entry") setSelectedstring(s); if (v === "payment-entry") setSelectedPaymentstring(s); if (v === "void-entry") setSelectedVoidstring(s); }} />}
-      {view === "orders-entry" && <OrdersEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s) => { setSelectedstring(s); setView("orders") }} />}
-      {view === "orders" && <OrdersView shiftType={selectedstring} />}
-      {view === "payment-entry" && <PaymentEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s) => { setSelectedPaymentstring(s); setView("payment") }} />}
-      {view === "payment" && <PaymentView shiftType={selectedPaymentstring} />}
-      {view === "void-entry" && <VoidEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s) => { setSelectedVoidstring(s); setView("void") }} />}
-      {view === "void" && <VoidView shiftType={selectedVoidstring} />}
+      {view === "orders-entry" && <OrdersEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s, op) => { setSelectedstring(s); setSelectedOperationDay(op); setView("orders") }} />}
+      {view === "orders" && <OrdersView shiftType={selectedstring} operationDay={selectedOperationDay} />}
+      {view === "payment-entry" && <PaymentEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s, op) => { setSelectedPaymentstring(s); setSelectedOperationDay(op); setView("payment") }} />}
+      {view === "payment" && <PaymentView shiftType={selectedPaymentstring} operationDay={selectedOperationDay} />}
+      {view === "void-entry" && <VoidEntryView isCashier={isCashier} currentstring={currentstring} onSelectShift={(s, op) => { setSelectedVoidstring(s); setSelectedOperationDay(op); setView("void") }} />}
+      {view === "void" && <VoidView shiftType={selectedVoidstring} operationDay={selectedOperationDay} />}
     </div>
   )
 }
@@ -294,7 +295,7 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
     )
   }
 
-function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
+function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
@@ -312,7 +313,9 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
   }, [])
 
   function isDisabled(shift: string) {
-    return isCashier && !!currentstring && shift !== currentstring
+    if (isCashier && !!currentstring && shift !== currentstring) return true
+    if (!opDays[shift]) return true
+    return false
   }
   const activeConfigs = shiftConfigs
     .filter((c) => c.isActive)
@@ -341,7 +344,7 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
             isDisabled(c.type)
               ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
               : "cursor-pointer hover:border-admin-accent"
-          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type)}>
+          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type, opDays[c.type])}>
             <div className="h-16 w-16 rounded-lg bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
               <Receipt size={32} className="text-blue-600" />
             </div>
@@ -365,10 +368,11 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
 
 function OrdersView({ shiftType }: { shiftType?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
+  const [shiftOpDayById, setShiftOpDayById] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchInput, setSearchInput] = useState("")
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
   const [activeTab, setActiveTab] = useState<OrderTab>("ALL")
 
@@ -378,15 +382,17 @@ function OrdersView({ shiftType }: { shiftType?: string }) {
       setLoading(true)
       setError("")
       try {
-        const [allOrders, shifts] = await Promise.all([getOrders(), listShifts()])
+        const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
         if (cancelled) return
 
-        const shiftTypeById = new Map(shifts.map((s) => [s.id, s.type]))
+        const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
+        const shiftOpDayById = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
         const filteredOrders = shiftType
           ? allOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
           : allOrders
 
         setOrders(filteredOrders)
+        setShiftOpDayById(shiftOpDayById)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
       } finally {
@@ -441,19 +447,15 @@ function OrdersView({ shiftType }: { shiftType?: string }) {
       })
     }
     if (selectedDate) {
-      const selectedUTC = new Date(Date.UTC(
-        selectedDate.getFullYear(),
-        selectedDate.getMonth(),
-        selectedDate.getDate()
-      ))
-      const nextDayUTC = new Date(selectedUTC.getTime() + 86400000)
+      const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
-        const orderDate = new Date(o.createdAt)
-        return orderDate >= selectedUTC && orderDate < nextDayUTC
+        const orderShiftOpDay = shiftOpDayById.get(o.shiftId)
+        return orderShiftOpDay === selectedStr
       })
     }
+    source.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     return source
-  }, [orders, activeTab, searchInput, batchTotals, selectedDate])
+  }, [orders, activeTab, searchInput, batchTotals, selectedDate, shiftOpDayById])
 
   const counts = useMemo(() => ({
     ALL: orders.length,
@@ -693,7 +695,7 @@ function OrdersView({ shiftType }: { shiftType?: string }) {
   )
 }
 
-function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
+function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
@@ -710,7 +712,9 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
       .catch(() => {})
   }, [])
   function isDisabled(shift: string) {
-    return isCashier && !!currentstring && shift !== currentstring
+    if (isCashier && !!currentstring && shift !== currentstring) return true
+    if (!opDays[shift]) return true
+    return false
   }
   const activeConfigs = shiftConfigs
     .filter((c) => c.isActive)
@@ -737,7 +741,7 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
           return (
           <Card key={c.id} className={`p-6 border-2 border-red-400 bg-red-50/50 text-center transition-colors ${
             isDisabled(c.type) ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-red-600 cursor-pointer"
-          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type)}>
+          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type, opDays[c.type])}>
             <div className="h-16 w-16 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
               <XCircle size={32} className="text-red-600" />
             </div>
@@ -764,10 +768,11 @@ function VoidView({ shiftType }: { shiftType?: string }) {
   const isCashier = user?.role === "cashier"
 
   const [orders, setOrders] = useState<Order[]>([])
+  const [shiftOpDayById, setShiftOpDayById] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchInput, setSearchInput] = useState("")
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [voiding, setVoiding] = useState(false)
@@ -778,16 +783,18 @@ function VoidView({ shiftType }: { shiftType?: string }) {
     async function loadOrders() {
       setLoading(true)
       try {
-        const [allOrders, shifts] = await Promise.all([getOrders(), listShifts()])
+        const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
         if (cancelled) return
 
-        const shiftTypeById = new Map(shifts.map((s) => [s.id, s.type]))
+        const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
+        const shiftOpDayByIdMap = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
         const voidableOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
         const filteredOrders = shiftType
           ? voidableOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
           : voidableOrders
 
         setOrders(filteredOrders)
+        setShiftOpDayById(shiftOpDayByIdMap)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
       } finally {
@@ -805,19 +812,15 @@ function VoidView({ shiftType }: { shiftType?: string }) {
       source = source.filter((o) => String(o.orderNumber).includes(q))
     }
     if (selectedDate) {
-      const selectedUTC = new Date(Date.UTC(
-        selectedDate.getFullYear(),
-        selectedDate.getMonth(),
-        selectedDate.getDate()
-      ))
-      const nextDayUTC = new Date(selectedUTC.getTime() + 86400000)
+      const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
-        const orderDate = new Date(o.createdAt)
-        return orderDate >= selectedUTC && orderDate < nextDayUTC
+        const orderShiftOpDay = shiftOpDayById.get(o.shiftId)
+        return orderShiftOpDay === selectedStr
       })
     }
+    source.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     return source
-  }, [orders, searchInput, selectedDate])
+  }, [orders, searchInput, selectedDate, shiftOpDayById])
 
   const {
     currentPage,
@@ -1038,7 +1041,7 @@ function VoidView({ shiftType }: { shiftType?: string }) {
   )
 }
 
-function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string) => void; isCashier: boolean; currentstring?: string }) {
+function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
@@ -1055,7 +1058,9 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
       .catch(() => {})
   }, [])
   function isDisabled(shift: string) {
-    return isCashier && !!currentstring && shift !== currentstring
+    if (isCashier && !!currentstring && shift !== currentstring) return true
+    if (!opDays[shift]) return true
+    return false
   }
   const activeConfigs = shiftConfigs
     .filter((c) => c.isActive)
@@ -1082,7 +1087,7 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
           return (
           <Card key={c.id} className={`p-6 text-center transition-colors ${
             isDisabled(c.type) ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50" : "cursor-pointer hover:border-admin-accent"
-          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type)}>
+          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type, opDays[c.type])}>
             <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
               <Wallet size={32} className="text-yellow-600" />
             </div>
@@ -1106,6 +1111,7 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
 
 function PaymentView({ shiftType }: { shiftType?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
+  const [shiftOpDayById, setShiftOpDayById] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -1113,7 +1119,7 @@ function PaymentView({ shiftType }: { shiftType?: string }) {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | null>(null)
   const [selectedOrders, setSelectedOrders] = useState<Order[]>([])
   const [orderSearch, setOrderSearch] = useState("")
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [processing, setProcessing] = useState(false)
   const [payOrder, setPayOrder] = useState<Order | null>(null)
   const [payMethod, setPayMethod] = useState<"cash" | "mpesa" | null>(null)
@@ -1125,16 +1131,18 @@ function PaymentView({ shiftType }: { shiftType?: string }) {
     async function loadOrders() {
       setLoading(true)
       try {
-        const [allOrders, shifts] = await Promise.all([getOrders(), listShifts()])
+        const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
         if (cancelled) return
 
-        const shiftTypeById = new Map(shifts.map((s) => [s.id, s.type]))
+        const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
+        const shiftOpDayByIdMap = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
         const unpaidOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
         const filteredOrders = shiftType
           ? unpaidOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
           : unpaidOrders
 
         setOrders(filteredOrders)
+        setShiftOpDayById(shiftOpDayByIdMap)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load orders")
       } finally {
@@ -1157,19 +1165,15 @@ function PaymentView({ shiftType }: { shiftType?: string }) {
       source = source.filter((o) => String(o.orderNumber).includes(q))
     }
     if (selectedDate) {
-      const selectedUTC = new Date(Date.UTC(
-        selectedDate.getFullYear(),
-        selectedDate.getMonth(),
-        selectedDate.getDate()
-      ))
-      const nextDayUTC = new Date(selectedUTC.getTime() + 86400000)
+      const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
-        const orderDate = new Date(o.createdAt)
-        return orderDate >= selectedUTC && orderDate < nextDayUTC
+        const orderShiftOpDay = shiftOpDayById.get(o.shiftId)
+        return orderShiftOpDay === selectedStr
       })
     }
+    source.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     return source
-  }, [orders, orderSearch, selectedDate, payCategory])
+  }, [orders, orderSearch, selectedDate, payCategory, shiftOpDayById])
 
   const {
     currentPage,
