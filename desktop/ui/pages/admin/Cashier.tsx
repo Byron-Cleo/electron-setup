@@ -349,7 +349,7 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
               <Receipt size={32} className="text-blue-600" />
             </div>
             <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Orders</Heading>
-            <p className="text-sm font-semibold text-red-600 mt-1 mb-1">{opDays[c.type] ? `Op Day: ${opDayLabel(opDays[c.type])}` : "Op Day: —"}</p>
+            <p className="text-sm font-semibold text-blue-600 mt-1 mb-1">{opDays[c.type] ? `Date: ${opDayLabel(opDays[c.type])}` : "Date: —"}</p>
             <p className="text-sm text-admin-muted">{new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()}</p>
             {isOpen && (
               <span className="mt-3 flex w-full justify-center">
@@ -746,7 +746,7 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
               <XCircle size={32} className="text-red-600" />
             </div>
             <Heading as="h3" className="text-lg text-red-700 mb-2">{c.type} Shift Voids</Heading>
-            <p className="text-sm font-semibold text-red-600 mt-1 mb-1">{opDays[c.type] ? `Op Day: ${opDayLabel(opDays[c.type])}` : "Op Day: —"}</p>
+            <p className="text-sm font-semibold text-blue-600 mt-1 mb-1">{opDays[c.type] ? `Date: ${opDayLabel(opDays[c.type])}` : "Date: —"}</p>
             <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift voidable orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
             {isOpen && (
               <span className="mt-3 flex w-full justify-center">
@@ -1092,7 +1092,7 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
               <Wallet size={32} className="text-yellow-600" />
             </div>
             <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Payments</Heading>
-            <p className="text-sm font-semibold text-red-600 mt-1 mb-1">{opDays[c.type] ? `Op Day: ${opDayLabel(opDays[c.type])}` : "Op Day: —"}</p>
+            <p className="text-sm font-semibold text-blue-600 mt-1 mb-1">{opDays[c.type] ? `Date: ${opDayLabel(opDays[c.type])}` : "Date: —"}</p>
             <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift unpaid orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
             {isOpen && (
               <span className="mt-3 flex w-full justify-center">
