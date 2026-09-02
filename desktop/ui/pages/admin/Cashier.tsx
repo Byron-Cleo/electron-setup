@@ -1093,7 +1093,7 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
             </div>
             <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Payments</Heading>
             <p className="text-sm font-semibold text-blue-600 mt-1 mb-1">{opDays[c.type] ? `Date: ${opDayLabel(opDays[c.type])}` : "Date: —"}</p>
-            <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift unpaid orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
+            <p className="text-sm text-admin-muted">View New/Unpaid/Dept Orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
             {isOpen && (
               <span className="mt-3 flex w-full justify-center">
               <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 ring-1 ring-green-300">
