@@ -59,7 +59,8 @@ export async function autoCreateShifts() {
     currentCycleStart = new Date(anchorToday.getTime() - cyclesBehind * intervalMs);
   }
 
-  const operationDay = dateOnly(currentCycleStart);
+  let operationDay = dateOnly(currentCycleStart);
+  if (operationDay < dateOnly(now)) operationDay = dateOnly(now);
 
   for (const cfg of configs) {
     try {
@@ -87,15 +88,12 @@ export async function autoCreateShifts() {
         continue;
       }
 
-      // Skip if shift already exists for this type + operational day
-      const existing = await prisma.shift.findFirst({
-        where: { type: cfg.type, operationDay },
-      });
-      if (existing) {
-        continue;
-      }
-
       await prisma.$transaction(async (tx) => {
+        const existing = await tx.shift.findFirst({
+          where: { type: cfg.type, operationDay },
+        });
+        if (existing) return;
+
         const shift = await tx.shift.create({
           data: {
             type: cfg.type,
