@@ -4,35 +4,102 @@ import { autoCloseExpiredShifts } from "../scheduler.js";
 
 const router = Router();
 
-// List shifts, optionally filtered by date (YYYY-MM-DD)
+// Shared helper to parse a YYYY-MM-DD query value into { start, end } boundaries
+// (UTC midnight so it aligns with the @db.Date column regardless of timezone).
+function parseDateQueryRange(value: string): { gte: Date; lt: Date } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, y, m, d] = match.map(Number);
+  const start = new Date(Date.UTC(y, m - 1, d));
+  const end = new Date(Date.UTC(y, m - 1, d + 1));
+  return { gte: start, lt: end };
+}
+
+// List shifts, optionally filtered by a single date (YYYY-MM-DD), a date range
+// (from/to), and/or a shift type. Each shift is enriched with read-only summary
+// fields (orderCount, voidCount, revenue, driftMinutes) computed from existing
+// relations. Sorted newest-first.
 router.get("/", async (req, res) => {
-  const { date } = req.query;
+  const { date, from, to, type } = req.query;
 
   try {
-    const where: { operationDay?: { gte: Date; lt: Date } } = {};
+    const where: {
+      operationDay?: { gte?: Date; lt?: Date };
+      type?: string;
+    } = {};
 
     if (date) {
-      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date));
-      if (!match) {
+      const range = parseDateQueryRange(String(date));
+      if (!range) {
         return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
       }
-      const [, y, m, d] = match.map(Number);
-      // operationDay is stored as a date; build the boundary at UTC midnight so
-      // it aligns with the @db.Date column regardless of server timezone.
-      const startOfDay = new Date(Date.UTC(y, m - 1, d));
-      const endOfDay = new Date(Date.UTC(y, m - 1, d + 1));
-      where.operationDay = { gte: startOfDay, lt: endOfDay };
+      where.operationDay = range;
+    } else if (from || to) {
+      // Build a partial range — only the provided bounds are applied.
+      let gte: Date | undefined;
+      let lt: Date | undefined;
+      if (from) {
+        const r = parseDateQueryRange(String(from));
+        if (!r) return res.status(400).json({ error: "Invalid from format. Use YYYY-MM-DD" });
+        gte = r.gte;
+      }
+      if (to) {
+        const r = parseDateQueryRange(String(to));
+        if (!r) return res.status(400).json({ error: "Invalid to format. Use YYYY-MM-DD" });
+        lt = r.lt;
+      }
+      where.operationDay = { ...(gte ? { gte } : {}), ...(lt ? { lt } : {}) };
+    }
+
+    if (type && type !== "") {
+      where.type = String(type);
     }
 
     const shifts = await prisma.shift.findMany({
       where,
-      orderBy: [{ operationDay: "desc" }, { autoOpenTime: "asc" }],
+      orderBy: { autoOpenTime: "desc" },
       include: {
         finalClosedBy: { select: { id: true, name: true } },
+        orders: {
+          select: {
+            id: true,
+            isVoid: true,
+            isPaid: true,
+            totalPrice: true,
+            voidedById: true,
+          },
+        },
+        snapshots: { select: { id: true } },
       },
     });
 
-    res.json(shifts);
+    // Enrich each shift with summary fields (read-only aggregation).
+    const enriched = shifts.map((shift) => {
+      const totalOrders = shift.orders.length;
+      const voidCount = shift.orders.filter((o) => o.isVoid).length;
+      const revenue = shift.orders
+        .filter((o) => o.isPaid && !o.isVoid)
+        .reduce((sum, o) => sum + Number(o.totalPrice), 0);
+      const driftMinutes =
+        shift.autoClosedAt && shift.autoCloseTime
+          ? Math.round(
+              (new Date(shift.autoClosedAt).getTime() - new Date(shift.autoCloseTime).getTime()) /
+                60000,
+            )
+          : null;
+
+      return {
+        ...shift,
+        orders: undefined,
+        snapshots: undefined,
+        orderCount: totalOrders,
+        voidCount,
+        revenue,
+        driftMinutes,
+      };
+    });
+
+    res.json(enriched);
   } catch (e) {
     console.error("Error listing shifts:", e);
     res.status(500).json({ error: "Failed to list shifts" });

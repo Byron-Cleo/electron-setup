@@ -17,6 +17,15 @@ interface DatePickerProps {
 export function DatePicker({ value, onChange, placeholder = "Select date", className }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(value ?? undefined)
+  const [prevValue, setPrevValue] = useState<Date | null | undefined>(value)
+
+  // Sync internal display when the controlled value is reset by the parent
+  // (e.g. the "Last 7 days" button in Reports). Adjusts state during render —
+  // the React-recommended alternative to syncing in an effect.
+  if (value !== prevValue) {
+    setPrevValue(value)
+    setSelectedDate(value ?? undefined)
+  }
 
   function handleSelect(date: Date) {
     setSelectedDate(date)

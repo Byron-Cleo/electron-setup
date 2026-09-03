@@ -261,7 +261,7 @@ router.get("/shift/:id", async (req, res) => {
       where: { id },
       include: {
         finalClosedBy: { select: { id: true, name: true } },
-        snapshots: { include: { menu: { select: { id: true, name: true, price: true } } } },
+        snapshots: { include: { menu: { select: { id: true, name: true, price: true, stock: true } } } },
         orders: {
           include: {
             OrderItem: true,
@@ -366,12 +366,20 @@ router.get("/shift/:id", async (req, res) => {
       }
     }
 
-    // Calculate plate movement — only items that were cooked or sold
+    // Calculate plate movement — only items that were cooked or sold.
+    // For an open shift (live or awaiting manual close) there is no final
+    // closingPlates yet, so use the current live menu stock as the "Current"
+    // value and flag it so the UI can label it accordingly.
+    const isOpenShift = shift.isOpen;
     const plateMovement = shift.snapshots
       .map((snapshot) => {
         const platesCooked = platesCookedByMenu.get(snapshot.menuId) ?? 0;
         const expectedClosing = snapshot.openingPlates + platesCooked - snapshot.platesSold;
-        const variance = (snapshot.closingPlates ?? expectedClosing) - expectedClosing;
+        const closingPlates = isOpenShift
+          ? (snapshot.menu.stock ?? 0)
+          : snapshot.closingPlates;
+        const variance = (closingPlates ?? expectedClosing) - expectedClosing;
+        const isLiveCurrent = isOpenShift;
 
         return {
           menuId: snapshot.menuId,
@@ -379,7 +387,8 @@ router.get("/shift/:id", async (req, res) => {
           openingPlates: snapshot.openingPlates,
           platesCooked,
           platesSold: snapshot.platesSold,
-          closingPlates: snapshot.closingPlates,
+          closingPlates,
+          isLiveCurrent,
           expectedClosing,
           variance,
         };
@@ -459,6 +468,7 @@ router.get("/shift/:id", async (req, res) => {
         closingDriftMinutes,
         driftMinutes,
         isOpen: shift.isOpen,
+        autoClosed: shift.autoClosed,
         finalClosedBy: shift.finalClosedBy,
       },
       plateMovement,

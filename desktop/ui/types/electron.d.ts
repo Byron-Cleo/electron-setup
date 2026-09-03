@@ -588,6 +588,10 @@ interface Shift {
   finalCloseSource: string | null;
   autoClosed: boolean;
   autoClosedAt: string | null;
+  orderCount?: number;
+  voidCount?: number;
+  revenue?: number;
+  driftMinutes?: number | null;
 }
 
 interface AutoCloseResult {
@@ -652,6 +656,7 @@ interface ShiftReportMeta {
   closingDriftMinutes: number | null;
   driftMinutes: number;
   isOpen: boolean;
+  autoClosed?: boolean;
   finalClosedBy?: { id: string; name: string } | null;
 }
 
@@ -662,6 +667,7 @@ interface ShiftPlateMovementRow {
   platesCooked: number;
   platesSold: number;
   closingPlates: number | null;
+  isLiveCurrent?: boolean;
   expectedClosing: number;
   variance: number;
 }
@@ -752,6 +758,7 @@ interface ShiftReportData {
     platesCooked: number;
     platesSold: number;
     closingPlates: number | null;
+    isLiveCurrent?: boolean;
     expectedClosing: number;
     variance: number;
   }[];

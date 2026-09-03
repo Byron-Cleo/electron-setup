@@ -559,6 +559,11 @@ export async function listShifts(operationDay?: string): Promise<Shift[]> {
   return apiFetch(`/shifts${query}`)
 }
 
+export async function listShiftsByRange(type: string, from: string, to: string): Promise<Shift[]> {
+  const query = `?type=${encodeURIComponent(type)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  return apiFetch(`/shifts${query}`)
+}
+
 export async function autoCloseShifts(): Promise<AutoCloseResult> {
   return apiFetch("/shifts/auto-close", { method: "POST" })
 }

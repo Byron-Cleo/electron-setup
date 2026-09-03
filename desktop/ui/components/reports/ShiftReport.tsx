@@ -165,6 +165,23 @@ function ShiftReportView({ report }: Props) {
               {shift.type === "DAY" ? "Day" : "Night"} shift · {formatDate(shift.operationDay)} · opened by{" "}
               "—"
             </span>
+            {report.shift.isOpen && (
+              <span
+                className={cn(
+                  "ml-3 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                  report.shift.autoClosed
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-blue-100 text-blue-700",
+                )}
+              >
+                {report.shift.autoClosed ? (
+                  <AlertTriangle className="h-3 w-3" />
+                ) : (
+                  <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-blue-600" />
+                )}
+                {report.shift.autoClosed ? "Awaiting Manual Close" : "Live"}
+              </span>
+            )}
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-md border border-admin-card-border p-3">
@@ -401,8 +418,17 @@ function ShiftReportView({ report }: Props) {
                       <p className="text-sm font-semibold tabular-nums">{row.expectedClosing}</p>
                     </div>
                     <div>
-                      <span className="text-admin-muted">Actual Close</span>
-                      <p className="text-sm font-semibold tabular-nums">{row.closingPlates ?? "—"}</p>
+                      <span className="text-admin-muted">
+                        {row.isLiveCurrent ? "Current" : "Actual Close"}
+                      </span>
+                      <p
+                        className={cn(
+                          "text-sm font-semibold tabular-nums",
+                          row.isLiveCurrent && "text-blue-600",
+                        )}
+                      >
+                        {row.closingPlates ?? "—"}
+                      </p>
                     </div>
                     <div>
                       <span className="text-admin-muted">Variance</span>
