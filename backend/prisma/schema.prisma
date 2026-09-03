@@ -361,13 +361,12 @@ model ShiftSnapshot {
   shiftId           String   @db.Uuid
   menuId            String   @db.Uuid
   openingPlates     Int // number of plates available at the start of the shift/shift creation
-  platesSold        Int      @default(0)  //live selling plates
-  autoClosePlates   Int? // live menu stock at autoCloseTime
+  platesSold        Int      @default(0)  //total shift sales of plates (opening -> manual close, incl. drift)
+  closingStockAtAutoClose  Int? // live menu stock at autoCloseTime
   autoCloseTime     DateTime?  @db.Timestamptz(6) //now
-  manualClosePlates Int? // live menu stock at manualCloseTime when closing
   manualCloseTime   DateTime?  @db.Timestamptz(6) //now closing Time
-  closingPlates     Int? // live menu stock at manualCloseTime when closing
-  platesSoldAfterAutoClose Int? //snapShot of total plates sold after autoCloseTime (if any) until manualCloseTime
+  closingStockAtManualClose Int? // live menu stock at manualCloseTime when closing
+  platesSoldAtAutoClose Int? // snapshot of total platesSold at the auto-close tick (pre-drift)
   driftPlates           Int? //plates sold between autoCloseTime and manualCloseTime
   driftMinutes      Int? //minutes between autoCloseTime and manualCloseTime
   platesWasted      Int      @default(0)

@@ -140,17 +140,17 @@ function shiftReportLines(data: ShiftReportData): Line[] {
   if (data.plateMovement.length === 0) {
     pushCenter("No snapshots recorded.");
   } else {
-    push("ITEM           OPEN  COOKED  SOLD   CLOSE", true);
+    push("ITEM             OPEN  COOKED  SOLD  CLOSE", true);
     push(line);
     for (const p of data.plateMovement) {
-      const name = p.menuName.slice(0, 14).padEnd(14);
+      const name = p.menuName.slice(0, 16).padEnd(16);
       const open = String(p.openingPlates).padStart(5);
       const cooked = String(p.platesCooked).padStart(7);
       const sold = String(p.platesSold).padStart(6);
-      const close = String(p.closingPlates ?? "—").padStart(6);
+      const close = String(p.closingStockAtManualClose ?? "—").padStart(7);
       push(name + open + cooked + sold + close);
     }
-    pushCenter("OPEN = carry-forward closing plates from previous shift");
+    pushCenter("OPEN = carry-forward opening plates from previous shift");
   }
   push(line);
 

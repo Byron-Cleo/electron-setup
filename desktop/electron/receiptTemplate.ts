@@ -229,9 +229,14 @@ export interface ShiftReportData {
     openingPlates: number;
     platesCooked: number;
     platesSold: number;
-    closingPlates: number | null;
-    expectedClosing: number;
-    variance: number;
+    platesSoldAtAutoClose: number | null;
+    driftSold: number | null;
+    closingStock: number;
+    platesWasted: number;
+    closingStockAtAutoClose: number | null;
+    driftMinutes: number | null;
+    closingStockAtManualClose: number | null;
+    isLiveCurrent?: boolean;
   }[];
   production: {
     totalCost: number;
@@ -301,12 +306,12 @@ function shiftReportBody(data: ShiftReportData): string {
   ${blockCenter("PLATE MOVEMENT", "font-weight:bold; font-size:13px;")}
   ${divider()}
   ${data.plateMovement.length === 0 ? blockCenter("No snapshots recorded.") : ""}
-  ${data.plateMovement.length > 0 ? `<pre style="margin:0; font-family:'Courier New',Courier,monospace; font-size:12px; line-height:1.5;">ITEM           OPEN  COOKED  SOLD   CLOSE
-${"─".repeat(38)}
+  ${data.plateMovement.length > 0 ? `<pre style="margin:0; font-family:'Courier New',Courier,monospace; font-size:12px; line-height:1.5;">ITEM             OPEN  COOKED  SOLD  CLOSE
+${"─".repeat(44)}
 ${data.plateMovement.map((p) =>
-  `<b>${p.menuName.slice(0, 14).padEnd(14)}</b>${String(p.openingPlates).padStart(5)}${String(p.platesCooked).padStart(7)}${String(p.platesSold).padStart(6)}${String(p.closingPlates ?? "—").padStart(6)}`
+  `<b>${p.menuName.slice(0, 16).padEnd(16)}</b>${String(p.openingPlates).padStart(5)}${String(p.platesCooked).padStart(7)}${String(p.platesSold).padStart(6)}${String(p.closingStockAtManualClose ?? "—").padStart(7)}`
 ).join("\n")}</pre>
-${blockCenter("OPEN = carry-forward closing plates from previous shift", "font-size:11px; margin-top:4px;")}` : ""}
+${blockCenter("OPEN = carry-forward opening plates from previous shift", "font-size:11px; margin-top:4px;")}` : ""}
   ${data.plateMovement.length > 0 ? divider() : ""}
   ${data.unassignedCarryOver && data.unassignedCarryOver.total > 0 ? `${divider()}
   ${blockCenter("UNASSIGNED CARRY-OVER", "font-weight:bold; font-size:13px;")}

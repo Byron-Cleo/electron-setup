@@ -301,7 +301,7 @@ router.post("/:id/close", async (req, res) => {
 
       for (const snapshot of snapshots) {
         const currentStock = snapshot.menu.stock ?? 0;
-        const autoPlates = snapshot.autoClosePlates ?? null;
+        const autoPlates = snapshot.closingStockAtAutoClose ?? null;
         const autoTime = snapshot.autoCloseTime ? new Date(snapshot.autoCloseTime) : null;
 
         // Compute drift
@@ -313,9 +313,7 @@ router.post("/:id/close", async (req, res) => {
         await tx.shiftSnapshot.update({
           where: { id: snapshot.id },
           data: {
-            closingPlates: currentStock,
-            manualClosePlates: currentStock,
-            platesSoldAfterAutoClose: snapshot.platesSold,
+            closingStockAtManualClose: currentStock,
             manualCloseTime: now,
             driftPlates,
             driftMinutes,

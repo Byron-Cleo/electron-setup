@@ -33,6 +33,16 @@ function driftLabel(minutes: number | null, verb: "Opened" | "Closed"): string {
   return `${verb} ${duration} ${early ? "early" : "late"}`
 }
 
+function formatDriftMinutes(minutes: number | null): string {
+  if (minutes === null || minutes === undefined) return "—"
+  const total = Math.abs(minutes)
+  const hours = Math.floor(total / 60)
+  const mins = total % 60
+  if (hours > 0 && mins > 0) return `${hours}h ${mins}min`
+  if (hours > 0) return `${hours}h`
+  return `${mins}min`
+}
+
 function buildShiftReportData(report: ShiftReport): ShiftReportData {
   return {
     restaurant: {
@@ -394,60 +404,51 @@ function ShiftReportView({ report }: Props) {
             <p className="text-sm text-admin-muted">No snapshots recorded.</p>
           ) : (
             <div className="space-y-3">
-              {plateMovement.map((row) => (
-                <div
-                  key={row.menuId}
-                  className="rounded-lg border border-admin-card-border p-3"
-                >
-                  <div className="mb-2 text-base font-bold text-admin-header-text">{row.menuName}</div>
-                  <div className="grid grid-cols-3 gap-2 text-xs sm:grid-cols-6">
-                    <div>
-                      <span className="text-admin-muted">Opening (carry-forward)</span>
-                      <p className="text-sm font-semibold tabular-nums">{row.openingPlates}</p>
-                    </div>
-                    <div>
-                      <span className="text-admin-muted">Cooked</span>
-                      <p className="text-sm font-semibold tabular-nums">{row.platesCooked}</p>
-                    </div>
-                    <div>
-                      <span className="text-admin-muted">Sold</span>
-                      <p className="text-sm font-semibold tabular-nums">{row.platesSold}</p>
-                    </div>
-                    <div>
-                      <span className="text-admin-muted">Expected</span>
-                      <p className="text-sm font-semibold tabular-nums">{row.expectedClosing}</p>
-                    </div>
-                    <div>
-                      <span className="text-admin-muted">
-                        {row.isLiveCurrent ? "Current" : "Actual Close"}
-                      </span>
-                      <p
-                        className={cn(
-                          "text-sm font-semibold tabular-nums",
-                          row.isLiveCurrent && "text-blue-600",
-                        )}
+              <div className="overflow-x-auto">
+                <table className="mx-auto w-auto text-xs">
+                  <thead>
+                    <tr className="border-b border-admin-card-border text-admin-muted">
+                      <th className="px-3 py-2 text-center font-medium">Item</th>
+                      <th className="px-3 py-2 text-center font-medium bg-yellow-100 text-yellow-900">Opening</th>
+                      <th className="px-3 py-2 text-center font-medium">Cooked</th>
+                      <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="Plates sold before the auto-close tick">Main-Sale Count</th>
+                      <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="opening + cooked − sold before auto-close">Main-Sale<br />Closing Stock</th>
+                      <th className="px-3 py-2 text-center font-medium bg-orange-100 text-orange-900">Drift Minutes</th>
+                      <th className="px-3 py-2 text-center font-medium bg-orange-100 text-orange-900" title="plates sold after auto-close">Drift Sold<br />Count</th>
+                      <th className="px-3 py-2 text-center font-medium">Wasted</th>
+                      <th className="px-3 py-2 text-center font-medium bg-[oklch(0.962_0.044_255.585)] text-blue-900" title="Final closing stock">Final Closing Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plateMovement.map((row) => (
+                      <tr
+                        key={row.menuId}
+                        className="border-b border-admin-card-border last:border-0"
                       >
-                        {row.closingPlates ?? "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-admin-muted">Variance</span>
-                      <p
-                        className={cn(
-                          "text-sm font-semibold tabular-nums",
-                          row.closingPlates === null
-                            ? "text-admin-muted"
-                            : row.variance !== 0
-                              ? "text-red-600"
-                              : "text-green-600",
-                        )}
-                      >
-                        {row.closingPlates === null ? "—" : row.variance > 0 ? `+${row.variance}` : row.variance}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                        <td className="px-3 py-2 text-center text-sm font-bold text-admin-header-text">{row.menuName}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-yellow-100">{row.openingPlates}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums">{row.platesCooked}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-green-100">{row.platesSoldAtAutoClose ?? "—"}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-green-100">{row.closingStockAtAutoClose ?? "—"}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-orange-100">{formatDriftMinutes(row.driftMinutes)}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-orange-100">{row.driftSold ?? "—"}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums">{row.platesWasted}</td>
+                        <td
+                          className={cn(
+                            "px-3 py-2 text-center text-sm font-semibold tabular-nums bg-[oklch(0.962_0.044_255.585)]",
+                            row.isLiveCurrent && "text-blue-600",
+                          )}
+                        >
+                          {row.isLiveCurrent ? `${row.closingStockAtManualClose ?? "—"}*` : (row.closingStockAtManualClose ?? "—")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {plateMovement.some((r) => r.isLiveCurrent) && (
+                  <p className="pt-2 text-[10px] text-admin-muted">* Live shift — current menu stock (no final close yet).</p>
+                )}
+              </div>
               {report.unassignedCarryOver && report.unassignedCarryOver.total > 0 && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
                   <div className="text-sm font-semibold text-orange-700">

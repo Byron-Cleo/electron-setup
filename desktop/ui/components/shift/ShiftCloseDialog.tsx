@@ -734,30 +734,29 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                   <p className="text-sm text-admin-muted">No snapshots recorded.</p>
                 ) : (
                   <div className="space-y-1 text-sm">
-                    <div className="grid grid-cols-[1fr_56px_56px_56px_56px] gap-x-3 text-xs font-semibold uppercase tracking-wide text-admin-muted">
+                    <div className="grid grid-cols-[1fr_42px_42px_42px_54px_50px_48px_52px] gap-x-2 text-xs font-semibold uppercase tracking-wide text-admin-muted">
                       <span>Item</span>
-                      <span className="text-right">Open*</span>
+                      <span className="text-right">Open</span>
                       <span className="text-right">Cooked</span>
                       <span className="text-right">Sold</span>
-                      <span className="text-right">Close</span>
+                      <span className="text-right" title="Plates sold before auto-close">Pre-Auto</span>
+                      <span className="text-right" title="Plates sold during drift">Drift Sold</span>
+                      <span className="text-right" title="Stock at auto-close">Auto</span>
+                      <span className="text-right" title="Final closing stock">Final</span>
                     </div>
                     {report.plateMovement.map((row) => (
                       <div
                         key={row.menuId}
-                        className="grid grid-cols-[1fr_56px_56px_56px_56px] items-center gap-x-3 border-t border-admin-card-border pt-1"
+                        className="grid grid-cols-[1fr_42px_42px_42px_54px_50px_48px_52px] items-center gap-x-2 border-t border-admin-card-border pt-1"
                       >
                         <span className="truncate">{row.menuName}</span>
                         <span className="text-right tabular-nums">{row.openingPlates}</span>
                         <span className="text-right tabular-nums">{row.platesCooked}</span>
                         <span className="text-right tabular-nums">{row.platesSold}</span>
-                        <span
-                          className={cn(
-                            "text-right tabular-nums",
-                            row.closingPlates !== row.expectedClosing && "font-medium text-amber-600",
-                          )}
-                        >
-                          {row.closingPlates ?? "—"}
-                        </span>
+                        <span className="text-right tabular-nums">{row.platesSoldAtAutoClose ?? "—"}</span>
+                        <span className="text-right tabular-nums">{row.driftSold ?? "—"}</span>
+                        <span className="text-right tabular-nums">{row.closingStockAtAutoClose ?? "—"}</span>
+                        <span className="text-right tabular-nums">{row.closingStockAtManualClose ?? "—"}</span>
                       </div>
                     ))}
                     {report.unassignedCarryOver && report.unassignedCarryOver.total > 0 && (
@@ -766,7 +765,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                       </div>
                     )}
                     <p className="pt-1 text-center text-[10px] leading-snug text-admin-muted">
-                      * Opening = carry-forward closing stock from the previous shift.
+                      * Final = final closing stock for the shift.
                     </p>
                   </div>
                 )}

@@ -558,9 +558,12 @@ interface ShiftSnapshot {
   shiftId: string;
   menuId: string;
   openingPlates: number;
-  closingPlates: number | null;
+  closingStockAtManualClose: number | null;
+  closingStockAtAutoClose: number | null;
   platesSold: number;
+  platesSoldAtAutoClose: number | null;
   platesWasted: number;
+  driftMinutes: number | null;
   menu: {
     id: string;
     name: string;
@@ -666,10 +669,14 @@ interface ShiftPlateMovementRow {
   openingPlates: number;
   platesCooked: number;
   platesSold: number;
-  closingPlates: number | null;
+  platesSoldAtAutoClose: number | null;
+  driftSold: number | null;
+  closingStock: number;
+  platesWasted: number;
+  closingStockAtAutoClose: number | null;
+  driftMinutes: number | null;
+  closingStockAtManualClose: number | null;
   isLiveCurrent?: boolean;
-  expectedClosing: number;
-  variance: number;
 }
 
 interface ShiftRevenueEntry {
@@ -757,10 +764,14 @@ interface ShiftReportData {
     openingPlates: number;
     platesCooked: number;
     platesSold: number;
-    closingPlates: number | null;
+    platesSoldAtAutoClose: number | null;
+    driftSold: number | null;
+    closingStock: number;
+    platesWasted: number;
+    closingStockAtAutoClose: number | null;
+    driftMinutes: number | null;
+    closingStockAtManualClose: number | null;
     isLiveCurrent?: boolean;
-    expectedClosing: number;
-    variance: number;
   }[];
   unassignedCarryOver?: {
     total: number;

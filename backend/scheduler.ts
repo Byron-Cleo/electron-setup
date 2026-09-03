@@ -104,18 +104,18 @@ export async function autoCreateShifts() {
           },
         });
 
-        // Carry-forward: previous closed shift of same type -> closingPlates
+        // Carry-forward: previous closed shift of same type -> closingStockAtManualClose
         const prevShift = await tx.shift.findFirst({
           where: { isOpen: false, type: cfg.type },
           orderBy: { autoOpenTime: "desc" },
           include: {
-            snapshots: { select: { menuId: true, closingPlates: true } },
+            snapshots: { select: { menuId: true, closingStockAtManualClose: true } },
           },
         });
         const prevClosingByMenu = new Map<string, number | null>();
         if (prevShift && prevShift.snapshots) {
           for (const snap of prevShift.snapshots) {
-            prevClosingByMenu.set(snap.menuId, snap.closingPlates);
+            prevClosingByMenu.set(snap.menuId, snap.closingStockAtManualClose);
           }
         }
 
@@ -200,7 +200,8 @@ export async function autoCloseExpiredShifts() {
           await tx.shiftSnapshot.update({
             where: { id: snapshot.id },
             data: {
-              autoClosePlates: currentStock,
+              closingStockAtAutoClose: currentStock,
+              platesSoldAtAutoClose: snapshot.platesSold,
               autoCloseTime: now,
             },
           });

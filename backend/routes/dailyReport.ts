@@ -368,17 +368,25 @@ router.get("/shift/:id", async (req, res) => {
 
     // Calculate plate movement — only items that were cooked or sold.
     // For an open shift (live or awaiting manual close) there is no final
-    // closingPlates yet, so use the current live menu stock as the "Current"
-    // value and flag it so the UI can label it accordingly.
+    // closingStockAtManualClose yet, so use the current live menu stock as the
+    // "Final Closing Stock" value and flag it so the UI can label it "Current".
     const isOpenShift = shift.isOpen;
     const plateMovement = shift.snapshots
       .map((snapshot) => {
         const platesCooked = platesCookedByMenu.get(snapshot.menuId) ?? 0;
-        const expectedClosing = snapshot.openingPlates + platesCooked - snapshot.platesSold;
-        const closingPlates = isOpenShift
+        const closingStock = snapshot.openingPlates + platesCooked - snapshot.platesSold;
+        const closingStockAtManualClose = isOpenShift
           ? (snapshot.menu.stock ?? 0)
-          : snapshot.closingPlates;
-        const variance = (closingPlates ?? expectedClosing) - expectedClosing;
+          : snapshot.closingStockAtManualClose;
+        const driftSold =
+          snapshot.platesSoldAtAutoClose !== null && snapshot.platesSoldAtAutoClose !== undefined
+            ? snapshot.platesSold - snapshot.platesSoldAtAutoClose
+            : null;
+        // Auto closing stock = remaining plates after opening + cooked − sold before auto-close
+        const closingStockAtAutoClose =
+          snapshot.platesSoldAtAutoClose !== null && snapshot.platesSoldAtAutoClose !== undefined
+            ? snapshot.openingPlates + platesCooked - snapshot.platesSoldAtAutoClose
+            : (snapshot.closingStockAtAutoClose ?? null);
         const isLiveCurrent = isOpenShift;
 
         return {
@@ -387,10 +395,14 @@ router.get("/shift/:id", async (req, res) => {
           openingPlates: snapshot.openingPlates,
           platesCooked,
           platesSold: snapshot.platesSold,
-          closingPlates,
+          platesSoldAtAutoClose: snapshot.platesSoldAtAutoClose ?? null,
+          driftSold,
+          closingStock,
+          platesWasted: snapshot.platesWasted ?? 0,
+          closingStockAtAutoClose,
+          driftMinutes: snapshot.driftMinutes ?? null,
+          closingStockAtManualClose,
           isLiveCurrent,
-          expectedClosing,
-          variance,
         };
       })
       .filter((row) => row.platesSold > 0 || row.platesCooked > 0);
@@ -438,7 +450,7 @@ router.get("/shift/:id", async (req, res) => {
     const previousShift = await prisma.shift.findFirst({
       where: { isOpen: false, autoOpenTime: { lt: shift.autoOpenTime } },
       orderBy: { autoOpenTime: "desc" },
-      include: { snapshots: { select: { menuId: true, closingPlates: true } } },
+      include: { snapshots: { select: { menuId: true, closingStockAtManualClose: true } } },
     });
     let unassignedCarryOver: {
       total: number;

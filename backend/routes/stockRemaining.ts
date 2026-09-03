@@ -61,7 +61,7 @@ router.get("/remaining", async (_req, res) => {
     // Carry-forward per menu = the previous shift's closing snapshot plates.
     // Each row pairs a menu with one of its linked stock supplies.
     const carryForwardPerMenu: CarryForwardRow[] = previousShift.snapshots
-      .filter((snap) => Number(snap.closingPlates) > 0)
+      .filter((snap) => Number(snap.closingStockAtManualClose) > 0)
       .flatMap<CarryForwardRow>((snap) => {
         const links = snap.menu.stockSupplyMenus ?? [];
         if (links.length === 0) {
@@ -69,7 +69,7 @@ router.get("/remaining", async (_req, res) => {
             {
               menuId: snap.menu.id,
               menuName: snap.menu.name,
-              closingPlates: Number(snap.closingPlates),
+              closingPlates: Number(snap.closingStockAtManualClose),
               stockSupplyId: null,
               stockSupplyName: null,
             },
@@ -78,7 +78,7 @@ router.get("/remaining", async (_req, res) => {
         return links.map((link) => ({
           menuId: snap.menu.id,
           menuName: snap.menu.name,
-          closingPlates: Number(snap.closingPlates),
+          closingPlates: Number(snap.closingStockAtManualClose),
           stockSupplyId: link.stockSupply.id,
           stockSupplyName: link.stockSupply.name,
         }));
