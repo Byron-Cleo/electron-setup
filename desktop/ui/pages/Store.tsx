@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit, getDepartments, getMenus } from "@/lib/api"
+import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit, getDepartments, getMenus, updateStockSupply } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
@@ -729,16 +729,22 @@ function RestockView() {
     return reorder - stock
   }
 
-  function handleRestockSubmit() {
+  async function handleRestockSubmit() {
     if (!restockTarget || !restockQuantity) return
     setRestockSubmitting(true)
-    setTimeout(() => {
-      setRestockSubmitting(false)
+    try {
+      const newStock = Number(restockTarget.currentStock) + Number(restockQuantity)
+      await updateStockSupply(restockTarget.id, { currentStock: newStock })
       setRestockTarget(null)
       setRestockQuantity("")
       setRestockSuccess(true)
+      loadLowStock()
       setTimeout(() => setRestockSuccess(false), 3000)
-    }, 500)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to restock item")
+    } finally {
+      setRestockSubmitting(false)
+    }
   }
 
   const columns: Column[] = [
