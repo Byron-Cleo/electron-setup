@@ -134,11 +134,17 @@ export async function deleteStockSupply(id: string) {
 // ─── Stock Requests ──────────────────────────────────────────────────────────
 
 export async function getPendingStockRequestCount(): Promise<number> {
+  if (window.electron?.stockRequest?.getPendingCount) {
+    return (await window.electron.stockRequest.getPendingCount()).count
+  }
   const res = await apiFetch("/stock-requests/pending-count") as { count: number }
   return res.count
 }
 
 export async function getPartialStockRequestCount(): Promise<number> {
+  if (window.electron?.stockRequest?.getPartialCount) {
+    return (await window.electron.stockRequest.getPartialCount()).count
+  }
   const res = await apiFetch("/stock-requests/partial-count") as { count: number }
   return res.count
 }
@@ -213,18 +219,31 @@ export async function deleteDepartment(id: string): Promise<void> {
 // ─── Categories ─────────────────────────────────────────────────────────────
 
 export async function getCategories(): Promise<Category[]> {
+  if (window.electron?.category?.getAll) {
+    return window.electron.category.getAll()
+  }
   return apiFetch("/categories")
 }
 
 export async function createCategory(data: CreateCategoryData): Promise<Category> {
+  if (window.electron?.category?.create) {
+    return window.electron.category.create(data)
+  }
   return apiFetch("/categories", { method: "POST", body: JSON.stringify(data) })
 }
 
 export async function updateCategory(id: string, data: UpdateCategoryData): Promise<Category> {
+  if (window.electron?.category?.update) {
+    return window.electron.category.update(id, data)
+  }
   return apiFetch(`/categories/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
 export async function deleteCategory(id: string): Promise<void> {
+  if (window.electron?.category?.delete) {
+    await window.electron.category.delete(id)
+    return
+  }
   return apiFetch(`/categories/${id}`, { method: "DELETE" })
 }
 
@@ -241,6 +260,9 @@ export async function getCookingRecords(stockSupplyId?: string): Promise<Cooking
 }
 
 export async function getCookingRecord(id: string): Promise<CookingRecord> {
+  if (window.electron?.cookingRecord?.getById) {
+    return window.electron.cookingRecord.getById(id)
+  }
   return apiFetch(`/cooking-records/${id}`)
 }
 
@@ -281,12 +303,18 @@ export async function topUpCookingRecordMenu(id: string, menuId: string, quantit
 }
 
 export async function getUnderproducedCookingCount(): Promise<{ count: number }> {
+  if (window.electron?.kitchen?.getUnderproducedCount) {
+    return window.electron.kitchen.getUnderproducedCount()
+  }
   return apiFetch("/cooking-records/underproduced-count")
 }
 
 // ─── Kitchen Inventory (new endpoint) ───────────────────────────────────────
 
 export async function getKitchenInventoryList(): Promise<KitchenStockItem[]> {
+  if (window.electron?.kitchen?.getInventoryList) {
+    return window.electron.kitchen.getInventoryList()
+  }
   return apiFetch("/kitchen/inventory")
 }
 
@@ -341,10 +369,16 @@ export async function uploadAccompanimentImage(imageFile: File): Promise<{ url: 
 }
 
 export async function getAccompanimentImages(): Promise<{ images: string[] }> {
+  if (window.electron?.menuExtra?.getAccompanimentImages) {
+    return window.electron.menuExtra.getAccompanimentImages()
+  }
   return apiFetch("/accompaniments/images")
 }
 
 export async function getCookedMenus(date?: string): Promise<CookedMenuItem[]> {
+  if (window.electron?.menu?.getCookedMenus) {
+    return window.electron.menu.getCookedMenus(date)
+  }
   const query = date ? `?date=${encodeURIComponent(date)}` : ""
   return apiFetch(`/menu/cooked${query}`)
 }
@@ -377,15 +411,24 @@ export interface MenuStockStatus {
 }
 
 export async function getMenuStockStatus(mealType?: string): Promise<MenuStockStatus> {
+  if (window.electron?.menuExtra?.getStockStatus) {
+    return window.electron.menuExtra.getStockStatus(mealType)
+  }
   const q = mealType ? `?mealType=${encodeURIComponent(mealType)}` : ""
   return apiFetch(`/menu/stock-status${q}`) as Promise<MenuStockStatus>
 }
 
 export async function updateMenu(id: string, data: Partial<MenuCreateData>): Promise<MenuItem> {
+  if (window.electron?.menu?.update) {
+    return window.electron.menu.update(id, data)
+  }
   return apiFetch(`/menu/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
 export async function updateMenuAvailability(id: string, isAvailable: boolean): Promise<MenuItem> {
+  if (window.electron?.menuExtra?.updateAvailability) {
+    return window.electron.menuExtra.updateAvailability(id, isAvailable)
+  }
   return apiFetch(`/menu/${id}/availability`, { method: "PUT", body: JSON.stringify({ isAvailable }) })
 }
 
@@ -401,6 +444,9 @@ export async function getKitchenInventory(stockSupplyId: string): Promise<Kitche
 // ─── Low Stock ──────────────────────────────────────────────────────────────
 
 export async function getLowStockSupplies(): Promise<StockSupply[]> {
+  if (window.electron?.stockSupply?.getLowStock) {
+    return window.electron.stockSupply.getLowStock()
+  }
   return apiFetch("/stock-supplies/low-stock")
 }
 
@@ -421,14 +467,23 @@ export async function getStockCount(): Promise<{ count: number }> {
 // ─── Accompaniments ─────────────────────────────────────────────────────────
 
 export async function getAccompaniments(): Promise<Accompaniment[]> {
+  if (window.electron?.accompaniment?.getAll) {
+    return window.electron.accompaniment.getAll()
+  }
   return apiFetch("/accompaniments")
 }
 
 export async function createAccompaniment(data: AccompanimentCreateData): Promise<Accompaniment> {
+  if (window.electron?.accompaniment?.create) {
+    return window.electron.accompaniment.create(data)
+  }
   return apiFetch("/accompaniments", { method: "POST", body: JSON.stringify(data) })
 }
 
 export async function updateAccompaniment(id: string, data: AccompanimentUpdateData): Promise<Accompaniment> {
+  if (window.electron?.accompaniment?.update) {
+    return window.electron.accompaniment.update(id, data)
+  }
   return apiFetch(`/accompaniments/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
@@ -465,16 +520,25 @@ export async function createOrder(data: CreateOrderData): Promise<Order> {
 }
 
 export async function getOrderCount(): Promise<number> {
+  if (window.electron?.order?.getCount) {
+    return (await window.electron.order.getCount()).count
+  }
   const res = await apiFetch("/orders/count")
   return res.count
 }
 
 export async function getOrders(orderNumber?: number): Promise<Order[]> {
+  if (window.electron?.order?.getAll) {
+    return window.electron.order.getAll(orderNumber)
+  }
   const query = orderNumber !== undefined ? `?orderNumber=${encodeURIComponent(orderNumber)}` : ""
   return apiFetch(`/orders${query}`)
 }
 
 export async function voidOrder(orderId: string, voidedById: string, reason?: string): Promise<Order> {
+  if (window.electron?.order?.void) {
+    return window.electron.order.void(orderId, { voidedById, reason })
+  }
   return apiFetch(`/orders/${orderId}/void`, {
     method: "POST",
     body: JSON.stringify({ voidedById, reason }),
@@ -482,6 +546,9 @@ export async function voidOrder(orderId: string, voidedById: string, reason?: st
 }
 
 export async function updateOrderPayment(orderId: string, paymentMethod: "cash" | "mpesa", paymentType?: "SINGLE" | "BATCH", batchId?: string): Promise<Order> {
+  if (window.electron?.order?.updatePayment) {
+    return window.electron.order.updatePayment(orderId, { paymentMethod, paymentType, batchId })
+  }
   return apiFetch(`/orders/${orderId}/payment`, {
     method: "PATCH",
     body: JSON.stringify({ paymentMethod, paymentType, batchId }),
@@ -489,6 +556,9 @@ export async function updateOrderPayment(orderId: string, paymentMethod: "cash" 
 }
 
 export async function markOrderAsUnpaid(orderId: string, acknowledgedById: string): Promise<Order> {
+  if (window.electron?.order?.markUnpaid) {
+    return window.electron.order.markUnpaid(orderId, { acknowledgedById })
+  }
   return apiFetch(`/orders/${orderId}/unpaid-ack`, {
     method: "POST",
     body: JSON.stringify({ acknowledgedById }),
@@ -496,6 +566,9 @@ export async function markOrderAsUnpaid(orderId: string, acknowledgedById: strin
 }
 
 export async function unmarkOrderAsUnpaid(orderId: string): Promise<Order> {
+  if (window.electron?.order?.unmarkUnpaid) {
+    return window.electron.order.unmarkUnpaid(orderId)
+  }
   return apiFetch(`/orders/${orderId}/unpaid-ack-undo`, {
     method: "POST",
   })
@@ -536,6 +609,9 @@ export async function closeShift(shiftId: string, finalClosedById: string, decla
   if (declaredCash !== undefined) body.declaredCash = declaredCash;
   if (declaredMpesa !== undefined) body.declaredMpesa = declaredMpesa;
   if (waste && waste.length > 0) body.waste = waste;
+  if (window.electron?.shift?.close) {
+    return window.electron.shift.close(shiftId, body)
+  }
   return apiFetch(`/shifts/${shiftId}/close`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -543,40 +619,68 @@ export async function closeShift(shiftId: string, finalClosedById: string, decla
 }
 
 export async function getCurrentShift(): Promise<Shift | null> {
+  if (window.electron?.shift?.getCurrent) {
+    return window.electron.shift.getCurrent()
+  }
   return apiFetch("/shifts/current")
 }
 
 export async function getShiftToClose(): Promise<Shift | null> {
+  if (window.electron?.shift?.getToClose) {
+    return window.electron.shift.getToClose()
+  }
   return apiFetch("/shifts/to-close")
 }
 
 export async function getShift(shiftId: string): Promise<Shift> {
+  if (window.electron?.shift?.get) {
+    return window.electron.shift.get(shiftId)
+  }
   return apiFetch(`/shifts/${shiftId}`)
 }
 
 export async function listShifts(operationDay?: string): Promise<Shift[]> {
+  if (window.electron?.shift?.list) {
+    return window.electron.shift.list(operationDay)
+  }
   const query = operationDay ? `?date=${encodeURIComponent(operationDay)}` : ""
   return apiFetch(`/shifts${query}`)
 }
 
 export async function listShiftsByRange(type: string, from: string, to: string): Promise<Shift[]> {
+  if (window.electron?.shift?.listByRange) {
+    return window.electron.shift.listByRange(type, from, to)
+  }
   const query = `?type=${encodeURIComponent(type)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
   return apiFetch(`/shifts${query}`)
 }
 
 export async function autoCloseShifts(): Promise<AutoCloseResult> {
+  if (window.electron?.shift?.autoClose) {
+    return window.electron.shift.autoClose()
+  }
   return apiFetch("/shifts/auto-close", { method: "POST" })
 }
 
 export async function getShiftReport(shiftId: string): Promise<ShiftReport> {
+  if (window.electron?.report?.getShiftReport) {
+    return window.electron.report.getShiftReport(shiftId)
+  }
   return apiFetch(`/reports/shift/${shiftId}`)
 }
 
 export async function getStockRemaining(): Promise<StockRemaining> {
+  if (window.electron?.report?.getStockRemaining) {
+    return window.electron.report.getStockRemaining()
+  }
   return apiFetch("/stock/remaining")
 }
 
 export async function getVoidReport(date: string): Promise<VoidReportWaiter[]> {
+  if (window.electron?.report?.getVoidReport) {
+    const data = await window.electron.report.getVoidReport(date) as { date: string; waiters: VoidReportWaiter[] }
+    return data.waiters
+  }
   const data = (await apiFetch(
     `/reports/voids?date=${encodeURIComponent(date)}`
   )) as { date: string; waiters: VoidReportWaiter[] }
@@ -689,33 +793,57 @@ export async function testServerConnection(): Promise<ServerStatus> {
 export type ShiftConfig = { id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean; manual: boolean; anchorIntervalMinutes: number }
 
 export async function getShiftConfigs(): Promise<ShiftConfig[]> {
+  if (window.electron?.shiftConfig?.getAll) {
+    return window.electron.shiftConfig.getAll()
+  }
   return apiFetch("/shift-config")
 }
 
 export async function createShiftConfig(data: { type: string; autoOpenTime: string; autoCloseTime: string; manual?: boolean; anchorIntervalMinutes?: number }): Promise<ShiftConfig> {
+  if (window.electron?.shiftConfig?.create) {
+    return window.electron.shiftConfig.create(data)
+  }
   return apiFetch("/shift-config", { method: "POST", body: JSON.stringify(data) })
 }
 
 export async function updateShiftConfig(id: string, data: Partial<Omit<ShiftConfig, "id" | "type">> & { type?: string }): Promise<ShiftConfig> {
+  if (window.electron?.shiftConfig?.update) {
+    return window.electron.shiftConfig.update(id, data)
+  }
   return apiFetch(`/shift-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
 export async function deleteShiftConfig(id: string): Promise<{ success: boolean }> {
+  if (window.electron?.shiftConfig?.delete) {
+    return window.electron.shiftConfig.delete(id)
+  }
   return apiFetch(`/shift-config/${id}`, { method: "DELETE" })
 }
 
 export async function getUsers(): Promise<AdminUser[]> {
+  if (window.electron?.users?.getAll) {
+    return window.electron.users.getAll()
+  }
   return apiFetch("/users")
 }
 
 export async function createUser(data: AdminUserCreateData): Promise<AdminUser> {
+  if (window.electron?.users?.create) {
+    return window.electron.users.create(data)
+  }
   return apiFetch("/users", { method: "POST", body: JSON.stringify(data) })
 }
 
 export async function updateUser(id: string, data: AdminUserUpdateData): Promise<AdminUser> {
+  if (window.electron?.users?.update) {
+    return window.electron.users.update(id, data)
+  }
   return apiFetch(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
 export async function deleteUser(id: string): Promise<{ message: string }> {
+  if (window.electron?.users?.delete) {
+    return window.electron.users.delete(id)
+  }
   return apiFetch(`/users/${id}`, { method: "DELETE" })
 }

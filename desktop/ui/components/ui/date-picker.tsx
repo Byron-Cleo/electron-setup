@@ -27,7 +27,8 @@ export function DatePicker({ value, onChange, placeholder = "Select date", class
     setSelectedDate(value ?? undefined)
   }
 
-  function handleSelect(date: Date) {
+  function handleSelect(date: Date | undefined) {
+    if (!date) return
     setSelectedDate(date)
     onChange(date)
     setOpen(false)
@@ -61,7 +62,7 @@ export function DatePicker({ value, onChange, placeholder = "Select date", class
             mode="single"
             selected={selectedDate}
             onSelect={handleSelect}
-            initialFocus
+            required={false}
             className="rounded-md border"
           />
           <div className="flex items-center justify-end gap-2 mt-3">

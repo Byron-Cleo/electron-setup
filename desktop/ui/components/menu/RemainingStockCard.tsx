@@ -109,7 +109,7 @@ export default function RemainingStockCard({ onAssigned }: Props) {
             {data?.previousShift ? (
               <span>
                 {data.previousShift.type === "DAY" ? "Day" : "Night"} shift ·{" "}
-                {formatDate(data.previousShift.date)}
+                {formatDate(data.previousShift.operationDay)}
               </span>
             ) : (
               "Carry-forward"

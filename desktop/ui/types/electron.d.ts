@@ -660,6 +660,7 @@ interface ShiftReportMeta {
   driftMinutes: number;
   isOpen: boolean;
   autoClosed?: boolean;
+  autoClosedAt?: string | null;
   finalClosedBy?: { id: string; name: string } | null;
 }
 
@@ -799,6 +800,35 @@ interface ShiftReportData {
   };
 }
 
+interface MenuStockStatusItem {
+  id: string;
+  name: string;
+  category: string;
+  mealTypes: string[];
+  produced: number;
+  sold: number;
+  remaining: number;
+  opening: number;
+}
+
+interface MenuStockStatus {
+  shift: { id: string; type: string; autoOpenTime: string } | null;
+  mealType: string | null;
+  selling: MenuStockStatusItem[];
+  soldOut: MenuStockStatusItem[];
+  runningLow: MenuStockStatusItem[];
+}
+
+interface ShiftConfig {
+  id: string;
+  type: string;
+  autoOpenTime: string;
+  autoCloseTime: string;
+  isActive: boolean;
+  manual: boolean;
+  anchorIntervalMinutes: number;
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: unknown) => void) => void;
   getStaticData: () => void;
@@ -821,6 +851,7 @@ interface ElectronAPI {
     update: (id: string, data: MenuUpdateData) => Promise<MenuItem>;
     delete: (id: string) => Promise<{ message: string }>;
     getRunningLowCount: () => Promise<{ count: number }>;
+    getCookedMenus: (date?: string) => Promise<CookedMenuItem[]>;
   };
   auth: {
     login: (pin: string) => Promise<LoginResponse>;
@@ -835,12 +866,21 @@ interface ElectronAPI {
     getLowStockCount: () => Promise<{ count: number }>;
     getStockCount: () => Promise<{ count: number }>;
     getKitchenInventory: (id: string) => Promise<KitchenInventory>;
+    getLowStock: () => Promise<StockSupply[]>;
   };
   stockRequest: {
     getAll: (status?: string) => Promise<StockRequest[]>;
     getById: (id: string) => Promise<StockRequest>;
+    getPendingCount: () => Promise<{ count: number }>;
+    getPartialCount: () => Promise<{ count: number }>;
     create: (data: CreateStockRequestData) => Promise<StockRequest>;
     fulfill: (id: string, data: FulfillStockRequestData) => Promise<StockRequest>;
+  };
+  category: {
+    getAll: () => Promise<Category[]>;
+    create: (data: CreateCategoryData) => Promise<Category>;
+    update: (id: string, data: UpdateCategoryData) => Promise<Category>;
+    delete: (id: string) => Promise<void>;
   };
   department: {
     getAll: () => Promise<Department[]>;
@@ -851,12 +891,15 @@ interface ElectronAPI {
   };
   cookingRecord: {
     getAll: (stockSupplyId?: string) => Promise<CookingRecord[]>;
+    getById: (id: string) => Promise<CookingRecord>;
     create: (data: CreateCookingRecordData) => Promise<CookingRecord>;
     delete: (id: string) => Promise<{ message: string }>;
   };
   kitchen: {
     getConfig: () => Promise<KitchenConfigItem[]>;
     saveConfig: (id: string, data: KitchenConfigData) => Promise<KitchenConfigItem>;
+    getInventoryList: () => Promise<KitchenStockItem[]>;
+    getUnderproducedCount: () => Promise<{ count: number }>;
   };
   printer: {
     getConfig: () => Promise<PosPrinterConfig>;
@@ -873,6 +916,18 @@ interface ElectronAPI {
   };
   order: {
     create: (data: CreateOrderData) => Promise<Order>;
+    getAll: (orderNumber?: number) => Promise<Order[]>;
+    getCount: () => Promise<{ count: number }>;
+    void: (orderId: string, data: { voidedById: string; reason?: string }) => Promise<Order>;
+    updatePayment: (orderId: string, data: { paymentMethod: "cash" | "mpesa"; paymentType?: "SINGLE" | "BATCH"; batchId?: string }) => Promise<Order>;
+    markUnpaid: (orderId: string, data: { acknowledgedById: string }) => Promise<Order>;
+    unmarkUnpaid: (orderId: string) => Promise<Order>;
+  };
+  users: {
+    getAll: () => Promise<AdminUser[]>;
+    create: (data: AdminUserCreateData) => Promise<AdminUser>;
+    update: (id: string, data: AdminUserUpdateData) => Promise<AdminUser>;
+    delete: (id: string) => Promise<{ message: string }>;
   };
   print: {
     preview: (data: ReceiptData) => Promise<string>;
@@ -880,9 +935,38 @@ interface ElectronAPI {
     previewShiftReport: (data: ShiftReportData) => Promise<string>;
     printShiftReport: (data: ShiftReportData) => Promise<PrintResult>;
   };
+  menuExtra: {
+    getStockStatus: (mealType?: string) => Promise<MenuStockStatus>;
+    updateAvailability: (id: string, isAvailable: boolean) => Promise<MenuItem>;
+    getAccompanimentImages: () => Promise<{ images: string[] }>;
+  };
+  accompaniment: {
+    getAll: () => Promise<Accompaniment[]>;
+    create: (data: AccompanimentCreateData) => Promise<Accompaniment>;
+    update: (id: string, data: AccompanimentUpdateData) => Promise<Accompaniment>;
+  };
+  shift: {
+    getCurrent: () => Promise<Shift | null>;
+    getToClose: () => Promise<Shift | null>;
+    get: (shiftId: string) => Promise<Shift>;
+    list: (operationDay?: string) => Promise<Shift[]>;
+    listByRange: (type: string, from: string, to: string) => Promise<Shift[]>;
+    close: (shiftId: string, data: { finalClosedById: string; declaredCash?: number; declaredMpesa?: number; waste?: Array<{ menuId?: string; plates?: number }> }) => Promise<Shift>;
+    autoClose: () => Promise<AutoCloseResult>;
+  };
+  report: {
+    getShiftReport: (shiftId: string) => Promise<ShiftReport>;
+    getStockRemaining: () => Promise<StockRemaining>;
+    getVoidReport: (date: string) => Promise<{ date: string; waiters: VoidReportWaiter[] }>;
+  };
+  shiftConfig: {
+    getAll: () => Promise<ShiftConfig[]>;
+    create: (data: { type: string; autoOpenTime: string; autoCloseTime: string; manual?: boolean; anchorIntervalMinutes?: number }) => Promise<ShiftConfig>;
+    update: (id: string, data: Partial<Omit<ShiftConfig, "id" | "type">> & { type?: string }) => Promise<ShiftConfig>;
+    delete: (id: string) => Promise<{ success: boolean }>;
+  };
 }
 
 interface Window {
   electron: ElectronAPI;
 }
-export {}

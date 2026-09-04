@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog"
 import { getCurrentShift, getOrders, getUsers } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
-import type { Shift } from "@/types/electron"
 
 type Props = {
   roles?: User["role"][]

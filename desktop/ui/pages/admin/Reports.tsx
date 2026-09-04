@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { CalendarDays, Printer, ShieldX, ClipboardList, Eye, AlertTriangle } from "lucide-react"
+import { CalendarDays, Printer, ShieldX, ClipboardList, Eye, AlertTriangle, Lock } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
@@ -299,6 +299,15 @@ function ShiftReportSection() {
       <div className="space-y-4">
         <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Report</Heading>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
+          {shiftConfigs.filter((c) => c.isActive).length === 0 && (
+            <Card className="col-span-full border-red-500/30 bg-red-50/40 shadow-red-100/40">
+              <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
+                <Lock className="h-6 w-6 text-red-600" />
+                <p className="text-sm font-semibold text-red-700">No shifts configured</p>
+                <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
+              </CardContent>
+            </Card>
+          )}
           {shiftConfigs.filter((c) => c.isActive).map((c, idx) => (
             <Card key={c.id} className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent" onClick={() => handleSelectShiftType(c.type)}>
               <div className={`h-16 w-16 rounded-lg flex items-center justify-center mx-auto mb-4 ${idx === 0 ? "bg-yellow-500/10" : idx === 1 ? "bg-indigo-500/10" : "bg-blue-500/10"}`}>
@@ -536,8 +545,15 @@ function WaitersReportSection() {
       </Card>
 
       {voidError ? (
-        <Card>
-          <CardContent className="p-6 text-sm text-red-600">{voidError}</CardContent>
+        <Card className="border-amber-300 bg-amber-50/50">
+          <CardContent className="p-6 flex flex-col items-center gap-2 text-center">
+            <AlertTriangle className="h-6 w-6 text-amber-600" />
+            <p className="text-sm font-semibold text-amber-800">No waiter report available</p>
+            <p className="text-xs text-amber-700/80">
+              No orders have been placed for the selected date yet, or the server could not be reached.
+              Try a different date or check that the backend server is running.
+            </p>
+          </CardContent>
         </Card>
       ) : (
         <DataTable
@@ -545,7 +561,7 @@ function WaitersReportSection() {
           data={voidWaiters}
           renderCell={renderVoidCell}
           keyExtractor={(w) => w.waiterId}
-          emptyMessage={loading ? "Loading report..." : "No orders recorded on this date."}
+          emptyMessage={loading ? "Loading report..." : "No orders recorded for this date. Waiter report will appear here once orders are placed."}
         />
       )}
     </div>

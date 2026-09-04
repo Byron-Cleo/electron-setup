@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Sunrise, Sun, Moon, CakeSlice, CupSoda, Ban, TriangleAlert } from "lucide-react"
+import { Sunrise, Sun, Moon, CakeSlice, CupSoda, Ban, TriangleAlert, Lock } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
 import { getActiveMealPeriods, type ActiveMealPeriod, type MealPeriodLabel } from "@/lib/mealPeriod"
-import { getCurrentShift } from "@/lib/api"
+import { getCurrentShift, getShiftConfigs } from "@/lib/api"
 import { useWaiterOrder } from "./WaiterOrderContext"
 import VoidOrdersDialog from "@/components/waiterPos/VoidOrdersDialog"
 
@@ -24,6 +24,7 @@ export function WaiterPOS() {
   const [hour, setHour] = useState(new Date().getHours())
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [noShift, setNoShift] = useState(false)
+  const [noConfig, setNoConfig] = useState(false)
   const { voidedOrders } = useWaiterOrder()
 
   useEffect(() => {
@@ -47,6 +48,20 @@ export function WaiterPOS() {
     return () => {
       cancelled = true
       clearInterval(id)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    getShiftConfigs()
+      .then((configs) => {
+        if (!cancelled) setNoConfig(configs.filter((c) => c.isActive).length === 0)
+      })
+      .catch(() => {
+        if (!cancelled) setNoConfig(false)
+      })
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -111,6 +126,17 @@ export function WaiterPOS() {
               <p className="text-sm text-red-700/80">
                 There is a missed shift. Please alert the manager. Orders cannot be taken until a shift is open.
               </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {noConfig && (
+        <Card className="mx-auto max-w-2xl border-red-500/30 bg-red-50/40 shadow-red-100/40">
+          <CardContent className="p-5 flex items-center gap-3">
+            <Lock className="h-6 w-6 text-red-600 shrink-0" />
+            <div className="text-center flex-1">
+              <p className="text-sm font-semibold text-red-700">No shifts configured</p>
+              <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
             </div>
           </CardContent>
         </Card>

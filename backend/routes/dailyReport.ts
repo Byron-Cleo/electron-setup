@@ -481,6 +481,7 @@ router.get("/shift/:id", async (req, res) => {
         driftMinutes,
         isOpen: shift.isOpen,
         autoClosed: shift.autoClosed,
+        autoClosedAt: shift.autoClosedAt,
         finalClosedBy: shift.finalClosedBy,
       },
       plateMovement,

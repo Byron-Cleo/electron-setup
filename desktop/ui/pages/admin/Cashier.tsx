@@ -366,7 +366,7 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
   )
 }
 
-function OrdersView({ shiftType }: { shiftType?: string }) {
+function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [shiftOpDayById, setShiftOpDayById] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -449,7 +449,7 @@ function OrdersView({ shiftType }: { shiftType?: string }) {
     if (selectedDate) {
       const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
-        const orderShiftOpDay = shiftOpDayById.get(o.shiftId)
+        const orderShiftOpDay = o.shiftId ? shiftOpDayById.get(o.shiftId) : undefined
         return orderShiftOpDay === selectedStr
       })
     }
@@ -763,7 +763,7 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
   )
 }
 
-function VoidView({ shiftType }: { shiftType?: string }) {
+function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) {
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
 
@@ -814,7 +814,7 @@ function VoidView({ shiftType }: { shiftType?: string }) {
     if (selectedDate) {
       const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
-        const orderShiftOpDay = shiftOpDayById.get(o.shiftId)
+        const orderShiftOpDay = o.shiftId ? shiftOpDayById.get(o.shiftId) : undefined
         return orderShiftOpDay === selectedStr
       })
     }
@@ -1109,7 +1109,7 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
   )
 }
 
-function PaymentView({ shiftType }: { shiftType?: string }) {
+function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [shiftOpDayById, setShiftOpDayById] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -1167,7 +1167,7 @@ function PaymentView({ shiftType }: { shiftType?: string }) {
     if (selectedDate) {
       const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
-        const orderShiftOpDay = shiftOpDayById.get(o.shiftId)
+        const orderShiftOpDay = o.shiftId ? shiftOpDayById.get(o.shiftId) : undefined
         return orderShiftOpDay === selectedStr
       })
     }

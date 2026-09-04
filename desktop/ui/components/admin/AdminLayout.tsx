@@ -36,7 +36,6 @@ function AdminLayout() {
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
   const [shiftType, setShiftType] = useState<string | null>(null)
   const [hasShiftToClose, setHasShiftToClose] = useState(false)
-  const [currentShiftName, setCurrentShiftName] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [partialCount, setPartialCount] = useState(0)
   const [readyCount, setReadyCount] = useState(0)
