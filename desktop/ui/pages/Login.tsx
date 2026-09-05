@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Info, Loader2, Power } from "lucide-react";
+import { ArrowRight, Info, Loader2, Power, UtensilsCrossed } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth";
 import { getMenuImages, menuImageUrl } from "@/lib/api";
@@ -19,31 +19,44 @@ function ImageCarousel() {
 
   useEffect(() => {
     let active = true;
-    getMenuImages()
-      .then((paths) => {
+
+    async function refreshCarousel() {
+      try {
+        const paths = await getMenuImages();
         if (!active) return;
         const urls = paths.map((p) => menuImageUrl(p) ?? "").filter(Boolean);
-        if (urls.length > 0) {
-          setImages(urls);
-          // Preload every image up-front so the carousel never shows a blank
-          // frame while a large PNG is still downloading.
-          urls.forEach((url) => {
-            const img = new Image();
-            img.onload = () => {
-              if (active) setLoaded((prev) => ({ ...prev, [url]: true }));
-            };
-            img.onerror = () => {
-              if (active) setLoaded((prev) => ({ ...prev, [url]: false }));
-            };
-            img.src = url;
-          });
+        if (urls.length === 0) {
+          setImages([]);
+          return;
         }
-      })
-      .catch(() => {
-        /* keep fallback images */
-      });
+        setImages(urls);
+        // Clamp the current index in case the list shrank between refreshes.
+        setCurrent((prev) => (prev < urls.length ? prev : 0));
+        // Preload every image up-front so the carousel never shows a blank
+        // frame while a large PNG is still downloading.
+        urls.forEach((url) => {
+          const img = new Image();
+          img.onload = () => {
+            if (active) setLoaded((prev) => ({ ...prev, [url]: true }));
+          };
+          img.onerror = () => {
+            if (active) setLoaded((prev) => ({ ...prev, [url]: false }));
+          };
+          img.src = url;
+        });
+      } catch {
+        /* keep current images */
+      }
+    }
+
+    // Load once on mount, then re-poll so images uploaded via the admin Menu /
+    // Accompaniment forms appear on this login screen without a manual reload.
+    refreshCarousel();
+    const timer = setInterval(refreshCarousel, 30000);
+
     return () => {
       active = false;
+      clearInterval(timer);
     };
   }, []);
 
@@ -67,16 +80,25 @@ function ImageCarousel() {
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden bg-brand-tan">
       <div className="absolute inset-0 bg-gradient-to-br from-brand-green/50 via-brand-green/30 to-brand-beige/40 z-10 pointer-events-none" />
-      {isLoaded ? (
-        <img
-          key={url}
-          src={url}
-          alt={`Restaurant view ${current + 1}`}
-          className="absolute inset-0 w-full h-full object-contain animate-[fade-in_0.5s_ease]"
-        />
+      {url ? (
+        isLoaded ? (
+          <img
+            key={url}
+            src={url}
+            alt={`Restaurant view ${current + 1}`}
+            className="absolute inset-0 w-full h-full object-contain animate-[fade-in_0.5s_ease]"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-brand-green/60" />
+          </div>
+        )
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-green/60" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <UtensilsCrossed className="h-12 w-12 text-brand-green/40" />
+          <p className="text-brand-green/60 font-medium">
+            Upload menu images to display here
+          </p>
         </div>
       )}
     </div>

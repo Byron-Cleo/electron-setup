@@ -11,11 +11,26 @@ const router = Router();
 
 const VALID_MEAL_TYPES = Object.values(ServiceTime) as string[];
 
+// Keep a readable, sanitized copy of the original filename at the end so the
+// waiter gallery's endsWith-based accompaniment matching works for uploaded
+// images (e.g. "beef fry ugali.png" -> "3f9c…-beef-fry-ugali.png").
+function sanitizeImageName(originalName: string): string {
+  const ext = path.extname(originalName);
+  const base = path.basename(originalName, ext);
+  return base
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]+/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 const menuImageStorage = multer.diskStorage({
   destination: uploadsDir("menu-items"),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${crypto.randomUUID()}${ext}`);
+    const readable = sanitizeImageName(file.originalname);
+    cb(null, `${crypto.randomUUID()}-${readable}${ext}`);
   },
 });
 
@@ -338,12 +353,25 @@ router.get("/", async (req, res) => {
 
 router.get("/images", async (_req, res) => {
   try {
-    const dir = uploadsDir("menu-items");
-    const files = await fs.readdir(dir);
-    const images = files
-      .filter((f) => /\.(png|jpe?g|webp)$/i.test(f))
-      .sort()
-      .map((f) => `/uploads/menu-items/${f}`);
+    // The login carousel feeds from this endpoint. List every image a form
+    // upload can produce — menu items and menu accompaniments — so both the
+    // Menu and Accompaniment admin forms automatically feed the carousel.
+    const subdirs = ["menu-items", "menu-accompaniments"];
+    const images: string[] = [];
+    for (const sub of subdirs) {
+      let files: string[] = [];
+      try {
+        files = await fs.readdir(uploadsDir(sub));
+      } catch {
+        files = [];
+      }
+      images.push(
+        ...files
+          .filter((f) => /\.(png|jpe?g|webp)$/i.test(f))
+          .sort()
+          .map((f) => `/uploads/${sub}/${f}`),
+      );
+    }
     res.json({ images });
   } catch {
     res.status(500).json({ error: "Failed to list menu images" });

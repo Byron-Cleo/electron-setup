@@ -49,8 +49,9 @@ app.use(express.json());
 const uploads = uploadsRoot();
 fs.mkdirSync(path.join(uploads, "stock-supplies"), { recursive: true });
 fs.mkdirSync(path.join(uploads, "menu-items"), { recursive: true });
+fs.mkdirSync(path.join(uploads, "menu-accompaniments"), { recursive: true });
 
-// All uploaded images (stock supplies + menu items) are served from /uploads.
+// All uploaded images (stock supplies, menu items + accompaniments) are served from /uploads.
 app.use("/uploads", express.static(uploads));
 
 app.get("/health", (_req, res) => {

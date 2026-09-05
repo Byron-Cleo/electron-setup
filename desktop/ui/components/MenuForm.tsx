@@ -80,22 +80,49 @@ function MenuImageField({
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const current = value?.[0] ?? null
+  const images = value ?? []
+
+  async function handleUpload(file: File) {
+    try {
+      setUploading(true)
+      const { url } = await uploadMenuImage(file)
+      onChange([...images, url])
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Image upload failed")
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
-    <div className="flex items-center gap-3">
-      {current ? (
-        <img
-          src={menuImageUrl(current) ?? undefined}
-          alt="Menu item"
-          className="h-16 w-16 rounded-md border object-cover"
-        />
-      ) : (
-        <div className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed text-muted-foreground">
-          <ImagePlus className="h-5 w-5" />
+    <div className="space-y-3">
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {images.map((url, i) => (
+            <div key={`${url}-${i}`} className="relative">
+              <img
+                src={menuImageUrl(url) ?? undefined}
+                alt={`Menu image ${i + 1}`}
+                className="h-16 w-16 rounded-md border object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => onChange(images.filter((_, idx) => idx !== i))}
+                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] leading-none hover:bg-red-600 cursor-pointer"
+                aria-label={`Remove image ${i + 1}`}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
       )}
-      <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-3">
+        {images.length === 0 && (
+          <div className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed text-muted-foreground">
+            <ImagePlus className="h-5 w-5" />
+          </div>
+        )}
         <input
           ref={inputRef}
           type="file"
@@ -105,15 +132,7 @@ function MenuImageField({
             const file = e.target.files?.[0]
             e.target.value = ""
             if (!file) return
-            try {
-              setUploading(true)
-              const { url } = await uploadMenuImage(file)
-              onChange([url])
-            } catch (err) {
-              onError(err instanceof Error ? err.message : "Image upload failed")
-            } finally {
-              setUploading(false)
-            }
+            await handleUpload(file)
           }}
         />
         <Button
@@ -123,13 +142,8 @@ function MenuImageField({
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
         >
-          {uploading ? "Uploading..." : current ? "Change Image" : "Upload Image"}
+          {uploading ? "Uploading..." : "Add Image"}
         </Button>
-        {current && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => onChange([])}>
-            Remove
-          </Button>
-        )}
       </div>
     </div>
   )
@@ -296,7 +310,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                 name="images"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Menu Image</FormLabel>
+                    <FormLabel>Menu Images</FormLabel>
                     <MenuImageField
                       value={field.value ?? []}
                       onChange={field.onChange}
