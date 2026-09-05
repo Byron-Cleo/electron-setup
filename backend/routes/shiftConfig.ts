@@ -85,22 +85,6 @@ router.put("/:id", async (req, res) => {
     return res.status(400).json({ error: "anchorIntervalMinutes must be a positive integer (minutes)" });
   }
 
-  const now = new Date();
-
-  // Guard A: reject outright rather than ever setting a past time on a shift.
-  if (autoOpenTime !== undefined) {
-    const newOpen = occurrenceOf(autoOpenTime, now);
-    if (now.getTime() >= newOpen.getTime()) {
-      return res.status(400).json({ error: "autoOpenTime cannot be set to a past time" });
-    }
-  }
-  if (autoCloseTime !== undefined) {
-    const newClose = occurrenceOf(autoCloseTime, now);
-    if (now.getTime() >= newClose.getTime()) {
-      return res.status(400).json({ error: "autoCloseTime cannot be set to a past time" });
-    }
-  }
-
   try {
     const updated = await prisma.$transaction(async (tx) => {
       const config = await tx.shiftConfig.update({
