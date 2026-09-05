@@ -6,10 +6,38 @@ function resolveApiOrigin(): string {
 const API_ORIGIN = resolveApiOrigin()
 const API_BASE = import.meta.env.VITE_API_BASE ?? `${API_ORIGIN}/api`
 
+// Runtime origin override. In a packaged Electron build the renderer image URLs
+// must follow the server configured via Settings → Server Connection (which the
+// main process resolves), not the build-time origin. module-level cache updated
+// once the IPC round-trip completes; falls back to API_ORIGIN in dev/browser.
+let runtimeApiOrigin: string | null = null
+
+export async function loadApiOrigin(): Promise<string> {
+  if (runtimeApiOrigin) return runtimeApiOrigin
+  try {
+    const origin = await window.electron?.serverConfig?.getApiOrigin()
+    if (origin) {
+      runtimeApiOrigin = origin.replace(/\/+$/, "")
+      return runtimeApiOrigin
+    }
+  } catch {
+    /* fall through to build-time origin */
+  }
+  return API_ORIGIN
+}
+
+loadApiOrigin()
+
+// Forget the cached runtime origin so the next loadApiOrigin() re-reads it from
+// the main process. Called after the server config changes so image URLs follow.
+export function resetApiOrigin(): void {
+  runtimeApiOrigin = null
+}
+
 export function stockSupplyImageUrl(image: string | null): string | null {
   if (!image) return null
   if (image.startsWith("http")) return image
-  return `${API_ORIGIN}${image}`
+  return `${runtimeApiOrigin ?? API_ORIGIN}${image}`
 }
 
 // Resolves menu/accompaniment image paths so they work in both the dev server and
@@ -19,12 +47,13 @@ export function stockSupplyImageUrl(image: string | null): string | null {
 export function menuImageUrl(url: string | null): string | null {
   if (!url) return null
   if (/^(https?:|data:|blob:|file:)/i.test(url)) return url
+  const origin = runtimeApiOrigin ?? API_ORIGIN
   const clean = url.trim().replace(/^(\.\.?\/)+/, "").replace(/^\/+/, "")
   if (clean.includes("images/sample-meals/")) {
-    return `${API_ORIGIN}/uploads/menu-items/${clean.split("/").pop()}`
+    return `${origin}/uploads/menu-items/${clean.split("/").pop()}`
   }
-  if (clean.startsWith("uploads/")) return `${API_ORIGIN}/${clean}`
-  return `${API_ORIGIN}/uploads/menu-items/${clean}`
+  if (clean.startsWith("uploads/")) return `${origin}/${clean}`
+  return `${origin}/uploads/menu-items/${clean}`
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -335,6 +364,7 @@ export async function getMenuByMealType(mealPeriod: string): Promise<MenuItem[]>
 }
 
 export async function getMenuImages(): Promise<string[]> {
+  await loadApiOrigin()
   if (window.electron?.menu?.listImages) {
     return (await window.electron.menu.listImages()).images
   }

@@ -11,6 +11,8 @@ import {
   saveServerConfig,
   getServerApiBase,
   testServerConnection,
+  resetApiOrigin,
+  loadApiOrigin,
 } from "@/lib/api"
 
 interface Props {
@@ -100,6 +102,8 @@ export default function ServerConfig({ onBack }: Props) {
     setError("")
     try {
       await saveServerConfig({ serverUrl: normalized })
+      resetApiOrigin()
+      await loadApiOrigin()
       setStatus(await testServerConnection())
       setApiBase(await getServerApiBase())
     } catch (e: unknown) {
@@ -119,6 +123,8 @@ export default function ServerConfig({ onBack }: Props) {
     setError("")
     try {
       await saveServerConfig({ serverUrl: normalized })
+      resetApiOrigin()
+      await loadApiOrigin()
       setApiBase(await getServerApiBase())
     } catch (e: unknown) {
       setError(errMessage(e))

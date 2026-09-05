@@ -104,6 +104,7 @@ electron.contextBridge.exposeInMainWorld("electron", {
       electron.ipcRenderer.invoke("server-config:save", config),
     test: () => electron.ipcRenderer.invoke("server-config:test"),
     getApiBase: () => electron.ipcRenderer.invoke("server-config:get-api-base"),
+    getApiOrigin: () => electron.ipcRenderer.invoke("server-config:get-api-origin"),
   },
   order: {
     create: (data: any) => electron.ipcRenderer.invoke("order:create", data),

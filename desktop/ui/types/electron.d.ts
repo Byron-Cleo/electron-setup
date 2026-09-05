@@ -913,6 +913,7 @@ interface ElectronAPI {
     saveConfig: (config: ServerConfig) => Promise<ServerConfig>;
     test: () => Promise<ServerStatus>;
     getApiBase: () => Promise<string>;
+    getApiOrigin: () => Promise<string>;
   };
   order: {
     create: (data: CreateOrderData) => Promise<Order>;

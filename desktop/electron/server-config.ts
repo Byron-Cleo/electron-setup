@@ -79,4 +79,5 @@ export function registerServerConfigHandlers(): void {
   );
   ipcMain.handle("server-config:test", async () => testServerConnection());
   ipcMain.handle("server-config:get-api-base", async () => getApiBase());
+  ipcMain.handle("server-config:get-api-origin", async () => getApiOrigin());
 }
