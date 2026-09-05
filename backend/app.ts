@@ -20,6 +20,7 @@ import shiftsRouter from "./routes/shifts.js";
 import shiftConfigRouter from "./routes/shiftConfig.js";
 import stockRemainingRouter from "./routes/stockRemaining.js";
 import categoriesRouter from "./routes/categories.js";
+import { registerEventsRoute } from "./events.js";
 import { uploadsRoot } from "./db/uploads.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -75,6 +76,10 @@ app.use("/api/shifts", shiftsRouter);
 app.use("/api/shift-config", shiftConfigRouter);
 app.use("/api/stock", stockRemainingRouter);
 app.use("/api/categories", categoriesRouter);
+
+// Server-Sent Events stream for real-time cross-terminal updates
+// (must be registered before the SPA fallback below).
+registerEventsRoute(app);
 
 // Serve the built React app (web interface over WiFi) + SPA fallback.
 const distReact = resolveDistReact();

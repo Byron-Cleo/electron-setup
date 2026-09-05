@@ -8,6 +8,7 @@ import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers, r
 import { registerPrinterHandlers } from "./printers.ts";
 import { registerReceiptHandlers } from "./receipt.ts";
 import { registerServerConfigHandlers } from "./server-config.ts";
+import { startLiveEvents } from "./live-events.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,7 +20,7 @@ try {
     electron: path.join(__dirname, "node_modules", ".bin", "electron"),
     watched: ["**/*.{js,css,html}"],
   });
-} catch {} // dev-only
+} catch { /* electron-reload is dev-only */ }
 
 function createMainWindow() {
   const win = new BrowserWindow({
@@ -78,6 +79,8 @@ app.whenReady().then(() => {
   ipcMain.handle("app:quit", () => {
     app.quit();
   });
+
+  startLiveEvents();
 
   createMainWindow();
 });

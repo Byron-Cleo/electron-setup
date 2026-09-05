@@ -829,6 +829,13 @@ interface ShiftConfig {
   anchorIntervalMinutes: number;
 }
 
+interface LiveEvent {
+  type: string;
+  orderId?: string;
+  shiftId?: string;
+  at?: string;
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: unknown) => void) => void;
   getStaticData: () => void;
@@ -965,6 +972,9 @@ interface ElectronAPI {
     create: (data: { type: string; autoOpenTime: string; autoCloseTime: string; manual?: boolean; anchorIntervalMinutes?: number }) => Promise<ShiftConfig>;
     update: (id: string, data: Partial<Omit<ShiftConfig, "id" | "type">> & { type?: string }) => Promise<ShiftConfig>;
     delete: (id: string) => Promise<{ success: boolean }>;
+  };
+  live: {
+    onEvent: (callback: (event: LiveEvent) => void) => () => void;
   };
 }
 

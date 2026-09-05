@@ -1,4 +1,5 @@
 import prisma from "./db/db.js";
+import { emitLiveEvent } from "./events.js";
 
 // Shift scheduler using an anchor-based operational cycle.
 //
@@ -88,11 +89,11 @@ export async function autoCreateShifts() {
         continue;
       }
 
-      await prisma.$transaction(async (tx) => {
+      const created = await prisma.$transaction(async (tx): Promise<string | null> => {
         const existing = await tx.shift.findFirst({
           where: { type: cfg.type, operationDay },
         });
-        if (existing) return;
+        if (existing) return null;
 
         const shift = await tx.shift.create({
           data: {
@@ -139,11 +140,20 @@ export async function autoCreateShifts() {
             },
           });
         }
+
+        return shift.id;
       });
 
-      console.log(
-        `[scheduler] Auto-created ${cfg.type} shift for operational day ${operationDay.toISOString().split("T")[0]} (open ${cfg.autoOpenTime}, close ${cfg.autoCloseTime})`
-      );
+      if (created) {
+        emitLiveEvent({
+          type: "shift.opened",
+          shiftId: created,
+          at: new Date().toISOString(),
+        });
+        console.log(
+          `[scheduler] Auto-created ${cfg.type} shift for operational day ${operationDay.toISOString().split("T")[0]} (open ${cfg.autoOpenTime}, close ${cfg.autoCloseTime})`
+        );
+      }
     } catch (e) {
       console.error(`[scheduler] Auto-create failed for ${cfg.type} (${cfg.autoOpenTime}):`, e);
     }
@@ -217,6 +227,13 @@ export async function autoCloseExpiredShifts() {
 
       if (autoClosed) {
         autoClosedShifts.push(autoClosed);
+        if (!manualClose) {
+          emitLiveEvent({
+            type: "shift.closed",
+            shiftId: autoClosed.id,
+            at: new Date().toISOString(),
+          });
+        }
         console.log(
           `[scheduler] Auto-captured ${autoClosed.type} shift ${autoClosed.id} at ${now.toISOString()} ` +
             `(scheduled ${shift.autoCloseTime.toISOString()}, manualClose=${manualClose})`

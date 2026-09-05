@@ -161,4 +161,13 @@ electron.contextBridge.exposeInMainWorld("electron", {
     update: (id: string, data: any) => electron.ipcRenderer.invoke("shift-config:update", id, data),
     delete: (id: string) => electron.ipcRenderer.invoke("shift-config:delete", id),
   },
+  live: {
+    onEvent: (callback: (event: any) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: any) => callback(payload);
+      electron.ipcRenderer.on("live:event", listener);
+      return () => {
+        electron.ipcRenderer.removeListener("live:event", listener);
+      };
+    },
+  },
 });

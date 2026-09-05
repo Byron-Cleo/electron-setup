@@ -56,6 +56,40 @@ export function menuImageUrl(url: string | null): string | null {
   return `${origin}/uploads/menu-items/${clean}`
 }
 
+// ─── Live Events ─────────────────────────────────────────────────────────────
+
+export interface LiveEvent {
+  type: string
+  orderId?: string
+  shiftId?: string
+  at?: string
+}
+
+// Subscribe to real-time backend events (order.created, order.paid, order.voided,
+// shift.opened, shift.closed, ...). In Electron events arrive via the main-process
+// SSE bridge + IPC; in browser/dev mode we fall back to a direct EventSource,
+// mirroring the window.electron-first convention used across this module.
+// Returns an unsubscribe function.
+export function subscribeLive(handler: (event: LiveEvent) => void): () => void {
+  if (window.electron?.live?.onEvent) {
+    return window.electron.live.onEvent(handler)
+  }
+  const origin = runtimeApiOrigin ?? API_ORIGIN
+  const source = new EventSource(`${origin}/api/events`)
+  const onMessage = (event: MessageEvent) => {
+    try {
+      handler(JSON.parse(event.data) as LiveEvent)
+    } catch {
+      /* ignore malformed events */
+    }
+  }
+  source.addEventListener("message", onMessage)
+  return () => {
+    source.removeEventListener("message", onMessage)
+    source.close()
+  }
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const UNIT_LABELS: Record<string, string> = {

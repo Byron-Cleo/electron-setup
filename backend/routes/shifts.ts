@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
+import { emitLiveEvent } from "../events.js";
 import { autoCloseExpiredShifts } from "../scheduler.js";
 
 const router = Router();
@@ -330,6 +331,11 @@ router.post("/:id/close", async (req, res) => {
       });
     });
 
+    emitLiveEvent({
+      type: "shift.closed",
+      shiftId: closedShift?.id ?? id,
+      at: new Date().toISOString(),
+    });
     res.json(closedShift);
   } catch (e) {
     console.error("Error closing shift:", e);

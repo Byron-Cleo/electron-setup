@@ -10,6 +10,7 @@ import ShiftCloseDialog from "@/components/shift/ShiftCloseDialog"
 import ShiftReportView from "@/components/reports/ShiftReport"
 import { getShiftReport, getVoidReport, listShiftsByRange, getShiftConfigs, getShift } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
+import { useLiveRefresh } from "@/hooks/useLiveRefresh"
 import { cn } from "@/lib/utils"
 
 type ActiveView = "shift-report" | "waiters-report" | null
@@ -143,6 +144,7 @@ function ShiftReportSection() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<ShiftReport | null>(null)
+  const [viewedShift, setViewedShift] = useState<Shift | null>(null)
   const [closeShift, setCloseShift] = useState<Shift | null>(null)
   const [closeShiftOpen, setCloseShiftOpen] = useState(false)
 
@@ -163,6 +165,7 @@ function ShiftReportSection() {
       setLoading(true)
       setError(null)
       setReport(null)
+      setViewedShift(null)
       try {
         const data = await listShiftsByRange(shiftType, fromKey, toKey)
         if (cancelled) return
@@ -200,6 +203,7 @@ function ShiftReportSection() {
     setReport(null)
     setError(null)
     setSubview("detail")
+    setViewedShift(shift)
     try {
       const data = await getShiftReport(shift.id)
       setReport(data)
@@ -218,6 +222,34 @@ function ShiftReportSection() {
       alert(err instanceof Error ? err.message : "Failed to load shift")
     }
   }
+
+  async function refreshReport() {
+    if (!viewedShift) return
+    try {
+      const data = await getShiftReport(viewedShift.id)
+      setReport(data)
+    } catch { /* keep the last good report */ }
+  }
+
+  // Live report: while the viewed shift is still open, orders arriving on any
+  // terminal refresh revenue / plate movement / production in place.
+  useLiveRefresh(
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo"],
+    () => {
+      if (viewedShift?.isOpen) void refreshReport()
+    }
+  )
+
+  // When the viewed shift is finalized, push its final report through once and
+  // refresh the shift metadata so the isOpen gate stops further live refetches.
+  useLiveRefresh(["shift.closed"], (event) => {
+    if (!viewedShift || !viewedShift.isOpen) return
+    if (event.shiftId && event.shiftId !== viewedShift.id) return
+    void refreshReport()
+    getShift(viewedShift.id)
+      .then((fresh) => setViewedShift((prev) => (prev && prev.id === fresh.id ? fresh : prev)))
+      .catch(() => {})
+  })
 
   const shiftColumns = useMemo(
     () => [
@@ -326,7 +358,7 @@ function ShiftReportSection() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3 print:hidden">
-          <BackButton onClick={() => { setSubview("list"); setReport(null) }} />
+          <BackButton onClick={() => { setSubview("list"); setReport(null); setViewedShift(null) }} />
           {report && (
             <Button variant="outline" onClick={() => window.print()}>
               <Printer className="h-4 w-4" />
@@ -360,7 +392,7 @@ function ShiftReportSection() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 print:hidden">
-        <BackButton onClick={() => { setSubview("types"); setSelectedShiftType(null); setShifts([]); setReport(null) }} />
+        <BackButton onClick={() => { setSubview("types"); setSelectedShiftType(null); setShifts([]); setReport(null); setViewedShift(null) }} />
         {report && (
           <Button variant="outline" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />

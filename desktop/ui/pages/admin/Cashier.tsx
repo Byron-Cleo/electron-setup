@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark, Lock } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,7 @@ import {
 import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { usePagination } from "@/hooks/usePagination"
+import { useLiveRefresh } from "@/hooks/useLiveRefresh"
 import BackButton from "@/components/shared/BackButton"
 import CurrentShiftIndicator from "@/components/shared/CurrentShiftIndicator"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -120,6 +121,15 @@ function Cashier() {
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
 
+  const refreshCurrentShift = useCallback(async () => {
+    try {
+      const shift = await getCurrentShift()
+      setCurrentstring(shift?.type)
+    } catch {
+      setCurrentstring(undefined)
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     getCurrentShift()
@@ -131,6 +141,8 @@ function Cashier() {
       })
     return () => { cancelled = true }
   }, [])
+
+  useLiveRefresh(["shift.opened", "shift.closed"], refreshCurrentShift)
 
   return (
     <div className="space-y-2">
@@ -173,6 +185,25 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
 
+  const refreshCounts = useCallback(async () => {
+    try {
+      const [orders, shifts] = await Promise.all([getOrders(), listShifts()])
+
+      const shiftTypeById = new Map(shifts.map((s) => [s.id, s.type]))
+
+      const dayShiftOrders = orders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === "DAY")
+      const nightShiftOrders = orders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === "NIGHT")
+
+      setCounts({
+        total: orders.length,
+        unpaid: orders.filter((o) => !o.isPaid && !o.isVoid).length,
+        voided: orders.filter((o) => o.isVoid).length,
+        dayShift: dayShiftOrders.length,
+        nightShift: nightShiftOrders.length,
+      })
+    } catch { /* ignore */ }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     async function loadData() {
@@ -197,6 +228,11 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
     loadData()
     return () => { cancelled = true }
   }, [])
+
+  useLiveRefresh(
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "shift.opened", "shift.closed"],
+    refreshCounts
+  )
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -376,6 +412,27 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
   const [activeTab, setActiveTab] = useState<OrderTab>("ALL")
 
+  const refreshOrders = useCallback(async () => {
+    setLoading(true)
+    setError("")
+    try {
+      const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
+
+      const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
+      const shiftOpDayById = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
+      const filteredOrders = shiftType
+        ? allOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+        : allOrders
+
+      setOrders(filteredOrders)
+      setShiftOpDayById(shiftOpDayById)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load orders")
+    } finally {
+      setLoading(false)
+    }
+  }, [shiftType])
+
   useEffect(() => {
     let cancelled = false
     async function loadOrders() {
@@ -402,6 +459,11 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
     loadOrders()
     return () => { cancelled = true }
   }, [shiftType])
+
+  useLiveRefresh(
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo"],
+    refreshOrders
+  )
 
   const batchTotals = useMemo(() => {
     const totals: Record<string, number> = {}
@@ -777,9 +839,30 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
   const [voidReason, setVoidReason] = useState("")
   const [voiding, setVoiding] = useState(false)
 
+  const refreshVoid = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
+
+      const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
+      const shiftOpDayByIdMap = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
+      const voidableOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
+      const filteredOrders = shiftType
+        ? voidableOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+        : voidableOrders
+
+      setOrders(filteredOrders)
+      setShiftOpDayById(shiftOpDayByIdMap)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load orders")
+    } finally {
+      setLoading(false)
+    }
+  }, [shiftType])
+
   useEffect(() => {
-    if (isCashier) return
     let cancelled = false
+    if (isCashier) return
     async function loadOrders() {
       setLoading(true)
       try {
@@ -804,6 +887,11 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
     loadOrders()
     return () => { cancelled = true }
   }, [isCashier, shiftType])
+
+  useLiveRefresh(
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo"],
+    isCashier ? () => {} : refreshVoid
+  )
 
   const filtered = useMemo(() => {
     let source = orders
@@ -1126,6 +1214,27 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
   const [payProcessing, setPayProcessing] = useState(false)
   const [payCategory, setPayCategory] = useState<"NEW" | "MARKED">("NEW")
 
+  const refreshPayment = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
+
+      const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
+      const shiftOpDayByIdMap = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
+      const unpaidOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
+      const filteredOrders = shiftType
+        ? unpaidOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+        : unpaidOrders
+
+      setOrders(filteredOrders)
+      setShiftOpDayById(shiftOpDayByIdMap)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load orders")
+    } finally {
+      setLoading(false)
+    }
+  }, [shiftType])
+
   useEffect(() => {
     let cancelled = false
     async function loadOrders() {
@@ -1152,6 +1261,11 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
     loadOrders()
     return () => { cancelled = true }
   }, [shiftType])
+
+  useLiveRefresh(
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo"],
+    refreshPayment
+  )
 
   const filtered = useMemo(() => {
     let source = orders

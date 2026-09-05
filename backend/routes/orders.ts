@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
+import { emitLiveEvent } from "../events.js";
 import { type Prisma, ServiceTime } from "../db/generated/prisma/client.js";
 
 const router = Router();
@@ -79,9 +80,12 @@ router.post("/", async (req, res) => {
   const shippingPrice = 0;
   const taxPrice = 0;
 
-  // Every order must link to an open shift (no orphaned orders)
+  // Every order must link to an open shift (no orphaned orders).
+  // Use the NEWEST open shift (same rule as getCurrentShift) so an order never
+  // lands on an older still-open shift left over from a previous cycle.
   const currentShift = await prisma.shift.findFirst({
     where: { isOpen: true },
+    orderBy: { createdAt: "desc" },
     select: { id: true },
   });
   if (!currentShift) {
@@ -213,6 +217,12 @@ router.post("/", async (req, res) => {
       });
     });
 
+    emitLiveEvent({
+      type: "order.created",
+      orderId: order?.id,
+      shiftId: order?.shiftId ?? currentShift.id,
+      at: new Date().toISOString(),
+    });
     res.status(201).json(order);
   } catch (e: unknown) {
     if ((e as { code?: string })?.code === "P2025") {
@@ -258,6 +268,12 @@ router.patch("/:id/payment", async (req, res) => {
       },
     });
 
+    emitLiveEvent({
+      type: "order.paid",
+      orderId: updated.id,
+      shiftId: updated.shiftId ?? undefined,
+      at: new Date().toISOString(),
+    });
     res.json(updated);
   } catch (e) {
     console.error("Error updating payment:", e);
@@ -294,6 +310,12 @@ router.post("/:id/unpaid-ack", async (req, res) => {
         unpaidAcknowledgedAt: new Date(),
       },
     });
+    emitLiveEvent({
+      type: "order.unpaid-ack",
+      orderId: updated.id,
+      shiftId: updated.shiftId ?? undefined,
+      at: new Date().toISOString(),
+    });
     res.json(updated);
   } catch (e) {
     console.error("Error acknowledging unpaid order:", e);
@@ -319,6 +341,12 @@ router.post("/:id/unpaid-ack-undo", async (req, res) => {
         unpaidAcknowledgedById: null,
         unpaidAcknowledgedAt: null,
       },
+    });
+    emitLiveEvent({
+      type: "order.unpaid-ack-undo",
+      orderId: updated.id,
+      shiftId: updated.shiftId ?? undefined,
+      at: new Date().toISOString(),
     });
     res.json(updated);
   } catch (e) {
@@ -353,6 +381,7 @@ router.post("/:id/void", async (req, res) => {
     // Check if order is in current open shift
     const currentShift = await prisma.shift.findFirst({
       where: { isOpen: true },
+      orderBy: { createdAt: "desc" },
     });
 
     if (currentShift && order.shiftId && order.shiftId !== currentShift.id) {
@@ -430,6 +459,12 @@ router.post("/:id/void", async (req, res) => {
       });
     });
 
+    emitLiveEvent({
+      type: "order.voided",
+      orderId: voidedOrder.id,
+      shiftId: voidedOrder.shiftId ?? undefined,
+      at: new Date().toISOString(),
+    });
     res.json(voidedOrder);
   } catch (e) {
     console.error("Error voiding order:", e);
