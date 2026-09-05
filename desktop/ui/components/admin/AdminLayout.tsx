@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
 import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getCurrentShift, getShiftToClose, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount } from "@/lib/api"
+import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount } from "@/lib/api"
 
 const allNavItems: {
   label: string
@@ -35,7 +35,6 @@ function AdminLayout() {
   const logout = useAuthStore((s) => s.logout)
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
   const [shiftType, setShiftType] = useState<string | null>(null)
-  const [hasShiftToClose, setHasShiftToClose] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [partialCount, setPartialCount] = useState(0)
   const [readyCount, setReadyCount] = useState(0)
@@ -90,22 +89,11 @@ function AdminLayout() {
           }
         })
     }
-    function checkToClose() {
-      getShiftToClose()
-        .then((shift) => {
-          if (!cancelled) setHasShiftToClose(!!shift)
-        })
-        .catch(() => {
-          if (!cancelled) setHasShiftToClose(false)
-        })
-    }
     checkShift()
     checkPending()
-    checkToClose()
     const interval = setInterval(() => {
       checkShift()
       checkPending()
-      checkToClose()
     }, 5000)
     return () => {
       cancelled = true
@@ -133,17 +121,13 @@ function AdminLayout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
                   item.accent
-                    ? hasShiftToClose
+                    ? hasOpenShift
                       ? isActive
+                        ? "bg-green-600/15 text-green-400 font-semibold"
+                        : "text-green-500 hover:bg-green-600/10 hover:text-green-400 font-semibold"
+                      : isActive
                         ? "bg-red-600/15 text-red-400 font-semibold"
                         : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
-                      : hasOpenShift
-                        ? isActive
-                          ? "bg-green-600/15 text-green-400 font-semibold"
-                          : "text-green-500 hover:bg-green-600/10 hover:text-green-400 font-semibold"
-                        : isActive
-                          ? "bg-red-600/15 text-red-400 font-semibold"
-                          : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
                     : isActive
                       ? "bg-admin-accent text-admin-accent-text"
                       : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"

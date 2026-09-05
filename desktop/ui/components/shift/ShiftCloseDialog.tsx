@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import {
   closeShift,
-  getCurrentShift,
+  getShift,
   getShiftReport,
   previewShiftReport,
   printShiftReport,
@@ -148,7 +148,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
     setError(null)
     try {
       await markOrderAsUnpaid(orderId, finalClosedById)
-      const fresh = await getCurrentShift()
+      const fresh = await getShift(liveShift.id)
       if (fresh) setLiveShift(fresh)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to mark order as unpaid")

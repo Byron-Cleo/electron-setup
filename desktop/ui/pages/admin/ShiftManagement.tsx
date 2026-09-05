@@ -472,15 +472,18 @@ function ShiftManagement() {
       </Card>
 
       {/* Close Shift Dialog */}
-      {currentShift && user && (
-        <ShiftCloseDialog
-          shift={currentShift}
-          finalClosedById={user?.id ?? ""}
-          open={closeShiftOpen}
-          onOpenChange={setCloseShiftOpen}
-          onClosed={() => setCurrentShift(null)}
-        />
-      )}
+      {(() => {
+        const closeShiftTarget = closeTargetShift ?? currentShift
+        return closeShiftTarget && user ? (
+          <ShiftCloseDialog
+            shift={closeShiftTarget}
+            finalClosedById={user?.id ?? ""}
+            open={closeShiftOpen}
+            onOpenChange={setCloseShiftOpen}
+            onClosed={() => setCloseTargetShift(null)}
+          />
+        ) : null
+      })()}
 
       {/* Config Dialog */}
       <Dialog open={configOpen} onOpenChange={(open) => { if (!open) { setConfigOpen(false); setIsEditing(false); setEditConfigId(null) } else setConfigOpen(true) }}>
