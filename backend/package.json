@@ -9,6 +9,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "seed": "tsx db/seed.ts",
+    "seed:extracted": "tsx db/seed-extracted.ts",
     "db:create-admin": "tsx db/create-admin.ts",
     "build": "tsc",
     "start": "node dist/index.js",
