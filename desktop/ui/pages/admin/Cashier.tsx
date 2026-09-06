@@ -56,6 +56,23 @@ function StatusBadge({ isPaid }: { isPaid: boolean }) {
   )
 }
 
+function AccompanimentLine({ name, price }: { name: string; price: number }) {
+  const charged = price > 0
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span className="flex items-center gap-1.5 text-admin-muted">
+        <span className="inline-block h-1 w-1 rounded-full bg-admin-header-text/30" />
+        {name}
+      </span>
+      {charged ? (
+        <span className="font-medium tabular-nums text-admin-header-text">+ {money(price)}</span>
+      ) : (
+        <span className="font-medium text-green-600">FREE</span>
+      )}
+    </div>
+  )
+}
+
 type CashierView = "dashboard" | "orders-entry" | "orders" | "payment-entry" | "payment" | "void-entry" | "void"
 
 type OrderTab = "ALL" | "MPESA" | "CASH" | "VOID" | "UNPAID" | "MARKED_UNPAID" | "BATCH"
@@ -724,28 +741,46 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
 
               <div className="space-y-2">
                 {detailOrder.OrderItem.map((item) => {
-                  const accomp = [item.Starch?.name, item.Vegetable?.name].filter(Boolean).join(", ")
+                  const starch = item.Starch
+                  const vegetable = item.Vegetable
+                  const unitPrice = Number(item.price)
+                  const starchPrice = Number(starch?.price ?? 0)
+                  const vegetablePrice = Number(vegetable?.price ?? 0)
+                  const lineTotal = (unitPrice + starchPrice + vegetablePrice) * item.qty
                   return (
                     <div
                       key={`${item.orderId}-${item.menuId}`}
-                      className="flex items-start justify-between gap-3 rounded-lg border border-admin-card-border p-3"
+                      className="rounded-lg border border-admin-card-border p-3"
                     >
-                      <div>
-                        <div className="font-medium">{item.name}</div>
-                        <div className="mt-0.5 text-xs text-admin-muted">
-                          {item.qty} x {money(item.price)}
-                          {accomp ? ` — ${accomp}` : ""}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-medium">{item.name}</div>
+                          <div className="mt-0.5 text-xs text-admin-muted">
+                            {item.qty} x {money(unitPrice)}
+                          </div>
                         </div>
+                        <div className="font-semibold shrink-0">{money(lineTotal)}</div>
                       </div>
-                      <div className="font-semibold">{money(item.qty * item.price)}</div>
+                      {(starch || vegetable) && (
+                        <div className="mt-2 space-y-1 border-t border-admin-card-border/70 pt-2">
+                          {starch && <AccompanimentLine name={starch.name} price={starchPrice} />}
+                          {vegetable && <AccompanimentLine name={vegetable.name} price={vegetablePrice} />}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
               </div>
 
-              <div className="flex items-center justify-between rounded-lg bg-admin-accent/10 p-4">
-                <span className="font-medium text-admin-header-text">Total</span>
-                <span className="text-lg font-bold text-admin-header-text">{money(detailOrder.totalPrice)}</span>
+              <div className="space-y-1 rounded-lg bg-admin-accent/10 p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-admin-muted">Sub-Total</span>
+                  <span className="font-medium">{money(detailOrder.itemsPrice)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-admin-accent/20 pt-2">
+                  <span className="font-medium text-admin-header-text">Total</span>
+                  <span className="text-lg font-bold text-admin-header-text">{money(detailOrder.totalPrice)}</span>
+                </div>
               </div>
             </div>
           )}

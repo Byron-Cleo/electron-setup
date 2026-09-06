@@ -265,34 +265,35 @@ export default function Users() {
                 )
               case "actions":
                 return (
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(user)}>
-                      <Pencil className="h-4 w-4 mr-1" />
-                      Edit
+                  <div className="flex items-center justify-center gap-1">
+                    <Button variant="ghost" size="icon" title="Edit" onClick={() => openEdit(user)}>
+                      <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={() => toggleActive(user)}
                       disabled={isSelf}
-                      title={isSelf ? "You cannot deactivate your own account" : undefined}
+                      title={
+                        isSelf
+                          ? "You cannot deactivate your own account"
+                          : user.isActive ? "Deactivate" : "Activate"
+                      }
                     >
                       {user.isActive ? (
-                        <ShieldOff className="h-4 w-4 mr-1 text-amber-600" />
+                        <ShieldOff className="h-4 w-4 text-amber-600" />
                       ) : (
-                        <ShieldCheck className="h-4 w-4 mr-1 text-green-600" />
+                        <ShieldCheck className="h-4 w-4 text-green-600" />
                       )}
-                      {user.isActive ? "Deactivate" : "Activate"}
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={() => { setDeleteTarget(user); setDeleteError("") }}
                       disabled={isSelf}
-                      title={isSelf ? "You cannot delete your own account" : undefined}
+                      title={isSelf ? "You cannot delete your own account" : "Delete"}
                     >
-                      <Trash2 className="h-4 w-4 mr-1 text-red-500" />
-                      Delete
+                      <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
                   </div>
                 )

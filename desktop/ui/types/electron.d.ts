@@ -79,6 +79,16 @@ interface OrderLineItem {
   vegetable: OrderAccompaniment | null;
 }
 
+interface OrderItemAccompaniment {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  price: number | null;
+  image: string;
+  isDefault: boolean;
+}
+
 interface OrderItem {
   orderId: string;
   menuId: string;
@@ -89,8 +99,8 @@ interface OrderItem {
   image: string;
   starchId: string | null;
   vegetableId: string | null;
-  Starch?: { id: string; name: string } | null;
-  Vegetable?: { id: string; name: string } | null;
+  Starch?: OrderItemAccompaniment | null;
+  Vegetable?: OrderItemAccompaniment | null;
 }
 
 interface Order {
