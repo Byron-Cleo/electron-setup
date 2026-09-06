@@ -121,6 +121,24 @@ function buildPreviewReceipt(
   }
 }
 
+// Printing is best-effort: only printers actually connected to this machine are
+// used, and any missing/unreachable printer is skipped. This must NEVER block
+// the order flow or the automatic logout after placing an order.
+async function printBestEffort(receipt: ReceiptData, label: string) {
+  try {
+    const result = await printReceipt(receipt)
+    if (result.ok) {
+      if (result.skipped) {
+        console.warn(`[print] ${label}: skipped (${result.reason ?? "no connected printer"})`)
+      }
+    } else {
+      console.warn(`[print] ${label}: ${result.error ?? "print failed"}`)
+    }
+  } catch (err) {
+    console.warn(`[print] ${label}: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
 export function WaiterMenu() {
   const { mealPeriod } = useParams<{ mealPeriod: string }>()
   const {
@@ -244,19 +262,9 @@ export function WaiterMenu() {
       setReplacementTargetId(null)
       prefilledRef.current = null
       const receipt = buildReceipt(order, orderItems, user.name, mealPeriod, replacesOrderNumber)
-      const printResult = await printReceipt(receipt)
-      if (!printResult.ok) {
-        window.alert(
-          `Order #${order.orderNumber} placed, but the receipt did not print.\n\n${printResult.error ?? "Unknown print error"}\n\nPlease check the printer config, then reprint the receipt for the order.`,
-        )
-      }
+      await printBestEffort(receipt, "customer receipt")
       const kitchenReceipt = { ...receipt, ticket: "kitchen" as const }
-      const kitchenResult = await printReceipt(kitchenReceipt)
-      if (!kitchenResult.ok) {
-        window.alert(
-          `Order #${order.orderNumber} placed, but the kitchen receipt did not print.\n\n${kitchenResult.error ?? "Unknown print error"}\n\nPlease check the kitchen printer config.`,
-        )
-      }
+      await printBestEffort(kitchenReceipt, "kitchen receipt")
       clearOrder()
       await logout()
     } catch (err) {

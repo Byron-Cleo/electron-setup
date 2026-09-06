@@ -203,6 +203,8 @@ interface ReceiptData {
 interface PrintResult {
   ok: boolean;
   error?: string;
+  skipped?: boolean;
+  reason?: string;
 }
 
 interface User {

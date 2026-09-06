@@ -2,12 +2,30 @@ import { BrowserWindow, ipcMain } from "electron";
 import net from "net";
 import fs from "fs";
 import { execFile } from "child_process";
-import { findPrinterByRole, type PosPrinter, type PosPrinterRole } from "./printers.ts";
+import { findPrinterByRole, checkPrinterStatus, type PosPrinter, type PosPrinterRole } from "./printers.ts";
 import { customerReceiptHtml, kitchenReceiptHtml, barReceiptHtml, shiftReportHtml, type ReceiptData, type ShiftReportData } from "./receiptTemplate.ts";
 
 export interface PrintResult {
   ok: boolean;
   error?: string;
+  skipped?: boolean;
+  reason?: string;
+}
+
+function skippedResult(reason: string): PrintResult {
+  return { ok: true, skipped: true, reason };
+}
+
+// Best-effort connectivity gate: only attempt a print when a real, reachable
+// printer is attached to this machine. Missing or offline printers are ignored
+// (returned as skipped) so they never surface errors or block the flow.
+async function printerOnline(printer: PosPrinter): Promise<boolean> {
+  try {
+    const status = await checkPrinterStatus(printer);
+    return status.online === true;
+  } catch {
+    return false;
+  }
 }
 
 // ─── ESC/POS helpers ─────────────────────────────────────────────────────────
@@ -481,19 +499,15 @@ function roleForTicket(ticket: ReceiptData["ticket"]): PosPrinterRole {
 }
 
 async function printReceipt(data: ReceiptData): Promise<PrintResult> {
-  const printer = findPrinterByRole(roleForTicket(data.ticket));
-  if (!printer) {
-    return { ok: false, error: `No ${roleForTicket(data.ticket)} printer configured` };
-  }
+  const role = roleForTicket(data.ticket);
+  const printer = findPrinterByRole(role);
+  if (!printer) return skippedResult(`No ${role} printer configured`);
+  if (!(await printerOnline(printer))) return skippedResult(`${role} printer is not connected`);
   if (printer.transport === "lan") {
-    if (!printer.host) {
-      return { ok: false, error: "LAN printer has no IP address configured" };
-    }
+    if (!printer.host) return skippedResult("LAN printer has no IP address configured");
     return printToLan(printer, renderEscPos(plainTextLines(data)));
   }
-  if (!printer.deviceName) {
-    return { ok: false, error: "USB printer has no device name configured" };
-  }
+  if (!printer.deviceName) return skippedResult("USB printer has no device name configured");
   const raw = await printRawUsb(printer, renderEscPos(plainTextLines(data)));
   if (raw.ok) return raw;
   const html = templateFor(data)(data);
@@ -528,14 +542,13 @@ export function registerReceiptHandlers(): void {
 
   ipcMain.handle("printer:print-shift-report", async (_event, data: ShiftReportData): Promise<PrintResult> => {
     const printer = findPrinterByRole("customer");
-    if (!printer) return { ok: false, error: "No customer printer configured" };
+    if (!printer) return skippedResult("No customer printer configured");
+    if (!(await printerOnline(printer))) return skippedResult("customer printer is not connected");
     if (printer.transport === "lan") {
-      if (!printer.host) return { ok: false, error: "LAN printer has no IP address configured" };
+      if (!printer.host) return skippedResult("LAN printer has no IP address configured");
       return printToLan(printer, renderEscPos(shiftReportLines(data)));
     }
-    if (!printer.deviceName) {
-      return { ok: false, error: "USB printer has no device name configured" };
-    }
+    if (!printer.deviceName) return skippedResult("USB printer has no device name configured");
     const raw = await printRawUsb(printer, renderEscPos(shiftReportLines(data)));
     if (raw.ok) return raw;
     return printHtml(printer.deviceName, shiftReportHtml(data));
