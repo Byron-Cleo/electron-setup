@@ -104,6 +104,14 @@ feature/<layer>/<task-kebab-case>
 - **Function declarations** (`function X()`) preferred over arrow functions for components
 - **Interfaces** defined inline in component files or in `types/electron.d.ts`
 
+### Menu Pricing Rule (MANDATORY)
+
+- `menu.price` is the **unit price** of the main dish **excluding** accompaniments.
+- Any menu item served with a **charged** starch and/or vegetable must still count as ONE main dish toward the order's dish count (`oi.quantity` — never a separate line).
+- When a **charged** starch/vegetable is selected, its price MUST be included in the dish total: line total = `(unit + chargedStarch + chargedVegetable) × qty` (`WaiterOrderContext.linePrice`, `WaiterMenuGrid.linePrice`, `orders.ts` itemsPrice, and Cashier line totals all apply this).
+- Free accompaniments (`price` null/`<= 0`) add nothing to the price.
+- The dish-detail panel shows the combined "Total" (unit + charged selections) once a charged accompaniment is chosen.
+
 ### Path Aliases
 
 - `@/` → `desktop/ui/` (configured in `vite.config.ts` and `tsconfig.app.json`)

@@ -49,6 +49,14 @@ function linePrice(item: OrderLineItem): number {
   return (Number(item.menuItem.price) + Number(item.starch?.price ?? 0) + Number(item.vegetable?.price ?? 0)) * item.quantity
 }
 
+// Full unit price of a dish with its selected accompaniments: charged starches
+// and vegetables are added to the main dish price once their selection is made.
+function comboPrice(item: MenuItem, starch: Accompaniment | null, vegetable: Accompaniment | null): number {
+  const starchPrice = starch && !isFreeAccompaniment(starch) ? Number(starch.price) : 0
+  const vegetablePrice = vegetable && !isFreeAccompaniment(vegetable) ? Number(vegetable.price) : 0
+  return Number(item.price) + starchPrice + vegetablePrice
+}
+
 function formatPrice(price: number) {
   return `KSH ${price.toLocaleString()}`
 }
@@ -460,7 +468,14 @@ export function WaiterMenuGrid({
               {/* Header — menu name centered, price beside it, spanning full width */}
               <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-gray-100 pb-3">
                 <Heading as="h3" className="text-xl font-semibold text-brand-ebony">{selectedItem.name}</Heading>
-                <p className="text-xl font-bold text-brand-maroon">{formatPrice(selectedItem.price)}</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-xl font-bold text-brand-maroon">{formatPrice(selectedItem.price)}</p>
+                  {comboPrice(selectedItem, selectedStarch, selectedVegetable) > Number(selectedItem.price) && (
+                    <span className="text-sm font-semibold text-brand-maroon/70">
+                      Total {formatPrice(comboPrice(selectedItem, selectedStarch, selectedVegetable))}
+                    </span>
+                  )}
+                </div>
                 <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", platesBadgeClass(platesFor(selectedItem)))}>
                   {platesFor(selectedItem) > 0 ? `${platesFor(selectedItem)} plates available` : "Sold Out"}
                 </span>
@@ -639,7 +654,7 @@ export function WaiterMenuGrid({
                 )}
                 {orderItems.length > 0 && (
                   <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-maroon text-white">
-                    {orderItems.length}
+                    {orderItems.reduce((n, oi) => n + oi.quantity, 0)}
                   </span>
                 )}
               </div>
