@@ -136,10 +136,6 @@ function ImageGallery({
   const current = menuImageUrl(images[active] ?? images[0])
   const [imgFailed, setImgFailed] = useState(false)
 
-  useEffect(() => {
-    setImgFailed(false)
-  }, [current])
-
   return (
     <div className="flex flex-col h-full gap-2">
       <div className="flex-1 min-h-0 overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
@@ -148,6 +144,7 @@ function ImageGallery({
             src={current}
             alt="Selected item"
             className="h-full w-full object-contain p-2"
+            onLoad={() => setImgFailed(false)}
             onError={() => setImgFailed(true)}
           />
         ) : (
@@ -326,6 +323,14 @@ export function WaiterMenuGrid({
     () => vegetables.filter((v) => v.price != null && v.price > 0),
     [vegetables],
   )
+  const freeStarches = useMemo(
+    () => starches.filter((s) => s.price == null || s.price <= 0),
+    [starches],
+  )
+  const chargedStarches = useMemo(
+    () => starches.filter((s) => s.price != null && s.price > 0),
+    [starches],
+  )
 
   const galleryLinks = useMemo(() => {
     if (!selectedItem) return []
@@ -479,21 +484,52 @@ export function WaiterMenuGrid({
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-brand-ebony/50 mb-2">Served With</p>
                     <RadioGroup
-                      className="flex flex-wrap gap-2"
                       value={selectedStarch?.id ?? ""}
                       onValueChange={(value) => {
                         const next = starches.find((s) => s.id === value)
                         if (next) selectStarch(next)
                       }}
                     >
-                      {starches.map((starch) => (
-                        <AccompanyRadioCard
-                          key={starch.id}
-                          value={starch.id}
-                          name={starch.name}
-                          image={starch.image}
-                        />
-                      ))}
+                      {freeStarches.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-brand-green mb-2">Free</p>
+                          <div className="flex flex-wrap gap-2">
+                            {freeStarches.map((starch) => (
+                              <AccompanyRadioCard
+                                key={starch.id}
+                                value={starch.id}
+                                name={starch.name}
+                                image={starch.image}
+                                badge={
+                                  <span className="rounded-full bg-green-100 px-1.5 text-[10px] font-semibold text-green-700">
+                                    Free
+                                  </span>
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {chargedStarches.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-brand-maroon/60 mb-2">Charged</p>
+                          <div className="flex flex-wrap gap-2">
+                            {chargedStarches.map((starch) => (
+                              <AccompanyRadioCard
+                                key={starch.id}
+                                value={starch.id}
+                                name={starch.name}
+                                image={starch.image}
+                                badge={
+                                  <span className="text-[10px] font-semibold text-brand-maroon">
+                                    Extra +{formatPrice(starch.price ?? 0)}
+                                  </span>
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </RadioGroup>
                   </div>
                 )}

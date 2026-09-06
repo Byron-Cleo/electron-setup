@@ -31,6 +31,7 @@ function AdminIndex() {
   const user = useAuthStore((s) => s.user)
   if (user?.role === "store") return <Navigate to="/admin/store" replace />
   if (user?.role === "kitchen") return <Navigate to="/admin/kitchen" replace />
+  if (user?.role === "cashier") return <Navigate to="/admin/cashier" replace />
   return <Dashboard />
 }
 
