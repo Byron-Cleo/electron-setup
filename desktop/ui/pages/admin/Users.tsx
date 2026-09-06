@@ -101,7 +101,7 @@ export default function Users() {
   function openEdit(user: AdminUser) {
     setEditTarget(user)
     setFormName(user.name)
-    setFormEmail(user.email)
+    setFormEmail(user.email ?? "")
     setFormPin("")
     setFormRole(user.role)
     setFormActive(user.isActive)
@@ -128,7 +128,7 @@ export default function Users() {
       if (editTarget) {
         await updateUser(editTarget.id, {
           name: formName.trim(),
-          email: formEmail.trim() || undefined,
+          email: formEmail.trim() || null,
           pin: formPin || undefined,
           role: formRole,
           isActive: formActive,
@@ -136,7 +136,7 @@ export default function Users() {
       } else {
         await createUser({
           name: formName.trim(),
-          email: formEmail.trim(),
+          email: formEmail.trim() || null,
           pin: formPin,
           role: formRole,
           isActive: formActive,
@@ -178,7 +178,7 @@ export default function Users() {
 
   const filtered = users.filter((u) => {
     const q = search.toLowerCase()
-    return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+    return u.name.toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q)
   })
 
   const {
@@ -238,7 +238,11 @@ export default function Users() {
                   </span>
                 )
               case "email":
-                return <span className="text-admin-header-text/60">{user.email}</span>
+                return (
+                  <span className="text-admin-header-text/60">
+                    {user.email ?? "—"}
+                  </span>
+                )
               case "role":
                 return (
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${ROLE_STYLES[user.role] ?? "bg-gray-500/15 text-gray-600"}`}>

@@ -210,7 +210,7 @@ interface PrintResult {
 interface User {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   emailVerified: string | null;
   image: string | null;
   role: "admin" | "manager" | "waiter" | "store" | "kitchen" | "cashier";
@@ -231,7 +231,7 @@ type AdminUserRole = "admin" | "manager" | "waiter" | "cashier" | "store" | "kit
 interface AdminUser {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   role: AdminUserRole;
   isActive: boolean;
   hasPin: boolean;
@@ -242,7 +242,7 @@ interface AdminUser {
 
 interface AdminUserCreateData {
   name: string;
-  email: string;
+  email: string | null;
   pin: string;
   role: AdminUserRole;
   isActive?: boolean;
@@ -250,7 +250,7 @@ interface AdminUserCreateData {
 
 interface AdminUserUpdateData {
   name?: string;
-  email?: string;
+  email?: string | null;
   pin?: string;
   role?: AdminUserRole;
   isActive?: boolean;

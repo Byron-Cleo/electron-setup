@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { randomUUID } from "node:crypto";
 import { hash, compare } from "bcrypt-ts-edge";
 import prisma from "../db/db.js";
 
@@ -15,7 +14,7 @@ function isAllowedRole(role: string): role is UserRole {
 function serializeUser(user: {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   role: string;
   isActive: boolean;
   platform: string | null;
@@ -76,7 +75,7 @@ router.post("/", async (req, res) => {
         return;
       }
     }
-    const emailValue = providedEmail ?? `user-${randomUUID()}@eraeva.local`;
+    const emailValue = providedEmail;
 
     const hashedPin = await hash(pin, 12);
     const created = await prisma.user.create({
@@ -117,16 +116,20 @@ router.put("/:id", async (req, res) => {
       data.name = name.trim();
     }
 
-    if (email !== undefined && typeof email === "string" && email.trim()) {
-      const normalizedEmail = email.trim().toLowerCase();
-      const emailTaken = await prisma.user.findFirst({
-        where: { email: normalizedEmail, id: { not: id } },
-      });
-      if (emailTaken) {
-        res.status(409).json({ error: "A user with this email already exists" });
-        return;
+    if (email !== undefined) {
+      if (email === null || (typeof email === "string" && !email.trim())) {
+        data.email = null;
+      } else if (typeof email === "string") {
+        const normalizedEmail = email.trim().toLowerCase();
+        const emailTaken = await prisma.user.findFirst({
+          where: { email: normalizedEmail, id: { not: id } },
+        });
+        if (emailTaken) {
+          res.status(409).json({ error: "A user with this email already exists" });
+          return;
+        }
+        data.email = normalizedEmail;
       }
-      data.email = normalizedEmail;
     }
 
     if (pin !== undefined && pin !== null && pin !== "") {
