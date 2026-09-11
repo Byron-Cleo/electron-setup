@@ -148,9 +148,9 @@ export default function ProductionGuidanceCard() {
                 <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">
                   Allocated<br />Selling Now
                 </th>
-                <th className="px-3 py-2 text-right font-semibold">Produced</th>
-                <th className="px-3 py-2 text-right font-semibold">Sold</th>
-                <th className="px-3 py-2 text-right font-semibold">Assignable</th>
+                <th className="px-3 py-2 text-right font-semibold bg-green-100 text-green-900 whitespace-nowrap">Produced</th>
+                <th className="px-3 py-2 text-right font-semibold bg-green-100 text-green-900 whitespace-nowrap">Sold</th>
+                <th className="px-3 py-2 text-right font-semibold bg-green-100 text-green-900 whitespace-nowrap">Assignable</th>
                 <th className="px-3 py-2 text-right font-semibold">Action</th>
               </tr>
             </thead>
@@ -165,9 +165,9 @@ export default function ProductionGuidanceCard() {
                 >
                   <td className="px-3 py-2 font-medium text-admin-header-text">{row.name}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{row.remaining}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{row.produced}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{row.sold}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{row.assignable}</td>
+                  <td className="px-3 py-2 text-right tabular-nums bg-green-50">{row.produced}</td>
+                  <td className="px-3 py-2 text-right tabular-nums bg-green-50">{row.sold}</td>
+                  <td className="px-3 py-2 text-right tabular-nums bg-green-50">{row.assignable}</td>
                   <td className="px-3 py-2 text-right">
                     <StatusPill g={row.guidance} />
                   </td>
