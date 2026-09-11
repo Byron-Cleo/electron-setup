@@ -30,7 +30,7 @@ Read the following to get the full context of the project.
 root/
 ├── desktop/ui/          # React 19 frontend (Vite 8, Electron renderer)
 ├── desktop/electron/    # Electron 42 main process (Node.js)
-└── backend/             # Express 4 REST API (port 3001, Prisma 7 → PostgreSQL)
+└── backend/             # Express 4 REST API (prod port 3001, dev port 3111, Prisma 7 → PostgreSQL)
 ```
 
 ### Data Flow
@@ -38,9 +38,11 @@ root/
 ```
 React Component → window.electron.* (contextBridge)
   → ipcRenderer.invoke → ipcMain.handle
-    → fetch("http://localhost:3001/api/...")
+    → fetch("http://localhost:3111/api/...")  # dev port; prod resolves via server-config
       → Express route → Prisma → PostgreSQL
 ```
+
+**Port split:** Production uses port **3001** (auto-started via pm2 / `dist/index.js`). Development uses port **3111** so the dev backend can run alongside the production server. Dev defaults are wired through `.env.development` (`VITE_API_BASE`/`VITE_API_ORIGIN`) and `server-config.ts` (`NODE_ENV=development` → `DEV_API_BASE`).
 
 No React Router — view switching via `useState<Tab>` and `useState<view>` in `App.tsx`.
 
@@ -146,7 +148,7 @@ feature/<layer>/<task-kebab-case>
 - Preload (`preload.cts`) uses `contextBridge.exposeInMainWorld("electron", ...)`
 - Namespaced: `window.electron.mealType.*`, `window.electron.menu.*`
 - IPC handlers in `ipc-handlers.ts` proxy to Express via `fetch()`
-- API base: `http://localhost:3001/api` (hardcoded in `ipc-handlers.ts`)
+- Dev API base: `http://localhost:3111/api` (via `.env.development` + `server-config.ts` dev default); production resolves through the main-process `server-config.json`
 
 ### Frontend API Convention (MANDATORY)
 
@@ -174,7 +176,7 @@ feature/<layer>/<task-kebab-case>
 | `npm run dev` | Run React + Electron concurrently |
 | `npm run dev:react` | Vite dev server only (port 5123) |
 | `npm run dev:electron` | Compile Electron TS + launch Electron |
-| `npm run dev:backend` | Start Express backend (port 3001) |
+| `npm run dev:backend` | Start Express backend (dev port 3111) |
 | `npm run lint` | ESLint check (`.ts`, `.tsx` files) |
 | `npm run build` | Type-check all + Vite build |
 | `npm run preview` | Preview built React app |

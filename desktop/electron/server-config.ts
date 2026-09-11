@@ -17,6 +17,10 @@ const CONFIG_FILENAME = "server-config.json";
 // network server address so the packaged app works without a config file.
 const DEFAULT_API_BASE = "http://192.168.100.45:3001/api";
 
+// Development default. Local dev runs the backend on a dedicated port (3111)
+// so it never collides with the auto-started production server on 3001.
+const DEV_API_BASE = "http://localhost:3111/api";
+
 function toApiBase(value: string): string {
   const v = value.trim().replace(/\/+$/, "");
   return v.endsWith("/api") ? v : `${v}/api`;
@@ -46,11 +50,13 @@ export function writeServerConfig(config: ServerConfig): ServerConfig {
 }
 
 // Precedence: 1) server-config.json (user-editable)  2) API_BASE env var
-//             3) baked-in default (localhost in dev, network server in builds)
+//             3) dev default (localhost:3111)  4) baked-in default
+//             (network server in builds, localhost:3111 in dev)
 export function getApiBase(): string {
   const fromConfig = readServerConfig().serverUrl;
   if (fromConfig) return toApiBase(fromConfig);
   if (process.env.API_BASE) return toApiBase(process.env.API_BASE);
+  if (process.env.NODE_ENV === "development") return DEV_API_BASE;
   return DEFAULT_API_BASE;
 }
 
