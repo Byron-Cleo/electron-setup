@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
+import { computeCurrentCycle, computeAllUnassignedBatches } from "./shiftCarryOver.js";
 import { ServiceTime } from "../db/generated/prisma/client.js";
 import multer from "multer";
 import path from "path";
@@ -86,18 +87,34 @@ async function getShiftBasedStockStatus(mealType?: string) {
   // Plate-movement context for the current shift (used only to show produced /
   // sold alongside the live stock — the Selling/Sold Out/Running Low buckets are
   // driven purely by live Menu.stock so they match exactly what the waiter sees).
+  // `produced` = Σ platesAllocated (what actually entered menu stock this shift),
+  // mirroring the shift report — NOT platesRemaining, which also includes sold.
   const menuSplits = await prisma.cookingRecordMenu.findMany({
     where: {
       cookingRecord: { createdAt: { gte: shift.autoOpenTime, lt: windowEnd } },
     },
     select: {
       menuId: true,
-      platesRemaining: true,
+      platesAllocated: true,
     },
   });
   const cookedByMenu = new Map<string, number>();
   for (const split of menuSplits) {
-    cookedByMenu.set(split.menuId, (cookedByMenu.get(split.menuId) ?? 0) + Number(split.platesRemaining));
+    cookedByMenu.set(split.menuId, (cookedByMenu.get(split.menuId) ?? 0) + Number(split.platesAllocated));
+  }
+
+  // Plates that can still be assigned right now: the current operation date's
+  // valid unassigned pools, credited to every menu the pool's stock item produces.
+  let assignableByMenu = new Map<string, number>();
+  const cycle = await computeCurrentCycle();
+  if (cycle) {
+    const { batches: validBatches } = await computeAllUnassignedBatches(cycle);
+    assignableByMenu = new Map<string, number>();
+    for (const batch of validBatches) {
+      for (const menuId of batch.linkableMenus) {
+        assignableByMenu.set(menuId, (assignableByMenu.get(menuId) ?? 0) + batch.unassigned);
+      }
+    }
   }
 
   const soldByMenu = new Map<string, number>();
@@ -131,6 +148,7 @@ async function getShiftBasedStockStatus(mealType?: string) {
       mealTypes: menu.MenuMealType.map((mt) => mt.mealType),
       produced: cookedByMenu.get(menu.id) ?? 0,
       sold: soldByMenu.get(menu.id) ?? 0,
+      assignable: assignableByMenu.get(menu.id) ?? 0,
       remaining: onHand,
       opening: openingByMenu.get(menu.id) ?? 0,
     };
@@ -183,6 +201,14 @@ router.get("/cooked", async (req, res) => {
         return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" })
       }
       dateFilter.cookedDate = d
+    } else {
+      // No date = "today's cooked food": scope to the CURRENT operation-date
+      // cycle (day + night, anchored at the morning auto-open) by createdAt.
+      // Past-op-date batches are handled separately by Remaining Stock Production.
+      const cycle = await computeCurrentCycle();
+      if (cycle) {
+        dateFilter.createdAt = { gte: cycle.cycleStart, lt: cycle.cycleEnd };
+      }
     }
 
     // Kitchen production = cooked batches. Show every batch produced (whether or
@@ -204,6 +230,7 @@ router.get("/cooked", async (req, res) => {
           include: { menu: { select: { id: true, name: true } } },
           orderBy: { createdAt: "asc" },
         },
+        shift: { select: { id: true, type: true, operationDay: true, autoOpenTime: true, autoCloseTime: true } },
       },
       orderBy: { cookedDate: "desc" },
     });
@@ -254,6 +281,10 @@ router.get("/cooked", async (req, res) => {
       return {
         id: record.id,
         cookedDate: record.cookedDate.toISOString().slice(0, 10),
+        shiftId: record.shift?.id ?? null,
+        shiftType: record.shift?.type ?? null,
+        operationDay: record.shift ? record.shift.operationDay.toISOString().slice(0, 10) : null,
+        cookedAt: record.createdAt.toISOString(),
         quantityCooked: Number(record.quantityCooked),
         produced,
         stockSupply: {

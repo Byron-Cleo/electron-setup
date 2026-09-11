@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
+import { findShiftIdForTime } from "./shiftCarryOver.js";
 
 const router = Router();
 
@@ -108,6 +109,7 @@ const RECORD_INCLUDE = {
     include: { menu: { select: { id: true, name: true, slug: true, images: true } } },
     orderBy: { createdAt: "asc" },
   },
+  shift: { select: { id: true, type: true, operationDay: true, autoOpenTime: true, autoCloseTime: true } },
 } as const;
 
 // GET /api/cooking-records - List cooking records (optional ?stockSupplyId filter)
@@ -236,6 +238,8 @@ router.post("/", async (req, res) => {
     ? Number(platesActual)
     : platesExpected;
 
+  const shiftId = await findShiftIdForTime(new Date());
+
   const record = await prisma.cookingRecord.create({
     data: {
       stockSupplyId,
@@ -244,6 +248,7 @@ router.post("/", async (req, res) => {
       platesActual: finalPlatesActual,
       cookedById,
       notes,
+      shiftId,
     },
     include: RECORD_INCLUDE,
   });
@@ -419,6 +424,30 @@ router.put("/:id", async (req, res) => {
   });
 
   res.json(record);
+});
+
+// POST /api/cooking-records/:id/dispose - Mark an unassigned (unallocated) batch as
+// wasted. Only affects the batch's flags — unassigned plates never entered Menu.stock,
+// so there is no stock to reconcile.
+router.post("/:id/dispose", async (req, res) => {
+  const { id } = req.params;
+
+  const existing = await prisma.cookingRecord.findUnique({
+    where: { id },
+    select: { id: true, disposed: true, disposedAt: true },
+  });
+  if (!existing) return res.status(404).json({ error: "Cooking record not found" });
+
+  if (existing.disposed) {
+    return res.json({ record: existing, message: "Already marked as wasted" });
+  }
+
+  const record = await prisma.cookingRecord.update({
+    where: { id },
+    data: { disposed: true, disposedAt: new Date() },
+  });
+
+  res.json({ record });
 });
 
 // DELETE /api/cooking-records/:id - Delete cooking record (batch + its splits)

@@ -155,6 +155,9 @@ export function registerCookingRecordHandlers() {
   ipcMain.handle("cooking-record:delete", async (_event, id: string) =>
     apiFetch(`/cooking-records/${id}`, { method: "DELETE" })
   );
+  ipcMain.handle("cooking-record:dispose", async (_event, id: string) =>
+    apiFetch(`/cooking-records/${id}/dispose`, { method: "POST" })
+  );
 }
 
 export function registerKitchenConfigHandlers() {
@@ -258,6 +261,7 @@ export function registerShiftHandlers() {
 export function registerReportHandlers() {
   ipcMain.handle("shift-report:get", async (_event, shiftId: string) => apiFetch(`/reports/shift/${shiftId}`));
   ipcMain.handle("report:stock-remaining", async () => apiFetch("/stock/remaining"));
+  ipcMain.handle("report:stock-wasted", async () => apiFetch("/stock/wasted"));
   ipcMain.handle("report:void", async (_event, date: string) =>
     apiFetch(`/reports/voids?date=${encodeURIComponent(date)}`)
   );

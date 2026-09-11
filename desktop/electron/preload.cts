@@ -81,6 +81,7 @@ electron.contextBridge.exposeInMainWorld("electron", {
     getById: (id: string) => electron.ipcRenderer.invoke("cooking-record:get-by-id", id),
     create: (data: any) => electron.ipcRenderer.invoke("cooking-record:create", data),
     delete: (id: string) => electron.ipcRenderer.invoke("cooking-record:delete", id),
+    dispose: (id: string) => electron.ipcRenderer.invoke("cooking-record:dispose", id),
   },
   kitchen: {
     getConfig: () => electron.ipcRenderer.invoke("kitchen-config:get"),
@@ -153,6 +154,7 @@ electron.contextBridge.exposeInMainWorld("electron", {
   report: {
     getShiftReport: (shiftId: string) => electron.ipcRenderer.invoke("shift-report:get", shiftId),
     getStockRemaining: () => electron.ipcRenderer.invoke("report:stock-remaining"),
+    getWastedStock: () => electron.ipcRenderer.invoke("report:stock-wasted"),
     getVoidReport: (date: string) => electron.ipcRenderer.invoke("report:void", date),
   },
   shiftConfig: {

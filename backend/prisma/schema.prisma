@@ -306,8 +306,12 @@ model CookingRecord {
   createdAt         DateTime              @default(now()) @db.Timestamptz(3)
   cookedDate        DateTime              @default(now()) @db.Date
   platesActual      Decimal?              @db.Decimal(12, 2)
+  disposed          Boolean               @default(false)
+  disposedAt        DateTime?             @db.Timestamptz(3)
+  shiftId           String?               @db.Uuid
   cookedBy          User                  @relation(fields: [cookedById], references: [id])
   stockSupply       StockSupply           @relation(fields: [stockSupplyId], references: [id])
+  shift             Shift?                @relation(fields: [shiftId], references: [id])
   cookingRecordMenus CookingRecordMenu[]
 }
 
@@ -351,6 +355,7 @@ model Shift {
   finalClosedBy   User?           @relation("ShiftFinalClosedBy", fields: [finalClosedById], references: [id])
   snapshots       ShiftSnapshot[]
   orders          Order[]
+  cookingRecords  CookingRecord[]
 
   @@unique([type, operationDay])
 }

@@ -18,6 +18,7 @@ interface Props {
   batchId: string | null
   title: string
   onRefresh: () => void
+  expired?: boolean
 }
 
 interface MenuWithStock {
@@ -29,7 +30,7 @@ interface MenuWithStock {
   openingStock: number
 }
 
-export default function AssignmentModal({ open, onClose, batchId, title, onRefresh }: Props) {
+export default function AssignmentModal({ open, onClose, batchId, title, onRefresh, expired = false }: Props) {
   const [deltas, setDeltas] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -216,7 +217,13 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
                   </span>
                 </div>
               </div>
-              {isCarryOver && (
+              {expired && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded">
+                  Expired unassigned batch from a previous operation date (valid = 0).
+                  This carry-over is a manual exception — assigning it is a manager decision.
+                </div>
+              )}
+              {!expired && isCarryOver && (
                 <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
                   Carry-over batch from previous shift. Assign plates to restock current shift.
                 </div>
