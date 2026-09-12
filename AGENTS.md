@@ -217,6 +217,26 @@ If `backend/prisma/schema.prisma` changed, run `npm run db:sync` (generate + pus
 
 Service shortcuts: `npm run server:start|stop|restart|status|logs` (logs tail `backend/logs/backend-service.log`). pm2, `ecosystem.config.cjs`, and `scripts/start-backend.bat` are retired — do not restore or use them.
 
+### Remote Operations over SSH & Dev Scope (MANDATORY)
+
+The server is operated remotely over SSH (no RDP; staff use the console). Local admin account **`ops`** (key-only auth via `administrators_authorized_keys`), OpenSSH port 22 firewalled to LocalSubnet + Tailscale (`100.64.0.0/10`) only, browser live view at `http://192.168.100.45:3001`.
+
+**Production deploy over SSH (no UAC needed):**
+1. Merge/push approved, dev-tested changes to `restaurant-build` (from the operator laptop).
+2. `ssh ops@<tailscale-ip or 192.168.100.45>` then `git pull origin restaurant-build`
+3. `npm run build --prefix backend` (compiles `dist/` — the service runs `dist/`, not tsx)
+4. Restart WITHOUT UAC: `schtasks /run /tn pos-backend-restart` (SYSTEM/Highest task → `scripts/restart-backend.cmd` → `sc stop/start EraevaBackend`; log: `backend/logs/restart.log`)
+5. Verify: `sc query EraevaBackend` → RUNNING and `curl http://localhost:3001/health`
+
+**Dev scope (isolated — reachable ONLY via SSH tunnels):**
+- DB `eraevadb_dev` owned by role `era_dev` (locked to that DB; **no grants on `eraevadb`**), schema pushed + dev users seeded. `backend/load-env.ts` selects `.env` on `NODE_ENV=production`, else `.env.development` (gitignored; PORT=3111, BIND=127.0.0.1, ENABLE_SCHEDULER=false).
+- Start/stop detached dev backend + Vite UI: `npm run dev:remote:start` / `npm run dev:remote:stop` (logs: `backend/logs/dev-backend.log`, `dev-backend.err.log`, `dev-ui.log`; survives SSH disconnect; last `ERROR: cannot terminate itself` in the output is the harmless stop of the caller).
+- One command from the operator laptop to reach everything:
+  `ssh -N -L 3001:127.0.0.1:3001 -L 3111:127.0.0.1:3111 -L 5123:127.0.0.1:5123 -L 5433:127.0.0.1:5432 ops@<server>` → browser `http://localhost:3001` (live prod UI), `http://localhost:5123` (dev UI → dev backend), DB tools at `localhost:5433`.
+- Dev backend binds `127.0.0.1:3111` — never expose dev to the LAN. Cleanup any stray `0.0.0.0` dev listener.
+
+**Browser live view (build:web rule):** after ANY plain `npm run build` / `build:win` (which rewrites `dist-react` for the Electron file:// build), RE-RUN `npm run build:web -- --server http://192.168.100.45:3001` so the served web UI stays browser-correct (absolute `/assets`, API origin baked). Installed .exe terminals keep their own packaged bundle and are unaffected.
+
 ## Project Structure
 
 ```

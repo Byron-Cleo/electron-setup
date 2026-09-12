@@ -10,6 +10,8 @@
     "dev:electron": "tsc --project desktop/electron/tsconfig.json && concurrently -k -n \"tsc,app\" \"tsc --project desktop/electron/tsconfig.json --watch --preserveWatchOutput\" \"nodemon --watch dist-electron -e js --exec cross-env NODE_ENV=development electron .\"",
     "dev": "concurrently -k -n \"react,electron\" \"npm run dev:react\" \"npm run dev:electron\"",
     "dev:backend": "npm run dev --prefix backend",
+    "dev:remote:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-start.ps1",
+    "dev:remote:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-stop.ps1",
     "server:start": "sc start EraevaBackend",
     "server:stop": "sc stop EraevaBackend",
     "server:restart": "sc stop EraevaBackend && sc start EraevaBackend",
