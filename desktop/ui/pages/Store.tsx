@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog"
 import { getStockSupplies, getStockRequests, createStockSupply, deleteStockSupply, getLowStockCount, getStockCount, getLowStockSupplies, stockSupplyImageUrl, formatQuantityWithUnit, getDepartments, getMenus, updateStockSupply } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
+import { useLiveRefresh } from "@/hooks/useLiveRefresh"
 import { StockRequestsList } from "@/components/store/StockRequestsList"
 import StockSupplyEditDialog from "@/components/admin/StockSupplyEditDialog"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
@@ -280,6 +281,10 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   useEffect(() => {
     loadStock()
   }, [])
+
+  useLiveRefresh(["stock.created", "stock.updated", "stock.deleted"], () => {
+    loadStock().catch(() => {})
+  })
 
   useEffect(() => {
     if (showAddModal) {
@@ -732,6 +737,10 @@ function RestockView() {
   useEffect(() => {
     loadLowStock()
   }, [])
+
+  useLiveRefresh(["stock.created", "stock.updated", "stock.deleted"], () => {
+    loadLowStock().catch(() => {})
+  })
 
   const filtered = items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase())
