@@ -43,6 +43,15 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-KE", { dateStyle: "medium" })
 }
 
+// Start of the operation-day window in ms. operationDay arrives as a UTC ISO
+// string ("2026-09-12T00:00:00.000Z"); some flows may send a bare "YYYY-MM-DD".
+function operationDayStart(operationDay: string): number {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(operationDay)) {
+    return new Date(`${operationDay}T00:00:00.000Z`).getTime()
+  }
+  return new Date(operationDay).getTime()
+}
+
 function driftLabel(minutes: number | null, verb: "Opened" | "Closed"): string {
   if (minutes === null) return "—"
   if (minutes === 0) return `${verb} on time`
@@ -79,7 +88,16 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
   const [search, setSearch] = useState("")
 
   const stats = useMemo(() => {
-    const orders = liveShift.orders ?? []
+    // Scope every figure to this shift's operation day so orders from other
+    // operation dates never leak into this close (unpaid blocking, reconciliation).
+    const allOrders = liveShift.orders ?? []
+    const orders = liveShift.operationDay
+      ? allOrders.filter((o) => {
+          const t = new Date(o.createdAt).getTime()
+          const start = operationDayStart(liveShift.operationDay)
+          return t >= start && t < start + 86_400_000
+        })
+      : allOrders
     const active = orders.filter((o) => !o.isVoid)
     const paid = active.filter((o) => o.isPaid)
     const unpaid = active.filter((o) => !o.isPaid)
@@ -106,7 +124,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
       entry.total += Number(order.totalPrice)
     }
     return {
-      totalOrders: liveShift.orders?.length ?? 0,
+      totalOrders: orders.length,
       voidedOrders: orders.length - active.length,
       unvoidedOrders: active.length,
       paidOrders: paid.length,

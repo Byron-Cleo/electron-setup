@@ -4,6 +4,17 @@ import { computeShiftUnassignedBatches } from "./shiftCarryOver.js";
 
 const router = Router();
 
+// An order belongs to a shift's operationDay when createdAt falls within
+// [operationDay, operationDay + 1d) — UTC-midnight alignment, the same
+// convention used by parseDateQueryRange. Applied ON TOP of shift membership:
+// every shift keeps its own generated data, and off-date (stale) orders never
+// leak into a shift's report.
+function belongsToOperationDay(createdAt: Date, operationDay: Date): boolean {
+  const t = new Date(createdAt).getTime();
+  const start = operationDay.getTime();
+  return t >= start && t < start + 86_400_000;
+}
+
 // GET /api/reports/daily?date=YYYY-MM-DD
 router.get("/", async (req, res) => {
   const { date } = req.query;
@@ -275,10 +286,16 @@ router.get("/shift/:id", async (req, res) => {
       return res.status(404).json({ error: "Shift not found" });
     }
 
+    // A shift's report is scoped to ITS OWN orders, intersected with the
+    // operation-date window [operationDay, operationDay + 1d). This keeps every
+    // shift's generated data per-shift (DAY and NIGHT stays separate on the same
+    // date) while excluding orders a stale open shift picked up from other dates.
+    const dayOrders = shift.orders.filter((o) => belongsToOperationDay(o.createdAt, shift.operationDay));
+
     // Revenue is computed from paid non-void orders only. Unpaid (including
     // manager-marked-unpaid) orders stay in the total count but are excluded
     // from revenue and reported separately in the payment summary.
-    const activeOrders = shift.orders.filter((o) => !o.isVoid);
+    const activeOrders = dayOrders.filter((o) => !o.isVoid);
     const paidOrders = activeOrders.filter((o) => o.isPaid);
     const unpaidOrders = activeOrders.filter((o) => !o.isPaid);
 
@@ -496,8 +513,8 @@ router.get("/shift/:id", async (req, res) => {
         profitMargin: totalSales > 0 ? `${((totalSales - totalProductionCost) / totalSales * 100).toFixed(1)}%` : "0%",
       },
       summary: {
-        totalOrders: shift.orders.length,
-        voidedOrders: shift.orders.filter((o) => o.isVoid).length,
+        totalOrders: dayOrders.length,
+        voidedOrders: dayOrders.filter((o) => o.isVoid).length,
       },
       payments,
       drift: {
