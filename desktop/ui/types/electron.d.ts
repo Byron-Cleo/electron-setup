@@ -155,6 +155,7 @@ interface ReceiptAccompaniment {
   name: string;
   charged: boolean;
   price: number;
+  note?: boolean;
 }
 
 interface ReceiptItem {

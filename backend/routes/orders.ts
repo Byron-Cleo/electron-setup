@@ -158,13 +158,6 @@ router.post("/", async (req, res) => {
         });
 
         const menu = await tx.menu.findUniqueOrThrow({ where: { id: item.menuId } });
-        // Enforce required starch/vegetable selections from menu configuration
-        if (menu.hasStarch && !item.starchId) {
-          throw new Error(`Menu item ${menu.name} requires a starch accompaniment`);
-        }
-        if (menu.hasVegetable && !item.vegetableId) {
-          throw new Error(`Menu item ${menu.name} requires a vegetable accompaniment`);
-        }
         const currentStock = menu.stock ?? 0;
         // Atomic guarded decrement: only succeeds if sufficient stock exists (prevents race/over-sell)
         const updated = await tx.menu.updateMany({

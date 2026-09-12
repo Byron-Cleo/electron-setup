@@ -14,6 +14,12 @@ function toReceiptItems(orderItems: OrderLineItem[]): ReceiptItem[] {
     const accompaniments: ReceiptAccompaniment[] = [
       ...(starch ? [{ name: starch.name, charged: Number(starch.price ?? 0) > 0, price: Number(starch.price ?? 0) }] : []),
       ...(vegetable ? [{ name: vegetable.name, charged: Number(vegetable.price ?? 0) > 0, price: Number(vegetable.price ?? 0) }] : []),
+      ...(!starch && oi.menuItem.hasStarch
+        ? [{ name: "No starch", charged: false, price: 0, note: true }]
+        : []),
+      ...(!vegetable && oi.menuItem.hasVegetable
+        ? [{ name: "No vegetables", charged: false, price: 0, note: true }]
+        : []),
     ]
     const unitPrice = Number(oi.menuItem.price)
     const lineTotal =
