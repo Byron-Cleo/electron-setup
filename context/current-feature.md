@@ -2,7 +2,7 @@
 
 ## Platform
 
-fullstack
+frontend
 
 ## Status
 
@@ -10,292 +10,30 @@ In Progress
 
 ## Goals
 
-- Opening stock at shift start is the previous shift's `closingPlates` per menu — unassigned production is NEVER merged into opening (falls back to `Menu.stock` when no previous shift)
-- Unassigned production from the previous shift stays independent and is carried forward; admin assigns it later (increasing `Menu.stock`) via the new Remaining Stock screen
-- New "Remaining Stock from Previous Shift" dashboard card (admin Menu page) navigates to its own standalone view (RemainingStockCard): per-menu carry-forward (previous closing), unassigned batches by stock supply, and "Assign Plates" that opens AssignmentModal for each batch
-- AssignmentModal labels previous-shift batches "Carry-over: X plates" (vs "Produced" for current-shift batches) and uses totalExisting for their allocated count
-- Shift open snapshot: `openingPlates` = previous shift's `closingPlates` only (fallback `Menu.stock`)
-- Plate movement report: Opening column labeled "(carry-forward)", plus an "Unassigned Carry-over" summary row in UI and printed shift report
-- CookedFoodTable is NOT modified — it keeps showing today's cooked food exactly as before
-- No schema changes — all data derives from existing tables (`ShiftSnapshot`, `CookingRecord`, `CookingRecordMenu`, `StockSupplyMenu`)
-- Branch: `feature/admin/shift-scoped-stock-assignment`
-- Ref: `context/fix-plan/shift-scoped-stock-assignment.md`
+- Waiter accompaniment picker is decluttered for the small POS window: only ONE accompaniment group visible at a time
+- Free group shown by default (ugali, chapati, rice, etc.) with a "None" card always present — selecting None serves the dish WITHOUT that accompaniment (starch or vegetables)
+- Charged group is a compact Free/Charged toggle — tapping Charged hides the free cards and reveals charged options (e.g. Ugali Brown), tapping Free restores them; toggling never clears an existing selection
+- Toggle opens on the group containing the dish's currently-selected default (free default → Free; charged default e.g. Ugali Brown → Charged)
+- "None" is captured end-to-end: order line stores null starchId/vegetableId, order column shows a "None" chip, customer + kitchen receipts print "No starch"/"No vegetables"
+- Add-to-Order is no longer blocked when no accompaniment is chosen (None is always valid); only the sold-out state disables it
+- Pricing rule unchanged: line total = (unit + chargedStarch + chargedVeg) × qty; multi-variant lines intact
+- Branch: `feature/waiter/accompaniment-picker-none`
 
 ## Notes
 
-- Three distinct numbers with separate lifecycles: opening stock (set once at shift open = prev closing only), produced this shift (records in current shift window, starts at 0), sold this shift (`ShiftSnapshot.platesSold`).
-- Backend: new `GET /api/stock/remaining` endpoint (`backend/routes/stockRemaining.ts`) → carryForwardPerMenu (from prev closed shift snapshots) + unassignedBatches grouped by stock supply; shared helper `backend/routes/shiftCarryOver.ts` (`findPreviousClosedShift`, `computeShiftUnassignedBatches`).
-- Shift open (POST /api/shifts open) sets openingPlates = prev shift closingPlates per menu (map by menuId), else `Menu.stock`. Unassigned is NOT folded in.
-- Frontend: `RemainingStockCard.tsx` is a standalone view (own heading + tables + empty state) rendered from a new dashboard card in `pages/admin/Menu.tsx` (view `remaining-stock`) — NOT embedded in CookedFoodTable.
-- AssignmentModal fetches `getCurrentShift()` and compares `record.createdAt` to `[openingTime, autoCloseTime)` to pick Carry-over vs Produced label; `totalAllocated = totalExisting` for carry-over batches.
-- Shift report UI (`ShiftReport.tsx`, `ShiftCloseDialog.tsx`) + printed report (`receiptTemplate.ts`, `receipt.ts`) surface `unassignedCarryOver` and label Opening as carry-forward.
-- Reuse existing carry-over calculation pattern in `dailyReport.ts` and `allocateCookingRecord` for assigning carry-over plates.
-- Verification gates: tsc -b (root) + backend tsc, npm run lint (changed UI), E2E (open shift after prev close → opening = closing; RemainingStockCard shows carry-forward + unassigned; assign carry-over → Menu.stock increases; closed report shows unassigned summary).
+- UI lives entirely in `desktop/ui/pages/waiterPos/WaiterMenuGrid.tsx`: new `AccompModeToggle` (Free/Charged segmented pills), `NoneAccompanyCard` (dashed card with Ban icon, radio value sentinel `NO_ACCOMPANIMENT = "none"`), `NoAccompanyRow` (order-column "None" chip). `selectStarch(null)`/`selectVegetable(null)` already existed and sync to the cart via `syncSelection`; null line keys (`menuId||veg`) create their own variant line.
+- Mode state per category (`starchMode`/`vegMode`) reset in the dish-selection sync block to follow the pre-selected default's price.
+- Section gates switched from `starchId`/`vegetableId` to `(hasStarch || starchId != null)` / `(hasVegetable || vegetableId != null)` so the picker + None still show for dishes with accompaniments but no configured default.
+- Receipt notes: `WaiterMenu.tsx toReceiptItems` appends `{ name: "No starch"|"No vegetables", note: true }` when `menuItem.hasStarch/hasVegetable` is true but the accompaniment is null; `ReceiptAccompaniment.note?: boolean` added in `receiptTemplate.ts` + `electron.d.ts`, `accompHtml` renders note entries in italic without the FREE/+KSH tag. Works for void-prefill lines too (real MenuItems carry hasStarch/hasVegetable).
+- Backend: `routes/orders.ts` no longer throws when `menu.hasStarch/hasVegetable` is true but the order item omits starchId/vegetableId — `hasStarch`/`hasVegetable` are informational only (drives the UI sections). No schema change; OrderItem already persists null.
+- Admin MenuForm default-requirement (LUNCH/DINNER need a configured default) untouched — it only sets the default, the waiter can still pick None at order time.
+- Verification: root `tsc -b` + backend `tsc` pass; full-repo `npm run lint` has many pre-existing errors but none introduced by this feature (WaiterMenuGrid.tsx:140 `setImgFailed` effect error is pre-existing).
 
 ## History
-### fullstack - 2026-08-28 — One Cooking Record Per Menu (Cooked Food Pool Consistency)
-- Dropped `CookingRecordAssignment` table entirely; `CookingRecordMenu` now stores `platesAllocated` + `platesRemaining` directly (was `quantityPlates`)
-- `recomputeMenuStock()` recalculates `Menu.stock` as sum of all `platesRemaining` per menu (FIFO across splits)
-- Order decrement picks the menu's earliest active split (remaining > 0) for that date — never below 0
-- Assignment modal rewritten: pool-cap display, delta +/- per menu, drift check, top-up support
-- Cooked food table: single row per cooking record with per-menu split breakdown
-- Plate movement report: Cooked column from `CookingRecordMenu.platesAllocated`, variance highlighting
-- Schema: `CookingRecordMenu` replaces composite PK with single `id`, unique index on `[cookingRecordId, menuId]`; `platesRemaining` added; `quantityPlates` removed
-- Deleted `backend/routes/cookingAssignments.ts` (382 lines) — all logic merged into `cookingRecords.ts`
-- DB wipe + re-seed of kitchen/cooking/assignment data onto new model
-- `ShiftReport.tsx` + `ShiftCloseDialog.tsx` plate movement: opened/closed section, Cooked column, variance highlight
-- `lib/api.ts` + `electron.d.ts`: `allocateCookingRecord`, `topUpCookingRecord`, updated types
-- `WaiterMenuGrid.tsx` + `Menu.tsx` minor fixes
-- Branch: `feature/kitchen/one-record-per-menu`
-- Ref: `context/fix-plan/cooked-food-one-record-per-menu.md`
 
-### fullstack - 2026-08-28 — Shift Management Completion (Gap B + Phases 8–12)
-
-- ✅ Gap B DONE — shift functions in lib/api.ts (openShift/closeShift/getCurrentShift/getShift/autoCloseShifts, plain apiFetch like voidOrder) + ShiftType/Shift/ShiftSnapshot/AutoCloseResult types in electron.d.ts — POST /api/orders accepts+validates voidedOrderId (must reference isVoid order); waiter flow links oldest void via context (WaiterOrderContext owns voidedOrders state + clearVoidedOrder; WaiterPOS consumes; fetch excludes already-replaced voids so count drop persists across re-login). Verified E2E: link persisted in DB, card gone after placement
-- ⚠️ DB repaired mid-session: eraevadb was missing OrderItem.id PK (schema drift broke all order reads); synced manually (drop composite PK → add SERIAL id → new PK + 4-col unique index + StockSupplyMenu FK). `prisma db push` chokes on this diff (Prisma 7 RENAME CONSTRAINT bug) — applied equivalent SQL by hand
-- ⚠️ Pre-existing fixes included: SERVER_STORAGE_KEY constant was missing in lib/api.ts (browser server config broken), eslint `any`s in orders.ts/electron.d.ts
-- ✅ Phase 9 DONE — ShiftCloseDialog (`desktop/ui/components/shift/ShiftCloseDialog.tsx`, confirm view: stats grid + revenue-by-period + amber drift warning past autoCloseTime → report view: summary tiles incl. drift, production vs sales, plate movement w/ variance highlight) wired into Cashier.tsx shift status bar (Open Shift dialog DAY/NIGHT radio, Close Shift button, handleOpenCloseDialog refetches getCurrentShift for fresh stats)
-- 🐛 Foundational fix (Phases 1–7 gap): POST /api/orders never stamped Order.shiftId nor incremented ShiftSnapshot.platesSold — orders were invisible to shifts/reports and void-shift-guard was dead code. Now: open-shift lookup before tx → shiftId on created order → per-line snapshot upsert (increment platesSold; create with openingPlates=pre-sale stock if no snapshot, e.g. mid-shift menu adds)
-- 🐛 Report-view unmount bug fixed: handleCloseShift called onClosed() (=setCurrentShift(null)) immediately after fetching report → parent's `{currentShift && ...}` guard unmounted dialog before report rendered. Fix: onClosed() deferred to handleDismiss() only when report exists
-- ✅ Phase 10 DONE — Manager Report UI: new `GET /api/shifts?date=` list endpoint (openedBy/closedBy includes, date-range filter); `listShifts()` in api.ts; `desktop/ui/pages/admin/Reports.tsx` (date picker defaults today + closed-shift-only Select dropdown, empty/loading/error states, Print/Export PDF via window.print()); `desktop/ui/components/reports/ShiftReport.tsx` (summary tiles w/ drift badge, shift details card, revenue-by-period table, production vs sales w/ variance coloring, plate movement table Open/Sold/Wasted/Expected/Actual/Variance); nav item + `/admin/reports` route (admin+manager); AdminLayout sidebar/header/footer get `print:hidden` for clean print output. Verified E2E: closed DAY shift selectable, all sections render real data, variance math checked (12−3=9 ✓)
-- ✅ Phase 11 DONE — `backend/scheduler.ts`: `autoCloseExpiredShifts()` (shared logic extracted from the route: find open shifts past autoCloseTime → close each in tx w/ closing-plates snapshot, per-shift try/catch) + `startScheduler()` (boot tick + 60s setInterval, overlap guard); `routes/shifts.ts` POST /auto-close now delegates to the shared helper; `index.ts` starts scheduler after listen. ⚠️ Gotcha found while testing: Shift time columns are `timestamp without time zone` — Prisma stores UTC-naive values, so test rows seeded via psql must use `(now() AT TIME ZONE 'utc')` or they look un-expired to the app. Verified E2E: expired shift auto-closed by interval within 60s
-- ✅ Phase 12 DONE — Void analytics surfaced in Reports UI: `VoidReportWaiter` type in electron.d.ts, `getVoidReport(date)` in api.ts, "Void Analytics — <date>" card on Reports page (per-waiter table: name / total orders / voided in red / void rate / common reasons; loads alongside shifts on date change). Verified E2E vs DB: 2 orders → 1 voided → 50.0% rate + reason rendered correctly
-- ✅ Dev-window toggle DONE — `desktop/electron/main.ts` createMainWindow: `kiosk: !isDev(), frame: isDev()` so `npm run dev:all` opens a normal window with native minimize/maximize/close (switch apps freely) while production installs stay locked frameless kiosk. NODE_ENV source = cross-env inline in package.json dev scripts (Electron main reads NO .env file; root .env → Vite only, backend/.env → Express only). Safe-by-default: absent variable ⇒ production behavior
-- ✅ Void-card UX refinement (user-directed): red VOID ORDERS card moved out of its own "Action Required" section into the Now Serving card row (WaiterPOS); clicking opens new `VoidOrdersDialog` (components/waiterPos/) listing all pending voids oldest-first with order #, time, item summary (+N more cap), reason; oldest pre-selected; Start Replacement sets replacementTargetId in context → WaiterMenu prefills cart via prefillFromVoid (merges voided order's lines into cart clamped to current stock, skips unavailable items) → placeOrder links THAT void (FIFO fallback for normal orders), clears target + notification after success. deepseek-coder output rejected in review (broken imports/structure); implemented manually per fallback rule. tsc + eslint clean
-- ✅ Receipt correlation line (user-directed): replacement orders print "REPLACES ORDER #142" centered+bold under the Order # row in the customer receipt (`receiptTemplate.ts` customerBody, optional `replacesOrderNumber` on ReceiptOrderInfo in both electron.d.ts + template's local interface); WaiterMenu passes the voided order's number into buildReceipt AND buildPreviewReceipt (preview resolves replacement with same fallback as placeOrder → print==preview parity); normal receipts unchanged; kitchen/bar tickets unaffected. App/root/electron tsc + eslint clean
-- ✅ Void reconciliation in analytics (user-directed): /voids endpoint now computes replacedVoids (void id appears as voidedOrderId on any order — searched by link, no date filter, so next-day replacements count) + pendingVoids = voided − replaced per waiter; VoidReportWaiter type extended; Reports Void Analytics table gains green Replaced + amber Pending columns (drill-down click-through explicitly deferred by user). Backend/app tsc + eslint clean
-- All 12 phases of Shift Management are now implemented + E2E verified. Merged to main `69d9371`.
-- Plate movement fix: only items with activity (cooked or sold), Cooked column added, Wasted removed
-- Spec: context/features/shift-management-completion.md
-- Deep logic reference: context/features/shift-management.md (§5–7), plan phases 8–12
-- Verification gates per phase: tsc --noEmit (root + backend), npm run lint, browser/E2E acceptance check
-- Ollama models must be stopped (`ollama stop <model>`) immediately after each generation run
-
-### fullstack - 2026-08-27 — Menu category edit "save doesn't stick" fix (MenuForm)
-- Root cause: editing a menu item left the Category dropdown blank (showed "Select category") even though `getMenuById` returns the correct category and it's a valid option. `form.reset({ category })` didn't propagate the value into the Radix `Select`, so RHF's `category` field stayed empty → required-field validation ("Category is required") blocked the Save → **no PUT was sent → changes didn't persist**. This is the classic Radix Select + react-hook-form async-`reset()` sync bug.
-- Verified end-to-end in browser + network log: with the blank dropdown, changing only price produced NO PUT (dialog still open with `[invalid]` + "Category is required"); with the category manually re-picked, the PUT fired and category persisted. Backend/DB proven correct (direct API PUT of category persists).
-- Fix: `desktop/ui/components/MenuForm.tsx:254` — added `key={field.value || "empty"}` to the Category `<Select>` so it remounts and re-syncs its trigger once the async-loaded value lands after `reset`. After the fix, a fresh Edit dialog opens with the category correctly displayed, and saving (e.g. price-only change) submits + persists (verified: price 500→501→500, category stayed "Fish"). `tsc -b`/vite build + eslint clean on MenuForm.tsx.
-- Data layer unaffected; no backend change.
-
-### fullstack - 2026-08-26 — Cashier Payment Wizard + Batch Tracking + Sidebar Reorder
-- Single order payment dialog: per-row "Pay" button → order summary + M-Pesa/Cash radio + Confirm Payment
-- Batch payment wizard: 2-step modal (Method → Select Orders with checkbox) with accumulated total, batchId via `crypto.randomUUID()`
-- Backend: `paymentType` and `batchId` fields on Order model, PATCH /api/orders/:id/payment accepts both
-- API layer: `updateOrderPayment()` in lib/api.ts accepts optional paymentType and batchId
-- OrdersView: view-only listing with 6 filter tabs (All/M-Pesa/Cash/Void/Unpaid/Batch), batch totals memoized, search matches order number or batch total
-- VoidView: "Void Order" column header, centered void button with Ban icon
-- Payment column simplified: method badge only (M-Pesa/Cash), batch amount removed (shown in Order # column)
-- Fixed blank screen on Payment card: PaymentView referenced `activeTab`/`searchInput` from OrdersView instead of own `orderSearch` state
-- Sidebar reorder: Dashboard → Shift Management → Store/Procurement → Kitchen → Menu/Dispatch → Cashier → Reports → Users → Settings
-- Menu renamed to Menu/Dispatch in sidebar and page heading
-- Branch: `feature/cashier/payment-wizard` (merged to main `865c85d`)
-
-### fullstack - 2026-08-25 — Shift Management Phases 8–12 + Plate Movement Fix
-- Phase 8: Waiter replacement-order flow — voidedOrderId on order create, VoidOrdersDialog, FIFO void linking, cart prefill from voided order
-- Phase 9: Cashier Shift Close UI — ShiftCloseDialog (confirm view with drift warning + report view with full summary), shift open/close from Cashier page
-- Phase 10: Manager Report UI — Reports page with date picker, shift selector, plate movement table, revenue by period, production vs sales
-- Phase 11: Auto-close scheduler — backend interval closing expired shifts every minute
-- Phase 12: Void analytics — per-waiter void summary with replaced/pending reconciliation in Reports UI
-- Plate movement: only show items with activity (cooked or sold), add Cooked column from CookingRecordAssignment, remove Wasted
-- Dev-window toggle, receipt correlation line for replacement orders, void reconciliation in analytics
-- Branch: `feature/cashier/shift-close-void-flow` (merged to main `69d9371`)
-
-### fullstack - 2026-08-22 — Shift Management Phases 1–7 (Foundation)
-- Implemented Phases 1–7 of the 12-phase Shift Management feature: Prisma schema + migration (Shift, ShiftSnapshot, ShiftType enum, Order void fields incl. shiftId/voidedOrderId, StockSupply.costPrice), Shift API (`routes/shifts.ts`: open/close/current/:id/auto-close) mounted at `/api/shifts`, void API (`POST /api/orders/:id/void` restoring stock + decrementing snapshot platesSold), costPrice on StockSupply CRUD + seed data, shift report API (`GET /api/reports/shift/:id` in dailyReport.ts), Cashier void UI (reason presets dialog, VOIDED badge), Waiter void notification card (WaiterPOS)
-- Meal period times updated: Breakfast 5:30AM–11:59AM, Lunch 12PM–5:29PM, Dinner 5:30PM–5:29AM
-- Remaining Phases 8–12 tracked in `context/features/shift-management-completion.md`
-- Verified: backend tsc + eslint clean; work committed directly on main as `4408996` (no feature branch existed)
-
-### frontend - 2026-08-11 — Waiter Two-Column Menu + Receipt Footer Branding
-- Replaced the waiter 3-column menu screen with a 2-column layout: serving-period bar on top + dynamic first column (listing ↔ detail) + order column (400px, unchanged) on the right
-- New `ServingPeriodBar.tsx` lists all periods (BREAKFAST/LUNCH/DINNER/DESSERT/BEVERAGE); closed periods disabled/dimmed, current highlighted; clicking a different period navigates, clicking the active period while in detail returns to listing — the period bar is the single navigation mechanism (no back button in detail view or grid top; BackButton kept only in error/empty states)
-- Listing (State A) groups foods for the active period by category — heading + grid of cards (thumbnail, name, price, plates badge), all categories visible + scrollable, sold-out cards dimmed; clicking a card mounts the existing detail view (State B) in the same wide first column
-- Receipt footer branding: "Apydy Technologies" bold below "POS Designed and Build By:", city under the address, QTY/ITEM/PRICE/TOTAL item table header, "Buy Goods Till No: 994296", services wording fixed to "Supermarket Systems" and "Mobile Development"; company name removed from the receipt header
-- Login PIN slots neutral (no green border/pulse) until the first digit is keyed
-- Verified: receipt HTML rendered + screenshot, `tsc -b` + eslint clean
-- Branch: `feature/waiter/two-column-menu` (merged to main as `0806b53`)
-
-### frontend - 2026-08-10 — Menu Image Uploads + LUNCH/DINNER Accompaniment Validation
-- Menu item images are now uploaded from the Menu create/edit form (`MenuForm`) via `POST /api/menu/upload` (multer → `backend/uploads/menu-items/`), served statically by Express, with the DB `image_path` migrated from old public paths by `backend/db/migrate-menu-images.ts`
-- `lib/api.ts` `menuImageUrl()` is the single source of truth for resolving menu image paths (dev server vs built app) — used in the menu list, detail dialog, form preview, and the Login page carousel sample meals
-- LUNCH/DINNER menus now require BOTH a starch and a vegetable accompaniment: frontend `superRefine` in `MenuForm` shows inline errors on the two selects (with `[invalid]` state) and conditional red `*` asterisks driven by `useWatch`; backend rejects with 400 on `POST /api/menu` and `PUT /api/menu/:id` (PUT falls back to existing row `starchId`/`vegetableId`/`mealTypes` so partial updates like stock-only from the Plate Assignment dialog still pass)
-- Verified end-to-end in browser: image upload renders in form, conditional asterisks appear when LUNCH/DINNER is checked, save without accompaniments shows both inline errors, edit-dialog prefill of starch/vegetable confirmed working on clean page loads; `npm run build` + backend tsc pass, changed files lint-clean
-- Branch: feature/admin/menu-image-uploads (merged to main as `d97b3b6`)
-
-### frontend - 2026-08-10 — Waiter Order: Multiple Variant Lines per Food
-- Order lines are now keyed by the full combination `menuItem.id|starch.id|vegetable.id` instead of `menuItem.id` alone, so the same dish can appear on multiple lines with different served-with/vegetable combinations (e.g. Beef+Rice, Beef+Chapati, Beef+Ugali) in one order/receipt
-- `addToOrder` increments quantity only when the exact same combination is added again; different combos each get their own line; plain items (no accompaniments, incl. beverages) get their own line too
-- `updateQuantity`/`removeItem`/`updateAccompaniments` operate by variant key; editing a line in the detail panel re-keys it; `WaiterMenuGrid` order rows use the variant key as React key
-- No backend change — order API already accepts multiple same-food lines; localStorage payloads from before are split apart on the next add pass
-- Branch: `feature/waiter/multi-variant-order-lines` (merged to main as `9861c16`)
-
-### frontend - 2026-08-07 — Single NSIS Installer + Branded Icon + Pre-Login Server IP Recovery
-- Phase 1 (Windows packaging): dropped the portable target so `npm run build:win` produces exactly ONE NSIS installer .exe; rebranded to "Eraeva POS System" (productName, shortcutName, `index.html` title); generated `build/icon.ico` (multi-size from `eraeva-logo.png`) with `scripts/icon.mjs` + `npm run icon`; NSIS `runAfterFinish: true` + installer/uninstaller/header icons
-- Verified by building the Windows installer on Mac — `release/Eraeva POS System-0.0.0-win-x64.exe`, icon embedded in the exe
-- Phase 2 (server IP recovery): new `ConnectionGate` in `App.tsx` probes `/health` before login — reachable → Login, unreachable → new `ServerRecovery` screen (branded, IP input, Reconnect / Try Again); `lib/api.ts` browser-mode `testServerConnection()` now does a real probe and honors saved server config; failed reconnects roll the config back so a temporary outage is never overwritten
-- All flows verified in browser: happy path → login, dead IP → recovery screen, correct IP → reconnect → login, bad IP → friendly error + rollback, Try Again → re-probe
-- Branch: feature/admin/win-installer-branded-icon (merged to main as `ee4d938`)
-
-### frontend - 2026-08-04 — Settings guide step number badges
-- Added step number badges (01, 02, 03…) to the Settings guide cards in `Manager.tsx`, positioned inside the card top-right corner so they aren't clipped
-- Badge placement fixed in a follow-up commit (moved inside card bounds) — verified in browser, eslint clean on `Manager.tsx`
-- Branch: `feature/admin/guide-numbering` (merged to main as `bd75693`)
-
-### frontend - 2026-08-03 — Pre-Deployment Checklist guide
-- New admin-only card "Pre-Deployment Checklist (Before You Travel)" (`PreDeploymentGuide.tsx`, icon Luggage) placed first among the setup guides in `Manager.tsx`
-- 6 sections: build & test the Windows installer, test printers on Windows, run one order end-to-end, download everything in advance, gather the hardware, prepare the restaurant data — plus a "Why it matters" and "Ready to travel when…" checklist
-- Verified in browser: card renders first among guides with all 6 sections
-- Branch: `feature/admin/pre-deploy-checklist` (merged to main as `7535ef7`)
-
-### frontend - 2026-08-03 — PostgreSQL guide fresh-clone patch
-- `PostgresGuide.tsx` step 4 now covers a fresh clone: create `backend/.env` if missing (file is not in the repo — exact create steps), add `DATABASE_URL` with the postgres password, then run `npm run db:generate` BEFORE `npm run db:push` (generated Prisma client is not committed either)
-- Checklist updated to reference generate + push
-- Verified in browser: .env-create text and db:generate code block render
-- Branch: `fix/postgres-guide-fresh-clone` (merged to main as `73757b0`)
-
-### frontend - 2026-08-03 — Deployment setup guides + admin-only Settings
-- 5 new admin-only guide cards in Settings (`Manager.tsx`), in deployment order: Install Node.js (Server) (`NodeJsGuide.tsx`), Build the Windows Installer (`BuildInstallerGuide.tsx`), Enter Restaurant Data (`DataEntryGuide.tsx`), Install Printer Drivers (`PrinterDriversGuide.tsx`), Final Network Test (`NetworkTestGuide.tsx`) — each follows the existing SectionCard/StepList guide pattern with a "how it works" card + troubleshooting checklist
-- Cards restructured with an `adminOnly` flag; manager sees only the 3 config cards (Restaurant Departments, Kitchen Stock Config, POS Printer Config), all 9 server/guide items hidden; `resolvedView` guard prevents manager from opening an admin-only view
-- Route guard in `App.tsx`: `/admin/settings` wrapped in `ProtectedRoute role={["admin","manager"]}` — store/kitchen/waiter can no longer reach Settings even by typing the URL (redirect to login)
-- Verified in browser: admin sees all 12 cards in order, guides render, manager sees 3, store user direct-nav to /admin/settings is bounced
-- Branch: `feature/admin/setup-guides` (merged to main as `7109682`)
-
-### backend - 2026-08-03 — Manager role with restricted Settings cards
-- New role `manager` added across the stack: `backend/routes/users.ts` `ALLOWED_ROLES`, `User`/`AdminUserRole` types in `electron.d.ts`, `Login.tsx` redirect, `/admin` + kitchen `ProtectedRoute` in `App.tsx`, `AdminLayout` nav items, `Users.tsx` role badge/label (teal "Manager"), and `db:create-admin` demo account (manager@eraeva.com, PIN 5555)
-- Manager has full admin access everywhere EXCEPT Settings: the four server-related cards (Server Connection, Server & Installation Guide, Web Interface Setup (WiFi), PostgreSQL Setup Guide) are hidden via `MANAGER_HIDDEN_VIEWS` filter in `Manager.tsx` (with `resolvedView` guard) — managers can still use Restaurant Departments, Kitchen Stock Config, POS Printer Config, and all other admin pages (Users, Menu, Cashier, Dashboard, Store, Kitchen)
-- Verified in browser: admin sees all 7 Settings cards; manager sees 3 and still accesses Users; backend tsc + eslint clean
-- Branch: `feature/admin/postgres-guide` (merged to main as `940c535`)
-
-### frontend - 2026-08-03 — PostgreSQL Setup Guide in Settings
-- New Settings card `PostgresGuide.tsx` ("PostgreSQL Setup Guide", icon Database) registered in `Manager.tsx` — 5 read-and-do sections matching the Server Installation Guide style: 1) install PostgreSQL 13+ (17 recommended) from postgresql.org, keep port 5432, note the postgres password, 2) keep it running (services.msc → service Running, Startup type Automatic), 3) create `eraevadb` via pgAdmin or `psql -U postgres` + `CREATE DATABASE eraevadb`, 4) connect backend by setting `DATABASE_URL="postgresql://postgres:YOURPASSWORD@localhost:5432/eraevadb"` in `backend/.env` + `npm run db:push --prefix backend`, 5) verify with `npm run dev:backend` (connects, port 3001)
-- Includes "Why this matters" card (database stores all data, runs as background service, backup via pgAdmin) and troubleshooting checklist (service running, correct password/port/name, firewall TCP 5432, db:push run)
-- Verified in served web app: all 5 sections + code blocks render
-- Branch: `feature/admin/postgres-guide` (merged to main as `940c535`)
-
-### backend - 2026-08-03 — User Management (CRUD)
-- `backend/routes/users.ts` mounted at `/api/users`: GET list (serialized without PIN hash; `hasPin` flag), POST create (name/email required, PIN ≥ 4 chars hashed with bcrypt, role whitelist, email uniqueness → 409), PUT update (optional PIN reset only re-hashes on change, role/name/email/isActive edits, last-active-admin guard), DELETE (409 guard on Order/StockRequest/StockFulfillment/CookingRecord history + last-admin guard)
-- `backend/package.json` `db:create-admin` script (was a bare script) — one-time bootstrap of the first admin + demo staff on a brand-new database
-- `lib/api.ts` `getUsers/createUser/updateUser/deleteUser`; `AdminUser`/`AdminUserCreateData`/`AdminUserUpdateData` types in `electron.d.ts`
-- `pages/admin/Users.tsx` full management page (was "Coming soon"): DataTable with search + pagination, role/status badges, PIN set indicator, Add/Edit dialog (role select, PIN reset, active checkbox), Delete confirm, Deactivate/Activate toggle, "(you)" self-marker with self-protection
-- Server & Installation Guide: new step 2 "Create the first admin" (`npm run db:create-admin --prefix backend`), steps renumbered
-- Verified end-to-end in browser: create → duplicate email blocked → edit (role + PIN reset) → login with new PIN ✓ / old PIN rejected ✓ → deactivate blocks login → delete; last-admin + delete guards via curl; eslint clean on new files, backend tsc + vite build pass
-- Branch: feature/admin/user-management
-
-### frontend - 2026-08-03 — Web Interface Setup Guide in Settings
-- Settings → "Web Interface Setup (WiFi)" card (`WebInterfaceGuide.tsx`): read-and-do flow matching ServerInstallationGuide — 1) `npm run build:web -- --server http://<ip>:3001`, 2) start backend (`npm run dev:backend`), 3) find IP (`ipconfig`), 4) open `http://<ip>:3001` from any device + login, 5) what works in browser vs desktop-only (printing). Includes "How it all fits together" card + troubleshooting checklist (Windows firewall port 3001 inbound rule, backend running, exact URL with port)
-- Registered card in `Manager.tsx` (view `web-interface-guide`); verified in served web app — card renders on Settings and the full guide opens cleanly
-- Merged to main: `feature/admin/web-interface-guide` — **DO NOT DELETE this branch**
-
-### backend - 2026-08-03 — Web Interface over WiFi (serve built frontend from backend)
-- `backend/app.ts` serves `dist-react` statically + SPA fallback (GET, excluding `/api/*` and `/uploads/*`) so the same UI as Electron runs in any browser at `http://<server-ip>:3001`
-- Robust `dist-react` path resolution across run contexts (dev cwd = `backend/`, compiled cwd = root)
-- `scripts/build-web.mjs` + `build:web` npm script: `vite build --base=/` with `VITE_API_BASE`/`VITE_API_ORIGIN` baked to the server IP (absolute base so deep links resolve `/assets/*` from the server root)
-- Fixed `desktop/ui/stores/auth.ts` hardcoded `API_BASE` → `import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api"` (browser login on other devices was hitting their own localhost)
-- Verified end-to-end via browser on `http://localhost:3001`: served app loads, PIN 1234 login → admin dashboard renders, deep link `/admin/menu` serves the app (no MIME/404), `/api/*` + `/health` + uploads untouched, `/admin` deep link via SPA fallback returns 200 text/html
-- Branch: `feature/backend/web-interface-wifi` — **DO NOT DELETE this branch**
-
-### frontend - 2026-08-03 — Server Config for Network Terminals
-- Electron main `server-config.ts`: reads/writes `server-config.json` in `app.getPath("userData")` (per-terminal, mirrors `printers.ts` pattern); `getApiBase()` precedence = config file → `API_BASE` env → baked default; `testServerConnection()` pings `/health` (5s timeout)
-- IPC handlers `server-config:get/save/test/get-api-base` registered in `main.ts`; preload exposes `window.electron.serverConfig.*`; `ServerConfig`/`ServerStatus` types added to `electron.d.ts`
-- `ipc-handlers.ts` apiFetch now resolves the base at runtime via `getApiBase()` instead of a module-level constant, so a saved config takes effect without rebuild
-- `lib/api.ts`: `getServerConfig`/`saveServerConfig`/`getServerApiBase`/`testServerConnection` with localStorage fallback (`eraeva.server-config.v1`) for browser dev mode
-- Settings → "Server Connection" card (`ServerConfig.tsx`): IP/URL input (accepts bare IP, IP:port, or full URL → normalized), live resolved API endpoint display, Test Connection with Connected/Unreachable status badge, Save
-- Settings → "Server & Installation Guide" card (`ServerInstallationGuide.tsx`): linear read-and-do flow — 1) start server (`npm run dev:backend`), 2) find IP (`ipconfig`), 3) build Windows installer the easy way (`npm run build:win:network -- --server http://IP:3001` → `release/`), 4) install on terminals, 5) connect via Settings → Server Connection, 6) set up printers (USB auto-detect / LAN by IP). Includes code blocks, "How it all works", and a can't-connect checklist (firewall port 3001, backend running, IP correct)
-- `scripts/build-network.mjs` now bakes the server URL into `dist-electron/server-config.js` (DEFAULT_API_BASE) instead of `ipc-handlers.js`; verified end-to-end (patch applied, artifacts restored to localhost)
-- Verified: `transpile:electron` + `vite build` pass, eslint clean on all touched files (pre-existing `main.ts:22` empty-catch warning left untouched)
-- Branch: feature/cashier/order-list (uncommitted)
-
-### frontend - 2026-08-02 — POS Order Printing (Phase 3: Receipt Preview)
-- "Preview Receipt" button below "Place Order" in the waiter POS order summary; dialog renders the exact customer receipt HTML via iframe `srcDoc`
-- IPC `printer:preview` in `receipt.ts` returns the same `templateFor(data)(data)` HTML as `printer:print-receipt` — single source of truth, print == preview
-- `GET /api/orders/count` returns the next order number used by the preview; previews persist nothing (DB count verified unchanged)
-- Code 128 barcode (start 104 / checksum mod 103 / stop 106) as inline SVG encoding the order number; width computed from module count so bars are never clipped
-- Receipt header now shows "Branch: Airport" below the restaurant name; centered footer below the barcode: "POS Designed and Build: Apydy Technologies", "Tel: 0701315250", "Hotel Systems, Suparket Systems, Web Design, Mobile"
-- `ReceiptData.restaurant` extended with optional `branch`/`tel`/`poweredBy`/`services`; electron template and renderer (`electron.d.ts`) types kept in sync
-- Verified: Code 128 round-trip decode for 1/7/42/123456; live preview renders centered header/footer; electron `tsc -b` + eslint pass
-- Branch: feature/waiter/receipt-preview (merged to main, 2026-08-02)
-
-### frontend - 2026-08-02 — POS Order Printing (Phase 2: USB customer receipt + printer status)
-- `placeOrder()` in `WaiterMenu` creates the order via `POST /api/orders`, prints a customer receipt, clears the cart, and logs out
-- Receipt templates (customer/kitchen/bar, 80mm) in `desktop/electron/receiptTemplate.ts`; print handler in `receipt.ts` via hidden BrowserWindow silent `webContents.print`
-- Printer registry with USB/LAN transport + `printer:check-status` IPC: USB matched against OS printer list (`getPrintersAsync`), LAN probed with a TCP connect (default port 9100)
-- `PrinterConfig` table now has a live Status column: green Online / red Offline with reason; statuses refresh on load/add/delete
-- `createOrder`/`printReceipt`/`checkPrinterStatus` API helpers + ElectronAPI typing in `electron.d.ts`
-- Verified: LAN probe reachable/unreachable/timeout behavior; status column renders green/red via computed styles; E2E order #1 persisted and cleaned up
-- Branch: feature/waiter/printer-template (merged to main, 2026-08-02)
-
-### backend - 2026-08-02 — POS Order Printing (Phase 1: orderNumber)
-- Added `orderNumber Int @unique @default(autoincrement())` to `Order` model; created + applied migration `20260802120000_add-order-number` (SERIAL column + unique index)
-- Repaired corrupted `20260729154800_initial_schema/migration.sql` (regenerated valid SQL via `prisma migrate diff --from-empty`), re-synced `_prisma_migrations` checksum, fixed pre-existing `Menu.isAvailable` default drift (DB → `true`) to unblock shadow-DB migration runs without reset
-- Regenerated Prisma client; verified `POST /api/orders` returns `orderNumber` (tested via curl + tsx script)
-- Branch: feature/waiter/pos-order-printing
-
-### frontend - 2026-08-02 — Admin POS Printer Config
-- Added "POS Printer Config" third card to Settings (`AdminManager`) opening a new `PrinterConfig` component
-- `PrinterConfig`: DataTable of configured printers + Add/Edit dialog with Name, Connection Type (USB/LAN radio), USB → detected-printers dropdown + Device Name, LAN → IP + Port (default 9100), Role (Customer/Kitchen/Bar); Delete with confirm
-- Electron main `printers.ts`: reads/writes `printers.json` in `app.getPath("userData")` (per-terminal config); IPC handlers `printer:get-config`, `printer:save-config`, `printer:list-devices` (via `webContents.getPrintersAsync()`)
-- Preload exposes `window.electron.printer.*`; `PosPrinter`/`PosPrinterConfig` types added to `electron.d.ts`
-- `lib/api.ts`: `getPrinterConfig`/`savePrinterConfig`/`listPrinterDevices` with localStorage fallback (`eraeva.printers.v1`) for browser dev mode
-- Branch: feature/admin/pos-printer-config
-
-### frontend - 2026-08-01 — Waiter Order Cart Persistence
-- Dynamic 3-column `WaiterMenuGrid`: category list → detail panel (image gallery + served-with/vegetable radio cards) → current order column
-- Image↔accompaniment matching by filename; gallery thumbnails drive selection and selection re-syncs the active gallery image
-- Starch/vegetable persisted per order line in localStorage (`eraeva.waiterOrder.v1`, keyed by waiter); order lines intact across menu switches and app restarts
-- Clicking an order line loads its stored config; editing an ordered item's accompaniments updates the stored line live via `updateAccompaniments`
-- Vegetable options split Free/Charged in one radio group; paid vegetable added to line total; live total in footer
-- shadcn `RadioGroup` primitive added with red checked indicator; selected accompaniment cards get red border/highlight
-- Add to Order button moved below the details as a centered red section (20% width); menu detail layout `2fr_3fr`; order column 400px
-- Meal period shown in nav bar near login time; removed content-area heading; trimmed layout padding
-- Branch: feature/waiter/order-cart-persistence (merged to main, 2026-08-01)
-
-### frontend - 2026-07-31 — Waiter Order Cart Persistence
-- `WaiterOrderContext` (`WaiterOrderProvider` + `useWaiterOrder`) wraps the waiter outlet; cart survives navigation across periods and app restarts (localStorage `eraeva.waiterOrder.v1` keyed by `user.id`, invalid payload ignored)
-- Extracted reusable 3-column `WaiterMenuGrid` (category list with plates badges → item detail + STARCH/VEGETABLE accompaniment chips → order summary with per-line accomp sub-rows and Free/+KSH labels)
-- Order lines capture free + paid accompaniments; paid accompaniment adds to line price (Decimal prices from API are strings — coerced with `Number()` in `linePrice`)
-- Quantity capped at remaining plates; Sold Out at 0 (badge, detail text, disabled button); backend already filters `stock > 0`
-- `placeOrder()` decrements local stock per line (Phase 1) and clears the cart
-- Header cart-count badge shown when cart non-empty
-- `getMenuByMealType()` added to `@/lib/api.ts`; `MenuItem.availablePlates?` + `OrderAccompaniment`/`OrderLineItem` added to `electron.d.ts`
-- Bugs fixed during verification: Decimal-as-string price concatenation in `linePrice`; accompaniment clobbering when re-adding an existing line
-- Branch: feature/waiter/order-cart-persistence
-
-### frontend - 2026-07-31 — Menu Create/Edit — Meal Type + Accompaniment
-- Updated `MenuCreateData` type with `mealTypes[]`, `starchId`, `vegetableId`
-- Added checkbox group for meal periods (BREAKFAST/LUNCH/DINNER/DESSERT/BEVERAGE) sorted by sortOrder
-- Added starch accompaniment dropdown (filtered STARCH) and vegetable accompaniment dropdown (filtered VEGETABLE), each with "None" option
-- Updated Zod schema to require at least one meal type
-- Meal types and accompaniments fetched on mount via `getMealTypes()` and `getAccompaniments()`
-- Edit mode pre-populates meal types and accompaniment selections from fetched item
-- Added `getMealTypes()` API function with Electron IPC fallback
-- Branch: feature/frontend/menu-create-mealtype-accompaniments
-
-### backend - 2026-07-31 — Menu Create/Edit — Meal Type + Accompaniment
-- Added `serializeMenu()` helper for consistent menu response shape
-- Updated `POST /api/menu` to accept `mealTypes[]`, `starchId`, `vegetableId` with `$transaction` (create menu → createMany MenuMealType → return with includes)
-- Updated `PUT /api/menu/:id` to accept same fields with `$transaction` (update menu → deleteMany + createMany MenuMealType → return with includes)
-- Validated mealTypes against `ServiceTime` enum on both POST and PUT
-- Refactored `GET /:id` to use `serializeMenu()` helper
-- Branch: feature/backend/menu-create-mealtype-accompaniments
-
-### backend - 2026-07-31 — Menu Meal Period Time-Based Filter (frontend-only)
-- Created shared `lib/mealPeriod.ts` utility with time-slot logic + dev toggle
-- Refactored `WaiterPOS.tsx` to use the shared utility
-- Added meal period filter bar (Now Serving / Closed) to `AllMenuTable.tsx`
-- Filter menu items by selected period's `mealTypes`
-- Live clock updates every 60s
-- Dev toggle (`TIME_FILTER_ENABLED`) to bypass time restrictions during development
-- Branch: feature/admin/meal-period-time-filter
-
-### frontend - 2026-07-30 — Menu Status Badges + Filter Tabs
-- Added computed status column (Unavailable / Selling Now / Sold Out) in AllMenuTable
-- Added 4 filter tabs (All / Unavailable / Selling Now / Sold Out) with count badges
-- Changed Unavailable color to amber/brown; all active backgrounds at /60 opacity
-
-### backend - 2026-07-30 — Menu Status Auto-Availability Fix
-- Removed `data.isAvailable = Number(stock) > 0` from menu.ts PUT route
-- isAvailable now purely manual toggle
-
-### frontend - 2026-07-29 — Menu Tab Redesign
-- Replaced tab-based Menu page with dashboard layout featuring two clickable cards
-- Created `AllMenuTable`, `MenuDetailDialog`, `CreateMenuDialog`, `BackButton`
+### frontend - 2026-09-12 — Waiter Accompaniment Picker Redesign + "None" Option
+- Waiter detail panel now shows accompaniments via the Free/Charged toggle: Free group (with an always-present "None" card) is the default view; tapping Charged hides free cards and shows charged options (Ugali Brown, etc.); tapping Free restores them; toggling never clears a selection
+- "None" is a real fourth selection: captured as null starchId/vegetableId on the order, shown as a "None" chip in the order column, and printed as "No starch"/"No vegetables" on both the customer and kitchen tickets (note-style, no FREE/+KSH tag)
+- Add-to-Order no longer disabled for missing accompaniments; backend `orders.ts` requirement relaxed accordingly (no schema change)
+- Occurrence in `WaiterMenuGrid.tsx`, `WaiterMenu.tsx`, `receiptTemplate.ts`, `electron.d.ts`, `backend/routes/orders.ts`
+- Branch: `feature/waiter/accompaniment-picker-none`

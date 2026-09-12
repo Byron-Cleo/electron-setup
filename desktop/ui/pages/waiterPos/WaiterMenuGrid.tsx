@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import BackButton from "@/components/shared/BackButton"
 import ServingPeriodBar from "./ServingPeriodBar"
-import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye, ArrowLeft } from "lucide-react"
+import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye, ArrowLeft, Ban } from "lucide-react"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
@@ -40,6 +40,9 @@ function platesFor(item: MenuItem): number {
 }
 
 const CATEGORY_ORDER = ["Beverages", "Snacks"]
+
+// Sentinel radio value for "no accompaniment" (serve the dish without it)
+const NO_ACCOMPANIMENT = "none"
 
 function isFreeAccompaniment(a: OrderAccompaniment): boolean {
   return a.price == null || a.price <= 0
@@ -130,6 +133,83 @@ function AccompanyRadioCard({
   )
 }
 
+// Compact Free / Charged toggle that swaps which accompaniment group is shown.
+// The selected group is the only one visible — no clutter in the small POS window.
+function AccompModeToggle({
+  freeCount,
+  chargedCount,
+  value,
+  onValueChange,
+}: {
+  freeCount: number
+  chargedCount: number
+  value: "free" | "charged"
+  onValueChange: (value: "free" | "charged") => void
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-pressed={value === "free"}
+        onClick={() => onValueChange("free")}
+        className={cn(
+          "flex-1 px-2 text-xs transition-colors",
+          value === "free"
+            ? "bg-white shadow-sm font-semibold text-brand-ebony"
+            : "text-brand-ebony/60 hover:text-brand-ebony",
+        )}
+      >
+        Free {freeCount > 0 && `(${freeCount})`}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-pressed={value === "charged"}
+        onClick={() => onValueChange("charged")}
+        className={cn(
+          "flex-1 px-2 text-xs transition-colors",
+          value === "charged"
+            ? "bg-white shadow-sm font-semibold text-brand-maroon"
+            : "text-brand-ebony/60 hover:text-brand-ebony",
+        )}
+      >
+        Charged {chargedCount > 0 && `(${chargedCount})`}
+      </Button>
+    </div>
+  )
+}
+
+// The "None" card shown with the free options — picking it serves the dish
+// without that accompaniment (captured on the order + printed on tickets).
+function NoneAccompanyCard({ value, hint }: { value: string; hint: string }) {
+  return (
+    <Label className="flex w-fit max-w-[130px] flex-col items-center gap-1.5 rounded-lg border border-dashed p-2 cursor-pointer transition-colors has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5">
+      <div className="flex items-center gap-1.5">
+        <RadioGroupItem value={value} />
+        <Ban className="h-6 w-6 text-brand-maroon/70" />
+      </div>
+      <span className="max-w-full text-center text-xs font-medium leading-tight text-brand-ebony/80">None</span>
+      <span className="max-w-full text-center text-[10px] font-medium leading-tight text-brand-ebony/50">{hint}</span>
+    </Label>
+  )
+}
+
+// Order-column row showing an explicitly declined accompaniment
+function NoAccompanyRow({ label }: { label: string }) {
+  return (
+    <p className="text-xs text-brand-ebony/60">
+      <span className="mr-1">•</span>
+      <span className="text-brand-ebony/80">{label}:</span>{" "}
+      <span className="ml-0.5 rounded-full bg-brand-ebony/10 px-1.5 py-px text-[10px] font-semibold text-brand-ebony/70">
+        None
+      </span>
+    </p>
+  )
+}
+
 function ImageGallery({
   images,
   active,
@@ -210,6 +290,8 @@ export function WaiterMenuGrid({
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
   const [activeOrderKey, setActiveOrderKey] = useState<string | null>(null)
   const [syncedOrderKey, setSyncedOrderKey] = useState<string | null>(null)
+  const [starchMode, setStarchMode] = useState<"free" | "charged">("free")
+  const [vegMode, setVegMode] = useState<"free" | "charged">("free")
   const [lastMealPeriod, setLastMealPeriod] = useState<string | null>(null)
   const [noShift, setNoShift] = useState(false)
 
@@ -375,6 +457,8 @@ export function WaiterMenuGrid({
     }
     setSelectedStarch(nextStarch)
     setSelectedVegetable(nextVegetable)
+    setStarchMode(nextStarch && !isFreeAccompaniment(nextStarch) ? "charged" : "free")
+    setVegMode(nextVegetable && !isFreeAccompaniment(nextVegetable) ? "charged" : "free")
     const matchIdx = galleryLinks.findIndex(
       (l) =>
         (nextStarch && l.starch?.id === nextStarch.id) ||
@@ -404,6 +488,7 @@ export function WaiterMenuGrid({
   const selectStarch = (starch: Accompaniment | null) => {
     setSelectedStarch(starch)
     if (starch) {
+      setStarchMode(isFreeAccompaniment(starch) ? "free" : "charged")
       const idx = galleryLinks.findIndex((l) => l.starch?.id === starch.id)
       if (idx >= 0) setGalleryActive(idx)
     }
@@ -413,6 +498,7 @@ export function WaiterMenuGrid({
   const selectVegetable = (vegetable: Accompaniment | null) => {
     setSelectedVegetable(vegetable)
     if (vegetable) {
+      setVegMode(isFreeAccompaniment(vegetable) ? "free" : "charged")
       const idx = galleryLinks.findIndex((l) => l.vegetable?.id === vegetable.id)
       if (idx >= 0) setGalleryActive(idx)
     }
@@ -495,19 +581,28 @@ export function WaiterMenuGrid({
                 {/* Right — Details */}
                 <div className="space-y-3">
 
-                {selectedItem.starchId && starches.length > 0 && (
+                {starches.length > 0 && (selectedItem.hasStarch || selectedItem.starchId != null) && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-brand-ebony/50 mb-2">Served With</p>
-                    <RadioGroup
-                      value={selectedStarch?.id ?? ""}
-                      onValueChange={(value) => {
-                        const next = starches.find((s) => s.id === value)
-                        if (next) selectStarch(next)
-                      }}
-                    >
-                      {freeStarches.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-brand-green mb-2">Free</p>
+                    <AccompModeToggle
+                      freeCount={freeStarches.length}
+                      chargedCount={chargedStarches.length}
+                      value={starchMode}
+                      onValueChange={setStarchMode}
+                    />
+                    <div className="mt-2">
+                      {starchMode === "free" ? (
+                        <RadioGroup
+                          value={selectedStarch?.id ?? NO_ACCOMPANIMENT}
+                          onValueChange={(value) => {
+                            if (value === NO_ACCOMPANIMENT) {
+                              selectStarch(null)
+                            } else {
+                              const next = starches.find((s) => s.id === value)
+                              if (next) selectStarch(next)
+                            }
+                          }}
+                        >
                           <div className="flex flex-wrap gap-2">
                             {freeStarches.map((starch) => (
                               <AccompanyRadioCard
@@ -522,12 +617,17 @@ export function WaiterMenuGrid({
                                 }
                               />
                             ))}
+                            <NoneAccompanyCard value={NO_ACCOMPANIMENT} hint="No starch" />
                           </div>
-                        </div>
-                      )}
-                      {chargedStarches.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-brand-maroon/60 mb-2">Charged</p>
+                        </RadioGroup>
+                      ) : (
+                        <RadioGroup
+                          value={selectedStarch?.id ?? ""}
+                          onValueChange={(value) => {
+                            const next = starches.find((s) => s.id === value)
+                            if (next) selectStarch(next)
+                          }}
+                        >
                           <div className="flex flex-wrap gap-2">
                             {chargedStarches.map((starch) => (
                               <AccompanyRadioCard
@@ -543,25 +643,34 @@ export function WaiterMenuGrid({
                               />
                             ))}
                           </div>
-                        </div>
+                        </RadioGroup>
                       )}
-                    </RadioGroup>
+                    </div>
                   </div>
                 )}
 
-                {selectedItem.vegetableId && vegetables.length > 0 && (
+                {vegetables.length > 0 && (selectedItem.hasVegetable || selectedItem.vegetableId != null) && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-brand-ebony/50 mb-2">Vegetable Options</p>
-                    <RadioGroup
-                      value={selectedVegetable?.id ?? ""}
-                      onValueChange={(value) => {
-                        const next = vegetables.find((v) => v.id === value)
-                        if (next) selectVegetable(next)
-                      }}
-                    >
-                      {freeVegetables.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-brand-green mb-2">Free</p>
+                    <AccompModeToggle
+                      freeCount={freeVegetables.length}
+                      chargedCount={chargedVegetables.length}
+                      value={vegMode}
+                      onValueChange={setVegMode}
+                    />
+                    <div className="mt-2">
+                      {vegMode === "free" ? (
+                        <RadioGroup
+                          value={selectedVegetable?.id ?? NO_ACCOMPANIMENT}
+                          onValueChange={(value) => {
+                            if (value === NO_ACCOMPANIMENT) {
+                              selectVegetable(null)
+                            } else {
+                              const next = vegetables.find((v) => v.id === value)
+                              if (next) selectVegetable(next)
+                            }
+                          }}
+                        >
                           <div className="flex flex-wrap gap-2">
                             {freeVegetables.map((veg) => (
                               <AccompanyRadioCard
@@ -576,12 +685,17 @@ export function WaiterMenuGrid({
                                 }
                               />
                             ))}
+                            <NoneAccompanyCard value={NO_ACCOMPANIMENT} hint="No vegetables" />
                           </div>
-                        </div>
-                      )}
-                      {chargedVegetables.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-brand-maroon/60 mb-2">Charged</p>
+                        </RadioGroup>
+                      ) : (
+                        <RadioGroup
+                          value={selectedVegetable?.id ?? ""}
+                          onValueChange={(value) => {
+                            const next = vegetables.find((v) => v.id === value)
+                            if (next) selectVegetable(next)
+                          }}
+                        >
                           <div className="flex flex-wrap gap-2">
                             {chargedVegetables.map((veg) => (
                               <AccompanyRadioCard
@@ -597,9 +711,9 @@ export function WaiterMenuGrid({
                               />
                             ))}
                           </div>
-                        </div>
+                        </RadioGroup>
                       )}
-                    </RadioGroup>
+                    </div>
                   </div>
                 )}
 
@@ -611,11 +725,7 @@ export function WaiterMenuGrid({
                   size="lg"
                   className="w-[28%] h-12 text-base bg-brand-red hover:bg-brand-red/90 text-white"
                   onClick={() => addToOrder(selectedItem, selectedStarch, selectedVegetable)}
-                  disabled={
-                    platesFor(selectedItem) === 0 ||
-                    (selectedItem.starchId != null && !selectedStarch) ||
-                    (selectedItem.vegetableId != null && !selectedVegetable)
-                  }
+                  disabled={platesFor(selectedItem) === 0}
                 >
                   {platesFor(selectedItem) === 0 ? "Sold Out" : "Add to Order"}
                 </Button>
@@ -703,10 +813,12 @@ export function WaiterMenuGrid({
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
-                      {(oi.starch || oi.vegetable) && (
+                      {(oi.starch || oi.vegetable || (oi.menuItem.hasStarch && !oi.starch) || (oi.menuItem.hasVegetable && !oi.vegetable)) && (
                         <div className="mt-1.5 space-y-0.5">
                           {oi.starch && <AccompanyRow label="Starch" accompany={oi.starch} />}
                           {oi.vegetable && <AccompanyRow label="Vegetable" accompany={oi.vegetable} />}
+                          {oi.menuItem.hasStarch && !oi.starch && <NoAccompanyRow label="Starch" />}
+                          {oi.menuItem.hasVegetable && !oi.vegetable && <NoAccompanyRow label="Vegetable" />}
                         </div>
                       )}
                       <div className="mt-2 flex items-center justify-between">
