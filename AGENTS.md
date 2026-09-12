@@ -42,7 +42,7 @@ React Component → window.electron.* (contextBridge)
       → Express route → Prisma → PostgreSQL
 ```
 
-**Port split:** Production uses port **3001** (auto-started via pm2 / `dist/index.js`). Development uses port **3111** so the dev backend can run alongside the production server. Dev defaults are wired through `.env.development` (`VITE_API_BASE`/`VITE_API_ORIGIN`) and `server-config.ts` (`NODE_ENV=development` → `DEV_API_BASE`).
+**Port split:** Production uses port **3001**, run by the `EraevaBackend` Windows service (NSSM, StartType Automatic) executing `node backend/dist/index.js` with `NODE_ENV=production`. The backend MUST be rebuilt (`npm run build --prefix backend`) before restarting the service whenever source changes — the service runs compiled `dist/`, not tsx. Control it with the root `server:start|stop|restart|status|logs` npm scripts (status/logs need no elevation; start/stop/restart do) or `sc query EraevaBackend`. Development uses port **3111** so the dev backend can run alongside the production server. Dev defaults are wired through `.env.development` (`VITE_API_BASE`/`VITE_API_ORIGIN`) and `server-config.ts` (`NODE_ENV=development` → `DEV_API_BASE`).
 
 No React Router — view switching via `useState<Tab>` and `useState<view>` in `App.tsx`.
 
