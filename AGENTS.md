@@ -200,9 +200,22 @@ feature/<layer>/<task-kebab-case>
 
 | Command | Description |
 |---|---|
-| `npm run dev` | `tsx watch src/index.ts` (hot reload) |
+| `npm run dev` | `tsx watch index.ts` (hot reload, dev port 3111) |
 | `npm run build` | `tsc` → `dist/` |
 | `npm run start` | `node dist/index.js` |
+
+### Production Deployment (MANDATORY)
+
+The production backend is the **`EraevaBackend`** Windows service (NSSM, StartType Automatic) running `node backend/dist/index.js` with `NODE_ENV=production` on port **3001**. It runs **compiled `dist/`, not tsx** — source changes require a **rebuild**, not just a restart.
+
+After ANY change under `backend/` (routes, app, db, scheduler, events, seeds, etc.):
+1. `npm run build --prefix backend`
+2. `npm run server:restart` (start/stop/restart need an elevated shell; status/logs do not)
+3. Verify: `npm run server:status` → `RUNNING` and `curl http://localhost:3001/health` → `{"status":"ok",...}`
+
+If `backend/prisma/schema.prisma` changed, run `npm run db:sync` (generate + push) BEFORE the rebuild + restart so the DB is in sync with `dist/`.
+
+Service shortcuts: `npm run server:start|stop|restart|status|logs` (logs tail `backend/logs/backend-service.log`). pm2, `ecosystem.config.cjs`, and `scripts/start-backend.bat` are retired — do not restore or use them.
 
 ## Project Structure
 

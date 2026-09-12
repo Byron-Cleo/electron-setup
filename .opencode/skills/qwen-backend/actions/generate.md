@@ -24,6 +24,7 @@ Triggered by: "write backend", "generate API", "create route", "backend code"
 3. Run `npx tsc --noEmit`
 4. Run `npm run lint`
 5. Fix any errors — return to qwen if needed
+6. **Deploy**: when any generated backend file changes, rebuild + restart the production service per AGENTS.md → Production Deployment (service runs compiled `dist/`, NOT tsx)
 
 ## Fallback Rule
 

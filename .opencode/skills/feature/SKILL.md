@@ -41,7 +41,7 @@ Detailed instructions for each action live in `actions/<action>.md`.
 | **review** | Check goals met, code quality |
 | **test** | Write and run unit tests |
 | **explain** | Document what changed and why |
-| **complete** | Commit, merge to main, delete branch, update status + history |
+| **complete** | Commit, merge to integration branch, ask before deleting branch, deploy backend changes, update status + history |
 
 ## Workflow Steps
 
@@ -55,9 +55,10 @@ Detailed instructions for each action live in `actions/<action>.md`.
    - **Cleanup**: After each model finishes generating output, immediately run `ollama stop <model>` to kill the process — do NOT leave it running in the background
    - **Review**: big-pickle reviews, applies, and runs `tsc --noEmit` + `npm run lint`
 5. **Test** — When user says "test" or "verify", follow detailed instructions in `actions/test.md`
-6. **Iterate** — Review code quality; when user says "review", follow detailed instructions in `actions/review.md`
-7. **Explain** — When user says "explain" or "what changed", follow detailed instructions in `actions/explain.md`
-8. **Complete** — When user says "complete this" or similar, follow detailed instructions in `actions/complete.md`
+6. **Deploy** — When the feature changed `backend/` or `backend/prisma/` code, deploy BEFORE calling the feature shipped: rebuild + restart the production service exactly as documented in AGENTS.md → Production Deployment. Frontend-only features skip this unless the user asks.
+7. **Iterate** — Review code quality; when user says "review", follow detailed instructions in `actions/review.md`
+8. **Explain** — When user says "explain" or "what changed", follow detailed instructions in `actions/explain.md`
+9. **Complete** — When user says "complete this" or similar, follow detailed instructions in `actions/complete.md`
 
 ## Keywords That Trigger This Skill
 
