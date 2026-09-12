@@ -235,7 +235,7 @@ The server is operated remotely over SSH (no RDP; staff use the console). Local 
   `ssh -N -L 3001:127.0.0.1:3001 -L 3111:127.0.0.1:3111 -L 5123:127.0.0.1:5123 -L 5433:127.0.0.1:5432 ops@<server>` → browser `http://localhost:3001` (live prod UI), `http://localhost:5123` (dev UI → dev backend), DB tools at `localhost:5433`.
 - Dev backend binds `127.0.0.1:3111` — never expose dev to the LAN. Cleanup any stray `0.0.0.0` dev listener.
 
-**Browser live view (build:web rule):** after ANY plain `npm run build` / `build:win` (which rewrites `dist-react` for the Electron file:// build), RE-RUN `npm run build:web -- --server http://192.168.100.45:3001` so the served web UI stays browser-correct (absolute `/assets`, API origin baked). Installed .exe terminals keep their own packaged bundle and are unaffected.
+**Browser live view (build:web rule):** after ANY plain `npm run build` / `build:win` (which rewrites `dist-react` for the Electron file:// build), RE-RUN `npm run build:web -- --server same-origin` so the served web UI stays browser-correct (absolute `/assets`, API resolves to the host the UI is opened on — LAN IP, SSH-tunnel localhost, or Tailscale). Installed .exe terminals keep their own packaged bundle and are unaffected. (Bake a fixed origin instead with `--server http://<server-ip>:3001` when the bundle must target one specific URL.)
 
 ## Project Structure
 

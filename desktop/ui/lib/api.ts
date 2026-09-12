@@ -1,5 +1,10 @@
 function resolveApiOrigin(): string {
   if (import.meta.env.VITE_API_ORIGIN) return import.meta.env.VITE_API_ORIGIN
+  // Browser: default to same-origin so the API follows whatever host the UI was
+  // opened on (LAN IP, SSH tunnel localhost, Tailscale IP). Electron packaged
+  // builds keep the localhost:3001 fallback.
+  const loc = typeof window !== "undefined" ? window.location : undefined
+  if (loc && /^https?:$/.test(loc.protocol)) return loc.origin
   return "http://localhost:3001"
 }
 
