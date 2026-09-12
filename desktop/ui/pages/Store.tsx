@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Package, ShoppingBasket, Plus, Pencil, Trash2, RefreshCw, X, Eye, Check } from "lucide-react"
+import { Package, ShoppingBasket, Plus, Pencil, Trash2, RefreshCw, X, Eye, Check, Flame, PackageOpen } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -189,6 +189,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
+  const [typeFilter, setTypeFilter] = useState<"cooked" | "notCooked" | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<StockSupply | null>(null)
@@ -290,8 +291,13 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   }, [showAddModal])
 
   const filtered = items.filter((item) => {
+    if (typeFilter === "cooked" && !item.isMenuStock) return false
+    if (typeFilter === "notCooked" && item.isMenuStock) return false
     return item.name.toLowerCase().includes(search.toLowerCase())
   })
+
+  const cookedCount = items.filter((item) => item.isMenuStock).length
+  const notCookedCount = items.length - cookedCount
 
   const {
     currentPage,
@@ -421,12 +427,30 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
           canNext,
         }}
         header={
-          <Input
-            placeholder="Search stock items..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="xs"
+              variant={typeFilter === "cooked" ? "default" : "outline"}
+              onClick={() => setTypeFilter(typeFilter === "cooked" ? null : "cooked")}
+            >
+              <Flame />
+              Cooked · Menu Items ({cookedCount})
+            </Button>
+            <Button
+              size="xs"
+              variant={typeFilter === "notCooked" ? "default" : "outline"}
+              onClick={() => setTypeFilter(typeFilter === "notCooked" ? null : "notCooked")}
+            >
+              <PackageOpen />
+              Not Cooked · Stock Only ({notCookedCount})
+            </Button>
+            <Input
+              placeholder="Search stock items..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm ml-auto"
+            />
+          </div>
         }
       />
 
