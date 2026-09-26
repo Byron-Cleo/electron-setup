@@ -14,8 +14,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs, markOrderUnpaidWithCustomer, assignOrderCustomer, unassignOrderCustomer, unmarkOrderAsUnpaid } from "@/lib/api"
-import { cn, formatElapsed, elapsedSeverity, ELAPSED_SEVERITY_CLASS } from "@/lib/utils"
+import { cn, formatElapsed, elapsedSeverity, ELAPSED_SEVERITY_CLASS, unpaidMarkedByLabel } from "@/lib/utils"
 import { useAuthStore } from "@/stores/auth"
+import { useUserRoles } from "@/hooks/useUserRoles"
 import { usePagination } from "@/hooks/usePagination"
 import { useLiveRefresh } from "@/hooks/useLiveRefresh"
 import BackButton from "@/components/shared/BackButton"
@@ -64,6 +65,27 @@ function StatusBadge({ isPaid }: { isPaid: boolean }) {
   ) : (
     <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
       Unpaid
+    </span>
+  )
+}
+
+/**
+ * Names the person or process that acknowledged an order as unpaid:
+ * a cashier during service, a manager during the manual close, or the
+ * scheduler when a shift auto-closed with no human actor. Renders nothing
+ * for an order that has not been marked. Red styling is carried over
+ * unchanged from the badge this replaces.
+ */
+function MarkedByBadge({ order, roles }: { order: Order; roles: Map<string, string> }) {
+  const label = unpaidMarkedByLabel(
+    order.unpaidAcknowledged,
+    order.unpaidAcknowledgedById,
+    order.unpaidAcknowledgedById ? roles.get(order.unpaidAcknowledgedById) : undefined,
+  )
+  if (!label) return null
+  return (
+    <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+      {label}
     </span>
   )
 }
@@ -172,6 +194,7 @@ const MARKED_UNPAID_COLUMNS: Column[] = [
   { label: "Total", key: "totalPrice", align: "center" },
   { label: "Date", key: "createdAt" },
   { label: "Marked", key: "marked", align: "center" },
+  { label: "Marked By", key: "markedBy", align: "center" },
   { label: "Customer", key: "customer" },
   { label: "Details", key: "details", isAction: true, align: "center" },
 ]
@@ -595,6 +618,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
   const [pickerOrder, setPickerOrder] = useState<Order | null>(null)
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
   const user = useAuthStore((s) => s.user)
+  const roleByUserId = useUserRoles()
 
   const refreshOrders = useCallback(async () => {
     setLoading(true)
@@ -829,9 +853,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
               <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
                 Unpaid
               </span>
-              <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-                Manager Marked
-              </span>
+              <MarkedByBadge order={order} roles={roleByUserId} />
             </div>
           )
         }
@@ -870,6 +892,8 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
         return <ElapsedCell from={order.createdAt} />
       case "marked":
         return <ElapsedCell from={order.unpaidAcknowledgedAt} />
+      case "markedBy":
+        return <MarkedByBadge order={order} roles={roleByUserId} />
       case "details":
         if (activeTab === "MARKED_UNPAID") {
           return (
@@ -1011,7 +1035,10 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
                 <div className="font-medium">{detailOrder.paymentMethod}</div>
                 <div className="text-admin-muted">Status</div>
                 <div className="font-medium">
-                  <StatusBadge isPaid={detailOrder.isPaid} />
+                  <div className="flex items-center gap-1.5">
+                    <StatusBadge isPaid={detailOrder.isPaid} />
+                    <MarkedByBadge order={detailOrder} roles={roleByUserId} />
+                  </div>
                 </div>
                 <div className="text-admin-muted">Customer</div>
                 <div className="font-medium">
@@ -1572,6 +1599,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
   const [unpaidPickerOrder, setUnpaidPickerOrder] = useState<Order | null>(null)
   const [markingUnpaidId, setMarkingUnpaidId] = useState<string | null>(null)
   const user = useAuthStore((s) => s.user)
+  const roleByUserId = useUserRoles()
 
   const refreshPayment = useCallback(async () => {
     setLoading(true)
@@ -1735,6 +1763,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     { label: "Customer", key: "customer" },
     { label: "Total", key: "totalPrice", align: "right" },
     { label: "Date", key: "createdAt" },
+    { label: "Marked By", key: "markedBy", align: "center" },
     { label: "Action", key: "action", isAction: true },
   ]
 
@@ -1756,6 +1785,8 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
         return <span className="font-medium">{money(order.totalPrice)}</span>
       case "createdAt":
         return formatDate(order.createdAt)
+      case "markedBy":
+        return <MarkedByBadge order={order} roles={roleByUserId} />
       case "action":
         return (
           <div className="flex justify-center gap-2">

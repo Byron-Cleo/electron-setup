@@ -72,3 +72,34 @@ export const ELAPSED_SEVERITY_CLASS: Record<ElapsedSeverity, string> = {
   warn: "text-amber-600 font-semibold",
   danger: "text-red-600 font-semibold",
 }
+
+export type UnpaidMarkedBy = "Cashier Marked" | "Manager Marked" | "System Marked"
+
+/**
+ * Who acknowledged an order as unpaid, derived from data already on the order.
+ *
+ * Three flows mark an order unpaid, and all of them land on the same
+ * `unpaidAcknowledged` flag, so the actor is the only thing that
+ * distinguishes them:
+ *   - a cashier using "Can't Pay" during service -> Cashier.tsx
+ *   - a manager (or admin) marking it in the close dialog -> ShiftCloseDialog
+ *   - the scheduler auto-closing an expired shift, with no human actor,
+ *     which stores a null `unpaidAcknowledgedById` -> "System Marked"
+ *
+ * The role is read live rather than snapshotted, so a later role change
+ * relabels past orders. That is deliberate: the badge reports who is
+ * responsible for chasing the money now, not a frozen audit record.
+ *
+ * An unknown or deleted user falls through to "Manager Marked" so the
+ * badge never renders blank.
+ */
+export function unpaidMarkedByLabel(
+  acknowledged: boolean,
+  markedById: string | null,
+  markedByRole: string | undefined,
+): UnpaidMarkedBy | null {
+  if (!acknowledged) return null
+  if (!markedById) return "System Marked"
+  if (markedByRole === "cashier") return "Cashier Marked"
+  return "Manager Marked"
+}
