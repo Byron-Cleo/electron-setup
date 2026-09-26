@@ -1798,7 +1798,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
               <Banknote />
               Pay
             </Button>
-            {!order.isPaid && !order.isVoid && (
+            {!order.isPaid && !order.isVoid && !order.unpaidAcknowledged && (
               <Button
                 size="sm"
                 className="bg-red-600 text-white hover:bg-red-700 border-red-600"
