@@ -1598,6 +1598,10 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
   const [payCategory, setPayCategory] = useState<"NEW" | "MARKED">("NEW")
   const [unpaidPickerOrder, setUnpaidPickerOrder] = useState<Order | null>(null)
   const [markingUnpaidId, setMarkingUnpaidId] = useState<string | null>(null)
+  // Orders view exposes assign/remove/undo on its marked-unpaid rows; Payment
+  // mirrors it so the cashier can act on a parked order from either table.
+  const [customerPickerOrder, setCustomerPickerOrder] = useState<Order | null>(null)
+  const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
   const user = useAuthStore((s) => s.user)
   const roleByUserId = useUserRoles()
 
@@ -1756,6 +1760,49 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     }
   }
 
+  async function handleAssignCustomer(customerId: string) {
+    if (!customerPickerOrder || !user) return
+    setBusyOrderId(customerPickerOrder.id)
+    setError("")
+    try {
+      await assignOrderCustomer(customerPickerOrder.id, customerId, user.id)
+      setCustomerPickerOrder(null)
+      await refreshPayment()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign customer")
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
+  async function handleUnassignCustomer(order: Order) {
+    setBusyOrderId(order.id)
+    setError("")
+    try {
+      await unassignOrderCustomer(order.id)
+      await refreshPayment()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove customer")
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
+  // Undo clears the mark AND the customer link, dropping the order back to the
+  // "New Unpaid" category, where it can be re-marked.
+  async function handleUndoMarkUnpaid(order: Order) {
+    setBusyOrderId(order.id)
+    setError("")
+    try {
+      await unmarkOrderAsUnpaid(order.id)
+      await refreshPayment()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to undo mark unpaid")
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
   const PAYMENT_COLUMNS: Column[] = [
     { label: "Order #", key: "orderNumber" },
     { label: "Meal", key: "mealType" },
@@ -1807,6 +1854,38 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
               >
                 {markingUnpaidId === order.id ? "Marking..." : "Mark Unpaid"}
               </Button>
+            )}
+            {order.unpaidAcknowledged && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCustomerPickerOrder(order)}
+                  disabled={busyOrderId === order.id}
+                >
+                  {order.Customer ? "Change Customer" : "Assign Customer"}
+                </Button>
+                {order.Customer && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => handleUnassignCustomer(order)}
+                    disabled={busyOrderId === order.id}
+                  >
+                    Remove
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                  onClick={() => handleUndoMarkUnpaid(order)}
+                  disabled={busyOrderId === order.id}
+                >
+                  Undo Mark
+                </Button>
+              </>
             )}
           </div>
         )
@@ -2184,6 +2263,12 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
         open={unpaidPickerOrder !== null}
         onOpenChange={(next) => { if (!next) setUnpaidPickerOrder(null) }}
         onSelect={(customer) => handleMarkUnpaidWithCustomer(customer.id)}
+      />
+
+      <CustomerPickerDialog
+        open={customerPickerOrder !== null}
+        onOpenChange={(next) => { if (!next) setCustomerPickerOrder(null) }}
+        onSelect={(customer) => handleAssignCustomer(customer.id)}
       />
     </div>
   )
