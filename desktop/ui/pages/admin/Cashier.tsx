@@ -185,33 +185,37 @@ const PAID_COLUMNS: Column[] = [
   { label: "Details", key: "details", isAction: true, align: "center" },
 ]
 
-// The Marked Unpaid tab is where a customer is attached to a walkout order, so
-// it swaps the payment column for the customer, ages the acknowledgement, and
-// exposes assign/change/remove.
+// The Marked Unpaid tab is a chase list, not a ledger: it only needs to answer
+// which order, whose it is, how much is owed, who parked it, and what can be
+// done about it. Meal and the live age are read off the details dialog instead,
+// so both views keep this identical column set.
 const MARKED_UNPAID_COLUMNS: Column[] = [
   { label: "Order #", key: "orderNumber", align: "center" },
-  { label: "Meal", key: "mealType" },
-  { label: "Total", key: "totalPrice", align: "center" },
-  { label: "Date", key: "createdAt" },
-  { label: "Marked", key: "marked", align: "center" },
-  { label: "Marked By", key: "markedBy", align: "center" },
   { label: "Customer", key: "customer" },
+  { label: "Total", key: "totalPrice", align: "center" },
+  { label: "Marked By", key: "markedBy", align: "center" },
   { label: "Details", key: "details", isAction: true, align: "center" },
 ]
 
-function columnsForOrdersTab(tab: OrderTab): Column[] {
-  switch (tab) {
-    case "UNPAID":
-      return UNPAID_COLUMNS
-    case "MPESA":
-    case "CASH":
-    case "BATCH":
-      return PAID_COLUMNS
-    case "MARKED_UNPAID":
-      return MARKED_UNPAID_COLUMNS
-    default:
-      return ORDER_COLUMNS
-  }
+// Entered from a shift card, every row belongs to that one operation day, so the
+// Date column repeats the same value on each line and is dropped. All Shifts
+// spans every operation day and filters by date, so there it stays.
+function columnsForOrdersTab(tab: OrderTab, scopedToOperationDay: boolean): Column[] {
+  const base = (() => {
+    switch (tab) {
+      case "UNPAID":
+        return UNPAID_COLUMNS
+      case "MPESA":
+      case "CASH":
+      case "BATCH":
+        return PAID_COLUMNS
+      case "MARKED_UNPAID":
+        return MARKED_UNPAID_COLUMNS
+      default:
+        return ORDER_COLUMNS
+    }
+  })()
+  return scopedToOperationDay ? base.filter((c) => c.key !== "createdAt") : base
 }
 
 function Cashier() {
@@ -982,7 +986,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
 
       {!loading && !error && (
         <DataTable
-          columns={columnsForOrdersTab(activeTab)}
+          columns={columnsForOrdersTab(activeTab, Boolean(shiftType))}
           data={paginatedItems}
           renderCell={renderCell}
           keyExtractor={(order) => order.id}
@@ -1814,6 +1818,24 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     { label: "Action", key: "action", isAction: true },
   ]
 
+  // Mirrors MARKED_UNPAID_COLUMNS in the Orders view so both tables present a
+  // parked order identically. Not shared with PAYMENT_COLUMNS, which the New
+  // Unpaid category still uses, and where "Marked By" is empty by definition.
+  const PAYMENT_MARKED_COLUMNS: Column[] = [
+    { label: "Order #", key: "orderNumber" },
+    { label: "Customer", key: "customer" },
+    { label: "Total", key: "totalPrice", align: "right" },
+    { label: "Marked By", key: "markedBy", align: "center" },
+    { label: "Action", key: "action", isAction: true },
+  ]
+
+  // A shift card scopes to one operation day, so Date repeats the same value on
+  // every row. All Shifts spans days and filters by date, so there it stays.
+  const newUnpaidColumns = shiftType
+    ? PAYMENT_COLUMNS.filter((c) => c.key !== "createdAt")
+    : PAYMENT_COLUMNS
+  const paymentColumns = payCategory === "MARKED" ? PAYMENT_MARKED_COLUMNS : newUnpaidColumns
+
   function renderCell(order: Order, column: Column): ReactNode {
     switch (column.key) {
       case "orderNumber":
@@ -1951,7 +1973,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
 
       {!loading && !error && (
         <DataTable
-          columns={PAYMENT_COLUMNS}
+          columns={paymentColumns}
           data={paginatedItems}
           renderCell={renderCell}
           keyExtractor={(order) => order.id}
