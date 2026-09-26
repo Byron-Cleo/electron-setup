@@ -176,7 +176,8 @@ feature/<layer>/<task-kebab-case>
 | `npm run dev` | Run React + Electron concurrently |
 | `npm run dev:react` | Vite dev server only (port 5123) |
 | `npm run dev:electron` | Compile Electron TS + launch Electron |
-| `npm run dev:backend` | Start Express backend (dev port 3111) |
+| `npm run dev:backend` | Start Express backend (**port 3001**) |
+| `npm run dev:all` | Backend 3001 + Vite 5123 + Electron, all on 3001 |
 | `npm run lint` | ESLint check (`.ts`, `.tsx` files) |
 | `npm run build` | Type-check all + Vite build |
 | `npm run preview` | Preview built React app |
@@ -185,6 +186,10 @@ feature/<layer>/<task-kebab-case>
 
 1. `npm run dev:backend` (terminal 1)
 2. `npm run dev` (terminal 2)
+
+Or run everything with `npm run dev:all`.
+
+> **Ports:** Production and normal Mac development both use **3001**. `npm run dev:all` / `dev:backend` / `dev:react:local` are the 3001 path. The SSH dev scope (`backend` `dev`, `.env.development`, `server-config.ts` `DEV_API_BASE`) stays on **3111** on the restaurant machine only, so it can run alongside the production service — revisit that separately when configuring SSH.
 
 ### Production Builds
 
