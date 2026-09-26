@@ -5,6 +5,13 @@ import { type Prisma, ServiceTime } from "../db/generated/prisma/client.js";
 
 const router = Router();
 
+// Every `*ById` column is a uuid, so a malformed value would otherwise surface
+// as an opaque Prisma P2007 500.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(v: unknown): v is string {
+  return typeof v === "string" && UUID_RE.test(v);
+}
+
 // Recompute Menu.stock = sum of split platesRemaining (aligns direct mutation with split truth)
 async function recomputeMenuStock(tx: Prisma.TransactionClient, menuId: string) {
   const agg = await tx.cookingRecordMenu.aggregate({
@@ -26,6 +33,22 @@ router.get("/count", async (_req, res) => {
   }
 });
 
+router.get("/unpaid-count", async (_req, res) => {
+  try {
+    // Unpaid backlog: orders the customer walked out on, whether or not a
+    // customer has since been attached. Deliberately excludes unmarked orders
+    // still pending collection on the running shift, so the badge reads 0
+    // during quiet service and only rises when money is actually owed.
+    const count = await prisma.order.count({
+      where: { unpaidAcknowledged: true, isPaid: false, isVoid: false },
+    });
+    res.json({ count });
+  } catch (e) {
+    console.error("Error counting unpaid orders:", e);
+    res.status(500).json({ error: "Failed to count unpaid orders" });
+  }
+});
+
 router.get("/", async (req, res) => {
   let where: { orderNumber?: number } = {};
   if (req.query.orderNumber !== undefined) {
@@ -43,6 +66,7 @@ router.get("/", async (req, res) => {
       include: {
         OrderItem: { include: { Starch: true, Vegetable: true } },
         User: { select: { name: true } },
+        Customer: { select: { id: true, name: true, phone: true } },
       },
     });
     res.json(orders);
@@ -286,10 +310,13 @@ router.patch("/:id/payment", async (req, res) => {
 // the shift's payment summary as an unpaid tracked order.
 router.post("/:id/unpaid-ack", async (req, res) => {
   const { id } = req.params;
-  const { acknowledgedById } = req.body;
+  const { acknowledgedById, customerId } = req.body;
 
   if (!acknowledgedById) {
     return res.status(400).json({ error: "acknowledgedById is required" });
+  }
+  if (!isUuid(acknowledgedById)) {
+    return res.status(400).json({ error: "acknowledgedById must be a valid user id" });
   }
 
   try {
@@ -302,13 +329,23 @@ router.post("/:id/unpaid-ack", async (req, res) => {
       return res.status(400).json({ error: "Voided orders cannot be marked as unpaid" });
     }
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data: {
+    const updateData: any = {
         unpaidAcknowledged: true,
         unpaidAcknowledgedById: acknowledgedById,
         unpaidAcknowledgedAt: new Date(),
-      },
+      };
+    if (customerId) {
+      const customerExists = await prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customerExists) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+      updateData.customerId = customerId;
+      updateData.customerAssignedById = acknowledgedById;
+      updateData.customerAssignedAt = new Date();
+    }
+    const updated = await prisma.order.update({
+      where: { id },
+      data: updateData,
     });
     emitLiveEvent({
       type: "order.unpaid-ack",
@@ -340,6 +377,9 @@ router.post("/:id/unpaid-ack-undo", async (req, res) => {
         unpaidAcknowledged: false,
         unpaidAcknowledgedById: null,
         unpaidAcknowledgedAt: null,
+        customerId: null,
+        customerAssignedById: null,
+        customerAssignedAt: null,
       },
     });
     emitLiveEvent({
@@ -352,6 +392,65 @@ router.post("/:id/unpaid-ack-undo", async (req, res) => {
   } catch (e) {
     console.error("Error undoing unpaid acknowledgement:", e);
     res.status(500).json({ error: "Failed to undo unpaid acknowledgement" });
+  }
+});
+
+router.post("/:id/assign-customer", async (req, res) => {
+  const { id } = req.params;
+  const { customerId, assignedById } = req.body;
+
+  if (!customerId) return res.status(400).json({ error: "customerId is required" });
+  if (!assignedById) return res.status(400).json({ error: "assignedById is required" });
+  if (!isUuid(customerId) || !isUuid(assignedById)) {
+    return res.status(400).json({ error: "customerId and assignedById must be valid ids" });
+  }
+
+  try {
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.isPaid) return res.status(400).json({ error: "Only unpaid orders can be assigned a customer" });
+    if (order.isVoid) return res.status(400).json({ error: "Voided orders cannot be assigned a customer" });
+    if (!order.unpaidAcknowledged) return res.status(400).json({ error: "Only orders marked as unpaid can be assigned a customer" });
+
+    const customerExists = await prisma.customer.findUnique({ where: { id: customerId } });
+    if (!customerExists) return res.status(404).json({ error: "Customer not found" });
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        customerId,
+        customerAssignedById: assignedById,
+        customerAssignedAt: new Date(),
+      },
+    });
+    emitLiveEvent({ type: "order.customer-assigned", orderId: updated.id, shiftId: updated.shiftId ?? undefined, at: new Date().toISOString() });
+    res.json(updated);
+  } catch (e) {
+    console.error("Error assigning customer:", e);
+    res.status(500).json({ error: "Failed to assign customer" });
+  }
+});
+
+router.post("/:id/unassign-customer", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.isPaid) return res.status(400).json({ error: "Paid orders cannot be unassigned" });
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        customerId: null,
+        customerAssignedById: null,
+        customerAssignedAt: null,
+      },
+    });
+    emitLiveEvent({ type: "order.customer-unassigned", orderId: updated.id, shiftId: updated.shiftId ?? undefined, at: new Date().toISOString() });
+    res.json(updated);
+  } catch (e) {
+    console.error("Error unassigning customer:", e);
+    res.status(500).json({ error: "Failed to unassign customer" });
   }
 });
 

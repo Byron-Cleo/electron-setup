@@ -106,16 +106,26 @@ electron.contextBridge.exposeInMainWorld("electron", {
     getApiBase: () => electron.ipcRenderer.invoke("server-config:get-api-base"),
     getApiOrigin: () => electron.ipcRenderer.invoke("server-config:get-api-origin"),
   },
+  customer: {
+    getAll: (q?: string) => electron.ipcRenderer.invoke("customer:get-all", q),
+    getById: (id: string) => electron.ipcRenderer.invoke("customer:get-by-id", id),
+    create: (data: any) => electron.ipcRenderer.invoke("customer:create", data),
+    update: (id: string, data: any) => electron.ipcRenderer.invoke("customer:update", id, data),
+    delete: (id: string) => electron.ipcRenderer.invoke("customer:delete", id),
+  },
   order: {
     create: (data: any) => electron.ipcRenderer.invoke("order:create", data),
     getAll: (orderNumber?: number) => electron.ipcRenderer.invoke("order:get-all", orderNumber),
     getCount: () => electron.ipcRenderer.invoke("order:get-count"),
+    getUnpaidCount: () => electron.ipcRenderer.invoke("order:get-unpaid-count"),
     void: (orderId: string, data: any) => electron.ipcRenderer.invoke("order:void", orderId, data),
     updatePayment: (orderId: string, data: any) =>
       electron.ipcRenderer.invoke("order:update-payment", orderId, data),
     markUnpaid: (orderId: string, data: any) =>
       electron.ipcRenderer.invoke("order:mark-unpaid", orderId, data),
     unmarkUnpaid: (orderId: string) => electron.ipcRenderer.invoke("order:unmark-unpaid", orderId),
+    assignCustomer: (orderId: string, data: any) => electron.ipcRenderer.invoke("order:assign-customer", orderId, data),
+    unassignCustomer: (orderId: string) => electron.ipcRenderer.invoke("order:unassign-customer", orderId),
   },
   users: {
     getAll: () => electron.ipcRenderer.invoke("user:get-all"),

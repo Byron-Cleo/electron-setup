@@ -221,6 +221,7 @@ export function registerOrderListHandlers() {
     return apiFetch(`/orders${query}`);
   });
   ipcMain.handle("order:get-count", async () => apiFetch("/orders/count"));
+  ipcMain.handle("order:get-unpaid-count", async () => apiFetch("/orders/unpaid-count"));
   ipcMain.handle("order:void", async (_event, orderId: string, data) =>
     apiFetch(`/orders/${orderId}/void`, { method: "POST", body: JSON.stringify(data) })
   );
@@ -273,5 +274,31 @@ export function registerShiftConfigHandlers() {
   );
   ipcMain.handle("shift-config:delete", async (_event, id: string) =>
     apiFetch(`/shift-config/${id}`, { method: "DELETE" })
+  );
+}
+
+export function registerCustomerHandlers() {
+  ipcMain.handle("customer:get-all", async (_event, q?: string) => {
+    const query = q ? `?q=${encodeURIComponent(q)}` : "";
+    return apiFetch(`/customers${query}`);
+  });
+  ipcMain.handle("customer:get-by-id", async (_event, id: string) => apiFetch(`/customers/${id}`));
+  ipcMain.handle("customer:create", async (_event, data) =>
+    apiFetch("/customers", { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("customer:update", async (_event, id: string, data) =>
+    apiFetch(`/customers/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("customer:delete", async (_event, id: string) =>
+    apiFetch(`/customers/${id}`, { method: "DELETE" })
+  );
+}
+
+export function extendOrderHandlers() {
+  ipcMain.handle("order:assign-customer", async (_event, orderId: string, data) =>
+    apiFetch(`/orders/${orderId}/assign-customer`, { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("order:unassign-customer", async (_event, orderId: string) =>
+    apiFetch(`/orders/${orderId}/unassign-customer`, { method: "POST" })
   );
 }

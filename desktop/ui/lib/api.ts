@@ -591,6 +591,14 @@ export async function getOrderCount(): Promise<number> {
   return res.count
 }
 
+export async function getUnpaidOrderCount(): Promise<number> {
+  if (window.electron?.order?.getUnpaidCount) {
+    return (await window.electron.order.getUnpaidCount()).count
+  }
+  const res = await apiFetch("/orders/unpaid-count")
+  return res.count
+}
+
 export async function getOrders(orderNumber?: number): Promise<Order[]> {
   if (window.electron?.order?.getAll) {
     return window.electron.order.getAll(orderNumber)
@@ -910,4 +918,73 @@ export async function deleteUser(id: string): Promise<{ message: string }> {
     return window.electron.users.delete(id)
   }
   return apiFetch(`/users/${id}`, { method: "DELETE" })
+}
+
+// ─── Customers ───────────────────────────────────────────────────────────────
+
+export async function getCustomers(q?: string): Promise<CustomerListRow[]> {
+  if (window.electron?.customer?.getAll) {
+    return window.electron.customer.getAll(q)
+  }
+  const query = q ? `?q=${encodeURIComponent(q)}` : ""
+  return apiFetch(`/customers${query}`)
+}
+
+export type CustomerListRow = CustomerRowData
+export type LedgerOrder = LedgerOrderRow
+export type CustomerDetail = CustomerDetailData
+
+export async function getCustomerById(id: string): Promise<CustomerDetail> {
+  if (window.electron?.customer?.getById) {
+    return window.electron.customer.getById(id)
+  }
+  return apiFetch(`/customers/${id}`)
+}
+
+export async function createCustomer(data: { name: string; phone: string; notes?: string }): Promise<Customer> {
+  if (window.electron?.customer?.create) {
+    return window.electron.customer.create(data)
+  }
+  return apiFetch("/customers", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function updateCustomer(id: string, data: { name?: string; phone?: string; notes?: string | null }): Promise<Customer> {
+  if (window.electron?.customer?.update) {
+    return window.electron.customer.update(id, data)
+  }
+  return apiFetch(`/customers/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+export async function deleteCustomer(id: string): Promise<{ message: string }> {
+  if (window.electron?.customer?.delete) {
+    return window.electron.customer.delete(id)
+  }
+  return apiFetch(`/customers/${id}`, { method: "DELETE" })
+}
+
+export async function assignOrderCustomer(orderId: string, customerId: string, assignedById: string): Promise<Order> {
+  if (window.electron?.order?.assignCustomer) {
+    return window.electron.order.assignCustomer(orderId, { customerId, assignedById })
+  }
+  return apiFetch(`/orders/${orderId}/assign-customer`, {
+    method: "POST",
+    body: JSON.stringify({ customerId, assignedById }),
+  })
+}
+
+export async function unassignOrderCustomer(orderId: string): Promise<Order> {
+  if (window.electron?.order?.unassignCustomer) {
+    return window.electron.order.unassignCustomer(orderId)
+  }
+  return apiFetch(`/orders/${orderId}/unassign-customer`, { method: "POST" })
+}
+
+export async function markOrderUnpaidWithCustomer(orderId: string, acknowledgedById: string, customerId?: string): Promise<Order> {
+  if (window.electron?.order?.markUnpaid) {
+    return window.electron.order.markUnpaid(orderId, { acknowledgedById, customerId })
+  }
+  return apiFetch(`/orders/${orderId}/unpaid-ack`, {
+    method: "POST",
+    body: JSON.stringify({ acknowledgedById, ...(customerId ? { customerId } : {}) }),
+  })
 }

@@ -187,6 +187,8 @@ export async function autoCloseExpiredShifts() {
       const manualClose =
         (manualByType.get(shift.type) ?? false) === true;
 
+      let markedUnpaidOrderIds: string[] = [];
+
       const autoClosed = await prisma.$transaction(async (tx) => {
         // Always auto-capture at the scheduled close time
         await tx.shift.update({
@@ -198,6 +200,36 @@ export async function autoCloseExpiredShifts() {
             finalCloseSource: manualClose ? null : "AUTO",
           },
         });
+
+        // A fully auto-closing shift has no manager to acknowledge its pending
+        // orders, so the scheduler does it. Without this the orders stay
+        // unpaidAcknowledged=false, which hides them from the Marked Unpaid
+        // tabs and the unpaid badge while remaining blockingUnpaid forever on
+        // an already-closed shift. Manual-close shifts are left alone: the
+        // close gate still requires a manager to review them.
+        if (!manualClose) {
+          const pending = await tx.order.findMany({
+            where: {
+              shiftId: shift.id,
+              isVoid: false,
+              isPaid: false,
+              unpaidAcknowledged: false,
+            },
+            select: { id: true },
+          });
+
+          if (pending.length > 0) {
+            await tx.order.updateMany({
+              where: { id: { in: pending.map((o) => o.id) } },
+              data: {
+                unpaidAcknowledged: true,
+                unpaidAcknowledgedAt: now,
+                unpaidAcknowledgedById: null,
+              },
+            });
+            markedUnpaidOrderIds = pending.map((o) => o.id);
+          }
+        }
 
         // Capture auto-close snapshot (current menu stock at scheduled close time)
         const snapshots = await tx.shiftSnapshot.findMany({
@@ -233,10 +265,21 @@ export async function autoCloseExpiredShifts() {
             shiftId: autoClosed.id,
             at: new Date().toISOString(),
           });
+          for (const orderId of markedUnpaidOrderIds) {
+            emitLiveEvent({
+              type: "order.unpaid-ack",
+              orderId,
+              shiftId: autoClosed.id,
+              at: now.toISOString(),
+            });
+          }
         }
         console.log(
           `[scheduler] Auto-captured ${autoClosed.type} shift ${autoClosed.id} at ${now.toISOString()} ` +
-            `(scheduled ${shift.autoCloseTime.toISOString()}, manualClose=${manualClose})`
+            `(scheduled ${shift.autoCloseTime.toISOString()}, manualClose=${manualClose})` +
+            (markedUnpaidOrderIds.length > 0
+              ? ` · marked ${markedUnpaidOrderIds.length} pending order(s) unpaid`
+              : "")
         );
       }
     } catch (e) {

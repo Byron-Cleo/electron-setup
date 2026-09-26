@@ -109,12 +109,16 @@ model Order {
   unpaidAcknowledged Boolean    @default(false) // manager-marked unpaid (not voided); allows shift close
   unpaidAcknowledgedById String? @db.Uuid
   unpaidAcknowledgedAt DateTime? @db.Timestamptz(6)
+  customerId           String?    @db.Uuid
+  customerAssignedById String?    @db.Uuid
+  customerAssignedAt   DateTime?  @db.Timestamptz(3)
   User              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   OrderItem         OrderItem[]
   shift             Shift     @relation(fields: [shiftId], references: [id])
   voidedBy          User?       @relation("VoidedBy", fields: [voidedById], references: [id])
   voidedOrder       Order?      @relation("VoidedFrom", fields: [voidedOrderId], references: [id])
   replacementOrders Order[]     @relation("VoidedFrom")
+  Customer             Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 }
 
 model OrderItem {
@@ -273,6 +277,17 @@ model DepartmentStockSupply {
   stockSupply   StockSupply @relation(fields: [stockSupplyId], references: [id], onDelete: Cascade)
 
   @@unique([departmentId, stockSupplyId])
+}
+
+model Customer {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  phone     String   @unique
+  notes     String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  orders    Order[]
+  @@index([name])
 }
 
 model StockFulfillment {

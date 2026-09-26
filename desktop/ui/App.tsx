@@ -14,6 +14,8 @@ import AdminKitchen from "./pages/admin/Kitchen"
 import AdminStore from "./pages/admin/Store"
 import AdminCashier from "./pages/admin/Cashier"
 import AdminReports from "./pages/admin/Reports"
+import AdminCustomers from "./pages/admin/Customers"
+import CustomerDetail from "./pages/admin/CustomerDetail"
 import AdminManager from "./pages/admin/Manager"
 import AdminShiftManagement from "./pages/admin/ShiftManagement"
 import StockSupplies from "./pages/admin/StockSupplies"
@@ -154,6 +156,22 @@ function App() {
             element={
               <ProtectedRoute role={["admin", "manager"]}>
                 <AdminReports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="customers"
+            element={
+              <ProtectedRoute role={["admin", "manager", "cashier"]}>
+                <AdminCustomers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="customers/:id"
+            element={
+              <ProtectedRoute role={["admin", "manager", "cashier"]}>
+                <CustomerDetail />
               </ProtectedRoute>
             }
           />

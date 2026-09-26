@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
-import { LayoutDashboard, Users, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
+import { LayoutDashboard, Users, Contact, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount } from "@/lib/api"
+import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount, getUnpaidOrderCount } from "@/lib/api"
 
 const allNavItems: {
   label: string
@@ -24,6 +24,7 @@ const allNavItems: {
   { label: "Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"], pending: true, partial: true, lowstock: true },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"], pending: true, partial: true, underproduced: true },
   { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"], ready: true, runninglow: true },
+  { label: "Customers", path: "/admin/customers", icon: Contact, roles: ["admin", "manager", "cashier"] },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager", "cashier"] },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
@@ -41,6 +42,7 @@ function AdminLayout() {
   const [lowStockCount, setLowStockCount] = useState(0)
   const [runningLowCount, setRunningLowCount] = useState(0)
   const [underproducedCount, setUnderproducedCount] = useState(0)
+  const [unpaidBacklogCount, setUnpaidBacklogCount] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -67,8 +69,9 @@ function AdminLayout() {
         getLowStockCount(),
         getRunningLowCount(),
         getUnderproducedCookingCount(),
+        getUnpaidOrderCount(),
       ])
-        .then(([pending, partial, cooked, lowStock, runningLow, underproduced]) => {
+        .then(([pending, partial, cooked, lowStock, runningLow, underproduced, unpaid]) => {
           if (!cancelled) {
             setPendingCount(pending)
             setPartialCount(partial)
@@ -76,6 +79,7 @@ function AdminLayout() {
             setLowStockCount(lowStock.count)
             setRunningLowCount(runningLow)
             setUnderproducedCount(underproduced.count)
+            setUnpaidBacklogCount(unpaid)
           }
         })
         .catch(() => {
@@ -86,6 +90,7 @@ function AdminLayout() {
             setLowStockCount(0)
             setRunningLowCount(0)
             setUnderproducedCount(0)
+            setUnpaidBacklogCount(0)
           }
         })
     }
@@ -182,6 +187,11 @@ function AdminLayout() {
                 {item.underproduced && underproducedCount > 0 && (
                   <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-600 text-white text-[9px] font-bold px-1" title={`${underproducedCount} underproduced`}>
                     {underproducedCount}
+                  </span>
+                )}
+                {item.label === "Cashier" && unpaidBacklogCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-amber-600 text-white text-[9px] font-bold px-1" title={`${unpaidBacklogCount} unpaid order(s)`}>
+                    {unpaidBacklogCount}
                   </span>
                 )}
               </span>

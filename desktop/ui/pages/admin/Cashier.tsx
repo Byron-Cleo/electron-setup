@@ -13,7 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs } from "@/lib/api"
+import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs, markOrderUnpaidWithCustomer, assignOrderCustomer, unassignOrderCustomer, unmarkOrderAsUnpaid } from "@/lib/api"
+import { formatElapsed, elapsedSeverity, ELAPSED_SEVERITY_CLASS } from "@/lib/utils"
 import { useAuthStore } from "@/stores/auth"
 import { usePagination } from "@/hooks/usePagination"
 import { useLiveRefresh } from "@/hooks/useLiveRefresh"
@@ -23,6 +24,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DatePicker } from "@/components/ui/date-picker"
+import CustomerPickerDialog from "@/components/admin/CustomerPickerDialog"
 
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`
@@ -42,6 +44,16 @@ function opDayLabel(iso?: string): string {
   if (!iso) return "—"
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number)
   return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`
+}
+
+/** Age of an unpaid event ("45m", "6h 20m", "3d 4h") with chase urgency colouring. */
+function ElapsedCell({ from }: { from: string | null }) {
+  if (!from) return <span className="text-xs text-muted-foreground">—</span>
+  return (
+    <span className={`text-xs tabular-nums ${ELAPSED_SEVERITY_CLASS[elapsedSeverity(from)]}`}>
+      {formatElapsed(from)}
+    </span>
+  )
 }
 
 function StatusBadge({ isPaid }: { isPaid: boolean }) {
@@ -127,6 +139,57 @@ const ORDER_COLUMNS: Column[] = [
   { label: "Date", key: "createdAt" },
   { label: "Details", key: "details", isAction: true, align: "center" },
 ]
+
+// Money still owed but not yet chased: the useful signal is how long the table
+// has been sitting there, so swap the plain Date for a live Waiting age.
+const UNPAID_COLUMNS: Column[] = [
+  { label: "Order #", key: "orderNumber", align: "center" },
+  { label: "Meal", key: "mealType" },
+  { label: "Payment", key: "paymentMethod", align: "center" },
+  { label: "Total", key: "totalPrice", align: "center" },
+  { label: "Date", key: "createdAt" },
+  { label: "Waiting", key: "waiting", align: "center" },
+  { label: "Details", key: "details", isAction: true, align: "center" },
+]
+
+// Settled orders are audited by when the money actually landed, which is not
+// the order's createdAt.
+const PAID_COLUMNS: Column[] = [
+  { label: "Order #", key: "orderNumber", align: "center" },
+  { label: "Meal", key: "mealType" },
+  { label: "Payment", key: "paymentMethod", align: "center" },
+  { label: "Total", key: "totalPrice", align: "center" },
+  { label: "Paid At", key: "paidAt", align: "center" },
+  { label: "Details", key: "details", isAction: true, align: "center" },
+]
+
+// The Marked Unpaid tab is where a customer is attached to a walkout order, so
+// it swaps the payment column for the customer, ages the acknowledgement, and
+// exposes assign/change/remove.
+const MARKED_UNPAID_COLUMNS: Column[] = [
+  { label: "Order #", key: "orderNumber", align: "center" },
+  { label: "Meal", key: "mealType" },
+  { label: "Total", key: "totalPrice", align: "center" },
+  { label: "Date", key: "createdAt" },
+  { label: "Marked", key: "marked", align: "center" },
+  { label: "Customer", key: "customer" },
+  { label: "Details", key: "details", isAction: true, align: "center" },
+]
+
+function columnsForOrdersTab(tab: OrderTab): Column[] {
+  switch (tab) {
+    case "UNPAID":
+      return UNPAID_COLUMNS
+    case "MPESA":
+    case "CASH":
+    case "BATCH":
+      return PAID_COLUMNS
+    case "MARKED_UNPAID":
+      return MARKED_UNPAID_COLUMNS
+    default:
+      return ORDER_COLUMNS
+  }
+}
 
 function Cashier() {
   const [view, setView] = useState<CashierView>("dashboard")
@@ -247,7 +310,7 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
   }, [])
 
   useLiveRefresh(
-    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "shift.opened", "shift.closed"],
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "shift.opened", "shift.closed", "order.customer-assigned", "order.customer-unassigned"],
     refreshCounts
   )
 
@@ -348,17 +411,24 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
     )
   }
 
-function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
+function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string | undefined, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
     getShiftConfigs().then(setShiftConfigs).catch(() => {})
     listShifts()
       .then((shifts) => {
+        // Prefer the shift that is actually running: the newest operationDay
+        // can belong to a shift that already closed while a new one opened
+        // under the same type, and picking that stale day would scope the
+        // whole cashier view to a closed shift's orders.
         const byType: Record<string, string> = {}
         for (const s of shifts) {
           const existing = byType[s.type]
           if (!existing || s.operationDay > existing) byType[s.type] = s.operationDay
+        }
+        for (const s of shifts) {
+          if (s.isOpen) byType[s.type] = s.operationDay
         }
         setOpDays(byType)
       })
@@ -414,12 +484,20 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
           </Card>
           )
         })}
+        <Card key="all-shifts" className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent border-2 border-brand-green/30 bg-brand-green/5" onClick={() => onSelectShift(undefined, undefined)}>
+          <div className="h-16 w-16 rounded-lg bg-brand-green/10 flex items-center justify-center mx-auto mb-4">
+            <Receipt size={32} className="text-brand-green" />
+          </div>
+          <Heading as="h3" className="text-lg text-admin-header-text mb-2">All Shifts</Heading>
+          <p className="text-sm text-brand-green font-semibold">Every order from every shift</p>
+          <p className="text-xs text-admin-muted mt-1">No shift filter applied</p>
+        </Card>
       </div>
     </div>
   )
 }
 
-function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }) {
+function OrdersView({ shiftType, operationDay }: { shiftType?: string; operationDay?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [shiftOpDayById, setShiftOpDayById] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -428,6 +506,9 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
   const [activeTab, setActiveTab] = useState<OrderTab>("ALL")
+  const [pickerOrder, setPickerOrder] = useState<Order | null>(null)
+  const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
+  const user = useAuthStore((s) => s.user)
 
   const refreshOrders = useCallback(async () => {
     setLoading(true)
@@ -437,8 +518,14 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
 
       const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
       const shiftOpDayById = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
+      const scopedDay = operationDay?.split("T")[0]
       const filteredOrders = shiftType
-        ? allOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+        ? allOrders.filter(
+            (o) =>
+              o.shiftId &&
+              shiftTypeById.get(o.shiftId) === shiftType &&
+              (!scopedDay || shiftOpDayById.get(o.shiftId) === scopedDay)
+          )
         : allOrders
 
       setOrders(filteredOrders)
@@ -448,7 +535,7 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
     } finally {
       setLoading(false)
     }
-  }, [shiftType])
+  }, [shiftType, operationDay])
 
   useEffect(() => {
     let cancelled = false
@@ -461,8 +548,14 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
 
         const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
         const shiftOpDayById = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
+        const scopedDay = operationDay?.split("T")[0]
         const filteredOrders = shiftType
-          ? allOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+          ? allOrders.filter(
+              (o) =>
+                o.shiftId &&
+                shiftTypeById.get(o.shiftId) === shiftType &&
+                (!scopedDay || shiftOpDayById.get(o.shiftId) === scopedDay)
+            )
           : allOrders
 
         setOrders(filteredOrders)
@@ -475,10 +568,10 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
     }
     loadOrders()
     return () => { cancelled = true }
-  }, [shiftType])
+  }, [shiftType, operationDay])
 
   useLiveRefresh(
-    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo"],
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "order.customer-assigned", "order.customer-unassigned"],
     refreshOrders
   )
 
@@ -511,7 +604,7 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
         source = source.filter((o) => o.isPaid && o.paymentType === "BATCH")
         break
       case "MARKED_UNPAID":
-        source = source.filter((o) => o.unpaidAcknowledged)
+        source = source.filter((o) => o.unpaidAcknowledged && !o.isVoid)
         break
     }
     if (searchInput) {
@@ -525,7 +618,7 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
         return false
       })
     }
-    if (selectedDate) {
+    if (!shiftType && selectedDate) {
       const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
         const orderShiftOpDay = o.shiftId ? shiftOpDayById.get(o.shiftId) : undefined
@@ -534,7 +627,7 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
     }
     source.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     return source
-  }, [orders, activeTab, searchInput, batchTotals, selectedDate, shiftOpDayById])
+  }, [orders, activeTab, searchInput, batchTotals, selectedDate, shiftType, shiftOpDayById])
 
   const counts = useMemo(() => ({
     ALL: orders.length,
@@ -542,7 +635,7 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
     CASH: orders.filter((o) => o.isPaid && o.paymentMethod === "cash").length,
     VOID: orders.filter((o) => o.isVoid).length,
     UNPAID: orders.filter((o) => !o.isPaid && !o.isVoid && !o.unpaidAcknowledged).length,
-    MARKED_UNPAID: orders.filter((o) => o.unpaidAcknowledged).length,
+    MARKED_UNPAID: orders.filter((o) => o.unpaidAcknowledged && !o.isVoid).length,
     BATCH: orders.filter((o) => o.isPaid && o.paymentType === "BATCH").length,
   }), [orders])
 
@@ -555,6 +648,49 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
     canNext,
     canPrev,
   } = usePagination(filtered)
+
+  async function handleAssignCustomer(customerId: string) {
+    if (!pickerOrder || !user) return
+    setBusyOrderId(pickerOrder.id)
+    setError("")
+    try {
+      await assignOrderCustomer(pickerOrder.id, customerId, user.id)
+      setPickerOrder(null)
+      await refreshOrders()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign customer")
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
+  async function handleUnassignCustomer(order: Order) {
+    setBusyOrderId(order.id)
+    setError("")
+    try {
+      await unassignOrderCustomer(order.id)
+      await refreshOrders()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove customer")
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
+
+  // Undo clears the manager's unpaid mark AND the customer link, returning the
+  // order to the "New Unpaid" tab.
+  async function handleUndoMarkUnpaid(order: Order) {
+    setBusyOrderId(order.id)
+    setError("")
+    try {
+      await unmarkOrderAsUnpaid(order.id)
+      await refreshOrders()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to undo mark unpaid")
+    } finally {
+      setBusyOrderId(null)
+    }
+  }
 
   function renderCell(order: Order, column: Column): ReactNode {
     switch (column.key) {
@@ -629,11 +765,63 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
         )
       case "totalPrice":
         return <span className="font-medium">{money(order.totalPrice)}</span>
+      case "customer":
+        return order.Customer ? (
+          <div className="flex flex-col items-center">
+            <span className="text-sm font-medium text-brand-green">{order.Customer.name}</span>
+            <span className="text-xs text-muted-foreground">{order.Customer.phone}</span>
+          </div>
+        ) : (
+          <span className="text-xs font-semibold text-amber-600">Not assigned</span>
+        )
       case "status":
         return <StatusBadge isPaid={order.isPaid} />
       case "createdAt":
         return formatDate(order.createdAt)
+      case "paidAt":
+        return order.paidAt ? formatDate(order.paidAt) : "—"
+      case "waiting":
+        return <ElapsedCell from={order.createdAt} />
+      case "marked":
+        return <ElapsedCell from={order.unpaidAcknowledgedAt} />
       case "details":
+        if (activeTab === "MARKED_UNPAID") {
+          return (
+            <div className="flex items-center justify-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPickerOrder(order)}
+                disabled={busyOrderId === order.id}
+              >
+                {order.Customer ? "Change Customer" : "Assign Customer"}
+              </Button>
+              {order.Customer && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={() => handleUnassignCustomer(order)}
+                  disabled={busyOrderId === order.id}
+                >
+                  Remove
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                onClick={() => handleUndoMarkUnpaid(order)}
+                disabled={busyOrderId === order.id}
+              >
+                Undo Mark
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setDetailOrder(order)}>
+                <Eye />
+              </Button>
+            </div>
+          )
+        }
         return (
           <Button variant="outline" size="sm" onClick={() => setDetailOrder(order)}>
             <Eye />
@@ -684,7 +872,7 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
 
       {!loading && !error && (
         <DataTable
-          columns={ORDER_COLUMNS}
+          columns={columnsForOrdersTab(activeTab)}
           data={paginatedItems}
           renderCell={renderCell}
           keyExtractor={(order) => order.id}
@@ -705,11 +893,13 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="max-w-sm"
               />
-              <DatePicker
-                value={selectedDate}
-                onChange={setSelectedDate}
-                placeholder="Filter by date"
-              />
+              {!shiftType && (
+                <DatePicker
+                  value={selectedDate}
+                  onChange={setSelectedDate}
+                  placeholder="Filter by date"
+                />
+              )}
             </div>
           }
         />
@@ -736,6 +926,12 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
                 <div className="text-admin-muted">Status</div>
                 <div className="font-medium">
                   <StatusBadge isPaid={detailOrder.isPaid} />
+                </div>
+                <div className="text-admin-muted">Customer</div>
+                <div className="font-medium">
+                  {detailOrder.Customer
+                    ? `${detailOrder.Customer.name} (${detailOrder.Customer.phone})`
+                    : "—"}
                 </div>
               </div>
 
@@ -788,21 +984,37 @@ function OrdersView({ shiftType }: { shiftType?: string; operationDay?: string }
           <DialogFooter showCloseButton />
         </DialogContent>
       </Dialog>
+
+      <CustomerPickerDialog
+        open={pickerOrder !== null}
+        onOpenChange={(next) => { if (!next) setPickerOrder(null) }}
+        onSelect={(customer) => handleAssignCustomer(customer.id)}
+        disabledReason={pickerOrder?.isPaid || pickerOrder?.isVoid
+          ? "This order is already settled or voided, so a customer cannot be attached."
+          : undefined}
+      />
     </div>
   )
 }
 
-function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
+function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string | undefined, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
     getShiftConfigs().then(setShiftConfigs).catch(() => {})
     listShifts()
       .then((shifts) => {
+        // Prefer the shift that is actually running: the newest operationDay
+        // can belong to a shift that already closed while a new one opened
+        // under the same type, and picking that stale day would scope the
+        // whole cashier view to a closed shift's orders.
         const byType: Record<string, string> = {}
         for (const s of shifts) {
           const existing = byType[s.type]
           if (!existing || s.operationDay > existing) byType[s.type] = s.operationDay
+        }
+        for (const s of shifts) {
+          if (s.isOpen) byType[s.type] = s.operationDay
         }
         setOpDays(byType)
       })
@@ -860,7 +1072,7 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
   )
 }
 
-function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) {
+function VoidView({ shiftType, operationDay }: { shiftType?: string; operationDay?: string }) {
   const user = useAuthStore((s) => s.user)
   const isCashier = user?.role === "cashier"
 
@@ -882,8 +1094,14 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
       const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
       const shiftOpDayByIdMap = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
       const voidableOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
+      const scopedDay = operationDay?.split("T")[0]
       const filteredOrders = shiftType
-        ? voidableOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+        ? voidableOrders.filter(
+            (o) =>
+              o.shiftId &&
+              shiftTypeById.get(o.shiftId) === shiftType &&
+              (!scopedDay || shiftOpDayByIdMap.get(o.shiftId) === scopedDay)
+          )
         : voidableOrders
 
       setOrders(filteredOrders)
@@ -893,7 +1111,7 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
     } finally {
       setLoading(false)
     }
-  }, [shiftType])
+  }, [shiftType, operationDay])
 
   useEffect(() => {
     let cancelled = false
@@ -907,8 +1125,14 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
         const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
         const shiftOpDayByIdMap = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
         const voidableOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
+        const scopedDay = operationDay?.split("T")[0]
         const filteredOrders = shiftType
-          ? voidableOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+          ? voidableOrders.filter(
+              (o) =>
+                o.shiftId &&
+                shiftTypeById.get(o.shiftId) === shiftType &&
+                (!scopedDay || shiftOpDayByIdMap.get(o.shiftId) === scopedDay)
+            )
           : voidableOrders
 
         setOrders(filteredOrders)
@@ -921,10 +1145,10 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
     }
     loadOrders()
     return () => { cancelled = true }
-  }, [isCashier, shiftType])
+  }, [isCashier, shiftType, operationDay])
 
   useLiveRefresh(
-    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo"],
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "order.customer-assigned", "order.customer-unassigned"],
     isCashier ? () => {} : refreshVoid
   )
 
@@ -934,7 +1158,7 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
       const q = searchInput.toLowerCase()
       source = source.filter((o) => String(o.orderNumber).includes(q))
     }
-    if (selectedDate) {
+    if (!shiftType && selectedDate) {
       const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
         const orderShiftOpDay = o.shiftId ? shiftOpDayById.get(o.shiftId) : undefined
@@ -943,7 +1167,7 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
     }
     source.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     return source
-  }, [orders, searchInput, selectedDate, shiftOpDayById])
+  }, [orders, searchInput, selectedDate, shiftType, shiftOpDayById])
 
   const {
     currentPage,
@@ -1066,11 +1290,13 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="max-w-sm"
               />
-              <DatePicker
-                value={selectedDate}
-                onChange={setSelectedDate}
-                placeholder="Filter by date"
-              />
+              {!shiftType && (
+                <DatePicker
+                  value={selectedDate}
+                  onChange={setSelectedDate}
+                  placeholder="Filter by date"
+                />
+              )}
             </div>
           }
         />
@@ -1164,17 +1390,24 @@ function VoidView({ shiftType }: { shiftType?: string; operationDay?: string }) 
   )
 }
 
-function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
+function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string | undefined, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
   useEffect(() => {
     getShiftConfigs().then(setShiftConfigs).catch(() => {})
     listShifts()
       .then((shifts) => {
+        // Prefer the shift that is actually running: the newest operationDay
+        // can belong to a shift that already closed while a new one opened
+        // under the same type, and picking that stale day would scope the
+        // whole cashier view to a closed shift's orders.
         const byType: Record<string, string> = {}
         for (const s of shifts) {
           const existing = byType[s.type]
           if (!existing || s.operationDay > existing) byType[s.type] = s.operationDay
+        }
+        for (const s of shifts) {
+          if (s.isOpen) byType[s.type] = s.operationDay
         }
         setOpDays(byType)
       })
@@ -1227,12 +1460,20 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
           </Card>
           )
         })}
+        <Card key="all-shifts-pay" className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent border-2 border-brand-green/30 bg-brand-green/5" onClick={() => onSelectShift(undefined, undefined)}>
+          <div className="h-16 w-16 rounded-lg bg-brand-green/10 flex items-center justify-center mx-auto mb-4">
+            <Wallet size={32} className="text-brand-green" />
+          </div>
+          <Heading as="h3" className="text-lg text-admin-header-text mb-2">All Shifts Payments</Heading>
+          <p className="text-sm text-brand-green font-semibold">Every unpaid order from every shift</p>
+          <p className="text-xs text-admin-muted mt-1">No shift scope — shows everything</p>
+        </Card>
       </div>
     </div>
   )
 }
 
-function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string }) {
+function PaymentView({ shiftType, operationDay }: { shiftType?: string; operationDay?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [shiftOpDayById, setShiftOpDayById] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -1248,6 +1489,9 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
   const [payMethod, setPayMethod] = useState<"cash" | "mpesa" | null>(null)
   const [payProcessing, setPayProcessing] = useState(false)
   const [payCategory, setPayCategory] = useState<"NEW" | "MARKED">("NEW")
+  const [unpaidPickerOrder, setUnpaidPickerOrder] = useState<Order | null>(null)
+  const [markingUnpaidId, setMarkingUnpaidId] = useState<string | null>(null)
+  const user = useAuthStore((s) => s.user)
 
   const refreshPayment = useCallback(async () => {
     setLoading(true)
@@ -1257,8 +1501,14 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
       const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
       const shiftOpDayByIdMap = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
       const unpaidOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
+      const scopedDay = operationDay?.split("T")[0]
       const filteredOrders = shiftType
-        ? unpaidOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+        ? unpaidOrders.filter(
+            (o) =>
+              o.shiftId &&
+              shiftTypeById.get(o.shiftId) === shiftType &&
+              (!scopedDay || shiftOpDayByIdMap.get(o.shiftId) === scopedDay)
+          )
         : unpaidOrders
 
       setOrders(filteredOrders)
@@ -1268,7 +1518,7 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
     } finally {
       setLoading(false)
     }
-  }, [shiftType])
+  }, [shiftType, operationDay])
 
   useEffect(() => {
     let cancelled = false
@@ -1281,8 +1531,14 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
         const shiftTypeById = new Map(shiftsData.map((s) => [s.id, s.type]))
         const shiftOpDayByIdMap = new Map(shiftsData.map((s) => [s.id, s.operationDay.split("T")[0]]))
         const unpaidOrders = allOrders.filter((o) => !o.isPaid && !o.isVoid)
+        const scopedDay = operationDay?.split("T")[0]
         const filteredOrders = shiftType
-          ? unpaidOrders.filter((o) => o.shiftId && shiftTypeById.get(o.shiftId) === shiftType)
+          ? unpaidOrders.filter(
+              (o) =>
+                o.shiftId &&
+                shiftTypeById.get(o.shiftId) === shiftType &&
+                (!scopedDay || shiftOpDayByIdMap.get(o.shiftId) === scopedDay)
+            )
           : unpaidOrders
 
         setOrders(filteredOrders)
@@ -1295,10 +1551,10 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
     }
     loadOrders()
     return () => { cancelled = true }
-  }, [shiftType])
+  }, [shiftType, operationDay])
 
   useLiveRefresh(
-    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo"],
+    ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "order.customer-assigned", "order.customer-unassigned"],
     refreshPayment
   )
 
@@ -1313,7 +1569,7 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
       const q = orderSearch.toLowerCase()
       source = source.filter((o) => String(o.orderNumber).includes(q))
     }
-    if (selectedDate) {
+    if (!shiftType && selectedDate) {
       const selectedStr = selectedDate.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
       source = source.filter((o) => {
         const orderShiftOpDay = o.shiftId ? shiftOpDayById.get(o.shiftId) : undefined
@@ -1322,7 +1578,7 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
     }
     source.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     return source
-  }, [orders, orderSearch, selectedDate, payCategory, shiftOpDayById])
+  }, [orders, orderSearch, selectedDate, payCategory, shiftType, shiftOpDayById])
 
   const {
     currentPage,
@@ -1375,10 +1631,28 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
     }
   }
 
+  // Marks the order unpaid and attaches the chosen customer in a single call.
+  async function handleMarkUnpaidWithCustomer(customerId: string) {
+    if (!unpaidPickerOrder || !user) return
+    const orderId = unpaidPickerOrder.id
+    setMarkingUnpaidId(orderId)
+    setError("")
+    try {
+      await markOrderUnpaidWithCustomer(orderId, user.id, customerId)
+      setUnpaidPickerOrder(null)
+      await refreshPayment()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to mark order unpaid")
+    } finally {
+      setMarkingUnpaidId(null)
+    }
+  }
+
   const PAYMENT_COLUMNS: Column[] = [
     { label: "Order #", key: "orderNumber" },
     { label: "Meal", key: "mealType" },
     { label: "Waiter", key: "waiter" },
+    { label: "Customer", key: "customer" },
     { label: "Total", key: "totalPrice", align: "right" },
     { label: "Date", key: "createdAt" },
     { label: "Action", key: "action", isAction: true },
@@ -1392,13 +1666,19 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
         return order.mealType
       case "waiter":
         return order.User?.name ?? "—"
+      case "customer":
+        return order.Customer ? (
+          <span className="text-xs font-medium text-brand-green">{order.Customer.name}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )
       case "totalPrice":
         return <span className="font-medium">{money(order.totalPrice)}</span>
       case "createdAt":
         return formatDate(order.createdAt)
       case "action":
         return (
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-2">
             <Button
               size="sm"
               className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
@@ -1407,6 +1687,16 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
               <Banknote />
               Pay
             </Button>
+            {!order.isPaid && !order.isVoid && (
+              <Button
+                size="sm"
+                className="bg-brand-green text-white hover:bg-brand-green/90"
+                onClick={() => setUnpaidPickerOrder(order)}
+                disabled={markingUnpaidId === order.id}
+              >
+                {markingUnpaidId === order.id ? "Marking..." : "Can't Pay — Mark Unpaid"}
+              </Button>
+            )}
           </div>
         )
       default:
@@ -1492,11 +1782,13 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
                 onChange={(e) => setOrderSearch(e.target.value)}
                 className="max-w-sm"
               />
-              <DatePicker
-                value={selectedDate}
-                onChange={setSelectedDate}
-                placeholder="Filter by date"
-              />
+              {!shiftType && (
+                <DatePicker
+                  value={selectedDate}
+                  onChange={setSelectedDate}
+                  placeholder="Filter by date"
+                />
+              )}
             </div>
           }
         />
@@ -1776,6 +2068,12 @@ function PaymentView({ shiftType }: { shiftType?: string; operationDay?: string 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CustomerPickerDialog
+        open={unpaidPickerOrder !== null}
+        onOpenChange={(next) => { if (!next) setUnpaidPickerOrder(null) }}
+        onSelect={(customer) => handleMarkUnpaidWithCustomer(customer.id)}
+      />
     </div>
   )
 }

@@ -370,7 +370,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                         <Input
                           value={search}
                           onChange={(e) => setSearch(e.target.value)}
-                          placeholder="Search by order #, meal period, or customer..."
+                          placeholder="Search by order # or meal period..."
                           className="pl-8"
                         />
                       </div>

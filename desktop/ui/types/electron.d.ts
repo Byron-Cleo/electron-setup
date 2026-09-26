@@ -129,6 +129,10 @@ interface Order {
   unpaidAcknowledged: boolean;
   unpaidAcknowledgedAt: string | null;
   unpaidAcknowledgedById: string | null;
+  customerId: string | null;
+  customerAssignedById: string | null;
+  customerAssignedAt: string | null;
+  Customer?: { id: string; name: string; phone: string } | null;
   OrderItem: OrderItem[];
   User?: { name: string } | null;
 }
@@ -361,6 +365,34 @@ interface CreateDepartmentData {
 }
 
 type UpdateDepartmentData = Partial<CreateDepartmentData>;
+
+interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  openOrderCount?: number;
+  outstandingTotal?: number;
+}
+
+/** A customer row in the list endpoint, with the computed balance columns. */
+type CustomerRowData = Customer;
+
+/** Ledger rows returned by GET /api/customers/:id, split into the three groups. */
+type LedgerOrderRow = Order & {
+  replacedByOrderNumber: number | null;
+  shift?: { type: string; operationDay: string } | null;
+};
+
+type CustomerDetailData = Omit<Customer, "openOrderCount" | "outstandingTotal"> & {
+  orders?: LedgerOrderRow[];
+  settledOrders?: LedgerOrderRow[];
+  cancelledOrders?: LedgerOrderRow[];
+  openOrderCount?: number;
+  outstandingTotal?: number;
+};
 
 interface Category {
   id: string;
@@ -934,14 +966,24 @@ interface ElectronAPI {
     getApiBase: () => Promise<string>;
     getApiOrigin: () => Promise<string>;
   };
+  customer: {
+    getAll: (q?: string) => Promise<CustomerRowData[]>;
+    getById: (id: string) => Promise<CustomerDetailData>;
+    create: (data: { name: string; phone: string; notes?: string }) => Promise<Customer>;
+    update: (id: string, data: { name?: string; phone?: string; notes?: string | null }) => Promise<Customer>;
+    delete: (id: string) => Promise<{ message: string }>;
+  };
   order: {
     create: (data: CreateOrderData) => Promise<Order>;
     getAll: (orderNumber?: number) => Promise<Order[]>;
     getCount: () => Promise<{ count: number }>;
+    getUnpaidCount: () => Promise<{ count: number }>;
     void: (orderId: string, data: { voidedById: string; reason?: string }) => Promise<Order>;
     updatePayment: (orderId: string, data: { paymentMethod: "cash" | "mpesa"; paymentType?: "SINGLE" | "BATCH"; batchId?: string }) => Promise<Order>;
-    markUnpaid: (orderId: string, data: { acknowledgedById: string }) => Promise<Order>;
+    markUnpaid: (orderId: string, data: { acknowledgedById: string; customerId?: string }) => Promise<Order>;
     unmarkUnpaid: (orderId: string) => Promise<Order>;
+    assignCustomer: (orderId: string, data: { customerId: string; assignedById: string }) => Promise<Order>;
+    unassignCustomer: (orderId: string) => Promise<Order>;
   };
   users: {
     getAll: () => Promise<AdminUser[]>;

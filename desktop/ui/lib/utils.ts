@@ -30,3 +30,45 @@ export function formatDate(date: string | Date): string {
   const year = d.getFullYear()
   return `${dayName}, ${day}${getOrdinalSuffix(day)} ${month}, ${year}`
 }
+
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+const DAY_MS = 24 * HOUR_MS
+
+export type ElapsedSeverity = "default" | "warn" | "danger"
+
+const WARN_AFTER_MS = 12 * HOUR_MS
+const DANGER_AFTER_MS = 2 * DAY_MS
+
+function elapsedMs(from: string | Date, to: Date): number {
+  const start = typeof from === "string" ? new Date(from) : from
+  return Math.max(0, to.getTime() - start.getTime())
+}
+
+/**
+ * Human-readable age of an event, e.g. "45m", "6h 20m", "3d 4h".
+ * Three tiers so a 15-minute-old order never reads "0d 0h".
+ */
+export function formatElapsed(from: string | Date, to: Date = new Date()): string {
+  const totalMinutes = Math.floor(elapsedMs(from, to) / MINUTE_MS)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const mins = totalMinutes % 60
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
+}
+
+/** How urgently an unpaid order needs chasing: < 12h, 12h-2d, > 2d. */
+export function elapsedSeverity(from: string | Date, to: Date = new Date()): ElapsedSeverity {
+  const ms = elapsedMs(from, to)
+  if (ms >= DANGER_AFTER_MS) return "danger"
+  if (ms >= WARN_AFTER_MS) return "warn"
+  return "default"
+}
+
+export const ELAPSED_SEVERITY_CLASS: Record<ElapsedSeverity, string> = {
+  default: "text-muted-foreground",
+  warn: "text-amber-600 font-semibold",
+  danger: "text-red-600 font-semibold",
+}

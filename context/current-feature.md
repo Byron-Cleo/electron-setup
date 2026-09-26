@@ -6,33 +6,63 @@ fullstack
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Opening stock at shift start is the previous shift's `closingPlates` per menu — unassigned production is NEVER merged into opening (falls back to `Menu.stock` when no previous shift)
-- Unassigned production from the previous shift stays independent and is carried forward; admin assigns it later (increasing `Menu.stock`) via the new Remaining Stock screen
-- New "Remaining Stock from Previous Shift" dashboard card (admin Menu page) navigates to its own standalone view (RemainingStockCard): per-menu carry-forward (previous closing), unassigned batches by stock supply, and "Assign Plates" that opens AssignmentModal for each batch
-- AssignmentModal labels previous-shift batches "Carry-over: X plates" (vs "Produced" for current-shift batches) and uses totalExisting for their allocated count
-- Shift open snapshot: `openingPlates` = previous shift's `closingPlates` only (fallback `Menu.stock`)
-- Plate movement report: Opening column labeled "(carry-forward)", plus an "Unassigned Carry-over" summary row in UI and printed shift report
-- CookedFoodTable is NOT modified — it keeps showing today's cooked food exactly as before
-- No schema changes — all data derives from existing tables (`ShiftSnapshot`, `CookingRecord`, `CookingRecordMenu`, `StockSupplyMenu`)
-- Branch: `feature/admin/shift-scoped-stock-assignment`
-- Ref: `context/fix-plan/shift-scoped-stock-assignment.md`
+- Phase 2 — a fully auto-closing shift marks its own pending orders unpaid: `autoCloseExpiredShifts()` bulk-acknowledges every pending, non-void order inside the same transaction that closes the shift, and emits `order.unpaid-ack` per affected order
+- Manual-close shifts are untouched by the scheduler — the manager still reviews and marks them in the customer-free `ShiftCloseDialog`
+- Badge counts the real money owed: `GET /api/orders/unpaid-count` = `unpaidAcknowledged && !isPaid && !isVoid`, assigned or not; the badge lives on the Cashier nav item, not Customers
+- A specific DAY/NIGHT card is hard-scoped to exactly `(shiftType, operationDay)` and shows no date picker; **All Shifts** is the central cross-date worklist and keeps the date picker
+- Shift entry cards prefer the **open** shift's `operationDay` over the newest one, so a stale closed day never wins after a new shift opens
+- Chase ageing: **Waiting** ages from `createdAt` (New Unpaid tab), **Marked** ages from `unpaidAcknowledgedAt` (Marked Unpaid tab), **Paid At** replaces `createdAt` on the paid tabs; thresholds are `< 12h` neutral, `12h–2d` amber, `> 2d` red
+- Assigning a customer to an already-marked order goes through `assign-customer` and must never restart the chase clock
+- Late payments stay attributed to the order's original shift/day — reports keep deriving live from `shift.orders`, so `shifts.ts` / `dailyReport.ts` are deliberately unchanged
+- Dead `GET /customers/needs-customer` path removed end-to-end (route, IPC, preload, types, api wrapper)
+- Branch: `feature/cashier/customer-accounts` · Ref: `context/fix-plan/customer-accounts.md`
 
 ## Notes
 
-- Three distinct numbers with separate lifecycles: opening stock (set once at shift open = prev closing only), produced this shift (records in current shift window, starts at 0), sold this shift (`ShiftSnapshot.platesSold`).
-- Backend: new `GET /api/stock/remaining` endpoint (`backend/routes/stockRemaining.ts`) → carryForwardPerMenu (from prev closed shift snapshots) + unassignedBatches grouped by stock supply; shared helper `backend/routes/shiftCarryOver.ts` (`findPreviousClosedShift`, `computeShiftUnassignedBatches`).
-- Shift open (POST /api/shifts open) sets openingPlates = prev shift closingPlates per menu (map by menuId), else `Menu.stock`. Unassigned is NOT folded in.
-- Frontend: `RemainingStockCard.tsx` is a standalone view (own heading + tables + empty state) rendered from a new dashboard card in `pages/admin/Menu.tsx` (view `remaining-stock`) — NOT embedded in CookedFoodTable.
-- AssignmentModal fetches `getCurrentShift()` and compares `record.createdAt` to `[openingTime, autoCloseTime)` to pick Carry-over vs Produced label; `totalAllocated = totalExisting` for carry-over batches.
-- Shift report UI (`ShiftReport.tsx`, `ShiftCloseDialog.tsx`) + printed report (`receiptTemplate.ts`, `receipt.ts`) surface `unassignedCarryOver` and label Opening as carry-forward.
-- Reuse existing carry-over calculation pattern in `dailyReport.ts` and `allocateCookingRecord` for assigning carry-over plates.
-- Verification gates: tsc -b (root) + backend tsc, npm run lint (changed UI), E2E (open shift after prev close → opening = closing; RemainingStockCard shows carry-forward + unassigned; assign carry-over → Menu.stock increases; closed report shows unassigned summary).
+- **Auto-close (backend):** inside the existing close transaction, non-manual shifts `findMany` pending order ids, `updateMany` them to `unpaidAcknowledged/At` with `unpaidAcknowledgedById: null` (no user signed off), then emit one `order.unpaid-ack` per id. The `findMany` is required — `updateMany` returns no ids. Re-running is safe: already-acknowledged orders are excluded, so `unpaidAcknowledgedAt` is never re-stamped.
+- **Report decision (no code):** a report is derived from `shift.orders` at read time and payment never rewrites `Order.shiftId`, so a shift closed without a manager still reports correctly once the order is later paid. Nothing to snapshot.
+- **Badge scope:** counts acknowledged unpaid orders regardless of which shift the acknowledgement happened on, so a walkout ticked during a still-open shift is chased rather than hidden. Unmarked orders pending collection are excluded, keeping the badge at 0 during quiet service.
+- **Scoping:** `operationDay` was already threaded from `Cashier` into all three views but every view discarded it. Each of the 6 filter sites (2 per view: `refreshOrders` callback + `useEffect`) now requires both `shiftTypeById` **and** `shiftOpDayById` to match; the prop is a full ISO string, the by-id maps hold the `split("T")[0]` date part, so it is normalized before comparing. Date filtering is gated on `!shiftType` and the pickers render only in All Shifts.
+- **Columns:** `columnsForOrdersTab()` picks the set per tab — base for ALL/VOID, `UNPAID_COLUMNS` (+Waiting), `PAID_COLUMNS` (+Paid At, drops the always-green Status column), `MARKED_UNPAID_COLUMNS` (+Marked, keeps Customer). `ElapsedCell` renders the age with `ELAPSED_SEVERITY_CLASS`.
+- **`PaymentView` live-refresh gap fixed:** it was the only view missing `order.customer-assigned` / `order.customer-unassigned`, so a customer attached in another window never appeared until a manual reload. All 4 arrays now listen for both.
+- **Crash fix found while testing:** deleting `/customers/needs-customer` let the old path fall through to `GET /customers/:id`, which fed a non-UUID to Prisma — and because Express 4 does not catch async rejections, the unhandled throw **killed the whole backend process**. All three `:id` routes now validate the UUID up front (400) and wrap queries in try/catch with a 500 instead of `throw e`.
+- **Helpers:** `formatElapsed` / `elapsedSeverity` / `ELAPSED_SEVERITY_CLASS` in `desktop/ui/lib/utils.ts`; `getUnpaidOrderCount()` in `lib/api.ts` (Electron IPC first, then `/orders/unpaid-count`); `order.getUnpaidCount` added to preload/types/IPC.
+- **Tests:** `backend/tests/customer-assignment.test.ts` is 11/11 green — auto-close marks + records the system ack, leaves manual shifts alone, and is idempotent; unpaid-count ignores still-pending orders but counts assigned ones; assign preserves `unpaidAcknowledgedAt`; the deleted path returns 400 without killing the server. Two pre-existing broken tests were fixed (a hardcoded `userId` that violated the User FK, and a duplicate-phone case seeded with unnormalized spaces so it could never collide). `tests/setup.ts` now also truncates `Customer` (after `Order`, for the FK) and `ShiftConfig` — fixed phone numbers were leaking between tests and runs. New `desktop/ui/tests/elapsed.test.ts` covers the ageing helpers (9/9).
+- **Environment:** `eraevadb_test` had never received the Phase 1 schema, so it was synced with `prisma db push --url …eraevadb_test`. `prisma migrate dev` remains broken by pre-existing `Category` drift, so the hand-written migration at `backend/prisma/migrations/20260926000000_customer_accounts/migration.sql` stays the convention. Backend tests need a server bound to `eraevadb_test` on port 3001; run them with `--no-file-parallelism` (the shared truncate in `setup.ts` makes parallel files wipe each other).
+- **Verification gates:** root `tsc -b` (only 8 pre-existing errors in `desktop/ui/tests/utils.tsx` + `waiter-menu-grid.test.tsx`, both untouched), backend `tsc --noEmit` clean, eslint clean on every changed file, `git diff --check` clean.
 
 ## History
+### fullstack - 2026-09-26 — Customer Accounts Phase 2: Unpaid Backlog, Auto-Close & Chase Ageing
+- **Auto-close marks unpaid orders** — `autoCloseExpiredShifts()` now acknowledges every pending non-void order of a fully auto-closing shift in the same transaction that closes it (`unpaidAcknowledgedById: null`) and emits `order.unpaid-ack` per order; manual-close shifts are deliberately skipped so the close gate still needs a manager. Verified idempotent — a second pass never re-stamps `unpaidAcknowledgedAt`
+- **New `GET /api/orders/unpaid-count`** counting `unpaidAcknowledged && !isPaid && !isVoid`; `/orders/count` is untouched (the waiter preview depends on it). Badge moved from Customers to the **Cashier** nav item and now counts assigned *and* unassigned acknowledged orders
+- **Shift scoping fixed** — all three Cashier views (Orders/Payment/Void) were receiving `operationDay` and dropping it on the floor, so a DAY card showed every DAY shift in history. Each now requires `shiftType` **and** `operationDay`; the date picker and its filter are All-Shifts-only. Entry cards prefer the open shift's `operationDay` over the newest
+- **Chase ageing** — `formatElapsed` / `elapsedSeverity` in `lib/utils.ts`; **Waiting** (from `createdAt`), **Marked** (from `unpaidAcknowledgedAt`), **Paid At** (on paid tabs, replacing `createdAt`), with `< 12h` neutral / `12h–2d` amber / `> 2d` red colouring via a new `columnsForOrdersTab()` selector
+- **Process-crash fix** — removing the dead `/customers/needs-customer` route exposed `GET /customers/:id` to non-UUID input, and the resulting unhandled rejection took down the entire backend. All three `:id` routes now validate the UUID (400) and return 500 instead of rethrowing
+- **Live-refresh gap** — `PaymentView` was the only view not listening for `order.customer-assigned` / `order.customer-unassigned`; all 4 arrays now do
+- Marked-unpaid actions relabelled to **Assign Customer** / **Change Customer**, still routed through `assign-customer` so the mark timestamp survives
+- Dead `needs-customer` path deleted end-to-end (Express route, `customer:get-needs-customer` IPC, preload method, `ElectronAPI` type, `getOrdersNeedingCustomer()`)
+- Reports/shift-close deliberately unchanged — a late payment keeps its original `shiftId` and reports derive live from `shift.orders`
+- Tests: `customer-assignment.test.ts` 11/11 (also repaired 2 pre-existing broken tests + a `Customer`/`ShiftConfig` truncation gap in `setup.ts` that leaked fixed phone numbers between runs); new `elapsed.test.ts` 9/9
+- Note: `backend/tests/` is gitignored, so the backend suite is force-added (`git add -f`) with this change
+
+### fullstack - 2026-09-26 — Customer Accounts (Simplified — No Auth)
+- **Phase 1 (complete, verified end-to-end):** cashier flow is live — All Shifts entry cards, "Can't Pay" marks an order unpaid *and* attaches a customer in one call, and the **Marked Unpaid** tab gained a Customer column with Assign / Change / Remove / Undo Mark actions
+- `CustomerPickerDialog` now debounces its search, loads on open, enforces `disabledReason`, surfaces errors, and can create a customer inline
+- `GET /api/customers/:id` now returns the real ledger: `orders` (open), `settledOrders`, `cancelledOrders`, `outstandingTotal`, plus a reverse `replacedByOrderNumber` lookup so "Replaced by #N" is accurate
+- Removed dead code: customer display in `ShiftCloseDialog` (impossible by construction — it lists `!unpaidAcknowledged` orders, which `assign-customer` rejects) and the misleading "or customer" search placeholder
+- `GET /orders` now returns `Customer` on every order; `order.customer-assigned` / `order.customer-unassigned` added to all live-refresh arrays; `MARKED_UNPAID` badge count no longer counts voided orders
+- Backend rejects non-UUID `*ById` values with `400` instead of an opaque Prisma `P2007` 500
+- **Verified live against the running backend:** assign, remove (keeps unpaid mark), undo mark (clears customer), combined unpaid-ack+assign, needs-customer worklist, ledger totals, `409` on linked-customer delete, `409` on duplicate phone. Test data removed; order restored to its original state
+- Added `Customer` model (`name`, `phone` unique stripped of spaces, `notes`) + 3 nullable `Order` fields (`customerId`, `customerAssignedById`, `customerAssignedAt`, `onDelete: SetNull`); DB applied via `prisma db push` (additive, no data loss)
+- New `routes/customers.ts` (+ list/search, CRUD, needs-customer worklist, ledger); `routes/orders.ts` extended (include Customer in GET, `unpaid-ack` with optional `customerId`, `unpaid-ack-undo` clears customer I8, assign/unassign endpoints)
+- `app.ts` registers `/api/customers`; `tests/customer-assignment.test.ts` written (note: `backend/tests/` is gitignored, so it is not committed)
+- Plan: `context/fix-plan/customer-accounts.md` (simplified, auth deferred, trusted LAN); branch: `feature/cashier/customer-accounts`
+- Note: `prisma migrate dev` chain is broken on pre-existing `Category` drift, so the migration was written by hand at `backend/prisma/migrations/20260926000000_customer_accounts/migration.sql` and applied with `prisma db push` (repo convention)
+
 ### fullstack - 2026-08-28 — One Cooking Record Per Menu (Cooked Food Pool Consistency)
 - Dropped `CookingRecordAssignment` table entirely; `CookingRecordMenu` now stores `platesAllocated` + `platesRemaining` directly (was `quantityPlates`)
 - `recomputeMenuStock()` recalculates `Menu.stock` as sum of all `platesRemaining` per menu (FIFO across splits)
