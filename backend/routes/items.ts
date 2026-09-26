@@ -6,6 +6,7 @@ import path from "path";
 import crypto from "crypto";
 import fs from "fs";
 import { uploadsDir, uploadsRoot } from "../db/uploads.js";
+import { emitLiveEvent } from "../events.js";
 
 const router = Router();
 
@@ -236,6 +237,7 @@ router.post("/", upload.single("image"), async (req, res) => {
         menus: { include: { menu: { select: { id: true, name: true } } } },
       },
     });
+    emitLiveEvent({ type: "stock.created", at: new Date().toISOString() });
     res.status(201).json(serializeStockSupply(item));
   } catch (e: any) {
     if (e.code === "P2002") return res.status(409).json({ error: "Item slug already exists" });
@@ -329,6 +331,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
         },
       });
     });
+    emitLiveEvent({ type: "stock.updated", at: new Date().toISOString() });
     res.json(serializeStockSupply(item));
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Item not found" });
@@ -351,6 +354,7 @@ router.delete("/:id", async (req, res) => {
       where: { id },
       data: { isActive: false },
     });
+    emitLiveEvent({ type: "stock.deleted", at: new Date().toISOString() });
     res.json({ message: "Item deactivated", id });
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Item not found" });

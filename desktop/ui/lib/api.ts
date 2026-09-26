@@ -1,5 +1,10 @@
 function resolveApiOrigin(): string {
   if (import.meta.env.VITE_API_ORIGIN) return import.meta.env.VITE_API_ORIGIN
+  // Browser: default to same-origin so the API follows whatever host the UI was
+  // opened on (LAN IP, SSH tunnel localhost, Tailscale IP). Electron packaged
+  // builds keep the localhost:3001 fallback.
+  const loc = typeof window !== "undefined" ? window.location : undefined
+  if (loc && /^https?:$/.test(loc.protocol)) return loc.origin
   return "http://localhost:3001"
 }
 
@@ -348,6 +353,13 @@ export async function deleteCookingRecord(id: string): Promise<void> {
   return apiFetch(`/cooking-records/${id}`, { method: "DELETE" })
 }
 
+export async function disposeCookingRecord(id: string): Promise<{ record: CookingRecord }> {
+  if (window.electron?.cookingRecord?.dispose) {
+    return window.electron.cookingRecord.dispose(id)
+  }
+  return apiFetch(`/cooking-records/${id}/dispose`, { method: "POST" })
+}
+
 export async function allocateCookingRecord(
   id: string,
   allocations: { menuId: string; plates: number }[]
@@ -462,6 +474,7 @@ export interface MenuStockStatusItem {
   mealTypes: string[]
   produced: number
   sold: number
+  assignable: number
   remaining: number
   opening: number
 }
@@ -746,6 +759,13 @@ export async function getStockRemaining(): Promise<StockRemaining> {
     return window.electron.report.getStockRemaining()
   }
   return apiFetch("/stock/remaining")
+}
+
+export async function getWastedStock(): Promise<WastedStock> {
+  if (window.electron?.report?.getWastedStock) {
+    return window.electron.report.getWastedStock()
+  }
+  return apiFetch("/stock/wasted")
 }
 
 export async function getVoidReport(date: string): Promise<VoidReportWaiter[]> {

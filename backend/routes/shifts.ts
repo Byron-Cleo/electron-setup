@@ -16,6 +16,16 @@ function parseDateQueryRange(value: string): { gte: Date; lt: Date } | null {
   return { gte: start, lt: end };
 }
 
+// An order belongs to a shift's operationDay when createdAt falls within
+// [operationDay, operationDay + 1d) — UTC-midnight alignment, the same
+// convention as parseDateQueryRange. This keeps unpaid enforcement and reports
+// scoped to the operation date even if an order was attached to a stale shift.
+function belongsToOperationDay(createdAt: Date, operationDay: Date): boolean {
+  const t = new Date(createdAt).getTime();
+  const start = operationDay.getTime();
+  return t >= start && t < start + 86_400_000;
+}
+
 // List shifts, optionally filtered by a single date (YYYY-MM-DD), a date range
 // (from/to), and/or a shift type. Each shift is enriched with read-only summary
 // fields (orderCount, voidCount, revenue, driftMinutes) computed from existing
@@ -64,6 +74,7 @@ router.get("/", async (req, res) => {
         orders: {
           select: {
             id: true,
+            createdAt: true,
             isVoid: true,
             isPaid: true,
             totalPrice: true,
@@ -74,11 +85,13 @@ router.get("/", async (req, res) => {
       },
     });
 
-    // Enrich each shift with summary fields (read-only aggregation).
+    // Enrich each shift with summary fields (read-only aggregation), scoped to
+    // the shift's operationDay so stale open shifts don't count other dates' orders.
     const enriched = shifts.map((shift) => {
-      const totalOrders = shift.orders.length;
-      const voidCount = shift.orders.filter((o) => o.isVoid).length;
-      const revenue = shift.orders
+      const orders = shift.orders.filter((o) => belongsToOperationDay(o.createdAt, shift.operationDay));
+      const totalOrders = orders.length;
+      const voidCount = orders.filter((o) => o.isVoid).length;
+      const revenue = orders
         .filter((o) => o.isPaid && !o.isVoid)
         .reduce((sum, o) => sum + Number(o.totalPrice), 0);
       const driftMinutes =
@@ -234,10 +247,17 @@ router.post("/:id/close", async (req, res) => {
       });
     }
 
-    // Block close while any order is unpaid and not marked-as-unpaid by a manager.
-    // Unpaid orders can only be resolved by marking them as unpaid (never voided here).
+    // Block close while any order of THIS shift's operationDay is unpaid and
+    // not marked-as-unpaid by a manager. Unpaid orders can only be resolved by
+    // marking them as unpaid (never voided here). Orders that do not belong to
+    // the closing operation date stay scoped to their own date and never leak
+    // into this close.
     const blockingUnpaid = shift.orders.filter(
-      (o) => !o.isVoid && !o.isPaid && !o.unpaidAcknowledged
+      (o) =>
+        belongsToOperationDay(o.createdAt, shift.operationDay) &&
+        !o.isVoid &&
+        !o.isPaid &&
+        !o.unpaidAcknowledged
     );
     if (blockingUnpaid.length > 0) {
       return res.status(409).json({

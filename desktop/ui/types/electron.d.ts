@@ -159,6 +159,7 @@ interface ReceiptAccompaniment {
   name: string;
   charged: boolean;
   price: number;
+  note?: boolean;
 }
 
 interface ReceiptItem {
@@ -445,6 +446,8 @@ interface CookingRecord {
   cookedById: string;
   notes: string | null;
   createdAt: string;
+  disposed: boolean;
+  disposedAt: string | null;
   stockSupply: {
     id: string;
     name: string;
@@ -488,6 +491,10 @@ interface CookedMenuItem {
   name: string;
   stock: number;
   cookedDate: string;
+  shiftId?: string | null;
+  shiftType?: string | null;
+  operationDay?: string | null;
+  cookedAt?: string;
   quantityCooked: number;
   produced: number;
   stockSupply: {
@@ -668,6 +675,17 @@ interface StockRemainingUnassignedBatch {
   totalProduced: number;
   totalAssigned: number;
   unassigned: number;
+  expired: boolean;
+  validUnassigned: number;
+  sellingNow: number;
+  soldTotal: number;
+  cookedAt: string;
+  shiftId: string | null;
+  shiftType: string | null;
+  operationDay: string | null;
+  autoOpenTime: string | null;
+  autoCloseTime: string | null;
+  linkableMenus: string[];
   menus: {
     menuId: string;
     menuName: string;
@@ -676,10 +694,39 @@ interface StockRemainingUnassignedBatch {
   }[];
 }
 
+interface WastedStockBatch {
+  cookingRecordId: string;
+  stockSupplyId: string;
+  stockSupplyName: string;
+  totalProduced: number;
+  totalAssigned: number;
+  soldTotal: number;
+  wastedQty: number;
+  cookedAt: string;
+  disposedAt: string;
+  shiftId: string | null;
+  shiftType: string | null;
+  operationDay: string | null;
+  autoOpenTime: string | null;
+  autoCloseTime: string | null;
+}
+
+interface WastedStock {
+  wastedBatches: WastedStockBatch[];
+}
+
+interface StockRemainingCycle {
+  cycleStart: string;
+  cycleEnd: string;
+  operationDay: string;
+}
+
 interface StockRemaining {
   previousShift: StockRemainingPreviousShift | null;
+  cycle: StockRemainingCycle | null;
   carryForwardPerMenu: StockRemainingCarryForward[];
   unassignedBatches: StockRemainingUnassignedBatch[];
+  expiredBatches: StockRemainingUnassignedBatch[];
 }
 
 interface VoidReportWaiter {
@@ -851,6 +898,7 @@ interface MenuStockStatusItem {
   mealTypes: string[];
   produced: number;
   sold: number;
+  assignable: number;
   remaining: number;
   opening: number;
 }
@@ -945,6 +993,7 @@ interface ElectronAPI {
     getById: (id: string) => Promise<CookingRecord>;
     create: (data: CreateCookingRecordData) => Promise<CookingRecord>;
     delete: (id: string) => Promise<{ message: string }>;
+    dispose: (id: string) => Promise<{ record: CookingRecord }>;
   };
   kitchen: {
     getConfig: () => Promise<KitchenConfigItem[]>;
@@ -1019,6 +1068,7 @@ interface ElectronAPI {
   report: {
     getShiftReport: (shiftId: string) => Promise<ShiftReport>;
     getStockRemaining: () => Promise<StockRemaining>;
+    getWastedStock: () => Promise<WastedStock>;
     getVoidReport: (date: string) => Promise<{ date: string; waiters: VoidReportWaiter[] }>;
   };
   shiftConfig: {

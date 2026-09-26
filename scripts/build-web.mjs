@@ -7,6 +7,7 @@
 // Usage:
 //   npm run build:web -- --server http://192.168.1.100:3001
 //   API_SERVER=http://192.168.1.100:3001 npm run build:web
+//   npm run build:web -- --server same-origin   # API follows the host the UI is opened on
 //
 // After this, start the backend (`npm run dev:backend`) and any device on the
 // network can open http://<server-ip>:3001.
@@ -28,21 +29,30 @@ const server = argValue("--server") || process.env.API_SERVER
 if (!server) {
   console.error("Error: missing server URL.\n")
   console.error("Usage: npm run build:web -- --server http://<server-ip>:3001")
+  console.error("   or: npm run build:web -- --server same-origin")
   console.error("   or: API_SERVER=http://<server-ip>:3001 npm run build:web")
   process.exit(1)
 }
 
-const origin = server.replace(/\/+$/, "").replace(/\/api$/, "")
-const apiBase = `${origin}/api`
+const env = { ...process.env }
 
-console.log(`API base   : ${apiBase}`)
-console.log(`API origin : ${origin}`)
-
-const env = {
-  ...process.env,
-  VITE_API_BASE: apiBase,
-  VITE_API_ORIGIN: origin,
+let displayOrigin
+if (server === "same-origin") {
+  // Bake no origin: lib/api.ts resolves the API to whatever host the UI is
+  // opened on, so it works over the SSH tunnel (localhost), LAN, or Tailscale.
+  displayOrigin = "<same-origin>"
+  delete env.VITE_API_BASE
+  delete env.VITE_API_ORIGIN
+} else {
+  const origin = server.replace(/\/+$/, "").replace(/\/api$/, "")
+  const apiBase = `${origin}/api`
+  displayOrigin = origin
+  env.VITE_API_BASE = apiBase
+  env.VITE_API_ORIGIN = origin
 }
+
+console.log(`API base   : ${displayOrigin}/api`)
+console.log(`API origin : ${displayOrigin}`)
 
 // Note: --base=/ overrides vite.config.ts's "./" (relative base used for the
 // Electron file:// build). Absolute paths are required so deep links like
@@ -54,4 +64,4 @@ if (res.error) {
 }
 if (res.status !== 0) process.exit(res.status ?? 1)
 
-console.log(`\nDone. Start the backend (npm run dev:backend), then open ${origin} from any device on the network.`)
+console.log(`\nDone. Start the backend (npm run dev:backend), then open the served UI from any device on the network.`)

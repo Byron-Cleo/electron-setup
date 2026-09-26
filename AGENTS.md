@@ -30,7 +30,7 @@ Read the following to get the full context of the project.
 root/
 ├── desktop/ui/          # React 19 frontend (Vite 8, Electron renderer)
 ├── desktop/electron/    # Electron 42 main process (Node.js)
-└── backend/             # Express 4 REST API (port 3001, Prisma 7 → PostgreSQL)
+└── backend/             # Express 4 REST API (prod port 3001, dev port 3111, Prisma 7 → PostgreSQL)
 ```
 
 ### Data Flow
@@ -38,9 +38,11 @@ root/
 ```
 React Component → window.electron.* (contextBridge)
   → ipcRenderer.invoke → ipcMain.handle
-    → fetch("http://localhost:3001/api/...")
+    → fetch("http://localhost:3111/api/...")  # dev port; prod resolves via server-config
       → Express route → Prisma → PostgreSQL
 ```
+
+**Port split:** Production uses port **3001**, run by the `EraevaBackend` Windows service (NSSM, StartType Automatic) executing `node backend/dist/index.js` with `NODE_ENV=production`. The backend MUST be rebuilt (`npm run build --prefix backend`) before restarting the service whenever source changes — the service runs compiled `dist/`, not tsx. Control it with the root `server:start|stop|restart|status|logs` npm scripts (status/logs need no elevation; start/stop/restart do) or `sc query EraevaBackend`. Development uses port **3111** so the dev backend can run alongside the production server. Dev defaults are wired through `.env.development` (`VITE_API_BASE`/`VITE_API_ORIGIN`) and `server-config.ts` (`NODE_ENV=development` → `DEV_API_BASE`).
 
 No React Router — view switching via `useState<Tab>` and `useState<view>` in `App.tsx`.
 
@@ -146,7 +148,7 @@ feature/<layer>/<task-kebab-case>
 - Preload (`preload.cts`) uses `contextBridge.exposeInMainWorld("electron", ...)`
 - Namespaced: `window.electron.mealType.*`, `window.electron.menu.*`
 - IPC handlers in `ipc-handlers.ts` proxy to Express via `fetch()`
-- API base: `http://localhost:3001/api` (hardcoded in `ipc-handlers.ts`)
+- Dev API base: `http://localhost:3111/api` (via `.env.development` + `server-config.ts` dev default); production resolves through the main-process `server-config.json`
 
 ### Frontend API Convention (MANDATORY)
 
@@ -174,7 +176,7 @@ feature/<layer>/<task-kebab-case>
 | `npm run dev` | Run React + Electron concurrently |
 | `npm run dev:react` | Vite dev server only (port 5123) |
 | `npm run dev:electron` | Compile Electron TS + launch Electron |
-| `npm run dev:backend` | Start Express backend (port 3001) |
+| `npm run dev:backend` | Start Express backend (dev port 3111) |
 | `npm run lint` | ESLint check (`.ts`, `.tsx` files) |
 | `npm run build` | Type-check all + Vite build |
 | `npm run preview` | Preview built React app |
@@ -198,9 +200,42 @@ feature/<layer>/<task-kebab-case>
 
 | Command | Description |
 |---|---|
-| `npm run dev` | `tsx watch src/index.ts` (hot reload) |
+| `npm run dev` | `tsx watch index.ts` (hot reload, dev port 3111) |
 | `npm run build` | `tsc` → `dist/` |
 | `npm run start` | `node dist/index.js` |
+
+### Production Deployment (MANDATORY)
+
+The production backend is the **`EraevaBackend`** Windows service (NSSM, StartType Automatic) running `node backend/dist/index.js` with `NODE_ENV=production` on port **3001**. It runs **compiled `dist/`, not tsx** — source changes require a **rebuild**, not just a restart.
+
+After ANY change under `backend/` (routes, app, db, scheduler, events, seeds, etc.):
+1. `npm run build --prefix backend`
+2. `npm run server:restart` (start/stop/restart need an elevated shell; status/logs do not)
+3. Verify: `npm run server:status` → `RUNNING` and `curl http://localhost:3001/health` → `{"status":"ok",...}`
+
+If `backend/prisma/schema.prisma` changed, run `npm run db:sync` (generate + push) BEFORE the rebuild + restart so the DB is in sync with `dist/`.
+
+Service shortcuts: `npm run server:start|stop|restart|status|logs` (logs tail `backend/logs/backend-service.log`). pm2, `ecosystem.config.cjs`, and `scripts/start-backend.bat` are retired — do not restore or use them.
+
+### Remote Operations over SSH & Dev Scope (MANDATORY)
+
+The server is operated remotely over SSH (no RDP; staff use the console). Local admin account **`ops`** (key-only auth via `administrators_authorized_keys`), OpenSSH port 22 firewalled to LocalSubnet + Tailscale (`100.64.0.0/10`) only, browser live view at `http://192.168.100.45:3001`.
+
+**Production deploy over SSH (no UAC needed):**
+1. Merge/push approved, dev-tested changes to `restaurant-build` (from the operator laptop).
+2. `ssh ops@<tailscale-ip or 192.168.100.45>` then `git pull origin restaurant-build`
+3. `npm run build --prefix backend` (compiles `dist/` — the service runs `dist/`, not tsx)
+4. Restart WITHOUT UAC: `schtasks /run /tn pos-backend-restart` (SYSTEM/Highest task → `scripts/restart-backend.cmd` → `sc stop/start EraevaBackend`; log: `backend/logs/restart.log`)
+5. Verify: `sc query EraevaBackend` → RUNNING and `curl http://localhost:3001/health`
+
+**Dev scope (isolated — reachable ONLY via SSH tunnels):**
+- DB `eraevadb_dev` owned by role `era_dev` (locked to that DB; **no grants on `eraevadb`**), schema pushed + dev users seeded. `backend/load-env.ts` selects `.env` on `NODE_ENV=production`, else `.env.development` (gitignored; PORT=3111, BIND=127.0.0.1, ENABLE_SCHEDULER=false).
+- Start/stop detached dev backend + Vite UI: `npm run dev:remote:start` / `npm run dev:remote:stop` (logs: `backend/logs/dev-backend.log`, `dev-backend.err.log`, `dev-ui.log`; survives SSH disconnect; last `ERROR: cannot terminate itself` in the output is the harmless stop of the caller).
+- One command from the operator laptop to reach everything:
+  `ssh -N -L 3001:127.0.0.1:3001 -L 3111:127.0.0.1:3111 -L 5123:127.0.0.1:5123 -L 5433:127.0.0.1:5432 ops@<server>` → browser `http://localhost:3001` (live prod UI), `http://localhost:5123` (dev UI → dev backend), DB tools at `localhost:5433`.
+- Dev backend binds `127.0.0.1:3111` — never expose dev to the LAN. Cleanup any stray `0.0.0.0` dev listener.
+
+**Browser live view (build:web rule):** after ANY plain `npm run build` / `build:win` (which rewrites `dist-react` for the Electron file:// build), RE-RUN `npm run build:web -- --server same-origin` so the served web UI stays browser-correct (absolute `/assets`, API resolves to the host the UI is opened on — LAN IP, SSH-tunnel localhost, or Tailscale). Installed .exe terminals keep their own packaged bundle and are unaffected. (Bake a fixed origin instead with `--server http://<server-ip>:3001` when the bundle must target one specific URL.)
 
 ## Project Structure
 

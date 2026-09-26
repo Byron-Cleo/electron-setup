@@ -2,6 +2,7 @@ export interface ReceiptAccompaniment {
   name: string;
   charged: boolean;
   price: number;
+  note?: boolean;
 }
 
 export interface ReceiptItem {
@@ -104,6 +105,9 @@ function accompHtml(accompaniments: ReceiptAccompaniment[]): string {
   if (accompaniments.length === 0) return "";
   const lines = accompaniments
     .map((a) => {
+      if (a.note) {
+        return `<div style="padding-left:10px; font-size:11px; font-style:italic;">&bull; ${a.name}</div>`;
+      }
       const tag = a.charged ? `+${money(a.price)}` : "FREE";
       return `<div style="padding-left:10px; font-size:11px;">&bull; ${a.name} (${tag})</div>`;
     })

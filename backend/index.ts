@@ -1,9 +1,10 @@
-import "dotenv/config";
+import "./load-env.js";
 import app from "./app.js";
 import prisma from "./db/db.js";
 import { startScheduler } from "./scheduler.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
+const BIND = process.env.BIND || "0.0.0.0";
 const ENABLE_SCHEDULER = process.env.ENABLE_SCHEDULER !== "false";
 
 async function main() {
@@ -15,8 +16,8 @@ async function main() {
     process.exit(1);
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server listening on http://0.0.0.0:${PORT}`);
+  app.listen(PORT, BIND, () => {
+    console.log(`Server listening on http://${BIND}:${PORT}`);
   });
 
   if (ENABLE_SCHEDULER) {

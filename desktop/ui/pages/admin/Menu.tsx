@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { UtensilsCrossed, List, Plus, Beef, Archive, type LucideIcon } from "lucide-react"
+import { UtensilsCrossed, List, Plus, Beef, Archive, PackageOpen, type LucideIcon } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -11,8 +11,9 @@ import DiscontinuedMenusTable from "@/components/menu/DiscontinuedMenusTable"
 import AccompanimentsTable from "@/components/menu/AccompanimentsTable"
 import CreateMenuDialog from "@/components/menu/CreateMenuDialog"
 import MenuStockStatusCard from "@/components/menu/MenuStockStatusCard"
-import RemainingStockCard from "@/components/menu/RemainingStockCard"
-import { getCookedMenus } from "@/lib/api"
+import ProductionGuidanceCard from "@/components/menu/ProductionGuidanceCard"
+import RemainingStockDashboard from "@/components/menu/RemainingStockDashboard"
+import { getCookedMenus, getStockRemaining } from "@/lib/api"
 
 type MenuView = "dashboard" | "cooked-food" | "remaining-stock" | "all-menu"
 type MenuSubView = "list" | "discontinued" | "accompaniments" | null
@@ -54,6 +55,7 @@ function Menu() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogEditId, setDialogEditId] = useState<string | null>(null)
   const [readyCount, setReadyCount] = useState(0)
+  const [remainingCount, setRemainingCount] = useState(0)
 
   function loadReadyCount() {
     getCookedMenus()
@@ -61,8 +63,15 @@ function Menu() {
       .catch(() => {})
   }
 
+  function loadRemainingCount() {
+    getStockRemaining()
+      .then((data) => setRemainingCount(data.expiredBatches.length))
+      .catch(() => {})
+  }
+
   useEffect(() => {
     loadReadyCount()
+    loadRemainingCount()
   }, [])
 
   function handleBackFromSub() {
@@ -73,6 +82,7 @@ function Menu() {
     setView("dashboard")
     setSubView(null)
     loadReadyCount()
+    loadRemainingCount()
   }
 
   function handleMenuNavSelect(tab: MenuTableTab) {
@@ -84,7 +94,7 @@ function Menu() {
       <Heading as="h1" className="text-admin-header-text">Menu/Dispatch</Heading>
 
       {view === "dashboard" && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card
             className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
             onClick={() => setView("cooked-food")}
@@ -129,10 +139,41 @@ function Menu() {
               </div>
             </div>
           </Card>
+
+          <Card
+            className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+            onClick={() => setView("remaining-stock")}
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <PackageOpen size={24} className="text-amber-600" />
+              </div>
+              <div>
+                <Heading as="h3" className="text-lg text-admin-header-text">
+                  Remaining Stock Production
+                </Heading>
+                <div className="flex items-center gap-2 mt-1">
+                  {remainingCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      {remainingCount} Batch{remainingCount === 1 ? "" : "es"} to Review
+                    </span>
+                  ) : (
+                    <span className="text-sm text-admin-muted">No past production to review</span>
+                  )}
+                </div>
+                <p className="text-xs text-admin-muted mt-1">
+                  Stock produced more than 24 hours ago but never assigned — carry over or mark as wasted
+                </p>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 
       {view === "dashboard" && <MenuStockStatusCard />}
+
+      {view === "dashboard" && <ProductionGuidanceCard />}
 
       {view === "cooked-food" && (
         <div className="space-y-4">
@@ -143,8 +184,7 @@ function Menu() {
 
       {view === "remaining-stock" && (
         <div className="space-y-4">
-          <BackButton onClick={handleBackToDashboard} />
-          <RemainingStockCard />
+          <RemainingStockDashboard onBack={handleBackToDashboard} />
         </div>
       )}
 

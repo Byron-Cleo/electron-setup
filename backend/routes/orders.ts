@@ -12,6 +12,12 @@ function isUuid(v: unknown): v is string {
   return typeof v === "string" && UUID_RE.test(v);
 }
 
+// Build operationDay as UTC midnight of the local calendar date, matching the
+// scheduler's dateOnly convention so order attribution aligns with shift dates.
+function dateOnly(d: Date): Date {
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
 // Recompute Menu.stock = sum of split platesRemaining (aligns direct mutation with split truth)
 async function recomputeMenuStock(tx: Prisma.TransactionClient, menuId: string) {
   const agg = await tx.cookingRecordMenu.aggregate({
@@ -104,14 +110,25 @@ router.post("/", async (req, res) => {
   const shippingPrice = 0;
   const taxPrice = 0;
 
-  // Every order must link to an open shift (no orphaned orders).
-  // Use the NEWEST open shift (same rule as getCurrentShift) so an order never
-  // lands on an older still-open shift left over from a previous cycle.
-  const currentShift = await prisma.shift.findFirst({
-    where: { isOpen: true },
-    orderBy: { createdAt: "desc" },
-    select: { id: true },
-  });
+  // Every order must link to an open shift (no orphaned orders) and should be
+  // attributed to the shift of the CURRENT operation day. This keeps all
+  // shift-scoped workflows (manual close, unpaid enforcement, reports) aligned
+  // with the order's operation date. Fall back to the newest open shift (same
+  // rule as getCurrentShift) only when today's shift has not opened yet, so an
+  // order never lands on a stale previous-day shift while the current cycle's
+  // shift exists.
+  const operationDay = dateOnly(new Date());
+  const currentShift =
+    (await prisma.shift.findFirst({
+      where: { isOpen: true, operationDay },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    })) ??
+    (await prisma.shift.findFirst({
+      where: { isOpen: true },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    }));
   if (!currentShift) {
     return res.status(400).json({ error: "No active shift. The system cannot take orders without an active shift. Please contact the manager." });
   }
@@ -182,13 +199,6 @@ router.post("/", async (req, res) => {
         });
 
         const menu = await tx.menu.findUniqueOrThrow({ where: { id: item.menuId } });
-        // Enforce required starch/vegetable selections from menu configuration
-        if (menu.hasStarch && !item.starchId) {
-          throw new Error(`Menu item ${menu.name} requires a starch accompaniment`);
-        }
-        if (menu.hasVegetable && !item.vegetableId) {
-          throw new Error(`Menu item ${menu.name} requires a vegetable accompaniment`);
-        }
         const currentStock = menu.stock ?? 0;
         // Atomic guarded decrement: only succeeds if sufficient stock exists (prevents race/over-sell)
         const updated = await tx.menu.updateMany({
