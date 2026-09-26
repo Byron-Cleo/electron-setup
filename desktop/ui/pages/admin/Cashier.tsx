@@ -1801,11 +1801,11 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
             {!order.isPaid && !order.isVoid && (
               <Button
                 size="sm"
-                className="bg-brand-green text-white hover:bg-brand-green/90"
+                className="bg-red-600 text-white hover:bg-red-700 border-red-600"
                 onClick={() => setUnpaidPickerOrder(order)}
                 disabled={markingUnpaidId === order.id}
               >
-                {markingUnpaidId === order.id ? "Marking..." : "Can't Pay — Mark Unpaid"}
+                {markingUnpaidId === order.id ? "Marking..." : "Mark Unpaid"}
               </Button>
             )}
           </div>
