@@ -14,6 +14,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["index.ts", "app.ts", "db.ts", "routes/**/*.ts", "generated/**/*.ts", "db/sample-data.ts", "db/seed.ts"],
+  "include": ["index.ts", "app.ts", "db.ts", "auth/**/*.ts", "routes/**/*.ts", "generated/**/*.ts", "db/sample-data.ts", "db/seed.ts"],
   "exclude": ["node_modules", "dist", "prisma"]
 }

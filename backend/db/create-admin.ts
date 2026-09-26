@@ -3,6 +3,7 @@ import { hash } from "bcrypt-ts-edge";
 import pg from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client.ts";
+import { pinLookup } from "../auth/pin-lookup.js";
 
 async function main() {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL! });
@@ -19,13 +20,15 @@ async function main() {
 
   for (const s of staff) {
     const hashedPin = await hash(s.pin, 12);
+    const lookup = pinLookup(s.pin);
     await prisma.user.upsert({
       where: { email: s.email },
-      update: { pin: hashedPin, role: s.role, isActive: true },
+      update: { pin: hashedPin, pinLookup: lookup, role: s.role, isActive: true },
       create: {
         name: s.name,
         email: s.email,
         pin: hashedPin,
+        pinLookup: lookup,
         role: s.role,
         isActive: true,
         updatedAt: new Date(),

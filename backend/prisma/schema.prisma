@@ -170,6 +170,14 @@ model User {
   image          String?
   password       String?
   pin            String?
+  // HMAC-SHA256(PIN_PEPPER, pin) — an indexed deterministic lookup key so login
+  // is one indexed row read instead of a serialised bcrypt compare against every
+  // user. `pin` above stays as the authoritative bcrypt hash and as the fallback
+  // path that lazily backfills this column on each user's next login. NULL means
+  // "not yet migrated"; Postgres allows unlimited NULLs in a unique index, and the
+  // unique constraint is what stops two staff sharing a PIN and misattributing
+  // orders to each other.
+  pinLookup      String?            @unique(map: "user_pin_lookup_idx")
   role           String             @default("staff")
   isActive       Boolean            @default(true)
   platform       String?

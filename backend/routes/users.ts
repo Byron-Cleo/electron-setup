@@ -1,6 +1,8 @@
 import { Router } from "express";
-import { hash, compare } from "bcrypt-ts-edge";
+import { hash } from "bcrypt-ts-edge";
 import prisma from "../db/db.js";
+import { pinLookup, pinLookupMatches } from "../auth/pin-lookup.js";
+import { Prisma } from "../db/generated/prisma/client.js";
 
 const router = Router();
 
@@ -83,6 +85,7 @@ router.post("/", async (req, res) => {
         name: name.trim(),
         email: emailValue,
         pin: hashedPin,
+        pinLookup: pinLookup(pin),
         role,
         isActive: isActive === undefined ? true : !!isActive,
         updatedAt: new Date(),
@@ -91,6 +94,12 @@ router.post("/", async (req, res) => {
 
     res.status(201).json(serializeUser(created));
   } catch (error) {
+    // Two staff sharing a PIN would silently log in as whichever the old
+    // first-match-wins loop happened to return, misattributing their orders.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      res.status(409).json({ error: "That PIN is already in use by another user" });
+      return;
+    }
     console.error("Create user error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
@@ -137,8 +146,13 @@ router.put("/:id", async (req, res) => {
         res.status(400).json({ error: "PIN must be at least 4 characters" });
         return;
       }
-      const samePin = existing.pin ? await compare(pin, existing.pin) : false;
-      if (!samePin) data.pin = await hash(pin, 12);
+      // Compare the keyed lookup rather than running bcrypt (measured 481 ms at
+      // cost 12) just to test whether the submitted PIN is unchanged.
+      const samePin = pinLookupMatches(pin, existing.pinLookup);
+      if (!samePin) {
+        data.pin = await hash(pin, 12);
+        data.pinLookup = pinLookup(pin);
+      }
     }
 
     if (role !== undefined) {
@@ -164,6 +178,10 @@ router.put("/:id", async (req, res) => {
     const updated = await prisma.user.update({ where: { id }, data });
     res.json(serializeUser(updated));
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      res.status(409).json({ error: "That PIN is already in use by another user" });
+      return;
+    }
     console.error("Update user error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
