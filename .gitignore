@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 .env
+.env.test
+backend/.env.test
 dist
 dist-react
 dist-electron
