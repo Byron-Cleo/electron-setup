@@ -24,10 +24,10 @@ const allNavItems: {
   { label: "Procurement", path: "/admin/store", icon: Warehouse, roles: ["admin", "manager", "store"], pending: true, partial: true, lowstock: true },
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"], pending: true, partial: true, underproduced: true },
   { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"], ready: true, runninglow: true },
-  { label: "Customers", path: "/admin/customers", icon: Contact, roles: ["admin", "manager", "cashier"] },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager", "cashier"] },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
+  { label: "Customers", path: "/admin/customers", icon: Contact, roles: ["admin", "manager", "cashier"] },
   { label: "Settings", path: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
 ]
 
