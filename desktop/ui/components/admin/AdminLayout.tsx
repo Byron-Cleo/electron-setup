@@ -200,7 +200,7 @@ function AdminLayout() {
         </nav>
       </aside>
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <header className="h-15 bg-admin-header text-admin-header-text flex items-center justify-end gap-4 px-6 shrink-0 border-b border-admin-card-border print:hidden">
           <div className="h-8 w-8 rounded-full bg-admin-accent/10 flex items-center justify-center text-admin-accent text-sm font-bold">
             {user?.name?.charAt(0)?.toUpperCase() || "U"}
@@ -211,7 +211,7 @@ function AdminLayout() {
             </Button>
         </header>
 
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 min-w-0 overflow-auto p-6">
           <Outlet />
         </main>
 

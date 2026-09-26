@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs, markOrderUnpaidWithCustomer, assignOrderCustomer, unassignOrderCustomer, unmarkOrderAsUnpaid } from "@/lib/api"
-import { formatElapsed, elapsedSeverity, ELAPSED_SEVERITY_CLASS } from "@/lib/utils"
+import { cn, formatElapsed, elapsedSeverity, ELAPSED_SEVERITY_CLASS } from "@/lib/utils"
 import { useAuthStore } from "@/stores/auth"
 import { usePagination } from "@/hooks/usePagination"
 import { useLiveRefresh } from "@/hooks/useLiveRefresh"
@@ -411,6 +411,95 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
     )
   }
 
+function shiftTimeRange(autoOpenTime: string, autoCloseTime: string): string {
+  const fmt = (t: string) =>
+    new Date("1970-01-01T" + t + ":00")
+      .toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true })
+      .toUpperCase()
+  return `${fmt(autoOpenTime)} — ${fmt(autoCloseTime)}`
+}
+
+/**
+ * Single-row container for the shift entry cards. flex-nowrap keeps every card on
+ * one line; each card has a fixed width plus shrink-0 so it can never be squashed
+ * into an overlap. `w-fit` + `mx-auto` centres the row as a group when it fits and
+ * `overflow-x-auto` lets it scroll sideways when it cannot — deliberately not
+ * `justify-center`, because a centred flex row that overflows clips its first card
+ * and makes it unreachable.
+ */
+function ShiftEntryRow({ children }: { children: ReactNode }) {
+  return (
+    <div className="mx-auto flex w-fit max-w-full flex-nowrap items-stretch gap-3 overflow-x-auto pb-1">
+      {children}
+    </div>
+  )
+}
+
+interface ShiftEntryCardProps {
+  title: string
+  description: string
+  icon: typeof Receipt
+  iconWrapClassName: string
+  iconClassName: string
+  operationDay?: string
+  /** The All Shifts card has no date concept, so it hides the row entirely. */
+  showDate?: boolean
+  timeRange: string
+  isOpen: boolean
+  disabled: boolean
+  onClick?: () => void
+}
+
+/**
+ * Shared by the Orders, Payments and Voids entry views so the three stay visually
+ * identical — previously each view had its own copy of this markup, which is how
+ * the three drifted apart.
+ */
+function ShiftEntryCard({
+  title,
+  description,
+  icon: Icon,
+  iconWrapClassName,
+  iconClassName,
+  operationDay,
+  showDate = true,
+  timeRange,
+  isOpen,
+  disabled,
+  onClick,
+}: ShiftEntryCardProps) {
+  return (
+    <Card
+      className={cn(
+        "w-60 shrink-0 snap-start p-4 text-center transition-colors",
+        disabled
+          ? "cursor-not-allowed border-2 border-red-300 bg-red-50 opacity-60"
+          : "cursor-pointer hover:border-admin-accent",
+      )}
+      onClick={disabled ? undefined : onClick}
+    >
+      <div className={cn("mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg", iconWrapClassName)}>
+        <Icon size={24} className={iconClassName} />
+      </div>
+      <Heading as="h3" className="truncate text-sm text-admin-header-text">{title}</Heading>
+      {showDate && (
+        <p className="mt-1 text-xs font-semibold whitespace-nowrap text-blue-600">
+          {operationDay ? `Date: ${opDayLabel(operationDay)}` : "Date: —"}
+        </p>
+      )}
+      <p className="text-xs whitespace-nowrap text-admin-muted tabular-nums">{timeRange}</p>
+      <p className="mt-1 text-xs text-admin-muted">{description}</p>
+      {isOpen && (
+        <span className="mt-2 flex justify-center">
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700 ring-1 ring-green-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN
+          </span>
+        </span>
+      )}
+    </Card>
+  )
+}
+
 function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string | undefined, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
@@ -450,49 +539,46 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
   return (
     <div className="space-y-4">
       {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Orders</Heading>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-        {activeConfigs.length === 0 && (
-          <Card className="col-span-full border-red-500/30 bg-red-50/40 shadow-red-100/40">
-            <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
-              <Lock className="h-6 w-6 text-red-600" />
-              <p className="text-sm font-semibold text-red-700">No shifts configured</p>
-              <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
-            </CardContent>
-          </Card>
-        )}
-        {activeConfigs.map((c) => {
-          const isOpen = currentstring === c.type
-          return (
-          <Card key={c.id} className={`p-6 text-center transition-colors ${
-            isDisabled(c.type)
-              ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50"
-              : "cursor-pointer hover:border-admin-accent"
-          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type, opDays[c.type])}>
-            <div className="h-16 w-16 rounded-lg bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
-              <Receipt size={32} className="text-blue-600" />
-            </div>
-            <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Orders</Heading>
-            <p className="text-sm font-semibold text-blue-600 mt-1 mb-1">{opDays[c.type] ? `Date: ${opDayLabel(opDays[c.type])}` : "Date: —"}</p>
-            <p className="text-sm text-admin-muted">{new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()}</p>
-            {isOpen && (
-              <span className="mt-3 flex w-full justify-center">
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 ring-1 ring-green-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN
-              </span>
-            </span>
-            )}
-          </Card>
-          )
-        })}
-        <Card key="all-shifts" className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent border-2 border-brand-green/30 bg-brand-green/5" onClick={() => onSelectShift(undefined, undefined)}>
-          <div className="h-16 w-16 rounded-lg bg-brand-green/10 flex items-center justify-center mx-auto mb-4">
-            <Receipt size={32} className="text-brand-green" />
-          </div>
-          <Heading as="h3" className="text-lg text-admin-header-text mb-2">All Shifts</Heading>
-          <p className="text-sm text-brand-green font-semibold">Every order from every shift</p>
-          <p className="text-xs text-admin-muted mt-1">No shift filter applied</p>
+      {activeConfigs.length === 0 && (
+        <Card className="border-red-500/30 bg-red-50/40 shadow-red-100/40">
+          <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
+            <Lock className="h-6 w-6 text-red-600" />
+            <p className="text-sm font-semibold text-red-700">No shifts configured</p>
+            <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
+          </CardContent>
         </Card>
-      </div>
+      )}
+      {activeConfigs.length > 0 && (
+        <ShiftEntryRow>
+          {activeConfigs.map((c) => (
+            <ShiftEntryCard
+              key={c.id}
+              title={`${c.type} Shift Orders`}
+              description="Every order from this shift"
+              icon={Receipt}
+              iconWrapClassName="bg-blue-500/10"
+              iconClassName="text-blue-600"
+              operationDay={opDays[c.type]}
+              timeRange={shiftTimeRange(c.autoOpenTime, c.autoCloseTime)}
+              isOpen={currentstring === c.type}
+              disabled={isDisabled(c.type)}
+              onClick={() => onSelectShift(c.type, opDays[c.type])}
+            />
+          ))}
+          <ShiftEntryCard
+            title="All Shifts"
+            description="Every order from every shift"
+            icon={Receipt}
+            iconWrapClassName="bg-brand-green/10"
+            iconClassName="text-brand-green"
+            showDate={false}
+            timeRange="No shift scope"
+            isOpen={false}
+            disabled={false}
+            onClick={() => onSelectShift(undefined, undefined)}
+          />
+        </ShiftEntryRow>
+      )}
     </div>
   )
 }
@@ -1035,39 +1121,34 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
   return (
     <div className="space-y-4">
       {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Voids</Heading>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-        {activeConfigs.length === 0 && (
-          <Card className="col-span-full border-red-500/30 bg-red-50/40 shadow-red-100/40">
-            <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
-              <Lock className="h-6 w-6 text-red-600" />
-              <p className="text-sm font-semibold text-red-700">No shifts configured</p>
-              <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
-            </CardContent>
-          </Card>
-        )}
-        {activeConfigs.map((c) => {
-          const isOpen = currentstring === c.type
-          return (
-          <Card key={c.id} className={`p-6 border-2 border-red-400 bg-red-50/50 text-center transition-colors ${
-            isDisabled(c.type) ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-red-600 cursor-pointer"
-          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type, opDays[c.type])}>
-            <div className="h-16 w-16 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
-              <XCircle size={32} className="text-red-600" />
-            </div>
-            <Heading as="h3" className="text-lg text-red-700 mb-2">{c.type} Shift Voids</Heading>
-            <p className="text-sm font-semibold text-blue-600 mt-1 mb-1">{opDays[c.type] ? `Date: ${opDayLabel(opDays[c.type])}` : "Date: —"}</p>
-            <p className="text-sm text-admin-muted">View {c.type.toLowerCase()} shift voidable orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
-            {isOpen && (
-              <span className="mt-3 flex w-full justify-center">
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 ring-1 ring-green-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN
-              </span>
-            </span>
-            )}
-          </Card>
-          )
-        })}
-      </div>
+      {activeConfigs.length === 0 && (
+        <Card className="border-red-500/30 bg-red-50/40 shadow-red-100/40">
+          <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
+            <Lock className="h-6 w-6 text-red-600" />
+            <p className="text-sm font-semibold text-red-700">No shifts configured</p>
+            <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
+          </CardContent>
+        </Card>
+      )}
+      {activeConfigs.length > 0 && (
+        <ShiftEntryRow>
+          {activeConfigs.map((c) => (
+            <ShiftEntryCard
+              key={c.id}
+              title={`${c.type} Shift Voids`}
+              description="Voidable orders for this shift"
+              icon={XCircle}
+              iconWrapClassName="bg-red-500/10"
+              iconClassName="text-red-600"
+              operationDay={opDays[c.type]}
+              timeRange={shiftTimeRange(c.autoOpenTime, c.autoCloseTime)}
+              isOpen={currentstring === c.type}
+              disabled={isDisabled(c.type)}
+              onClick={() => onSelectShift(c.type, opDays[c.type])}
+            />
+          ))}
+        </ShiftEntryRow>
+      )}
     </div>
   )
 }
@@ -1428,47 +1509,46 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
   return (
     <div className="space-y-4">
       {activeConfigs.length > 0 && <Heading as="h2" className="text-admin-header-text text-center text-xl">Select Shift Payments</Heading>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-        {activeConfigs.length === 0 && (
-          <Card className="col-span-full border-red-500/30 bg-red-50/40 shadow-red-100/40">
-            <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
-              <Lock className="h-6 w-6 text-red-600" />
-              <p className="text-sm font-semibold text-red-700">No shifts configured</p>
-              <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
-            </CardContent>
-          </Card>
-        )}
-        {activeConfigs.map((c) => {
-          const isOpen = currentstring === c.type
-          return (
-          <Card key={c.id} className={`p-6 text-center transition-colors ${
-            isDisabled(c.type) ? "opacity-50 cursor-not-allowed border-2 border-red-300 bg-red-50" : "cursor-pointer hover:border-admin-accent"
-          }`} onClick={isDisabled(c.type) ? undefined : () => onSelectShift(c.type, opDays[c.type])}>
-            <div className="h-16 w-16 rounded-lg bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
-              <Wallet size={32} className="text-yellow-600" />
-            </div>
-            <Heading as="h3" className="text-lg text-admin-header-text mb-2">{c.type} Shift Payments</Heading>
-            <p className="text-sm font-semibold text-blue-600 mt-1 mb-1">{opDays[c.type] ? `Date: ${opDayLabel(opDays[c.type])}` : "Date: —"}</p>
-            <p className="text-sm text-admin-muted">View New/Unpaid/Dept Orders ({new Date("1970-01-01T" + c.autoOpenTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()} — {new Date("1970-01-01T" + c.autoCloseTime + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()})</p>
-            {isOpen && (
-              <span className="mt-3 flex w-full justify-center">
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 ring-1 ring-green-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN
-              </span>
-            </span>
-            )}
-          </Card>
-          )
-        })}
-        <Card key="all-shifts-pay" className="p-6 text-center transition-colors cursor-pointer hover:border-admin-accent border-2 border-brand-green/30 bg-brand-green/5" onClick={() => onSelectShift(undefined, undefined)}>
-          <div className="h-16 w-16 rounded-lg bg-brand-green/10 flex items-center justify-center mx-auto mb-4">
-            <Wallet size={32} className="text-brand-green" />
-          </div>
-          <Heading as="h3" className="text-lg text-admin-header-text mb-2">All Shifts Payments</Heading>
-          <p className="text-sm text-brand-green font-semibold">Every unpaid order from every shift</p>
-          <p className="text-xs text-admin-muted mt-1">No shift scope — shows everything</p>
+      {activeConfigs.length === 0 && (
+        <Card className="border-red-500/30 bg-red-50/40 shadow-red-100/40">
+          <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
+            <Lock className="h-6 w-6 text-red-600" />
+            <p className="text-sm font-semibold text-red-700">No shifts configured</p>
+            <p className="text-xs text-red-600/80">Contact manager to configure shift schedules.</p>
+          </CardContent>
         </Card>
-      </div>
+      )}
+      {activeConfigs.length > 0 && (
+        <ShiftEntryRow>
+          {activeConfigs.map((c) => (
+            <ShiftEntryCard
+              key={c.id}
+              title={`${c.type} Shift Payments`}
+              description="New, unpaid & dept orders"
+              icon={Wallet}
+              iconWrapClassName="bg-yellow-500/10"
+              iconClassName="text-yellow-600"
+              operationDay={opDays[c.type]}
+              timeRange={shiftTimeRange(c.autoOpenTime, c.autoCloseTime)}
+              isOpen={currentstring === c.type}
+              disabled={isDisabled(c.type)}
+              onClick={() => onSelectShift(c.type, opDays[c.type])}
+            />
+          ))}
+          <ShiftEntryCard
+            title="All Shifts"
+            description="Every unpaid order from every shift"
+            icon={Wallet}
+            iconWrapClassName="bg-brand-green/10"
+            iconClassName="text-brand-green"
+            showDate={false}
+            timeRange="No shift scope"
+            isOpen={false}
+            disabled={false}
+            onClick={() => onSelectShift(undefined, undefined)}
+          />
+        </ShiftEntryRow>
+      )}
     </div>
   )
 }
