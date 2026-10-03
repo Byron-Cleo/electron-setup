@@ -13,21 +13,14 @@ const UNIT_LABELS: Record<string, string> = {
 }
 import { DataTable } from "@/components/ui/data-table"
 import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Plus, Pencil } from "lucide-react"
-import { getKitchenConfig, saveKitchenConfig, getStockSupplies } from "@/lib/api"
+import { Pencil } from "lucide-react"
+import { getKitchenConfig, saveKitchenConfig } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 
 interface Props {
@@ -36,24 +29,21 @@ interface Props {
 
 export default function KitchenStockConfig({ onBack }: Props) {
   const [configItems, setConfigItems] = useState<KitchenConfigItem[]>([])
-  const [allSupplies, setAllSupplies] = useState<StockSupply[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<KitchenConfigItem | null>(null)
-  const [selectedSupplyId, setSelectedSupplyId] = useState("")
   const [platesPerUnit, setPlatesPerUnit] = useState("")
   const [formError, setFormError] = useState("")
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState("")
 
   async function fetchAll() {
     setLoading(true)
     setError("")
     try {
-      const [config, supplies] = await Promise.all([getKitchenConfig(), getStockSupplies()])
-      setConfigItems(config)
-      setAllSupplies(supplies)
+      setConfigItems(await getKitchenConfig())
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -67,25 +57,13 @@ export default function KitchenStockConfig({ onBack }: Props) {
 
   function openEdit(item: KitchenConfigItem) {
     setEditItem(item)
-    setSelectedSupplyId(item.id)
     setPlatesPerUnit(item.platesPerUnit?.toString() ?? "")
     setFormError("")
     setShowForm(true)
   }
 
-  function openCreate() {
-    setEditItem(null)
-    setSelectedSupplyId("")
-    setPlatesPerUnit("")
-    setFormError("")
-    setShowForm(true)
-  }
-
   async function handleSave() {
-    if (!selectedSupplyId) {
-      setFormError("Stock item is required")
-      return
-    }
+    if (!editItem) return
     const plates = parseFloat(platesPerUnit)
     if (!plates || plates <= 0) {
       setFormError("Plates per unit must be greater than 0")
@@ -95,7 +73,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
     setSaving(true)
     setFormError("")
     try {
-      await saveKitchenConfig(selectedSupplyId, { platesPerUnit: plates })
+      await saveKitchenConfig(editItem.id, { platesPerUnit: plates })
       setShowForm(false)
       await fetchAll()
     } catch (e: any) {
@@ -105,8 +83,15 @@ export default function KitchenStockConfig({ onBack }: Props) {
     }
   }
 
-  const configuredIds = new Set(configItems.map((c) => c.id))
-  const unconfiguredSupplies = allSupplies.filter((s) => s.isMenuStock && !configuredIds.has(s.id))
+  const filteredConfigItems = configItems.filter((item) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return (
+      item.name.toLowerCase().includes(q) ||
+      item.unit.toLowerCase().includes(q) ||
+      item.menus.some((m) => m.name.toLowerCase().includes(q))
+    )
+  })
 
   const {
     currentPage,
@@ -116,22 +101,19 @@ export default function KitchenStockConfig({ onBack }: Props) {
     prevPage,
     canNext,
     canPrev,
-  } = usePagination(configItems)
+  } = usePagination(filteredConfigItems)
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <BackButton onClick={onBack} />
-        <Button onClick={openCreate} className="px-6 py-6">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Configuration
-        </Button>
       </div>
 
       <Heading as="h2" className="mb-6 text-admin-header-text text-center">Stock-Kitchen Configuration</Heading>
 
       <p className="text-sm text-red-500 mb-4">
-        Configure how stock items convert to menu plates. Set the plates per unit for each ingredient.
+        Configure how stock items convert to menu plates. Every stock item is listed here — search for
+        the item, then use Edit to set the plates per unit.
       </p>
 
       {loading && <p className="p-4 text-admin-header-text/60">Loading...</p>}
@@ -144,6 +126,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
             { label: "Unit", key: "unit" },
             { label: "Plates per Unit", key: "platesPerUnit" },
             { label: "Menu Items", key: "menu" },
+            { label: "Status", key: "status" },
             { label: "Actions", key: "actions", isAction: true },
           ]}
           data={paginatedItems}
@@ -167,6 +150,16 @@ export default function KitchenStockConfig({ onBack }: Props) {
                 ) : (
                   <span className="text-admin-header-text/60">—</span>
                 )
+              case "status":
+                return item.platesPerUnit != null && item.platesPerUnit > 0 ? (
+                  <span className="text-xs px-2 py-0.5 rounded bg-brand-green/10 text-brand-green border border-brand-green/30">
+                    Configured
+                  </span>
+                ) : (
+                  <span className="text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                    Not set
+                  </span>
+                )
               case "actions":
                 return (
                   <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
@@ -179,7 +172,17 @@ export default function KitchenStockConfig({ onBack }: Props) {
             }
           }}
           keyExtractor={(item) => item.id}
-          emptyMessage="No configurations yet. Click 'Add Configuration' to get started."
+          emptyMessage={search.trim()
+            ? `No stock items match "${search.trim()}".`
+            : "No stock items available to configure."}
+          header={
+            <Input
+              placeholder="Search by item, unit, or menu..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+          }
           pagination={{
             currentPage,
             totalPages,
@@ -191,38 +194,20 @@ export default function KitchenStockConfig({ onBack }: Props) {
         />
       )}
 
-      {/* Create / Edit Dialog */}
+      {/* Edit Dialog */}
       <Dialog open={showForm} onOpenChange={(open) => !open && setShowForm(false)}>
         <DialogContent className="min-h-[280px] p-8">
           <DialogHeader>
             <DialogTitle className="text-base uppercase text-center text-admin-header-text">
-              {editItem ? "Edit Configuration" : "Add Configuration"}
+              Edit Configuration
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-admin-header-text">Stock Item *</label>
-              <Select
-                onValueChange={setSelectedSupplyId}
-                value={selectedSupplyId}
-                disabled={!!editItem}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select stock item" />
-                </SelectTrigger>
-                <SelectContent>
-                  {!editItem && unconfiguredSupplies.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name} ({s.unit})
-                    </SelectItem>
-                  ))}
-                  {editItem && (
-                    <SelectItem value={editItem.id}>
-                      {editItem.name} ({editItem.unit})
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium text-admin-header-text">Stock Item</label>
+              <p className="mt-1 text-sm text-admin-header-text/70">
+                {editItem ? `${editItem.name} (${editItem.unit})` : "—"}
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium text-admin-header-text">Plates per Unit *</label>
