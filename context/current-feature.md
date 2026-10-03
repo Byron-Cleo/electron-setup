@@ -1,26 +1,28 @@
 
+## Platform
+
+frontend
+
 ## Status
 
 Not Started
 
 ## Goals
 
-- Operate this Windows server fully over SSH (no RDP) while staff use the console
-- Isolated dev scope (DB / backend / UI) reachable ONLY over SSH tunnels — production untouched
-- Push approved dev changes to production over SSH (no UAC) via an elevated restart bridge
-
 ## Notes
 
-- Local admin `ops` created (POS Remote Operator, Administrators, password key-only behind key auth). Windows 11 Pro, OpenSSH server on 22, firewall `POS-SSH-In` limited to LocalSubnet + `100.64.0.0/10` (Tailscale) Private/Domain
-- sshd hardening PENDING: administrators_authorized_keys + `PasswordAuthentication no`, `AllowUsers ops` (waiting on Mac public key)
-- Restart bridge: scheduled task `pos-backend-restart` (SYSTEM, Highest) → `scripts/restart-backend.cmd` → `sc stop/start EraevaBackend`
-- Tailscale already installed + connected (server + Mac `byronochara` on tailnet)
-- Dev scope: DB `eraevadb_dev` (owned by role `era_dev`, NO access to `eraevadb`), schema pushed + dev users seeded, `backend/.env.development` (gitignored): DATABASE_URL dev, PORT=3111, BIND=127.0.0.1, ENABLE_SCHEDULER=false; `backend/load-env.ts` selects `.env` (production) vs `.env.development` (else)
-- Detached dev stack: `npm run dev:remote:start|stop` (scripts/dev-start.ps1 / dev-stop.ps1); stale 0.0.0.0 dev instances killed
-- Browser live view rebuilt: `npm run build:web -- --server http://192.168.100.45:3001` (served UI hits 3001/api; re-run after any plain `vite build`)
-- REMINDER: must rebuild + restart `EraevaBackend` after ANY backend change for prod to pick up new `dist`
-
 ## History
+
+### frontend - 2026-10-03 — Kitchen Config Search & Edit (Drop the Add Flow)
+- **Obsolete add-flow removed** — `GET /api/kitchen-config` already returns **every** active stock supply (`where: { isActive: true }`), so **Add Configuration** had nothing left to add: its dropdown only picked an item out of the list that *was* the table. Deleted the button, `openCreate()`, `selectedSupplyId`, the stock-item `Select`, and the now-redundant `getStockSupplies()` call — `getKitchenConfig()` is the single source for the view
+- **Search across the whole row** — new `search` state matches stock item name, **unit**, or any linked **menu item name** (case-insensitive, trimmed). No manual page reset is needed because `usePagination` already clamps `currentPage` to `totalPages`, so the pager self-corrects as the filtered list shrinks
+- **Edit-only dialog** — title fixed to **Edit Configuration**; the stock item renders as read-only `name (unit)` instead of a disabled select. `handleSave()` now saves against `editItem.id` and still validates `platesPerUnit > 0`
+- **Status column** — new column reads **Configured** (`platesPerUnit > 0`, green) / **Not set** (`null`/`0`, amber), so unset items are visible without opening each row. On the 15 seeded items: 4 configured, 11 not set
+- **Copy corrected** — the empty message pointed at the button that no longer exists ("Click 'Add Configuration' to get started"); it now names the active query, and the header paragraph tells the user to search then Edit
+- **Verified live on :3001 + `eraevadb`** — Edit → Save persisted to Postgres (`Cabbage` → `4.50`) and the Status badge flipped in step; reverted afterwards, so data is unchanged (still Beef 6, Chapati Flour 23, Fish 1, Liver 6). Search confirmed by unit (`"pcs"` → Chicken, Fish) and by menu name alone (`"chapatis"`, which the stock item name "Chapati Flour" does not contain); a no-match search shows `No stock items match "zzzz".` with the pager at `Page 1 of 1`
+- **No backend change** — `GET /api/kitchen-config` and `PUT /api/kitchen-config/:id` already covered it, so no schema change and **no rebuild/restart of `EraevaBackend`**
+- Checks: `tsc -b` clean for this file (remaining errors are pre-existing in `desktop/ui/tests/` — the known `@testing-library/dom` gap); ESLint 3 errors, byte-identical to HEAD (2× `no-explicit-any`, 1× `react-hooks/set-state-in-effect`)
+- Branch: `feature/admin/kitchen-config-search-dropdown` (kept, not deleted) · Ref: `context/fix-plan/kitchen-config-search-and-dropdown.md` · Commit `d6335d6`, merged fast-forward into `restaurant-build`; **not pushed**
 
 ### fullstack - 2026-09-26 — Cashier Marked-Unpaid UI: Actor Attribution, Action Parity & Chase Columns
 - **Who marked it unpaid** — new `unpaidMarkedByLabel()` in `lib/utils.ts` plus a `useUserRoles()` hook and a shared `MarkedByBadge` render **Cashier Marked** / **Manager Marked** / **System Marked** on all four surfaces (Orders All, Orders Marked Unpaid, Payment Marked Unpaid, order details). No schema or migration: the three flows already persist an actor, so it reads `unpaidAcknowledgedById` and resolves the role live. `null` actor = system auto-close; a missing or deleted user falls through to Manager Marked. Roles are read live by decision — no historical snapshot, and a later promotion changes the label
