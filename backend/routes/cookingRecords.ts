@@ -264,6 +264,10 @@ router.post("/", async (req, res) => {
       notes,
       shiftId,
       batchNumber: nextBatch,
+      // Freeze the engine onto the batch. Changing a supply's mode later must
+      // not retroactively reinterpret what an already-cooked tray meant, so the
+      // batch carries its own copy rather than reading through to the supply.
+      sellingMode: stockSupply.sellingMode,
     },
     include: RECORD_INCLUDE,
   });

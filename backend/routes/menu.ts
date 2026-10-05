@@ -6,6 +6,22 @@ import multer from "multer";
 import path from "path";
 import crypto from "crypto";
 import { uploadsDir } from "../db/uploads.js";
+import { batchPools } from "../pools.js";
+
+/**
+ * Plates left in a shared batch, derived from its allocation ledger. Resolved
+ * per batch and memoised because the cooked table maps over many records.
+ */
+const sharedRemainingCache = new Map<string, number>();
+async function sharedRemaining(batchId: string, produced: number): Promise<number> {
+  const cached = sharedRemainingCache.get(batchId);
+  if (cached !== undefined) return cached;
+  const pools = await batchPools(prisma, { id: batchId });
+  const pool = pools.get(batchId);
+  const remaining = pool ? pool.poolRemaining : produced;
+  sharedRemainingCache.set(batchId, remaining);
+  return remaining;
+}
 import fs from "fs/promises";
 
 const router = Router();
@@ -258,18 +274,21 @@ router.get("/cooked", async (req, res) => {
       const allocatedTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
       const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
 
-      // Sold applies only when the batch has been assigned (a plate cannot be
-      // sold before it is put on a menu). Available mirrors the AssignmentModal's
-      // Remaining Plates: produced - remaining - sold (or all produced when
-      // unassigned since nothing could have been sold yet). platesAllocated
-      // already includes sold plates (allocated = remaining + sold), so using
-      // allocatedTotal here would subtract the sold plates twice.
-      const soldTotal = allocatedTotal > 0
-        ? Math.max(0, allocatedTotal - remainingTotal)
-        : 0;
-      const availableTotal = allocatedTotal > 0
-        ? remainingTotal
-        : produced;
+      // Two different questions, previously conflated into one number:
+      //
+      //  - assignmentCapacity — how many MORE plates a manager may hand to a
+      //    dish. Plates already allocated to another dish are spoken for, so
+      //    this is produced - allocated, not what is left to sell.
+      //  - sellableRemaining — what a waiter can still order. For ALLOCATED
+      //    that is the split remainders; for SHARED it is the derived pool.
+      const isShared = record.sellingMode === "SHARED";
+      const assignmentCapacity = Math.max(0, produced - allocatedTotal);
+      const sellableRemaining = isShared ? await sharedRemaining(record.id, produced) : remainingTotal;
+      const soldTotal = isShared
+        ? Math.max(0, produced - sellableRemaining)
+        : allocatedTotal > 0
+          ? Math.max(0, allocatedTotal - remainingTotal)
+          : 0;
 
       // Get current stock for the primary menu (first linkable menu)
       const primaryMenu = linkableMenus[0];
@@ -310,10 +329,17 @@ router.get("/cooked", async (req, res) => {
         cooking: {
           totalProduced: produced,
           totalAssigned: allocatedTotal,
-          totalAvailable: availableTotal,
+          // Kept as the field the AssignmentModal reads, now with the correct
+          // meaning: how much more can be allocated.
+          totalAvailable: assignmentCapacity,
           totalSold: soldTotal,
+          sellableRemaining,
+          assignmentCapacity,
         },
-        platesRemaining: remainingTotal,
+        sellingMode: record.sellingMode,
+        // No allocation step exists for a shared batch.
+        canAssign: !isShared,
+        platesRemaining: sellableRemaining,
         cookingRecords: record.cookingRecordMenus.map((crm) => ({
           id: crm.cookingRecordId,
           menuId: crm.menuId,
