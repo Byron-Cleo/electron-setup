@@ -8,15 +8,14 @@ fullstack
 Complete
 
 ## Goals
-- Fix critical bug in shift carry-over calculation where batchSold incorrectly sums all menu sales for a stock supply
-- Implement per-supply batch numbering (Batch #1, #2 per stock supply)
-- Enforce strict FIFO allocation - cannot allocate from newer batch while older batch has unallocated plates
-- Ensure correct shift-based carry-over: food cooked & sold within same shift does NOT carry over; only genuinely unassigned inventory carries over
-- Add batch numbers to all relevant UI views (Cooking History, Edit dialog, etc.)
-- Maintain full traceability from cooking → allocation → order → sale
+- Enforce shift-attributed cooking (new records require active shift; protect shiftId/batchNumber from clearing)
+- Implement per-(stockSupplyId,shiftId) batch numbering with FIFO enforcement (cannot allocate newer batch while older unallocated exist in same shift)
+- Surface batchNumber in remaining/expired/wasted batch APIs and UI (Remaining Stock Production with Batch No. + horizontal scroll)
+- Make sold/remaining strictly batch-isolated in Remaining Stock Production and Menu/Dispatch cooked batches (no menu-global leakage)
+- Preserve legacy NULL-shift rows (schema nullable); production deployment requires backend rebuild + service restart for dist changes
 
 ## Notes
-Critical fix: In shiftCarryOver.ts, batchSold calculation must only consider sales for menu items the batch was allocated to (totalEverAllocated - currentlyAvailable), not all menu items the stock supply produces. Schema change requires db:sync followed by backend rebuild + service restart. FIFO enforcement prevents allocating from newer batch while older has unallocated plates.
+Backend changes: cookingRecords (shift check + batch assignment + FIFO guard + PUT protections), shiftCarryOver (include batchNumber in batch payloads/interfaces), menu.ts (/cooked computes batch-local sold/available), kitchenInventory/orders adjusted as needed. Frontend: RemainingStockTable adds Batch column + scroll and computes per-batch-menu sold; CookedFoodTable shows batch numbers; types updated. Built dist reflects backend changes; dev server hot-reloads TS. Schema change already applied (unique on [stockSupplyId,shiftId,batchNumber]); legacy rows unaffected.
 
 ## History
 
