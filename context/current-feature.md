@@ -20,6 +20,15 @@ Critical fix: In shiftCarryOver.ts, batchSold calculation must only consider sal
 
 ## History
 
+### fullstack - 2026-10-05 — Batch Number FIFO + Shift Enforcement (Production Quality)
+
+- **Shift enforcement (new records only):** `CookingRecord` creation requires an active shift (`findShiftIdForTime`); PUT rejects clearing `shiftId`/`batchNumber`. Schema remains nullable to preserve legacy NULL-shift rows; enforcement applies only to new records.
+- **Batch numbering per (stockSupplyId, shiftId):** Next batch is computed per supply+shift starting at 1; FIFO enforced in allocate/top-up (cannot allocate from newer batch while older batches in same shift have unallocated plates). Legacy rows with NULL shift retain their existing batch numbers.
+- **Batch traceability surfaced:** `batchNumber` included in remaining/expired/wasted batch payloads (shiftCarryOver); Remaining Stock Production table adds "Batch No." column with horizontal scroll (`overflow-x-auto`, `min-w-[1200px]`).
+- **Batch-strict sold/remaining (UI + API):** Remaining Stock Production shows per-batch-menu sold as `(platesAllocated - platesRemaining)`. Menu/Dispatch (`/api/menu/cooked`) computes `totalSold = allocatedTotal - remainingTotal` (batch-local) and `totalAvailable = allocatedTotal > 0 ? remainingTotal : produced` to avoid cross-batch leakage in display.
+- **Deduction remains FIFO:** Order creation consumes splits oldest-first (`createdAt ASC`) and records `OrderItemAllocation` per consumed chunk; void/cancel restores plates to consumed splits. Core accounting already batch-isolated; presentation aligned to batch-strict semantics.
+- **Type safety + build:** Interfaces updated to include `batchNumber`; backend builds clean (`tsc`), frontend builds clean (`vite build`), UI TypeScript compiles clean.
+
 ### frontend - 2026-10-03 — Kitchen Config Search & Edit (Drop the Add Flow)
 - **Obsolete add-flow removed** — `GET /api/kitchen-config` already returns **every** active stock supply (`where: { isActive: true }`), so **Add Configuration** had nothing left to add: its dropdown only picked an item out of the list that *was* the table. Deleted the button, `openCreate()`, `selectedSupplyId`, the stock-item `Select`, and the now-redundant `getStockSupplies()` call — `getKitchenConfig()` is the single source for the view
 - **Search across the whole row** — new `search` state matches stock item name, **unit**, or any linked **menu item name** (case-insensitive, trimmed). No manual page reset is needed because `usePagination` already clamps `currentPage` to `totalPages`, so the pager self-corrects as the filtered list shrinks
