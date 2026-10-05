@@ -1,7 +1,7 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { emitLiveEvent } from "../events.js";
-import { type Prisma, ServiceTime } from "../db/generated/prisma/client.js";
+import { ServiceTime } from "../db/generated/prisma/client.js";
 import {
   InsufficientPoolError,
   assertLinesServable,
