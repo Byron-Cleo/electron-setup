@@ -1,15 +1,22 @@
 
 ## Platform
 
-frontend
+fullstack
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
+- Fix critical bug in shift carry-over calculation where batchSold incorrectly sums all menu sales for a stock supply
+- Implement per-supply batch numbering (Batch #1, #2 per stock supply)
+- Enforce strict FIFO allocation - cannot allocate from newer batch while older batch has unallocated plates
+- Ensure correct shift-based carry-over: food cooked & sold within same shift does NOT carry over; only genuinely unassigned inventory carries over
+- Add batch numbers to all relevant UI views (Cooking History, Edit dialog, etc.)
+- Maintain full traceability from cooking → allocation → order → sale
 
 ## Notes
+Critical fix: In shiftCarryOver.ts, batchSold calculation must only consider sales for menu items the batch was allocated to (totalEverAllocated - currentlyAvailable), not all menu items the stock supply produces. Schema change requires db:sync followed by backend rebuild + service restart. FIFO enforcement prevents allocating from newer batch while older has unallocated plates.
 
 ## History
 
@@ -103,3 +110,15 @@ Not Started
 - Deployed: backend rebuilt (`npm run build --prefix backend`) + EraevaBackend service restarted, `/health` 200 on :3001; merged to `restaurant-build` (feature branch kept)
 - Cleanup: removed stale committed duplicate client `backend/prisma/generated`, pm2 `ecosystem.config.cjs`, and `scripts/start-backend.bat`; `server:*` npm scripts repointed to the NSSM service
 - Branch: `feature/waiter/accompaniment-picker-none`
+### frontend - 2026-10-04 — Shift-Scoped Batch Numbers with FIFO Enforcement
+- **Shift-scoped batches:** Batch numbers reset per (stockSupplyId, shiftId) starting at 1 for each shift. Carried-over unallocated batches from prior shifts retain their original batch numbers and must be allocated first (FIFO within shift).
+- **Schema:** Updated `CookingRecord` unique constraint to `@@unique([stockSupplyId, shiftId, batchNumber])`.
+- **Backend logic:** Assignment computes next batch number per supply and shift on create; FIFO enforcement in allocate and top-up checks only earlier batches within the same shift.
+- **UI:** Added "BAT No." column to Kitchen Production and Cooking History; tables made horizontally scrollable when >10 columns; Kitchen Production shows latest batch number per item; Cooking History sorted ascending (oldest first) with edit dialog selecting latest by `createdAt`.
+- **Migration/backfill:** Created shift-scoped backfill script and updated types.
+
+### backend - 2026-10-04 — Order Allocation Traceability (Batch/Shift)
+- Added `OrderItemAllocation` model to track which `CookingRecord`/`CookingRecordMenu` (batch/shift) consumed plates for each sold `OrderItem`.
+- On order creation: record allocations during FIFO split consumption with `cookingRecordId`, `cookingRecordMenuId`, and plates consumed.
+- On order void/cancel: delete allocations and restore plates back to the consumed splits.
+- Enables per-batch, per-shift sold consumption tracking for accurate FIFO and reporting.

@@ -60,8 +60,8 @@ router.get("/", async (req, res) => {
       // Get the latest cooking record date for this item
       const latestRecord = await prisma.cookingRecord.findFirst({
         where: { stockSupplyId: item.id },
-        orderBy: { cookedDate: "desc" },
-        select: { cookedDate: true },
+        orderBy: { createdAt: "desc" },
+        select: { cookedDate: true, batchNumber: true },
       });
 
       return {
@@ -77,6 +77,7 @@ router.get("/", async (req, res) => {
         totalCooked: activeCooked,
         rawStockPending,
         totalPlatesProduced,
+        latestBatchNumber: latestRecord?.batchNumber ?? null,
       };
     })
   );

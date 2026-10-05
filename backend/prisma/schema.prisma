@@ -136,6 +136,7 @@ model OrderItem {
   Order       Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
   Starch      MenuAccompaniment? @relation("OrderItem_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
   Vegetable   MenuAccompaniment? @relation("OrderItem_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
+  allocations OrderItemAllocation[]
 
   @@unique([orderId, menuId, starchId, vegetableId], map: "orderitems_order_menu_starch_veg_key")
 }
@@ -332,10 +333,14 @@ model CookingRecord {
   disposed          Boolean               @default(false)
   disposedAt        DateTime?             @db.Timestamptz(3)
   shiftId           String?               @db.Uuid
+  batchNumber       Int?
   cookedBy          User                  @relation(fields: [cookedById], references: [id])
   stockSupply       StockSupply           @relation(fields: [stockSupplyId], references: [id])
   shift             Shift?                @relation(fields: [shiftId], references: [id])
-  cookingRecordMenus CookingRecordMenu[]
+  cookingRecordMenus  CookingRecordMenu[]
+  allocations         OrderItemAllocation[]
+
+  @@unique([stockSupplyId, shiftId, batchNumber])
 }
 
 model CookingRecordMenu {
@@ -348,9 +353,26 @@ model CookingRecordMenu {
   cookingRecord     CookingRecord  @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
   menu              Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
 
+  allocations       OrderItemAllocation[]
+
   @@unique([cookingRecordId, menuId])
   @@map("CookingRecordAssignment")
 }
+
+model OrderItemAllocation {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderItemId         String               @db.Uuid
+  cookingRecordId     String               @db.Uuid
+  cookingRecordMenuId String?              @db.Uuid
+  plates              Decimal              @db.Decimal(12, 2)
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  orderItem           OrderItem            @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  cookingRecord       CookingRecord        @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
+  cookingRecordMenu   CookingRecordMenu?   @relation(fields: [cookingRecordMenuId], references: [id], onDelete: SetNull)
+
+  @@map("OrderItemAllocation")
+}
+
 model StockSupplyMenu {
   stockSupplyId String      @db.Uuid
   menuId        String      @db.Uuid

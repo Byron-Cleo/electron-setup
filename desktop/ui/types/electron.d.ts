@@ -448,6 +448,7 @@ interface CookingRecord {
   createdAt: string;
   disposed: boolean;
   disposedAt: string | null;
+  batchNumber: number | null;
   stockSupply: {
     id: string;
     name: string;
@@ -495,6 +496,7 @@ interface CookedMenuItem {
   shiftType?: string | null;
   operationDay?: string | null;
   cookedAt?: string;
+  batchNumber?: number | null;
   quantityCooked: number;
   produced: number;
   stockSupply: {
@@ -540,6 +542,7 @@ interface KitchenStockItem {
   rawStockPending: number;
   totalPlatesProduced: number;
   lastCookedDate: string | null;
+  latestBatchNumber?: number | null;
 }
 
 interface KitchenInventory {

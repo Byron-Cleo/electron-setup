@@ -20,6 +20,7 @@ export interface OperationDateUnassignedBatch extends UnassignedBatch {
   // Plates sold from this batch's assigned/selling portion.
   soldTotal: number;
   cookedAt: string;
+  batchNumber: number | null;
   shiftId: string | null;
   shiftType: string | null;
   operationDay: string | null;
@@ -234,8 +235,10 @@ export async function computeAllUnassignedBatches(
   for (const record of records) {
     const produced = Number(record.platesActual ?? record.platesExpected);
     const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
-    const batchSold = record.stockSupply.menus.reduce((sum, sm) => sum + (soldByMenu.get(sm.menuId) ?? 0), 0);
-    const unassigned = produced - remainingTotal - batchSold;
+    const totalEverAllocated = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
+    const currentlyAvailable = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
+    const batchSold = totalEverAllocated - currentlyAvailable;
+    const unassigned = produced - totalEverAllocated;
     if (unassigned <= 0) continue;
 
     const attribution = attributionForCookingRecord(record, cycle);
@@ -252,6 +255,7 @@ export async function computeAllUnassignedBatches(
       sellingNow: produced - batchSold - unassigned,
       soldTotal: batchSold,
       cookedAt: record.createdAt.toISOString(),
+      batchNumber: record.batchNumber,
       shiftId: attribution.shiftId,
       shiftType: attribution.shiftType,
       operationDay: attribution.operationDay,
@@ -296,8 +300,10 @@ export async function computeExpiredUnassignedBatches(
   for (const record of records) {
     const produced = Number(record.platesActual ?? record.platesExpected);
     const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
-    const batchSold = record.stockSupply.menus.reduce((sum, sm) => sum + (soldByMenu.get(sm.menuId) ?? 0), 0);
-    const unassigned = produced - remainingTotal - batchSold;
+    const totalEverAllocated = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
+    const currentlyAvailable = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
+    const batchSold = totalEverAllocated - currentlyAvailable;
+    const unassigned = produced - totalEverAllocated;
     if (unassigned <= 0) continue;
 
     const attribution = attributionForCookingRecord(record, cycle);
@@ -314,6 +320,7 @@ export async function computeExpiredUnassignedBatches(
       sellingNow: produced - batchSold - unassigned,
       soldTotal: batchSold,
       cookedAt: record.createdAt.toISOString(),
+      batchNumber: record.batchNumber,
       shiftId: attribution.shiftId,
       shiftType: attribution.shiftType,
       operationDay: attribution.operationDay,
@@ -348,6 +355,7 @@ export interface WastedStockBatch {
   soldTotal: number;
   wastedQty: number;
   cookedAt: string;
+  batchNumber: number | null;
   disposedAt: string;
   shiftId: string | null;
   shiftType: string | null;
@@ -407,6 +415,7 @@ export async function computeWastedBatches(
       soldTotal: batchSold,
       wastedQty,
       cookedAt: record.createdAt.toISOString(),
+      batchNumber: record.batchNumber,
       disposedAt: record.disposedAt ? record.disposedAt.toISOString() : record.createdAt.toISOString(),
       shiftId: record.shift?.id ?? null,
       shiftType,

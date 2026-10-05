@@ -42,8 +42,8 @@ function DataTable<T>({
         </div>
       )}
 
-      <div className={cn("flex-1 min-h-[384px]", columns.length > 10 && "overflow-x-auto")}>
-        <table className={cn(columns.length <= 10 ? "w-full" : "min-w-full")}>
+      <div className="flex-1 min-h-[384px] overflow-x-auto">
+        <table className="min-w-full">
           <thead>
             <tr className="text-sm text-admin-header-text/60 border-b border-admin-card-border bg-admin-content">
               {columns.map((col) => (
