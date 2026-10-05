@@ -265,10 +265,10 @@ router.get("/cooked", async (req, res) => {
       // already includes sold plates (allocated = remaining + sold), so using
       // allocatedTotal here would subtract the sold plates twice.
       const soldTotal = allocatedTotal > 0
-        ? linkableMenus.reduce((sum, menu) => sum + (soldByMenu.get(menu.id) ?? 0), 0)
+        ? Math.max(0, allocatedTotal - remainingTotal)
         : 0;
       const availableTotal = allocatedTotal > 0
-        ? produced - remainingTotal - soldTotal
+        ? remainingTotal
         : produced;
 
       // Get current stock for the primary menu (first linkable menu)
@@ -285,6 +285,7 @@ router.get("/cooked", async (req, res) => {
         shiftType: record.shift?.type ?? null,
         operationDay: record.shift ? record.shift.operationDay.toISOString().slice(0, 10) : null,
         cookedAt: record.createdAt.toISOString(),
+        batchNumber: record.batchNumber ?? null,
         quantityCooked: Number(record.quantityCooked),
         produced,
         stockSupply: {

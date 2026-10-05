@@ -62,6 +62,15 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     })
   }, [filteredItems])
 
+  const activeBatch = useMemo(() => {
+    const sortedByBatch = [...filteredItems].sort((a, b) => {
+      const aBatch = (a as any).batchNumber ?? 9999;
+      const bBatch = (b as any).batchNumber ?? 9999;
+      return aBatch - bBatch;
+    });
+    return sortedByBatch.find(item => item.cooking.totalAvailable > 0);
+  }, [filteredItems])
+
   const {
     currentPage,
     totalPages,
@@ -73,6 +82,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
   } = usePagination(sortedItems)
 
   const columns: Column[] = [
+    { label: "BAT No.", key: "batchNumber" },
     { label: "Stock Image", key: "stockImage" },
     { label: "Stock Item", key: "stockItem" },
     { label: "Stock Item Menus", key: "stockItemMenus" },
@@ -85,6 +95,8 @@ export default function CookedFoodTable({ onRefresh }: Props) {
 
   function renderCell(row: CookedMenuItem, column: Column) {
     switch (column.key) {
+      case "batchNumber":
+        return <span>#{(row as any).batchNumber ?? "—"}</span>
       case "stockItem":
         return <span className="font-medium">{row.stockSupply?.name ?? "—"}</span>
       case "stockImage": {
@@ -100,7 +112,10 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         )
       }
       case "produced":
-        return <span>{row.cooking.totalProduced} plates</span>
+          const batchNumber = (row as any).batchNumber;
+        return batchNumber !== null 
+          ? <span>Batch #{batchNumber}: {row.cooking.totalProduced} plates</span>
+          : <span>{row.cooking.totalProduced} plates</span>
       case "assigned": {
         const assigned = row.cooking.totalAssigned
         return assigned === 0 ? (

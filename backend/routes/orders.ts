@@ -184,7 +184,7 @@ router.post("/", async (req, res) => {
 
       for (let i = 0; i < lines.length; i++) {
         const item = lines[i];
-        await tx.orderItem.create({
+        const orderItem = await tx.orderItem.create({
           data: {
             orderId: created.id,
             menuId: item.menuId,
@@ -210,12 +210,12 @@ router.post("/", async (req, res) => {
         }
 
         // Decrement the menu's split platesRemaining in lock-step with Menu.stock
-        // (FIFO across the menu's splits, never below 0)
+        // (FIFO across the menu's splits, never below 0) - record allocations
         let toDeduct = item.qty;
         const activeSplits = await tx.cookingRecordMenu.findMany({
           where: { menuId: item.menuId, platesRemaining: { gt: 0 } },
           orderBy: { createdAt: "asc" },
-          select: { id: true, platesRemaining: true },
+          include: { cookingRecord: true },
         });
         for (const split of activeSplits) {
           if (toDeduct <= 0) break;
@@ -223,6 +223,14 @@ router.post("/", async (req, res) => {
           await tx.cookingRecordMenu.update({
             where: { id: split.id },
             data: { platesRemaining: { decrement: deductNow } },
+          });
+          await tx.orderItemAllocation.create({
+            data: {
+              orderItemId: orderItem.id,
+              cookingRecordId: split.cookingRecordId,
+              cookingRecordMenuId: split.id,
+              plates: deductNow,
+            },
           });
           toDeduct -= deductNow;
         }
@@ -520,23 +528,22 @@ router.post("/:id/void", async (req, res) => {
           });
         }
 
-        // Restore plates to splits: cap each at its platesAllocated so remaining never exceeds allocated
-        let toRestore = item.qty;
-        const splits = await tx.cookingRecordMenu.findMany({
-          where: { menuId: item.menuId },
+        // Delete allocations for this order item and restore plates to splits (FIFO reverse - restore to splits that were consumed? but we don't track; easier: just restore by consuming from the allocations we created? 
+        // But to keep simple: delete allocations for this item and restore plates to splits - but we need to know which splits to restore to. 
+        // Alternatively, look up allocations and restore to those split ids in reverse order of creation? Since allocations created in order of consumption (FIFO), restoring to same splits)
+        const allocations = await tx.orderItemAllocation.findMany({
+          where: { orderItemId: item.id },
           orderBy: { createdAt: "desc" },
-          select: { id: true, platesRemaining: true, platesAllocated: true },
         });
-        for (const split of splits) {
-          if (toRestore <= 0) break;
-          // Per user spec: no headroom cap. Restore voided qty directly back to split.
-          const add = Math.min(toRestore, item.qty);
+        for (const alloc of allocations) {
           await tx.cookingRecordMenu.update({
-            where: { id: split.id },
-            data: { platesRemaining: { increment: add } },
+            where: { id: alloc.cookingRecordMenuId! },
+            data: { platesRemaining: { increment: Number(alloc.plates) } },
           });
-          toRestore -= add;
         }
+        await tx.orderItemAllocation.deleteMany({
+          where: { orderItemId: item.id },
+        });
 
         // Align Menu.stock with split truth after void restoration
         await recomputeMenuStock(tx, item.menuId);

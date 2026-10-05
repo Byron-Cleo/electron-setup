@@ -1,17 +1,26 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
 ## Notes
 
 ## History
+
+### fullstack - 2026-10-05 — Batch Number FIFO + Shift Enforcement (Production Quality)
+
+- **Shift enforcement (new records only):** `CookingRecord` creation requires an active shift (`findShiftIdForTime`); PUT rejects clearing `shiftId`/`batchNumber`. Schema remains nullable to preserve legacy NULL-shift rows; enforcement applies only to new records.
+- **Batch numbering per (stockSupplyId, shiftId):** Next batch is computed per supply+shift starting at 1; FIFO enforced in allocate/top-up (cannot allocate from newer batch while older batches in same shift have unallocated plates). Legacy rows with NULL shift retain their existing batch numbers.
+- **Batch traceability surfaced:** `batchNumber` included in remaining/expired/wasted batch payloads (shiftCarryOver); Remaining Stock Production table adds "Batch No." column with horizontal scroll (`overflow-x-auto`, `min-w-[1200px]`).
+- **Batch-strict sold/remaining (UI + API):** Remaining Stock Production shows per-batch-menu sold as `(platesAllocated - platesRemaining)`. Menu/Dispatch (`/api/menu/cooked`) computes `totalSold = allocatedTotal - remainingTotal` (batch-local) and `totalAvailable = allocatedTotal > 0 ? remainingTotal : produced` to avoid cross-batch leakage in display.
+- **Deduction remains FIFO:** Order creation consumes splits oldest-first (`createdAt ASC`) and records `OrderItemAllocation` per consumed chunk; void/cancel restores plates to consumed splits. Core accounting already batch-isolated; presentation aligned to batch-strict semantics.
+- **Type safety + build:** Interfaces updated to include `batchNumber`; backend builds clean (`tsc`), frontend builds clean (`vite build`), UI TypeScript compiles clean.
 
 ### frontend - 2026-10-03 — Kitchen Config Search & Edit (Drop the Add Flow)
 - **Obsolete add-flow removed** — `GET /api/kitchen-config` already returns **every** active stock supply (`where: { isActive: true }`), so **Add Configuration** had nothing left to add: its dropdown only picked an item out of the list that *was* the table. Deleted the button, `openCreate()`, `selectedSupplyId`, the stock-item `Select`, and the now-redundant `getStockSupplies()` call — `getKitchenConfig()` is the single source for the view
@@ -103,3 +112,15 @@ Not Started
 - Deployed: backend rebuilt (`npm run build --prefix backend`) + EraevaBackend service restarted, `/health` 200 on :3001; merged to `restaurant-build` (feature branch kept)
 - Cleanup: removed stale committed duplicate client `backend/prisma/generated`, pm2 `ecosystem.config.cjs`, and `scripts/start-backend.bat`; `server:*` npm scripts repointed to the NSSM service
 - Branch: `feature/waiter/accompaniment-picker-none`
+### frontend - 2026-10-04 — Shift-Scoped Batch Numbers with FIFO Enforcement
+- **Shift-scoped batches:** Batch numbers reset per (stockSupplyId, shiftId) starting at 1 for each shift. Carried-over unallocated batches from prior shifts retain their original batch numbers and must be allocated first (FIFO within shift).
+- **Schema:** Updated `CookingRecord` unique constraint to `@@unique([stockSupplyId, shiftId, batchNumber])`.
+- **Backend logic:** Assignment computes next batch number per supply and shift on create; FIFO enforcement in allocate and top-up checks only earlier batches within the same shift.
+- **UI:** Added "BAT No." column to Kitchen Production and Cooking History; tables made horizontally scrollable when >10 columns; Kitchen Production shows latest batch number per item; Cooking History sorted ascending (oldest first) with edit dialog selecting latest by `createdAt`.
+- **Migration/backfill:** Created shift-scoped backfill script and updated types.
+
+### backend - 2026-10-04 — Order Allocation Traceability (Batch/Shift)
+- Added `OrderItemAllocation` model to track which `CookingRecord`/`CookingRecordMenu` (batch/shift) consumed plates for each sold `OrderItem`.
+- On order creation: record allocations during FIFO split consumption with `cookingRecordId`, `cookingRecordMenuId`, and plates consumed.
+- On order void/cancel: delete allocations and restore plates back to the consumed splits.
+- Enables per-batch, per-shift sold consumption tracking for accurate FIFO and reporting.

@@ -123,7 +123,7 @@ router.get("/", async (req, res) => {
   const records = await prisma.cookingRecord.findMany({
     where,
     include: RECORD_INCLUDE,
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
   });
   res.json(records);
 });
@@ -142,7 +142,7 @@ router.get("/:id", async (req, res) => {
 
   const shift = await prisma.shift.findFirst({
     where: { isOpen: true },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
     include: { snapshots: true },
   });
   const snapshots = shift?.snapshots ?? [];
@@ -240,6 +240,20 @@ router.post("/", async (req, res) => {
 
   const shiftId = await findShiftIdForTime(new Date());
 
+  if (!shiftId) {
+    return res.status(400).json({
+      error: "No active shift. Cooking must be recorded during a shift window.",
+    });
+  }
+
+  // Calculate next batch number for this stock supply and shift
+  const lastBatch = await prisma.cookingRecord.findFirst({
+    where: { stockSupplyId, shiftId },
+    orderBy: { batchNumber: 'desc' },
+    select: { batchNumber: true },
+  });
+  const nextBatch = (lastBatch?.batchNumber ?? 0) + 1;
+
   const record = await prisma.cookingRecord.create({
     data: {
       stockSupplyId,
@@ -249,6 +263,7 @@ router.post("/", async (req, res) => {
       cookedById,
       notes,
       shiftId,
+      batchNumber: nextBatch,
     },
     include: RECORD_INCLUDE,
   });
@@ -280,11 +295,37 @@ router.post("/:id/allocate", async (req, res) => {
     return res.status(400).json({ error: "allocations array is required" });
   }
 
+
   const record = await prisma.cookingRecord.findUnique({
     where: { id },
-    include: { stockSupply: { include: { menus: { include: { menu: true } } } } },
+    include: { stockSupply: { include: { menus: { include: { menu: true } } } }, cookingRecordMenus: true },
   });
   if (!record) return res.status(404).json({ error: "Cooking record not found" });
+
+  // Enforce FIFO allocation: cannot allocate from newer batch while older batch has unallocated plates
+  if (record.batchNumber) {
+    const olderBatches = await prisma.cookingRecord.findMany({
+      where: {
+        stockSupplyId: record.stockSupplyId,
+        shiftId: record.shiftId,
+        batchNumber: { lt: record.batchNumber },
+      },
+      include: { cookingRecordMenus: true },
+    });
+
+    for (const batch of olderBatches) {
+      const produced = Number(batch.platesActual ?? batch.platesExpected);
+      const totalEverAllocated = batch.cookingRecordMenus.reduce(
+        (sum, crm) => sum + Number(crm.platesAllocated),
+        0,
+      );
+      if (produced > totalEverAllocated) {
+        return res.status(400).json({
+          error: `Cannot allocate from batch ${record.batchNumber} while batch ${batch.batchNumber} has unallocated plates`,
+        });
+      }
+    }
+  }
 
   // Compute the batch's produced total (cap for allocations)
   const produced = Number(record.platesActual ?? record.platesExpected);
@@ -356,6 +397,7 @@ router.post("/:id/menu/:menuId/top-up", async (req, res) => {
     return res.status(400).json({ error: "quantityPlates must be greater than 0" });
   }
 
+
   const existing = await prisma.cookingRecordMenu.findUnique({
     where: { cookingRecordId_menuId: { cookingRecordId: id, menuId } },
   });
@@ -363,12 +405,40 @@ router.post("/:id/menu/:menuId/top-up", async (req, res) => {
     return res.status(404).json({ error: "This batch has no allocation for the given menu" });
   }
 
-  // Enforce cap: total allocated across the batch's splits must not exceed produced
   const record = await prisma.cookingRecord.findUnique({
     where: { id },
-    include: { cookingRecordMenus: { select: { platesAllocated: true } } },
+    include: { cookingRecordMenus: { select: { platesAllocated: true } }, stockSupply: { select: { id: true } } },
   });
   if (!record) return res.status(404).json({ error: "Cooking record not found" });
+
+  // Enforce FIFO allocation: cannot allocate from newer batch while older batch has unallocated plates
+  const fullRecord = await prisma.cookingRecord.findUnique({
+    where: { id },
+    include: { cookingRecordMenus: true },
+  });
+  if (fullRecord?.batchNumber) {
+    const olderBatches = await prisma.cookingRecord.findMany({
+      where: {
+        stockSupplyId: fullRecord.stockSupplyId,
+        shiftId: fullRecord.shiftId,
+        batchNumber: { lt: fullRecord.batchNumber },
+      },
+      include: { cookingRecordMenus: true },
+    });
+
+    for (const batch of olderBatches) {
+      const produced = Number(batch.platesActual ?? batch.platesExpected);
+      const totalEverAllocated = batch.cookingRecordMenus.reduce(
+        (sum, crm) => sum + Number(crm.platesAllocated),
+        0,
+      );
+      if (produced > totalEverAllocated) {
+        return res.status(400).json({
+          error: `Cannot allocate from batch ${fullRecord.batchNumber} while batch ${fullRecord.batchNumber} has unallocated plates`,
+        });
+      }
+    }
+  }
 
   const produced = Number(record.platesActual ?? record.platesExpected);
   const currentTotal = record.cookingRecordMenus.reduce((sum, s) => sum + Number(s.platesAllocated), 0);
@@ -400,6 +470,15 @@ router.put("/:id", async (req, res) => {
     include: { stockSupply: { select: { platesPerUnit: true } } },
   });
   if (!existing) return res.status(404).json({ error: "Cooking record not found" });
+
+  // Reject attempts to set shiftId to null/falsy if provided
+  if (req.body.shiftId !== undefined && !req.body.shiftId) {
+    return res.status(400).json({ error: "shiftId cannot be null or empty" });
+  }
+  // Reject attempts to clear batchNumber if provided
+  if (req.body.batchNumber !== undefined && (req.body.batchNumber === null || req.body.batchNumber === "")) {
+    return res.status(400).json({ error: "batchNumber cannot be cleared" });
+  }
 
   if (platesActual !== undefined && platesActual !== null && Number(platesActual) <= 0) {
     return res.status(400).json({ error: "platesActual must be greater than 0" });

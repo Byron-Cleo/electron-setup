@@ -31,6 +31,7 @@ function formatShiftLabel(type: string | null): string {
 }
 
 const columnHeaders = [
+  "Batch No.",
   "Stock Item",
   "Op Date",
   "Shift",
@@ -82,11 +83,11 @@ export default function RemainingStockTable({ variant, batches, currentOpDay, di
         )}
       </p>
       <div
-        className={`overflow-hidden rounded-md border ${
+        className={`overflow-x-auto rounded-md border ${
           isCurrent ? "border-admin-card-border" : "border-amber-200 bg-amber-50/30"
         }`}
       >
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[1200px] text-sm">
           <thead>
             <tr
               className={`border-b text-xs uppercase ${
@@ -116,6 +117,9 @@ export default function RemainingStockTable({ variant, batches, currentOpDay, di
                 key={batch.cookingRecordId}
                 className={`border-b last:border-b-0 ${isCurrent ? "border-admin-card-border" : "border-amber-200"}`}
               >
+                <td className={`px-3 py-2 text-center whitespace-nowrap tabular-nums ${isCurrent ? "text-admin-muted" : "text-amber-800"}`}>
+                  {batch.batchNumber ? `#${batch.batchNumber}` : "—"}
+                </td>
                 <td className={`px-3 py-2 font-medium text-center whitespace-nowrap ${isCurrent ? "text-admin-header-text" : "text-amber-900"}`}>
                   {batch.stockSupplyName}
                 </td>
@@ -185,7 +189,7 @@ export default function RemainingStockTable({ variant, batches, currentOpDay, di
                           >
                             <span className={isCurrent ? "text-admin-header-text" : "text-amber-900"}>{m.menuName}</span>
                             <span className="rounded-full bg-blue-500/15 text-blue-600 px-1.5 py-0 text-[9px] font-semibold tabular-nums leading-tight">
-                              {m.platesSold ?? 0}
+                              {Math.max(0, Number(m.platesAllocated ?? 0) - Number((m as any).platesRemaining ?? 0))}
                             </span>
                           </span>
                         ))}

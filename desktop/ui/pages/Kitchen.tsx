@@ -381,6 +381,8 @@ function CurrentStockView({ userId }: { userId: string }) {
             <Package size={16} className="text-admin-header-text/30" />
           </div>
         )
+      case "batchNumber":
+        return <span>#{(item as any).batchNumber ?? (item as any).latestBatchNumber ?? '—'}</span>
       case "name":
         return <span className="font-medium">{item.name}</span>
       case "stock":
@@ -719,6 +721,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   } = usePagination(filteredItems)
 
   const columns: Column[] = [
+    { label: "BAT No.", key: "batchNumber" },
     { label: "Item", key: "name" },
     { label: "Delivered Amnt", key: "ordered" },
     { label: "Cooked", key: "cooked" },
@@ -731,6 +734,8 @@ function KitchenInventoryView({ userId }: { userId: string }) {
 
   function renderCell(item: KitchenStockItem, column: Column) {
     switch (column.key) {
+      case "batchNumber":
+        return <span>#{(item as any).batchNumber ?? (item as any).latestBatchNumber ?? '—'}</span>
       case "name":
         return <span className="font-medium">{item.name}</span>
       case "lastCooked": {
@@ -938,7 +943,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit: {editDialog.item?.name}</DialogTitle>
+            <DialogTitle>Edit Batch {editRecord?.batchNumber ? `#${editRecord.batchNumber}` : ''}: {editDialog.item?.name}</DialogTitle>
             <DialogDescription>
               Update cooking record for this item
             </DialogDescription>
@@ -1079,6 +1084,7 @@ function CookingHistoryView({ userId }: { userId: string }) {
   } = usePagination(filteredRecords)
 
   const columns: Column[] = [
+    { label: "BAT No.", key: "batchNumber" },
     { label: "Cooked Date", key: "cookedDate" },
     { label: "Item", key: "name" },
     { label: "Last Requested Amnt", key: "lastRequested" },
@@ -1116,6 +1122,8 @@ function CookingHistoryView({ userId }: { userId: string }) {
           </span>
         )
       }
+      case "batchNumber":
+        return <span>#{record.batchNumber ?? '—'}</span>
       case "name":
         return <span className="font-medium">{record.stockSupply.name}</span>
       case "lastRequested": {
