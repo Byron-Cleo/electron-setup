@@ -1,21 +1,15 @@
 
 ## Platform
 
-fullstack
+Not Specified
 
 ## Status
 
 Complete
 
 ## Goals
-- Enforce shift-attributed cooking (new records require active shift; protect shiftId/batchNumber from clearing)
-- Implement per-(stockSupplyId,shiftId) batch numbering with FIFO enforcement (cannot allocate newer batch while older unallocated exist in same shift)
-- Surface batchNumber in remaining/expired/wasted batch APIs and UI (Remaining Stock Production with Batch No. + horizontal scroll)
-- Make sold/remaining strictly batch-isolated in Remaining Stock Production and Menu/Dispatch cooked batches (no menu-global leakage)
-- Preserve legacy NULL-shift rows (schema nullable); production deployment requires backend rebuild + service restart for dist changes
 
 ## Notes
-Backend changes: cookingRecords (shift check + batch assignment + FIFO guard + PUT protections), shiftCarryOver (include batchNumber in batch payloads/interfaces), menu.ts (/cooked computes batch-local sold/available), kitchenInventory/orders adjusted as needed. Frontend: RemainingStockTable adds Batch column + scroll and computes per-batch-menu sold; CookedFoodTable shows batch numbers; types updated. Built dist reflects backend changes; dev server hot-reloads TS. Schema change already applied (unique on [stockSupplyId,shiftId,batchNumber]); legacy rows unaffected.
 
 ## History
 
