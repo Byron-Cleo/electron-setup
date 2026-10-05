@@ -41,24 +41,37 @@ model Cart {
 }
 
 model Menu {
-  id                                                    String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                                                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                                                  String
-  slug                                                  String                    @unique(map: "product_slug_idx")
+  slug                                                  String              @unique(map: "product_slug_idx")
   category                                              String
   images                                                String[]
-  stock                                                 Int                       @default(0)
-  price                                                 Decimal                   @default(0) @db.Decimal(12, 2)
-  numReviews                                            Int                       @default(0)
+  // Decimal, not Int: a weighted supply (Boiled Meat Half = 0.5 plates per
+  // serving) leaves a fractional pool (9.5), which an Int column would truncate.
+  stock                                                 Decimal             @default(0) @db.Decimal(12, 2)
+  price                                                 Decimal             @default(0) @db.Decimal(12, 2)
+  numReviews                                            Int                 @default(0)
   banner                                                String?
-  createdAt                                             DateTime                  @default(now()) @db.Timestamptz(6)
-  hasStarch                                             Boolean                   @default(false)
-  hasVegetable                                          Boolean                   @default(false)
-  starchId                                              String?                   @db.Uuid
-  vegetableId                                           String?                   @db.Uuid
-  isAvailable                                           Boolean                   @default(true)
+  createdAt                                             DateTime            @default(now()) @db.Timestamptz(6)
+  hasStarch                                             Boolean             @default(false)
+  hasVegetable                                          Boolean             @default(false)
+  starchId                                              String?             @db.Uuid
+  vegetableId                                           String?             @db.Uuid
+  // Portion picker (Fried Eggs 1pc / 2pc). Reuses the accompaniment
+  // convention: one optional single-choice slot with its own price. The
+  // portion price REPLACES menu.price rather than adding to it, because 1pc
+  // and 2pc are different prices, not extras on top of a base.
+  hasPortion                                            Boolean             @default(false)
+  portionId                                             String?             @db.Uuid
+  // Quantity the waiter grid opens at when this dish is first tapped.
+  defaultQty                                            Int                 @default(1)
+  isAvailable                                           Boolean             @default(true)
   cookingRecordMenus                                    CookingRecordMenu[]
-  MenuAccompaniment_Menu_starchIdToMenuAccompaniment    MenuAccompaniment?        @relation("Menu_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
-  MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment?        @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
+  MenuAccompaniment_Menu_starchIdToMenuAccompaniment    MenuAccompaniment?  @relation("Menu_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
+  MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment?  @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
+  MenuAccompaniment_Menu_portionIdToMenuAccompaniment   MenuAccompaniment?  @relation("Menu_portionIdToMenuAccompaniment", fields: [portionId], references: [id])
+  // Every portion option configured for this dish (the waiter picker).
+  portionOptions                                           MenuAccompaniment[] @relation("Menu_portionOptions")
   MenuMealType                                          MenuMealType[]
   OrderItem                                             OrderItem[]
   Review                                                Review[]
@@ -75,70 +88,83 @@ model MenuAccompaniment {
   createdAt                                DateTime          @default(now()) @db.Timestamptz(6)
   isDefault                                Boolean           @default(false)
   category                                 AccompanimentType
+  // PORTION only: how much of the supply's pool one serving of this portion
+  // consumes (1 piece = 1 egg, 2 pieces = 2 eggs). Ignored for STARCH/VEGETABLE.
+  platesPerServing                         Decimal           @default(1) @db.Decimal(12, 2)
+  // PORTION only: the dish this option belongs to. A dish needs MANY portion
+  // options (Fried Eggs = 1pc / 2pc), which a single Menu.portionId pointer
+  // cannot express — so PORTION rows are owned by their dish here, while
+  // STARCH/VEGETABLE rows stay global and leave this null.
+  menuId                                    String?           @db.Uuid
+  menu                                      Menu?             @relation("Menu_portionOptions", fields: [menuId], references: [id], onDelete: Cascade)
   Menu_Menu_starchIdToMenuAccompaniment    Menu[]            @relation("Menu_starchIdToMenuAccompaniment")
   Menu_Menu_vegetableIdToMenuAccompaniment Menu[]            @relation("Menu_vegetableIdToMenuAccompaniment")
+  Menu_Menu_portionIdToMenuAccompaniment   Menu[]            @relation("Menu_portionIdToMenuAccompaniment")
   OrderItem_starchIdToMenuAccompaniment    OrderItem[]       @relation("OrderItem_starchIdToMenuAccompaniment")
   OrderItem_vegetableIdToMenuAccompaniment OrderItem[]       @relation("OrderItem_vegetableIdToMenuAccompaniment")
+  OrderItem_portionIdToMenuAccompaniment   OrderItem[]       @relation("OrderItem_portionIdToMenuAccompaniment")
 }
 
 model Order {
-  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderNumber       Int         @unique @default(autoincrement())
-  userId            String      @db.Uuid
-  shippingAddress   Json        @db.Json
-  paymentMethod     String
-  paymentResult     Json?       @db.Json
-  itemsPrice        Decimal     @db.Decimal(12, 2)
-  shippingPrice     Decimal     @db.Decimal(12, 2)
-  taxPrice          Decimal     @db.Decimal(12, 2)
-  totalPrice        Decimal     @db.Decimal(12, 2)
-  isPaid            Boolean     @default(false)
-  paidAt            DateTime?   @db.Timestamptz(6)
-  isDelivered       Boolean     @default(false)
-  deliveredAt       DateTime?   @db.Timestamptz(6)
-  createdAt         DateTime    @default(now()) @db.Timestamptz(6)
-  mealType          ServiceTime
-  shiftId           String     @db.Uuid
-  isVoid            Boolean     @default(false)
-  voidReason        String?
-  voidedAt          DateTime?   @db.Timestamptz(6)
-  voidedById        String?     @db.Uuid
-  voidedOrderId     String?     @db.Uuid
-  paymentType       String?     // "SINGLE" or "BATCH"
-  batchId           String?     // groups orders paid together in a batch
-  unpaidAcknowledged Boolean    @default(false) // manager-marked unpaid (not voided); allows shift close
-  unpaidAcknowledgedById String? @db.Uuid
-  unpaidAcknowledgedAt DateTime? @db.Timestamptz(6)
-  customerId           String?    @db.Uuid
-  customerAssignedById String?    @db.Uuid
-  customerAssignedAt   DateTime?  @db.Timestamptz(3)
-  User              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  OrderItem         OrderItem[]
-  shift             Shift     @relation(fields: [shiftId], references: [id])
-  voidedBy          User?       @relation("VoidedBy", fields: [voidedById], references: [id])
-  voidedOrder       Order?      @relation("VoidedFrom", fields: [voidedOrderId], references: [id])
-  replacementOrders Order[]     @relation("VoidedFrom")
-  Customer             Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  id                     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderNumber            Int         @unique @default(autoincrement())
+  userId                 String      @db.Uuid
+  shippingAddress        Json        @db.Json
+  paymentMethod          String
+  paymentResult          Json?       @db.Json
+  itemsPrice             Decimal     @db.Decimal(12, 2)
+  shippingPrice          Decimal     @db.Decimal(12, 2)
+  taxPrice               Decimal     @db.Decimal(12, 2)
+  totalPrice             Decimal     @db.Decimal(12, 2)
+  isPaid                 Boolean     @default(false)
+  paidAt                 DateTime?   @db.Timestamptz(6)
+  isDelivered            Boolean     @default(false)
+  deliveredAt            DateTime?   @db.Timestamptz(6)
+  createdAt              DateTime    @default(now()) @db.Timestamptz(6)
+  mealType               ServiceTime
+  shiftId                String      @db.Uuid
+  isVoid                 Boolean     @default(false)
+  voidReason             String?
+  voidedAt               DateTime?   @db.Timestamptz(6)
+  voidedById             String?     @db.Uuid
+  voidedOrderId          String?     @db.Uuid
+  paymentType            String? // "SINGLE" or "BATCH"
+  batchId                String? // groups orders paid together in a batch
+  unpaidAcknowledged     Boolean     @default(false) // manager-marked unpaid (not voided); allows shift close
+  unpaidAcknowledgedById String?     @db.Uuid
+  unpaidAcknowledgedAt   DateTime?   @db.Timestamptz(6)
+  customerId             String?     @db.Uuid
+  customerAssignedById   String?     @db.Uuid
+  customerAssignedAt     DateTime?   @db.Timestamptz(3)
+  User                   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  OrderItem              OrderItem[]
+  shift                  Shift       @relation(fields: [shiftId], references: [id])
+  voidedBy               User?       @relation("VoidedBy", fields: [voidedById], references: [id])
+  voidedOrder            Order?      @relation("VoidedFrom", fields: [voidedOrderId], references: [id])
+  replacementOrders      Order[]     @relation("VoidedFrom")
+  Customer               Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
 }
 
 model OrderItem {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId     String   @db.Uuid
-  menuId      String   @db.Uuid
+  id          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId     String                @db.Uuid
+  menuId      String                @db.Uuid
   qty         Int
-  price       Decimal            @db.Decimal(12, 2)
+  price       Decimal               @db.Decimal(12, 2)
   name        String
   slug        String
   image       String
-  starchId    String?            @db.Uuid
-  vegetableId String?            @db.Uuid
-  Menu        Menu               @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  Order       Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  Starch      MenuAccompaniment? @relation("OrderItem_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
-  Vegetable   MenuAccompaniment? @relation("OrderItem_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
+  starchId    String?               @db.Uuid
+  vegetableId String?               @db.Uuid
+  portionId   String?               @db.Uuid
+  Menu        Menu                  @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  Order       Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Starch      MenuAccompaniment?    @relation("OrderItem_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
+  Vegetable   MenuAccompaniment?    @relation("OrderItem_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
+  Portion     MenuAccompaniment?    @relation("OrderItem_portionIdToMenuAccompaniment", fields: [portionId], references: [id])
   allocations OrderItemAllocation[]
 
-  @@unique([orderId, menuId, starchId, vegetableId], map: "orderitems_order_menu_starch_veg_key")
+  @@unique([orderId, menuId, starchId, vegetableId, portionId], map: "orderitems_order_menu_starch_veg_portion_key")
 }
 
 model Review {
@@ -164,13 +190,13 @@ model Session {
 }
 
 model User {
-  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name           String             @default("NO_NAME")
-  email          String?            @unique(map: "user_email_idx")
-  emailVerified  DateTime?          @db.Timestamptz(6)
-  image          String?
-  password       String?
-  pin            String?
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String             @default("NO_NAME")
+  email             String?            @unique(map: "user_email_idx")
+  emailVerified     DateTime?          @db.Timestamptz(6)
+  image             String?
+  password          String?
+  pin               String?
   // HMAC-SHA256(PIN_PEPPER, pin) — an indexed deterministic lookup key so login
   // is one indexed row read instead of a serialised bcrypt compare against every
   // user. `pin` above stays as the authoritative bcrypt hash and as the fallback
@@ -178,24 +204,24 @@ model User {
   // "not yet migrated"; Postgres allows unlimited NULLs in a unique index, and the
   // unique constraint is what stops two staff sharing a PIN and misattributing
   // orders to each other.
-  pinLookup      String?            @unique(map: "user_pin_lookup_idx")
-  role           String             @default("staff")
-  isActive       Boolean            @default(true)
-  platform       String?
-  address        Json?              @db.Json
-  paymentMethod  String?
-  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime @db.Timestamptz(3)
-  Account        Account[]
-  Cart           Cart[]
-  cookingRecords CookingRecord[]
-  Order          Order[]
-  voidedOrders   Order[]            @relation("VoidedBy")
-  finalClosedShifts Shift[]         @relation("ShiftFinalClosedBy")
-  Review         Review[]
-  Session        Session[]
-  fulfillments   StockFulfillment[]
-  StockRequest   StockRequest[]
+  pinLookup         String?            @unique(map: "user_pin_lookup_idx")
+  role              String             @default("staff")
+  isActive          Boolean            @default(true)
+  platform          String?
+  address           Json?              @db.Json
+  paymentMethod     String?
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime           @db.Timestamptz(3)
+  Account           Account[]
+  Cart              Cart[]
+  cookingRecords    CookingRecord[]
+  Order             Order[]
+  voidedOrders      Order[]            @relation("VoidedBy")
+  finalClosedShifts Shift[]            @relation("ShiftFinalClosedBy")
+  Review            Review[]
+  Session           Session[]
+  fulfillments      StockFulfillment[]
+  StockRequest      StockRequest[]
 }
 
 model VerificationToken {
@@ -223,12 +249,15 @@ model StockSupply {
   currentStock          Decimal                 @default(0) @db.Decimal(12, 2)
   reorderLevel          Decimal?                @db.Decimal(12, 2)
   isActive              Boolean                 @default(true)
-  createdAt         DateTime                @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime                @updatedAt @db.Timestamptz(3)
+  createdAt             DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                @updatedAt @db.Timestamptz(3)
   platesPerUnit         Decimal?                @db.Decimal(12, 2)
   image                 String?
   isMenuStock           Boolean                 @default(false)
   costPrice             Decimal?                @db.Decimal(12, 2)
+  // Default engine for batches cooked from this supply. Copied onto each
+  // CookingRecord at cook time; never read at order time.
+  sellingMode           SellingMode             @default(ALLOCATED)
   CookingRecord         CookingRecord[]
   DepartmentStockSupply DepartmentStockSupply[]
   StockRequestItem      StockRequestItem[]
@@ -296,6 +325,7 @@ model Customer {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   orders    Order[]
+
   @@index([name])
 }
 
@@ -321,107 +351,128 @@ model StockFulfillmentItem {
 }
 
 model CookingRecord {
-  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  stockSupplyId     String                @db.Uuid
-  quantityCooked    Decimal               @db.Decimal(12, 2)
-  platesExpected    Decimal               @db.Decimal(12, 2)
-  cookedById        String                @db.Uuid
-  notes             String?
-  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
-  cookedDate        DateTime              @default(now()) @db.Date
-  platesActual      Decimal?              @db.Decimal(12, 2)
-  disposed          Boolean               @default(false)
-  disposedAt        DateTime?             @db.Timestamptz(3)
-  shiftId           String?               @db.Uuid
-  batchNumber       Int?
-  cookedBy          User                  @relation(fields: [cookedById], references: [id])
-  stockSupply       StockSupply           @relation(fields: [stockSupplyId], references: [id])
-  shift             Shift?                @relation(fields: [shiftId], references: [id])
-  cookingRecordMenus  CookingRecordMenu[]
-  allocations         OrderItemAllocation[]
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockSupplyId      String                @db.Uuid
+  quantityCooked     Decimal               @db.Decimal(12, 2)
+  platesExpected     Decimal               @db.Decimal(12, 2)
+  cookedById         String                @db.Uuid
+  notes              String?
+  createdAt          DateTime              @default(now()) @db.Timestamptz(3)
+  cookedDate         DateTime              @default(now()) @db.Date
+  platesActual       Decimal?              @db.Decimal(12, 2)
+  disposed           Boolean               @default(false)
+  disposedAt         DateTime?             @db.Timestamptz(3)
+  shiftId            String?               @db.Uuid
+  batchNumber        Int?
+  // Frozen from StockSupply.sellingMode when this batch was cooked. Never
+  // re-read from the supply, so flipping a supply's mode mid-service cannot
+  // rewrite what this batch meant.
+  sellingMode        SellingMode           @default(ALLOCATED)
+  // Plates deliberately thrown away. Completeness of the derived pool
+  // (produced - sold - wasted) depends on this being recorded on dispose.
+  wastedPlates       Decimal               @default(0) @db.Decimal(12, 2)
+  cookedBy           User                  @relation(fields: [cookedById], references: [id])
+  stockSupply        StockSupply           @relation(fields: [stockSupplyId], references: [id])
+  shift              Shift?                @relation(fields: [shiftId], references: [id])
+  cookingRecordMenus CookingRecordMenu[]
+  allocations        OrderItemAllocation[]
 
   @@unique([stockSupplyId, shiftId, batchNumber])
 }
 
 model CookingRecordMenu {
-  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  cookingRecordId   String         @db.Uuid
-  menuId            String         @db.Uuid
-  platesAllocated   Decimal        @db.Decimal(12, 2) @map("quantityPlates")
-  platesRemaining   Decimal        @default(0) @db.Decimal(12, 2)
-  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
-  cookingRecord     CookingRecord  @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
-  menu              Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cookingRecordId String        @db.Uuid
+  menuId          String        @db.Uuid
+  platesAllocated Decimal       @map("quantityPlates") @db.Decimal(12, 2)
+  platesRemaining Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  cookingRecord   CookingRecord @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
+  menu            Menu          @relation(fields: [menuId], references: [id], onDelete: Cascade)
 
-  allocations       OrderItemAllocation[]
+  allocations OrderItemAllocation[]
 
   @@unique([cookingRecordId, menuId])
   @@map("CookingRecordAssignment")
 }
 
 model OrderItemAllocation {
-  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderItemId         String               @db.Uuid
-  cookingRecordId     String               @db.Uuid
-  cookingRecordMenuId String?              @db.Uuid
-  plates              Decimal              @db.Decimal(12, 2)
-  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
-  orderItem           OrderItem            @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  cookingRecord       CookingRecord        @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
-  cookingRecordMenu   CookingRecordMenu?   @relation(fields: [cookingRecordMenuId], references: [id], onDelete: SetNull)
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderItemId         String             @db.Uuid
+  cookingRecordId     String             @db.Uuid
+  cookingRecordMenuId String?            @db.Uuid
+  plates              Decimal            @db.Decimal(12, 2)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  orderItem           OrderItem          @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  cookingRecord       CookingRecord      @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
+  // Null for SHARED batches: the pool is not partitioned per dish, so there is
+  // no split to attribute consumption to. The batch id plus the orderItem's
+  // menuId is the full trace. Void restores such a row by deleting it.
+  cookingRecordMenu   CookingRecordMenu? @relation(fields: [cookingRecordMenuId], references: [id], onDelete: SetNull)
 
+  @@index([cookingRecordId])
   @@map("OrderItemAllocation")
 }
 
 model StockSupplyMenu {
-  stockSupplyId String      @db.Uuid
-  menuId        String      @db.Uuid
-  menu          Menu        @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  stockSupply   StockSupply @relation(fields: [stockSupplyId], references: [id])
+  stockSupplyId    String      @db.Uuid
+  menuId           String      @db.Uuid
+  // How many plates of this supply's pool one serving of this dish consumes.
+  // 1 for every uniform supply; 0.5 for Boiled Meat Half, where a half serving
+  // takes half a plate, so allocating 4 halves deducts 2.0 plates not 4.
+  // Resolved per (supply, dish) pair so a dish fed by two supplies would still
+  // deduct at the correct rate for whichever batch served it.
+  platesPerServing Decimal     @default(1) @db.Decimal(12, 2)
+  menu             Menu        @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  stockSupply      StockSupply @relation(fields: [stockSupplyId], references: [id])
 
   @@id([stockSupplyId, menuId])
 }
 
 model Shift {
-  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type            String
-  operationDay    DateTime        @db.Date
-  autoOpenTime     DateTime      @db.Timestamptz(3)
-  autoCloseTime     DateTime      @db.Timestamptz(3)
-  isOpen          Boolean         @default(true)
-  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
-  autoClosed      Boolean         @default(false)
-  autoClosedAt    DateTime?       @db.Timestamptz(6) //autoCloseTime
-  finalClosedAt   DateTime?       @db.Timestamptz(6) //manualCloseTime
-  finalCloseSource String?        // "AUTO" | "MANUAL"
-  finalClosedById String?         @db.Uuid //user
-  declaredCash    Decimal?        @db.Decimal(12, 2) // manager-declared cash received at close
-  declaredMpesa   Decimal?        @db.Decimal(12, 2) // manager-declared M-Pesa received at close
-  finalClosedBy   User?           @relation("ShiftFinalClosedBy", fields: [finalClosedById], references: [id])
-  snapshots       ShiftSnapshot[]
-  orders          Order[]
-  cookingRecords  CookingRecord[]
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type             String
+  operationDay     DateTime        @db.Date
+  autoOpenTime     DateTime        @db.Timestamptz(3)
+  autoCloseTime    DateTime        @db.Timestamptz(3)
+  isOpen           Boolean         @default(true)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(6)
+  autoClosed       Boolean         @default(false)
+  autoClosedAt     DateTime?       @db.Timestamptz(6) //autoCloseTime
+  finalClosedAt    DateTime?       @db.Timestamptz(6) //manualCloseTime
+  finalCloseSource String? // "AUTO" | "MANUAL"
+  finalClosedById  String?         @db.Uuid //user
+  declaredCash     Decimal?        @db.Decimal(12, 2) // manager-declared cash received at close
+  declaredMpesa    Decimal?        @db.Decimal(12, 2) // manager-declared M-Pesa received at close
+  finalClosedBy    User?           @relation("ShiftFinalClosedBy", fields: [finalClosedById], references: [id])
+  snapshots        ShiftSnapshot[]
+  orders           Order[]
+  cookingRecords   CookingRecord[]
 
   @@unique([type, operationDay])
 }
 
 //this is the tallying table
 model ShiftSnapshot {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  shiftId           String   @db.Uuid
-  menuId            String   @db.Uuid
-  openingPlates     Int // number of plates available at the start of the shift/shift creation
-  platesSold        Int      @default(0)  //total shift sales of plates (opening -> manual close, incl. drift)
-  closingStockAtAutoClose  Int? // live menu stock at autoCloseTime
-  autoCloseTime     DateTime?  @db.Timestamptz(6) //now
-  manualCloseTime   DateTime?  @db.Timestamptz(6) //now closing Time
-  closingStockAtManualClose Int? // live menu stock at manualCloseTime when closing
-  platesSoldAtAutoClose Int? // snapshot of total platesSold at the auto-close tick (pre-drift)
-  driftPlates           Int? //plates sold between autoCloseTime and manualCloseTime
-  driftMinutes      Int? //minutes between autoCloseTime and manualCloseTime
-  platesWasted      Int      @default(0)
-  shift             Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  menu              Menu     @relation(fields: [menuId], references: [id])
+  id                        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shiftId                   String      @db.Uuid
+  menuId                    String      @db.Uuid
+  openingPlates             Decimal     @default(0) @db.Decimal(12, 2) // plates available at shift creation (Decimal: a weighted supply leaves a fractional pool, e.g. 9.5)
+  platesSold                Decimal     @default(0) @db.Decimal(12, 2) //total shift sales of plates (opening -> manual close, incl. drift)
+  closingStockAtAutoClose   Decimal?    @db.Decimal(12, 2) // live menu stock at autoCloseTime
+  autoCloseTime             DateTime?   @db.Timestamptz(6) //now
+  manualCloseTime           DateTime?   @db.Timestamptz(6) //now closing Time
+  closingStockAtManualClose Decimal?    @db.Decimal(12, 2) // live menu stock at manualCloseTime when closing
+  platesSoldAtAutoClose     Decimal?    @db.Decimal(12, 2) // snapshot of total platesSold at the auto-close tick (pre-drift)
+  driftPlates               Decimal?    @db.Decimal(12, 2) //plates sold between autoCloseTime and manualCloseTime
+  driftMinutes              Int? //minutes between autoCloseTime and manualCloseTime
+  platesWasted              Decimal     @default(0) @db.Decimal(12, 2)
+  // Engine this snapshot's stock figures belong to. Reports use it to avoid
+  // summing one shared pool across several mirrored dishes (a 10-plate Tilapia
+  // tray mirrored onto 4 dishes would otherwise total as 40).
+  sellingMode               SellingMode @default(ALLOCATED)
+  shift                     Shift       @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  menu                      Menu        @relation(fields: [menuId], references: [id])
 
   @@unique([shiftId, menuId])
 }
@@ -437,6 +488,22 @@ enum ServiceTime {
 enum AccompanimentType {
   STARCH
   VEGETABLE
+  PORTION
+}
+
+// How a cooked batch's produced pool is made sellable.
+// ALLOCATED = today's hard-cap model: a manager splits the pool per dish via
+//   the Assign Plates modal; only allocated amounts are sellable and the
+//   unassigned remainder carries over untouched.
+// SHARED = the whole pool is sellable by every dish derived from the supply,
+//   with no allocation step at all. Only legal when every dish consumes
+//   exactly 1 platePerServing, because otherwise servings compete for the pool
+//   at different rates and a real reservation decision exists.
+// Frozen onto CookingRecord at cook time so a later config flip can never
+// rewrite the meaning of a batch that was already cooked.
+enum SellingMode {
+  ALLOCATED
+  SHARED
 }
 
 enum ItemUnit {
@@ -454,13 +521,13 @@ enum StockRequestStatus {
 }
 
 model ShiftConfig {
-  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type                 String
-  autoOpenTime         String     // HH:MM format for scheduled open
-  autoCloseTime        String     // HH:MM format for scheduled close
-  isActive             Boolean    @default(true)
-  manual               Boolean    @default(false) // false = auto-close at autoCloseTime, true = manager closes manually later
-  anchorIntervalMinutes Int       @default(1440)  // operational cycle window in minutes (1440 = 24h)
-  createdAt            DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime   @updatedAt @db.Timestamptz(6)
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type                  String
+  autoOpenTime          String // HH:MM format for scheduled open
+  autoCloseTime         String // HH:MM format for scheduled close
+  isActive              Boolean  @default(true)
+  manual                Boolean  @default(false) // false = auto-close at autoCloseTime, true = manager closes manually later
+  anchorIntervalMinutes Int      @default(1440) // operational cycle window in minutes (1440 = 24h)
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
 }

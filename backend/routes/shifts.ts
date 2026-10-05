@@ -315,14 +315,14 @@ router.post("/:id/close", async (req, res) => {
         if (menuRow) {
           await tx.menu.update({
             where: { id: w.menuId },
-            data: { stock: Math.max(0, (menuRow.stock ?? 0) - wastedPlates) },
+            data: { stock: Math.max(0, Number(menuRow.stock ?? 0) - wastedPlates) },
           });
         }
       }
 
       for (const snapshot of snapshots) {
-        const currentStock = snapshot.menu.stock ?? 0;
-        const autoPlates = snapshot.closingStockAtAutoClose ?? null;
+        const currentStock = Number(snapshot.menu.stock ?? 0);
+        const autoPlates = snapshot.closingStockAtAutoClose === null ? null : Number(snapshot.closingStockAtAutoClose);
         const autoTime = snapshot.autoCloseTime ? new Date(snapshot.autoCloseTime) : null;
 
         // Compute drift

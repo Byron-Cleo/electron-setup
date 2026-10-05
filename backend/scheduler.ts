@@ -116,7 +116,7 @@ export async function autoCreateShifts() {
         const prevClosingByMenu = new Map<string, number | null>();
         if (prevShift && prevShift.snapshots) {
           for (const snap of prevShift.snapshots) {
-            prevClosingByMenu.set(snap.menuId, snap.closingStockAtManualClose);
+            prevClosingByMenu.set(snap.menuId, snap.closingStockAtManualClose === null ? null : Number(snap.closingStockAtManualClose));
           }
         }
 

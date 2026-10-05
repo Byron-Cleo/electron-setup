@@ -117,6 +117,8 @@ export async function createOrderWithItems(shiftId: string, items: Array<{ menuI
   const order = await prisma.$transaction(async (tx) => {
     const created = await tx.order.create({
       data: {
+        // Unchecked shape throughout: scalar userId/shiftId plus the unchecked nested
+        // `OrderItem`. Prisma's XOR cannot mix this with the checked shape.
         userId: user.id,
         shiftId,
         mealType: ServiceTime.LUNCH,
@@ -145,7 +147,7 @@ export async function createOrderWithItems(shiftId: string, items: Array<{ menuI
     // Create/update shift snapshot (always exists under shift window)
     for (const item of items) {
       const menu = await tx.menu.findUnique({ where: { id: item.menuId } });
-      const currentStock = menu?.stock ?? 0;
+      const currentStock = Number(menu?.stock ?? 0);
       await tx.shiftSnapshot.upsert({
         where: { shiftId_menuId: { shiftId, menuId: item.menuId } },
         create: {

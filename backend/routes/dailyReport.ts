@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { computeShiftUnassignedBatches } from "./shiftCarryOver.js";
+import { round2 } from "../pools.js";
 
 const router = Router();
 
@@ -390,32 +391,42 @@ router.get("/shift/:id", async (req, res) => {
     const isOpenShift = shift.isOpen;
     const plateMovement = shift.snapshots
       .map((snapshot) => {
-        const platesCooked = platesCookedByMenu.get(snapshot.menuId) ?? 0;
-        const closingStock = snapshot.openingPlates + platesCooked - snapshot.platesSold;
-        const closingStockAtManualClose = isOpenShift
-          ? (snapshot.menu.stock ?? 0)
-          : snapshot.closingStockAtManualClose;
-        const driftSold =
+        // Snapshot counters are Decimal(12,2) because a weighted supply leaves a
+        // fractional pool. Coerce once here so the arithmetic below stays exact.
+        const opening = Number(snapshot.openingPlates);
+        const sold = Number(snapshot.platesSold);
+        const soldAtAutoClose =
           snapshot.platesSoldAtAutoClose !== null && snapshot.platesSoldAtAutoClose !== undefined
-            ? snapshot.platesSold - snapshot.platesSoldAtAutoClose
+            ? Number(snapshot.platesSoldAtAutoClose)
             : null;
+        const platesCooked = platesCookedByMenu.get(snapshot.menuId) ?? 0;
+        const closingStock = round2(opening + platesCooked - sold);
+        const closingStockAtManualClose = isOpenShift
+          ? Number(snapshot.menu.stock ?? 0)
+          : snapshot.closingStockAtManualClose !== null && snapshot.closingStockAtManualClose !== undefined
+            ? Number(snapshot.closingStockAtManualClose)
+            : null;
+        const driftSold = soldAtAutoClose !== null ? round2(sold - soldAtAutoClose) : null;
         // Auto closing stock = remaining plates after opening + cooked − sold before auto-close
         const closingStockAtAutoClose =
-          snapshot.platesSoldAtAutoClose !== null && snapshot.platesSoldAtAutoClose !== undefined
-            ? snapshot.openingPlates + platesCooked - snapshot.platesSoldAtAutoClose
-            : (snapshot.closingStockAtAutoClose ?? null);
+          soldAtAutoClose !== null
+            ? round2(opening + platesCooked - soldAtAutoClose)
+            : snapshot.closingStockAtAutoClose !== null && snapshot.closingStockAtAutoClose !== undefined
+              ? Number(snapshot.closingStockAtAutoClose)
+              : null;
         const isLiveCurrent = isOpenShift;
 
         return {
           menuId: snapshot.menuId,
           menuName: snapshot.menu.name,
-          openingPlates: snapshot.openingPlates,
+          sellingMode: snapshot.sellingMode,
+          openingPlates: opening,
           platesCooked,
-          platesSold: snapshot.platesSold,
-          platesSoldAtAutoClose: snapshot.platesSoldAtAutoClose ?? null,
+          platesSold: sold,
+          platesSoldAtAutoClose: soldAtAutoClose,
           driftSold,
           closingStock,
-          platesWasted: snapshot.platesWasted ?? 0,
+          platesWasted: Number(snapshot.platesWasted ?? 0),
           closingStockAtAutoClose,
           driftMinutes: snapshot.driftMinutes ?? null,
           closingStockAtManualClose,
@@ -423,6 +434,27 @@ router.get("/shift/:id", async (req, res) => {
         };
       })
       .filter((row) => row.platesSold > 0 || row.platesCooked > 0);
+
+    // A SHARED pool is one set of plates mirrored onto every dish it feeds, so
+    // summing its figures per dish would report 4x the food that was actually
+    // cooked. Count each shared pool once (on its first dish) and mark the
+    // other dishes as mirrors, which the UI shows but the totals skip.
+    const sharedSupplyByMenu = new Map<string, string>();
+    const supplyLinks = await prisma.stockSupplyMenu.findMany({
+      where: { menuId: { in: plateMovement.map((r) => r.menuId) } },
+      select: { menuId: true, stockSupplyId: true },
+    });
+    for (const link of supplyLinks) {
+      if (!sharedSupplyByMenu.has(link.menuId)) sharedSupplyByMenu.set(link.menuId, link.stockSupplyId);
+    }
+    const countedSharedPools = new Set<string>();
+    const plateMovementDeduped = plateMovement.map((row) => {
+      if (row.sellingMode !== "SHARED") return { ...row, isSharedMirror: false };
+      const supplyId = sharedSupplyByMenu.get(row.menuId) ?? row.menuId;
+      const first = !countedSharedPools.has(supplyId);
+      countedSharedPools.add(supplyId);
+      return { ...row, isSharedMirror: !first };
+    });
 
     // Calculate drift
     const driftMinutes = shift.autoClosedAt
@@ -501,7 +533,14 @@ router.get("/shift/:id", async (req, res) => {
         autoClosedAt: shift.autoClosedAt,
         finalClosedBy: shift.finalClosedBy,
       },
-      plateMovement,
+      plateMovement: plateMovementDeduped,
+      // Summed from non-mirror rows only, so a shared pool counted once.
+      plates: {
+        cooked: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.platesCooked), 0)),
+        sold: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.platesSold), 0)),
+        opening: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.openingPlates), 0)),
+        closing: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.closingStock), 0)),
+      },
       revenue: {
         ...revenueByMealType,
         total: totalSales,

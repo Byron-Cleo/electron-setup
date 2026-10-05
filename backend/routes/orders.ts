@@ -2,6 +2,16 @@ import { Router } from "express";
 import prisma from "../db/db.js";
 import { emitLiveEvent } from "../events.js";
 import { type Prisma, ServiceTime } from "../db/generated/prisma/client.js";
+import {
+  InsufficientPoolError,
+  assertLinesServable,
+  consumeForOrderItem,
+  factorForServing,
+  recomputeMenuStock,
+  restoreForOrderItem,
+  round2,
+  sellableForMenu,
+} from "../pools.js";
 
 const router = Router();
 
@@ -18,16 +28,9 @@ function dateOnly(d: Date): Date {
   return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 }
 
-// Recompute Menu.stock = sum of split platesRemaining (aligns direct mutation with split truth)
-async function recomputeMenuStock(tx: Prisma.TransactionClient, menuId: string) {
-  const agg = await tx.cookingRecordMenu.aggregate({
-    _sum: { platesRemaining: true },
-    where: { menuId },
-  });
-  const total = Number(agg._sum?.platesRemaining ?? 0);
-  await tx.menu.update({ where: { id: menuId }, data: { stock: total } });
-  return total;
-}
+// `Menu.stock` is a mirror maintained by recomputeMenuStock() in pools.ts —
+// which knows about both engines and weighted portions. It is deliberately not
+// decremented here.
 
 router.get("/count", async (_req, res) => {
   try {
@@ -93,8 +96,15 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: `Invalid mealType. Must be one of: ${Object.values(ServiceTime).join(", ")}` });
   }
 
-  const lineKey = (item: { menuId: string; starchId?: string | null; vegetableId?: string | null }) =>
-    `${item.menuId}|${item.starchId ?? ""}|${item.vegetableId ?? ""}`;
+  // Portion is part of the line's identity: one dish ordered as 1pc and as 2pc
+// is two different lines (they cost different amounts of pool), matching the
+// OrderItem unique index.
+const lineKey = (item: {
+    menuId: string;
+    starchId?: string | null;
+    vegetableId?: string | null;
+    portionId?: string | null;
+  }) => `${item.menuId}|${item.starchId ?? ""}|${item.vegetableId ?? ""}|${item.portionId ?? ""}`;
   const merged = new Map<string, (typeof items)[number]>();
   for (const item of items) {
     const key = lineKey(item);
@@ -148,24 +158,45 @@ router.post("/", async (req, res) => {
 
     const order = await prisma.$transaction(async (tx) => {
       let itemsPrice = 0;
-      const resolvedAccompaniments: { starchId: string | null; vegetableId: string | null }[] = [];
+      const resolvedAccompaniments: { starchId: string | null; vegetableId: string | null; portionId: string | null }[] = [];
       for (const item of lines) {
-        const [starch, vegetable] = await Promise.all([
+        const [starch, vegetable, portion] = await Promise.all([
           item.starchId
             ? tx.menuAccompaniment.findUnique({ where: { id: item.starchId }, select: { price: true } })
             : Promise.resolve(null),
           item.vegetableId
             ? tx.menuAccompaniment.findUnique({ where: { id: item.vegetableId }, select: { price: true } })
             : Promise.resolve(null),
+          item.portionId
+            ? tx.menuAccompaniment.findUnique({
+                where: { id: item.portionId },
+                select: { price: true, category: true },
+              })
+            : Promise.resolve(null),
         ]);
-        itemsPrice +=
-          (Number(item.price) + Number(starch?.price ?? 0) + Number(vegetable?.price ?? 0)) * item.qty;
+        // A portion prices the serving (2 eggs is not "1 egg plus 1"), so its
+        // price replaces the dish price rather than adding to it.
+        const basePrice = portion?.category === "PORTION" ? Number(portion.price ?? 0) : Number(item.price);
+        itemsPrice += (basePrice + Number(starch?.price ?? 0) + Number(vegetable?.price ?? 0)) * item.qty;
         resolvedAccompaniments.push({
           starchId: starch ? item.starchId ?? null : null,
           vegetableId: vegetable ? item.vegetableId ?? null : null,
+          portionId: portion?.category === "PORTION" ? item.portionId ?? null : null,
         });
       }
       const totalPrice = itemsPrice + shippingPrice + taxPrice;
+
+      // Fail the whole order before writing anything, so the waiter is told
+      // about every shortfall at once and a rejection leaves no partial state.
+      await assertLinesServable(
+        tx,
+        lines.map((item, i) => ({
+          menuId: item.menuId,
+          name: item.name,
+          qty: item.qty,
+          portionId: resolvedAccompaniments[i]?.portionId ?? null,
+        })),
+      );
 
       const created = await tx.order.create({
         data: {
@@ -195,61 +226,44 @@ router.post("/", async (req, res) => {
             image: item.image,
             starchId: resolvedAccompaniments[i]?.starchId ?? null,
             vegetableId: resolvedAccompaniments[i]?.vegetableId ?? null,
+            portionId: resolvedAccompaniments[i]?.portionId ?? null,
           },
         });
 
-        const menu = await tx.menu.findUniqueOrThrow({ where: { id: item.menuId } });
-        const currentStock = menu.stock ?? 0;
-        // Atomic guarded decrement: only succeeds if sufficient stock exists (prevents race/over-sell)
-        const updated = await tx.menu.updateMany({
-          where: { id: item.menuId, stock: { gte: item.qty } },
-          data: { stock: { decrement: item.qty } },
-        });
-        if (updated.count === 0) {
-          throw new Error(`Insufficient stock for ${item.name}: only ${currentStock} plates remaining`);
-        }
-
-        // Decrement the menu's split platesRemaining in lock-step with Menu.stock
-        // (FIFO across the menu's splits, never below 0) - record allocations
-        let toDeduct = item.qty;
-        const activeSplits = await tx.cookingRecordMenu.findMany({
-          where: { menuId: item.menuId, platesRemaining: { gt: 0 } },
-          orderBy: { createdAt: "asc" },
-          include: { cookingRecord: true },
-        });
-        for (const split of activeSplits) {
-          if (toDeduct <= 0) break;
-          const deductNow = Math.min(Number(split.platesRemaining), toDeduct);
-          await tx.cookingRecordMenu.update({
-            where: { id: split.id },
-            data: { platesRemaining: { decrement: deductNow } },
-          });
-          await tx.orderItemAllocation.create({
-            data: {
-              orderItemId: orderItem.id,
-              cookingRecordId: split.cookingRecordId,
-              cookingRecordMenuId: split.id,
-              plates: deductNow,
-            },
-          });
-          toDeduct -= deductNow;
-        }
+        // Opening balance for the shift snapshot, taken before this sale.
+        const sellableBefore = await sellableForMenu(tx, item.menuId);
+        // Charge the weighted cost of this serving (1 plate, or 0.5 for a half,
+        // or 2 for a two-piece portion) and drain FIFO across both engines.
+        const factor = await factorForServing(
+          tx,
+          item.menuId,
+          resolvedAccompaniments[i]?.portionId ?? null,
+        );
+        await consumeForOrderItem(tx, orderItem.id, item.menuId, factor * item.qty);
 
         // Track plates sold on the shift snapshot (openingPlates falls back to
-        // pre-sale stock when the item has no snapshot — e.g. added mid-shift)
+        // pre-sale stock when the item has no snapshot — e.g. added mid-shift).
         if (currentShift) {
+          // Freeze the engine alongside the figures so reports can tell a
+          // shared pool from a split without re-deriving it later.
+          const supply = await tx.stockSupplyMenu.findFirst({
+            where: { menuId: item.menuId },
+            select: { stockSupply: { select: { sellingMode: true } } },
+          });
+          const plates = round2(factor * item.qty);
           await tx.shiftSnapshot.upsert({
             where: { shiftId_menuId: { shiftId: currentShift.id, menuId: item.menuId } },
             create: {
               shiftId: currentShift.id,
               menuId: item.menuId,
-              openingPlates: currentStock,
-              platesSold: item.qty,
+              openingPlates: sellableBefore,
+              platesSold: plates,
+              sellingMode: supply?.stockSupply.sellingMode ?? "ALLOCATED",
             },
-            update: { platesSold: { increment: item.qty } },
+            update: { platesSold: { increment: plates } },
           });
         }
-        // Align Menu.stock with split truth after order creation
+        // Align Menu.stock with pool truth after order creation
         await recomputeMenuStock(tx, item.menuId);
       }
 
@@ -269,6 +283,16 @@ router.post("/", async (req, res) => {
   } catch (e: unknown) {
     if ((e as { code?: string })?.code === "P2025") {
       return res.status(404).json({ error: "Menu item not found" });
+    }
+    // A stock rejection is the waiter's problem to fix, not a server fault:
+    // report it as 409 with per-line numbers so the cart can be adjusted in
+    // place instead of the page reloading.
+    if (e instanceof InsufficientPoolError) {
+      return res.status(409).json({
+        error: e.message,
+        code: "INSUFFICIENT_STOCK",
+        shortfalls: e.shortfalls,
+      });
     }
     console.error("Error creating order:", e);
     res.status(500).json({ error: "Failed to create order" });
@@ -513,39 +537,24 @@ router.post("/:id/void", async (req, res) => {
 
     // Void order and restore plates
     const voidedOrder = await prisma.$transaction(async (tx) => {
-      // Restore plates for each item
       for (const item of order.OrderItem) {
         const menu = await tx.menu.findUnique({ where: { id: item.menuId } });
         if (!menu) {
           console.warn(`Menu item ${item.menuId} not found during void; stock restoration skipped for this item`);
-        } else {
-          const currentStock = menu.stock ?? 0;
-          await tx.menu.update({
-            where: { id: item.menuId },
-            data: {
-              stock: currentStock + item.qty,
-            },
-          });
         }
 
-        // Delete allocations for this order item and restore plates to splits (FIFO reverse - restore to splits that were consumed? but we don't track; easier: just restore by consuming from the allocations we created? 
-        // But to keep simple: delete allocations for this item and restore plates to splits - but we need to know which splits to restore to. 
-        // Alternatively, look up allocations and restore to those split ids in reverse order of creation? Since allocations created in order of consumption (FIFO), restoring to same splits)
-        const allocations = await tx.orderItemAllocation.findMany({
+        // Restore from the allocation ledger rather than nudging Menu.stock:
+        // split plates go back to the exact splits they came from, and a shared
+        // pool recovers by the allocation row simply being removed. `Menu.stock`
+        // is then re-derived, so it can never drift from the pool.
+        // Read the ledger first: it is the only record of how many *plates* this
+        // line cost, which is not `item.qty` for a weighted or portioned sale.
+        const consumed = await tx.orderItemAllocation.aggregate({
           where: { orderItemId: item.id },
-          orderBy: { createdAt: "desc" },
+          _sum: { plates: true },
         });
-        for (const alloc of allocations) {
-          await tx.cookingRecordMenu.update({
-            where: { id: alloc.cookingRecordMenuId! },
-            data: { platesRemaining: { increment: Number(alloc.plates) } },
-          });
-        }
-        await tx.orderItemAllocation.deleteMany({
-          where: { orderItemId: item.id },
-        });
-
-        // Align Menu.stock with split truth after void restoration
+        const platesConsumed = Number(consumed._sum?.plates ?? 0);
+        await restoreForOrderItem(tx, item.id);
         await recomputeMenuStock(tx, item.menuId);
 
         // Update shift snapshot if exists
@@ -556,7 +565,7 @@ router.post("/:id/void", async (req, res) => {
           if (snapshot) {
             await tx.shiftSnapshot.update({
               where: { id: snapshot.id },
-              data: { platesSold: Math.max(0, snapshot.platesSold - item.qty) },
+              data: { platesSold: Math.max(0, Number(snapshot.platesSold) - platesConsumed) },
             });
           }
         }

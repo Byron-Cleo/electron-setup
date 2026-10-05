@@ -378,7 +378,7 @@ router.get("/", async (req, res) => {
     vegetable: vegetableRel,
   }));
 
-  const filtered = mealType ? result.filter((item) => (item.availablePlates ?? 0) > 0) : result;
+  const filtered = mealType ? result.filter((item) => Number(item.availablePlates ?? 0) > 0) : result;
 
   res.json(filtered);
 });
