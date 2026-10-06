@@ -6,7 +6,7 @@ import multer from "multer";
 import path from "path";
 import crypto from "crypto";
 import { uploadsDir } from "../db/uploads.js";
-import { batchPools } from "../pools.js";
+import { batchPools, sellableForMenu } from "../pools.js";
 
 /**
  * Plates left in a shared batch, derived from its allocation ledger. Resolved
@@ -387,22 +387,65 @@ router.get("/", async (req, res) => {
       MenuMealType: { select: { mealType: true } },
       MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
       MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
+      // Portion sizes (Fried Eggs 1pc / 2pc). These are dish-owned options, not
+      // the starch/vegetable relations above.
+      portionOptions: {
+        where: { category: "PORTION" },
+        orderBy: { price: "asc" },
+        select: { id: true, name: true, price: true, platesPerServing: true },
+      },
+      stockSupplyMenus: {
+        select: {
+          platesPerServing: true,
+          stockSupply: { select: { id: true, sellingMode: true, name: true } },
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
+
+  // Availability comes from the pool ledger, not the Menu.stock mirror, so a
+  // shared pool is credited in full to every dish on its supply.
+  const availability = await Promise.all(
+    items.map((menu) => sellableForMenu(prisma, menu.id)),
+  );
 
   const result = items.map(({
     MenuMealType,
     MenuAccompaniment_Menu_starchIdToMenuAccompaniment: starchRel,
     MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: vegetableRel,
+    portionOptions,
+    stockSupplyMenus,
     ...menu
-  }) => ({
-    ...menu,
-    availablePlates: menu.stock,
-    mealTypes: MenuMealType.map((mt) => mt.mealType),
-    starch: starchRel,
-    vegetable: vegetableRel,
-  }));
+  }, index) => {
+    const plates = availability[index] ?? 0;
+    // Per-dish factor: the max across its feeds keeps the served cap honest.
+    const dishRates = stockSupplyMenus
+      .map((l) => Number(l.platesPerServing))
+      .filter((n) => n > 0);
+    const platesPerServing = dishRates.length > 0 ? Math.max(...dishRates) : 1;
+    // Every feeding supply must agree on the engine or the dish is ambiguous.
+    const modes = new Set(stockSupplyMenus.map((l) => l.stockSupply.sellingMode));
+
+    return {
+      ...menu,
+      // Prisma Decimal does not survive JSON as a number; normalise explicitly.
+      stock: Number(menu.stock),
+      availablePlates: plates,
+      platesPerServing,
+      // Whole servings only — a partial plate is not orderable.
+      sellableServings: Math.floor(plates / platesPerServing),
+      sellingMode: modes.size === 1 ? [...modes][0] : undefined,
+      hasPortion: portionOptions.length > 0,
+      portionId: menu.portionId,
+      defaultPortionId: menu.portionId,
+      defaultQty: Number(menu.defaultQty ?? 1),
+      portionOptions,
+      mealTypes: MenuMealType.map((mt) => mt.mealType),
+      starch: starchRel,
+      vegetable: vegetableRel,
+    };
+  });
 
   const filtered = mealType ? result.filter((item) => Number(item.availablePlates ?? 0) > 0) : result;
 
