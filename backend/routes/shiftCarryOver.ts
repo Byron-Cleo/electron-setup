@@ -1,4 +1,5 @@
 import prisma from "../db/db.js";
+import { SellingMode } from "../db/generated/prisma/client.js";
 
 export interface UnassignedBatch {
   cookingRecordId: string;
@@ -14,6 +15,9 @@ export interface UnassignedBatch {
 // assignable in the current window — 0 for batches from a previous operation date.
 export interface OperationDateUnassignedBatch extends UnassignedBatch {
   expired: boolean;
+  // Engine frozen on the batch at cook time. Shared batches are filtered out of
+  // the unassigned lists entirely, but the field travels for display/typing.
+  sellingMode: SellingMode;
   validUnassigned: number;
   // Plates from this batch now sitting on menus (allocated − sold).
   sellingNow: number;
@@ -233,6 +237,11 @@ export async function computeAllUnassignedBatches(
 
   const batches: OperationDateUnassignedBatch[] = [];
   for (const record of records) {
+    // A shared pool has no allocation step: every plate is already sellable by
+    // every dish on the supply. Counting it here would report its whole batch as
+    // "unassigned" and offer plates that are actually on sale.
+    if (record.sellingMode === "SHARED") continue;
+
     const produced = Number(record.platesActual ?? record.platesExpected);
     const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
     const totalEverAllocated = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
@@ -247,6 +256,7 @@ export async function computeAllUnassignedBatches(
       cookingRecordId: record.id,
       stockSupplyId: record.stockSupplyId,
       stockSupplyName: record.stockSupply.name,
+      sellingMode: record.sellingMode,
       totalProduced: produced,
       totalAssigned: record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0),
       unassigned,
@@ -298,6 +308,10 @@ export async function computeExpiredUnassignedBatches(
 
   const batches: OperationDateUnassignedBatch[] = [];
   for (const record of records) {
+    // Same as the in-window list: a shared pool is already fully sellable, so it
+    // is not "expired unassigned" stock awaiting a carry-over decision.
+    if (record.sellingMode === "SHARED") continue;
+
     const produced = Number(record.platesActual ?? record.platesExpected);
     const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
     const totalEverAllocated = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
@@ -312,6 +326,7 @@ export async function computeExpiredUnassignedBatches(
       cookingRecordId: record.id,
       stockSupplyId: record.stockSupplyId,
       stockSupplyName: record.stockSupply.name,
+      sellingMode: record.sellingMode,
       totalProduced: produced,
       totalAssigned: record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0),
       unassigned,

@@ -124,6 +124,36 @@ export function formatSupplyDescription(supply: { name: string; unit: string; cu
   return `${quantity} ${suffix} of ${supply.name}`
 }
 
+/**
+ * An error the server described in detail. A stock rejection arrives as a 409
+ * with the real per-dish ceiling, which the waiter needs in order to fix the
+ * order — collapsing it to a bare message would force a reload and lose the cart.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly shortfalls?: StockShortfall[];
+  readonly offenders?: { menuId: string; menuName: string; factors: number[] }[];
+
+  constructor(
+    message: string,
+    status: number,
+    body?: { code?: string; shortfalls?: StockShortfall[]; offenders?: ApiError["offenders"] },
+  ) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+    this.code = body?.code
+    this.shortfalls = body?.shortfalls
+    this.offenders = body?.offenders
+  }
+}
+
+/** True when the order failed because the pool could not cover it. */
+export function isStockShortfall(e: unknown): e is ApiError {
+  return e instanceof ApiError && e.status === 409 && Array.isArray(e.shortfalls)
+}
+
 async function apiFetch(path: string, options?: RequestInit) {
   const isFormData = options?.body instanceof FormData
   const res = await fetch(`${API_BASE}${path}`, {
@@ -132,7 +162,7 @@ async function apiFetch(path: string, options?: RequestInit) {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-    throw new Error(err.error || `HTTP ${res.status}`)
+    throw new ApiError(err.error || `HTTP ${res.status}`, res.status, err)
   }
   return res.json()
 }

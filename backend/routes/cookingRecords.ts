@@ -306,6 +306,17 @@ router.post("/:id/allocate", async (req, res) => {
   });
   if (!record) return res.status(404).json({ error: "Cooking record not found" });
 
+  // A shared pool has no per-dish split by design: the whole tray sells through
+  // every dish. Allocating it would invent splits that the pool maths never
+  // reads back, silently stranding plates.
+  if (record.sellingMode === "SHARED") {
+    return res.status(400).json({
+      error:
+        "This batch is a shared pool, so it is sellable by every dish already and has no allocation step.",
+      code: "SHARED_HAS_NO_ALLOCATION",
+    });
+  }
+
   // Enforce FIFO allocation: cannot allocate from newer batch while older batch has unallocated plates
   if (record.batchNumber) {
     const olderBatches = await prisma.cookingRecord.findMany({

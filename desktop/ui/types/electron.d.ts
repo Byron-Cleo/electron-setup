@@ -99,6 +99,9 @@ interface OrderItem {
   image: string;
   starchId: string | null;
   vegetableId: string | null;
+  /** Portion chosen for this line (1pc / 2pc). Null when the dish has none. */
+  portionId: string | null;
+  Portion?: OrderItemAccompaniment | null;
   Starch?: OrderItemAccompaniment | null;
   Vegetable?: OrderItemAccompaniment | null;
 }
@@ -146,6 +149,21 @@ interface CreateOrderItemData {
   image: string;
   starchId?: string | null;
   vegetableId?: string | null;
+  /** Part of the line's identity: 1pc and 2pc are different lines. */
+  portionId?: string | null;
+}
+
+/**
+ * One dish the order could not be filled for. `available` is what the pool can
+ * actually serve right now, so the waiter can see the real ceiling rather than
+ * just being told "no".
+ */
+interface StockShortfall {
+  menuId: string;
+  name: string;
+  requested: number;
+  available: number;
+  platesPerServing: number;
 }
 
 interface CreateOrderData {
@@ -515,9 +533,17 @@ interface CookedMenuItem {
   cooking: {
     totalProduced: number;
     totalAssigned: number;
+    /** How much MORE can be allocated to dishes (produced − assigned). */
     totalAvailable: number;
     totalSold?: number;
+    /** What a waiter can still order from this batch. */
+    sellableRemaining?: number;
+    assignmentCapacity?: number;
   };
+  /** Engine frozen onto this batch when it was cooked. */
+  sellingMode?: SellingMode;
+  /** False for a shared pool, which has no allocation step. */
+  canAssign?: boolean;
   platesRemaining: number;
   cookingRecords: {
     id: string;
@@ -557,6 +583,23 @@ interface KitchenInventory {
   kitchenInventory: number;
 }
 
+/**
+ * How a cooked batch becomes sellable. Frozen onto the batch at cook time so
+ * reconfiguring a supply later cannot reinterpret an existing tray.
+ *  - ALLOCATED: a manager splits the pool per dish; only allocated stock sells.
+ *  - SHARED: the whole pool sells through every dish on the supply, unallocated.
+ */
+type SellingMode = "ALLOCATED" | "SHARED";
+
+/** One portion option configured on a dish (e.g. Fried Eggs = 1pc / 2pc). */
+interface MenuPortionOption {
+  id: string;
+  name: string;
+  price: number;
+  /** Plates of the supply's pool one serving of this portion consumes. */
+  platesPerServing: number;
+}
+
 interface KitchenConfigItem {
   id: string;
   name: string;
@@ -566,12 +609,22 @@ interface KitchenConfigItem {
   reorderLevel: number | null;
   isMenuStock: boolean;
   platesPerUnit: number | null;
-  menus: { id: string; name: string }[];
+  sellingMode: SellingMode;
+  menus: {
+    id: string;
+    name: string;
+    /** Plates one serving of this dish consumes. 0.5 = a half portion. */
+    platesPerServing: number;
+    hasPortion?: boolean;
+    portions?: MenuPortionOption[];
+  }[];
 }
 
 interface KitchenConfigData {
   platesPerUnit?: number;
-  menuIds?: string[];
+  sellingMode?: SellingMode;
+  /** Per-dish consumption rates, e.g. Boiled Meat Half = 0.5 / Full = 1. */
+  menuFactors?: { menuId: string; platesPerServing: number }[];
 }
 
 type PosPrinterTransport = "usb" | "lan";
@@ -675,6 +728,7 @@ interface StockRemainingUnassignedBatch {
   cookingRecordId: string;
   stockSupplyId: string;
   stockSupplyName: string;
+  sellingMode: SellingMode;
   totalProduced: number;
   totalAssigned: number;
   unassigned: number;
@@ -683,6 +737,7 @@ interface StockRemainingUnassignedBatch {
   sellingNow: number;
   soldTotal: number;
   cookedAt: string;
+  batchNumber: number | null;
   shiftId: string | null;
   shiftType: string | null;
   operationDay: string | null;

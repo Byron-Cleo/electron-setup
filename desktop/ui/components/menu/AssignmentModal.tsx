@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { getCookingRecord, allocateCookingRecord, getMenus, updateMenu } from "@/lib/api"
+import { getCookingRecord, allocateCookingRecord, getMenus } from "@/lib/api"
 
 interface Props {
   open: boolean
@@ -161,14 +161,10 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
       }))
       await allocateCookingRecord(batchId, payload)
 
-      // Update menu stock for each menu
-      const stockUpdates = menus.map((menu) => {
-        const delta = deltas[menu.id] ?? 0
-        const newStock = menu.stock + delta
-        return updateMenu(menu.id, { stock: newStock })
-      })
-      await Promise.all(stockUpdates)
-
+      // Menu.stock is deliberately NOT written from here. The server derives it
+      // from the pool for every affected dish and returns stockUpdates; writing
+      // a client-computed value would race with concurrent orders and could
+      // resurrect plates an order already consumed.
       onRefresh()
       onClose()
     } catch (e) {

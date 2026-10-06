@@ -53,22 +53,19 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     )
   }, [items, search])
 
+  // A shared pool has no per-dish allocation, so what a waiter can order from it
+  // is the batch remainder itself — not the "how much is still unassigned"
+  // figure that drives the allocated flow.
+  const sellableOf = (item: CookedMenuItem) =>
+    item.cooking.sellableRemaining ?? item.cooking.totalAvailable
+
   const sortedItems = useMemo(() => {
     return [...filteredItems].sort((a, b) => {
-      const aHas = a.cooking.totalAvailable > 0 ? 1 : 0
-      const bHas = b.cooking.totalAvailable > 0 ? 1 : 0
+      const aHas = sellableOf(a) > 0 ? 1 : 0
+      const bHas = sellableOf(b) > 0 ? 1 : 0
       if (aHas !== bHas) return bHas - aHas
       return b.cooking.totalProduced - a.cooking.totalProduced
     })
-  }, [filteredItems])
-
-  const activeBatch = useMemo(() => {
-    const sortedByBatch = [...filteredItems].sort((a, b) => {
-      const aBatch = (a as any).batchNumber ?? 9999;
-      const bBatch = (b as any).batchNumber ?? 9999;
-      return aBatch - bBatch;
-    });
-    return sortedByBatch.find(item => item.cooking.totalAvailable > 0);
   }, [filteredItems])
 
   const {
@@ -159,6 +156,18 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         )
       }
       case "available": {
+        if (row.sellingMode === "SHARED") {
+          const sellable = sellableOf(row)
+          return sellable <= 0 ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+              SOLD OUT
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700">
+              {sellable} plates sellable
+            </span>
+          )
+        }
         const available = row.cooking.totalAvailable
         return available <= 0 ? (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
@@ -171,6 +180,14 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         )
       }
       case "actions":
+        if (row.sellingMode === "SHARED") {
+          // No allocation step to perform — the whole tray is already sellable.
+          return (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-admin-content text-admin-muted border border-admin-card-border">
+              Shared pool — no assignment
+            </span>
+          )
+        }
         return (
           <div className="flex items-center justify-end gap-1">
             <Button
@@ -203,7 +220,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         data={paginatedItems}
         renderCell={renderCell}
         keyExtractor={(row) => row.id}
-        rowClassName={(row) => (row.cooking.totalAvailable <= 0 ? "opacity-40" : "")}
+        rowClassName={(row) => (sellableOf(row) <= 0 ? "opacity-40" : "")}
         emptyMessage={
           search
             ? "No cooked foods match your search."
