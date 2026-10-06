@@ -18,7 +18,13 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { getAccompaniments, menuImageUrl, getCurrentShift } from "@/lib/api"
-import { useWaiterOrder, orderLineKey, lineKey } from "./WaiterOrderContext"
+import {
+  useWaiterOrder,
+  orderLineKey,
+  lineKey,
+  sellableServingsFor,
+  defaultPortionFor,
+} from "./WaiterOrderContext"
 
 interface Props {
   mealPeriod: string
@@ -27,16 +33,13 @@ interface Props {
   error: string | null
   placing: boolean
   placeError: string | null
+  stockShortfalls: StockShortfall[]
   onPlaceOrder: () => void
   previewing: boolean
   previewHtml: string | null
   previewError: string | null
   onPreview: () => void
   onClosePreview: () => void
-}
-
-function platesFor(item: MenuItem): number {
-  return item.availablePlates ?? item.stock
 }
 
 const CATEGORY_ORDER = ["Beverages", "Snacks"]
@@ -54,10 +57,17 @@ function linePrice(item: OrderLineItem): number {
 
 // Full unit price of a dish with its selected accompaniments: charged starches
 // and vegetables are added to the main dish price once their selection is made.
-function comboPrice(item: MenuItem, starch: Accompaniment | null, vegetable: Accompaniment | null): number {
+// A chosen portion replaces the dish price — it is the item actually being sold.
+function comboPrice(
+  item: MenuItem,
+  starch: Accompaniment | null,
+  vegetable: Accompaniment | null,
+  portion?: MenuPortionOption | null,
+): number {
   const starchPrice = starch && !isFreeAccompaniment(starch) ? Number(starch.price) : 0
   const vegetablePrice = vegetable && !isFreeAccompaniment(vegetable) ? Number(vegetable.price) : 0
-  return Number(item.price) + starchPrice + vegetablePrice
+  const base = portion ? Number(portion.price) : Number(item.price)
+  return base + starchPrice + vegetablePrice
 }
 
 function formatPrice(price: number) {
@@ -271,6 +281,7 @@ export function WaiterMenuGrid({
   error,
   placing,
   placeError,
+  stockShortfalls,
   onPlaceOrder,
   previewing,
   previewHtml,
@@ -286,6 +297,13 @@ export function WaiterMenuGrid({
   const [accompaniments, setAccompaniments] = useState<Accompaniment[]>([])
   const [selectedStarch, setSelectedStarch] = useState<Accompaniment | null>(null)
   const [selectedVegetable, setSelectedVegetable] = useState<Accompaniment | null>(null)
+  // Explicit size pick, scoped to the dish it was made for. Null means "use the
+  // dish's configured default", which is derived below rather than stored, so
+  // switching dishes needs no effect to reset it.
+  const [portionPick, setPortionPick] = useState<{
+    itemId: string
+    portion: MenuPortionOption | null
+  } | null>(null)
   const [galleryActive, setGalleryActive] = useState(0)
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
   const [activeOrderKey, setActiveOrderKey] = useState<string | null>(null)
@@ -343,6 +361,22 @@ export function WaiterMenuGrid({
       .catch(() => {})
   }, [])
 
+  // What the waiter can actually order for the dish+portion on screen. Recomputed
+  // whenever the portion changes because a 2pc option can cost twice the plates of
+  // a 1pc one and drop the ceiling.
+  // A dish with portions preselects its configured default so the common case is
+  // one tap; a dish without options simply has no portion to track.
+  const selectedPortion = useMemo(() => {
+    if (!selectedItem) return null
+    if (portionPick?.itemId === selectedItem.id) return portionPick.portion
+    return defaultPortionFor(selectedItem)
+  }, [selectedItem, portionPick])
+
+  const selectedServings = useMemo(
+    () => (selectedItem ? sellableServingsFor(selectedItem, selectedPortion) : 0),
+    [selectedItem, selectedPortion],
+  )
+
   const categories = useMemo(() => {
     const cats = [...new Set(items.map((i) => i.category))]
     if (mealPeriod !== "BREAKFAST") return cats
@@ -364,10 +398,16 @@ export function WaiterMenuGrid({
   }, [items])
 
   const renderItemCard = (item: MenuItem) => {
-    const plates = platesFor(item)
-    const soldOut = plates <= 0
-    const runningLow = plates > 0 && plates <= 5
-    const inStock = plates > 5
+    // Servings, not plates: a dish with a 0.5 factor can be sold twice from one
+    // plate, and it is the servings that are actually orderable.
+    const servings = sellableServingsFor(item, defaultPortionFor(item))
+    const plates = Number(item.availablePlates ?? item.stock ?? 0)
+    const factor = Number(item.platesPerServing ?? 1)
+    const soldOut = servings <= 0
+    const runningLow = servings > 0 && servings <= 5
+    const inStock = servings > 5
+    // Only worth showing when the factor makes plates and servings disagree.
+    const weighted = factor > 0 && factor !== 1
     return (
       <Card
         key={item.id}
@@ -392,12 +432,17 @@ export function WaiterMenuGrid({
             <span
               className={cn(
                 "text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap",
-                platesBadgeClass(plates),
+                platesBadgeClass(servings),
               )}
             >
-              {soldOut ? "Sold Out" : `${plates} plates`}
+              {soldOut ? "Sold Out" : weighted ? `${servings} left` : `${servings} plates`}
             </span>
           </div>
+          {weighted && (
+            <p className="text-[10px] text-brand-ebony/60 leading-tight">
+              {plates} {plates === 1 ? "plate" : "plates"} in pool
+            </p>
+          )}
         </CardContent>
       </Card>
     )
@@ -555,17 +600,25 @@ export function WaiterMenuGrid({
               <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-gray-100 pb-3">
                 <Heading as="h3" className="text-xl font-semibold text-brand-ebony">{selectedItem.name}</Heading>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-xl font-bold text-brand-maroon">{formatPrice(selectedItem.price)}</p>
-                  {comboPrice(selectedItem, selectedStarch, selectedVegetable) > Number(selectedItem.price) && (
+                  <p className="text-xl font-bold text-brand-maroon">
+                    {formatPrice(selectedPortion ? Number(selectedPortion.price) : Number(selectedItem.price))}
+                  </p>
+                  {comboPrice(selectedItem, selectedStarch, selectedVegetable, selectedPortion) >
+                    Number(selectedPortion?.price ?? selectedItem.price) && (
                     <span className="text-sm font-semibold text-brand-maroon/70">
-                      Total {formatPrice(comboPrice(selectedItem, selectedStarch, selectedVegetable))}
+                      Total {formatPrice(comboPrice(selectedItem, selectedStarch, selectedVegetable, selectedPortion))}
                     </span>
                   )}
                 </div>
-                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", platesBadgeClass(platesFor(selectedItem)))}>
-                  {platesFor(selectedItem) > 0 ? `${platesFor(selectedItem)} plates available` : "Sold Out"}
+                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", platesBadgeClass(selectedServings))}>
+                  {selectedServings > 0 ? `${selectedServings} available` : "Sold Out"}
                 </span>
               </div>
+              {selectedItem.sellingMode === "SHARED" && (
+                <p className="mt-2 text-[11px] text-brand-ebony/50 text-center">
+                  Shared pool — every dish on this ingredient draws from the same tray.
+                </p>
+              )}
 
               <div className="grid grid-cols-[2fr_3fr] gap-4 pt-4">
                 {/* Left — Image gallery (40%) */}
@@ -580,6 +633,51 @@ export function WaiterMenuGrid({
 
                 {/* Right — Details */}
                 <div className="space-y-3">
+
+                {(selectedItem.portionOptions ?? []).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-ebony/50 mb-2">Size</p>
+                    <RadioGroup
+                      value={selectedPortion?.id ?? NO_ACCOMPANIMENT}
+                      onValueChange={(value) => {
+                        if (value === NO_ACCOMPANIMENT) {
+                          setPortionPick({ itemId: selectedItem.id, portion: null })
+                        } else {
+                          const found = (selectedItem.portionOptions ?? []).find((p) => p.id === value)
+                          if (found) setPortionPick({ itemId: selectedItem.id, portion: found })
+                        }
+                      }}
+                    >
+                      {(selectedItem.portionOptions ?? []).map((p) => {
+                        const servings = sellableServingsFor(selectedItem, p)
+                        const disabled = servings <= 0
+                        return (
+                          <div
+                            key={p.id}
+                            className={cn(
+                              "flex items-center gap-2 rounded-md px-2 py-1.5 border transition-colors",
+                              disabled && "opacity-40",
+                            )}
+                          >
+                            <RadioGroupItem value={p.id} id={`portion-${p.id}`} disabled={disabled} />
+                            <Label htmlFor={`portion-${p.id}`} className="flex-1 cursor-pointer text-sm text-brand-ebony">
+                              {p.name}
+                            </Label>
+                            <span className="text-sm font-semibold text-brand-maroon">{formatPrice(Number(p.price))}</span>
+                            <span
+                              className={cn(
+                                "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                                platesBadgeClass(servings),
+                              )}
+                            >
+                              {disabled ? "Sold Out" : `${servings} left`}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </RadioGroup>
+                  </div>
+                )}
 
                 {starches.length > 0 && (selectedItem.hasStarch || selectedItem.starchId != null) && (
                   <div>
@@ -724,10 +822,26 @@ export function WaiterMenuGrid({
                 <Button
                   size="lg"
                   className="w-[28%] h-12 text-base bg-brand-red hover:bg-brand-red/90 text-white"
-                  onClick={() => addToOrder(selectedItem, selectedStarch, selectedVegetable)}
-                  disabled={platesFor(selectedItem) === 0}
+                  onClick={() =>
+                    // defaultQty lets a dish sell more than one per tap (e.g. a
+                    // 2pc portion counting as 2); never below 1.
+                    addToOrder(
+                      selectedItem,
+                      selectedStarch,
+                      selectedVegetable,
+                      selectedPortion,
+                      Math.max(1, Number(selectedItem.defaultQty ?? 1)),
+                    )
+                  }
+                  disabled={selectedServings === 0}
                 >
-                  {platesFor(selectedItem) === 0 ? "Sold Out" : "Add to Order"}
+                  {selectedServings === 0
+                    ? "Sold Out"
+                    : `Add to Order${
+                        Math.max(1, Number(selectedItem.defaultQty ?? 1)) > 1
+                          ? ` (${Math.max(1, Number(selectedItem.defaultQty ?? 1))})`
+                          : ""
+                      }`}
                 </Button>
               </div>
           </div>
@@ -786,7 +900,13 @@ export function WaiterMenuGrid({
                   const key = lineKey(oi)
                   const isActive =
                     !!selectedItem &&
-                    key === orderLineKey(selectedItem.id, selectedStarch?.id, selectedVegetable?.id)
+                    key ===
+                    orderLineKey(
+                      selectedItem.id,
+                      selectedStarch?.id,
+                      selectedVegetable?.id,
+                      selectedPortion?.id,
+                    )
                   return (
                     <div
                       key={key}
@@ -800,7 +920,12 @@ export function WaiterMenuGrid({
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-medium leading-snug">{oi.menuItem.name}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-snug">{oi.menuItem.name}</p>
+                          {oi.portion && (
+                            <p className="text-xs text-brand-ebony/60 leading-snug">{oi.portion.name}</p>
+                          )}
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -862,7 +987,26 @@ export function WaiterMenuGrid({
                   <span className="font-bold text-brand-maroon text-lg">{formatPrice(totalPrice)}</span>
                 </div>
                 {placeError && (
-                  <p className="w-full text-center text-sm font-medium text-red-600">{placeError}</p>
+                  <div className="w-full rounded-md border border-red-200 bg-red-50 p-2">
+                    <p className="text-center text-sm font-medium text-red-700">{placeError}</p>
+                    {stockShortfalls.length > 0 && (
+                      <ul className="mt-1.5 space-y-0.5">
+                        {stockShortfalls.map((s) => (
+                          <li
+                            key={`${s.menuId}-${s.requested}`}
+                            className="text-xs text-red-700/90 flex items-center justify-between gap-2"
+                          >
+                            <span className="truncate">{s.name}</span>
+                            <span className="tabular-nums whitespace-nowrap">
+                              {s.available > 0
+                                ? `only ${s.available} available`
+                                : "sold out"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
                 <Button className="w-full" onClick={onPlaceOrder} disabled={placing}>
                   {placing ? "Placing Order..." : "Place Order"}

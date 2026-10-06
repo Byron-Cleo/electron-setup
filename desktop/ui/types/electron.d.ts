@@ -46,6 +46,19 @@ interface MenuItem {
   mealTypes: string[];
   starch: { name: string; price: number } | null;
   vegetable: { name: string; price: number } | null;
+  /** True when this dish sells in sizes (e.g. Fried Eggs 1pc / 2pc). */
+  hasPortion?: boolean;
+  /** The portion preselected in the detail panel. */
+  defaultPortionId?: string | null;
+  /** How many servings one add adds, following the selected portion. */
+  defaultQty?: number;
+  portionOptions?: MenuPortionOption[];
+  /** Plates of the supply pool one serving of this dish consumes. */
+  platesPerServing?: number;
+  /** How many servings the pool can still cover: floor(plates / factor). */
+  sellableServings?: number;
+  /** Engine backing this dish, so the UI can explain shared vs allocated. */
+  sellingMode?: SellingMode;
 }
 
 interface MenuCreateData {
@@ -77,6 +90,8 @@ interface OrderLineItem {
   quantity: number;
   starch: OrderAccompaniment | null;
   vegetable: OrderAccompaniment | null;
+  /** Size chosen for this line. Part of the line identity, not the dish. */
+  portion: MenuPortionOption | null;
 }
 
 interface OrderItemAccompaniment {

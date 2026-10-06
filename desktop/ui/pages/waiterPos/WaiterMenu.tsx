@@ -2,7 +2,15 @@ import { useState, useEffect, useRef } from "react"
 import { useParams } from "react-router-dom"
 import { TriangleAlert } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { getMenuByMealType, createOrder, printReceipt, previewReceipt, getOrderCount, getCurrentShift } from "@/lib/api"
+import {
+  getMenuByMealType,
+  createOrder,
+  printReceipt,
+  previewReceipt,
+  getOrderCount,
+  getCurrentShift,
+  isStockShortfall,
+} from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { useWaiterOrder } from "./WaiterOrderContext"
 import WaiterMenuGrid from "./WaiterMenuGrid"
@@ -12,6 +20,7 @@ function toReceiptItems(orderItems: OrderLineItem[]): ReceiptItem[] {
     const starch = oi.starch
     const vegetable = oi.vegetable
     const accompaniments: ReceiptAccompaniment[] = [
+      ...(oi.portion ? [{ name: oi.portion.name, charged: false, price: 0, note: true }] : []),
       ...(starch ? [{ name: starch.name, charged: Number(starch.price ?? 0) > 0, price: Number(starch.price ?? 0) }] : []),
       ...(vegetable ? [{ name: vegetable.name, charged: Number(vegetable.price ?? 0) > 0, price: Number(vegetable.price ?? 0) }] : []),
       ...(!starch && oi.menuItem.hasStarch
@@ -21,7 +30,9 @@ function toReceiptItems(orderItems: OrderLineItem[]): ReceiptItem[] {
         ? [{ name: "No vegetables", charged: false, price: 0, note: true }]
         : []),
     ]
-    const unitPrice = Number(oi.menuItem.price)
+    // A portion replaces the dish price — it is the item being sold. Its name is
+    // printed as an uncharged note so the kitchen ticket shows the size ordered.
+    const unitPrice = oi.portion ? Number(oi.portion.price) : Number(oi.menuItem.price)
     const lineTotal =
       (unitPrice + Number(starch?.price ?? 0) + Number(vegetable?.price ?? 0)) * oi.quantity
     return { name: oi.menuItem.name, accompaniments, qty: oi.quantity, unitPrice, lineTotal }
@@ -32,12 +43,14 @@ function buildOrderItems(orderItems: OrderLineItem[]): CreateOrderItemData[] {
   return orderItems.map((oi) => ({
     menuId: oi.menuItem.id,
     qty: oi.quantity,
-    price: Number(oi.menuItem.price),
-    name: oi.menuItem.name,
+    // A portion is the item being sold, so its price is the line's price.
+    price: oi.portion ? Number(oi.portion.price) : Number(oi.menuItem.price),
+    name: oi.portion ? `${oi.menuItem.name} (${oi.portion.name})` : oi.menuItem.name,
     slug: oi.menuItem.slug,
     image: oi.menuItem.images[0] ?? "",
     starchId: oi.starch?.id ?? null,
     vegetableId: oi.vegetable?.id ?? null,
+    portionId: oi.portion?.id ?? null,
   }))
 }
 
@@ -155,6 +168,7 @@ export function WaiterMenu() {
     replacementTargetId,
     setReplacementTargetId,
     prefillFromVoid,
+    applyShortfalls,
   } = useWaiterOrder()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
@@ -164,6 +178,8 @@ export function WaiterMenu() {
   const [loadedPeriod, setLoadedPeriod] = useState<string | null>(null)
   const [placing, setPlacing] = useState(false)
   const [placeError, setPlaceError] = useState<string | null>(null)
+  /** Per-dish ceilings from the last stock rejection, for the adjustment notice. */
+  const [stockShortfalls, setStockShortfalls] = useState<StockShortfall[]>([])
   const [previewing, setPreviewing] = useState(false)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -245,10 +261,20 @@ export function WaiterMenu() {
     }
   }, [mealPeriod])
 
+  // Pull fresh availability without remounting: the cart and any open detail
+  // panel stay exactly where the waiter left them.
+  function refreshMenu() {
+    if (!mealPeriod) return
+    getMenuByMealType(mealPeriod)
+      .then((data) => setItems(data))
+      .catch(() => {})
+  }
+
   async function placeOrder() {
     if (!user || orderItems.length === 0 || !mealPeriod) return
     setPlacing(true)
     setPlaceError(null)
+    setStockShortfalls([])
     // Replacement flow: link the new order to the targeted voided order
     // (falls back to the oldest pending void when placing a normal order)
     const replacementForId = replacementTargetId ?? voidedOrders[0]?.id
@@ -274,13 +300,32 @@ export function WaiterMenu() {
       clearOrder()
       await logout()
     } catch (err) {
+      // Stock rejection: the server tells us the real ceiling per dish. Trim only
+      // the offending lines to what the pool can actually cover and leave every
+      // other line untouched — no reload, so the waiter's cart survives.
+      if (isStockShortfall(err)) {
+        const adjusted = applyShortfalls(err.shortfalls ?? [])
+        setStockShortfalls(err.shortfalls ?? [])
+        setPlacing(false)
+        if (err.shortfalls?.length) {
+          setPlaceError(
+            adjusted.length > 0
+              ? `Not enough stock for ${adjusted.join(", ")}. Reduced to the available amount — adjust and try again.`
+              : "Not enough stock for one or more items. Adjust the order and try again.",
+          )
+        } else {
+          setPlaceError(err.message)
+        }
+        return
+      }
       if (err instanceof Error && err.message.includes("No active shift")) {
         setNoShift(true)
       }
       setPlaceError(err instanceof Error ? err.message : "Failed to place order")
       setPlacing(false)
-      // Auto-refresh menu grid after rejection (sold out / no shift updates)
-      setTimeout(() => window.location.reload(), 1500)
+      // Refresh the menu grid so sold-out dishes stop being offered, without
+      // throwing away the cart the waiter is still editing.
+      refreshMenu()
     }
   }
 
@@ -332,6 +377,7 @@ export function WaiterMenu() {
       error={error}
       placing={placing}
       placeError={placeError}
+      stockShortfalls={stockShortfalls}
       onPlaceOrder={placeOrder}
       previewing={previewing}
       previewHtml={previewHtml}
