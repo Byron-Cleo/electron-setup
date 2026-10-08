@@ -378,21 +378,29 @@ function ShiftReportView({ report }: Props) {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Payment Reconciliation</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
+          <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-lg border border-green-200 bg-green-50 p-3">
               <p className="text-xs text-green-700 font-medium flex items-center gap-1 mb-2">
                 <Wallet className="h-3 w-3" /> M-Pesa
               </p>
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-green-600">System Total</span>
-                  <span className="font-medium text-green-700">{money(payments.mpesaTotal)}</span>
+                  <span className="text-xs text-green-600">Direct M-Pesa Amount:</span>
+                  <span className="font-medium text-green-700">{money(payments.mpesaDirect)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-green-600">Declared</span>
+                  <span className="text-xs text-green-600">From M-Pesa + Cash Orders' Amount:</span>
+                  <span className="font-medium text-green-700">{money(payments.mpesaFromPartial)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs text-green-600">Manager Declared Amount:</span>
                   <span className="font-medium text-green-700">
                     {payments.declaredMpesa !== null ? money(payments.declaredMpesa) : "—"}
                   </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-green-600">Total M-Pesa</span>
+                  <span className="font-bold text-green-700">{money(payments.mpesaTotal)}</span>
                 </div>
                 <div className="flex justify-between border-t border-green-200 pt-1">
                   <span className="font-medium text-green-600">Variance</span>
@@ -408,20 +416,51 @@ function ShiftReportView({ report }: Props) {
               </p>
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-orange-600">System Total</span>
-                  <span className="font-medium text-orange-700">{money(payments.cashTotal)}</span>
+                  <span className="text-xs text-orange-600">Direct Cash Amount:</span>
+                  <span className="font-medium text-orange-700">{money(payments.cashDirect)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-orange-600">Declared</span>
+                  <span className="text-xs text-orange-600">From M-Pesa + Cash Orders' Amount:</span>
+                  <span className="font-medium text-orange-700">{money(payments.cashFromPartial)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs text-orange-600">Manager Declared Amount:</span>
                   <span className="font-medium text-orange-700">
                     {payments.declaredCash !== null ? money(payments.declaredCash) : "—"}
                   </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-orange-600">Total Cash</span>
+                  <span className="font-bold text-orange-700">{money(payments.cashTotal)}</span>
                 </div>
                 <div className="flex justify-between border-t border-orange-200 pt-1">
                   <span className="font-medium text-orange-600">Variance</span>
                   <span className={`font-bold ${payments.cashVariance !== null && payments.cashVariance < 0 ? "text-red-600" : "text-orange-700"}`}>
                     {payments.cashVariance !== null ? money(payments.cashVariance) : "—"}
                   </span>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
+              <p className="text-xs text-violet-700 font-medium flex items-center gap-1 mb-2">
+                <Wallet className="h-3 w-3" /> M-Pesa + Cash
+              </p>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-xs text-violet-600">Total Orders:</span>
+                  <span className="font-medium text-violet-700">{payments.partial.count}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs text-violet-600">M-Pesa Portion Amount:</span>
+                  <span className="font-medium text-green-700">{money(payments.partial.mpesaTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs text-violet-600">Cash Portion Amount:</span>
+                  <span className="font-medium text-orange-700">{money(payments.partial.cashTotal)}</span>
+                </div>
+                <div className="flex justify-between border-t border-violet-200 pt-1">
+                  <span className="font-bold text-violet-600">Total Partial Amount:</span>
+                  <span className="font-bold text-violet-700">{money(payments.partial.total)}</span>
                 </div>
               </div>
             </div>
@@ -435,7 +474,7 @@ function ShiftReportView({ report }: Props) {
                   <span className="font-medium text-amber-700">{payments.unpaid.count}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-amber-600">Unpaid Total</span>
+                  <span className="text-amber-600">Unpaid Total Amount:</span>
                   <span className="font-medium text-amber-700">{money(payments.unpaid.total)}</span>
                 </div>
                 <div className="flex justify-between border-t border-amber-200 pt-1">

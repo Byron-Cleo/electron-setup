@@ -269,6 +269,11 @@ export interface ShiftReportData {
   payments?: {
     cashTotal: number;
     mpesaTotal: number;
+    cashDirect: number;
+    cashFromPartial: number;
+    mpesaDirect: number;
+    mpesaFromPartial: number;
+    partial: { count: number; total: number; mpesaTotal: number; cashTotal: number };
     unpaid: { count: number; total: number };
     declaredCash: number | null;
     declaredMpesa: number | null;
@@ -352,13 +357,20 @@ ${blockCenter("OPEN = carry-forward opening plates from previous shift", "font-s
   ${divider()}
   ${blockCenter("PAYMENT RECONCILIATION", "font-weight:bold; font-size:13px;")}
   ${divider()}
-  ${row("M-Pesa (System)", money(data.payments.mpesaTotal))}
+  ${row("Total M-Pesa", money(data.payments.mpesaTotal))}
+  ${row("M-Pesa — Direct", money(data.payments.mpesaDirect))}
+  ${row("M-Pesa — From Partial", money(data.payments.mpesaFromPartial))}
   ${row("M-Pesa (Declared)", data.payments.declaredMpesa !== null ? money(data.payments.declaredMpesa) : "—")}
   ${row("M-Pesa Variance", data.payments.mpesaVariance !== null ? money(data.payments.mpesaVariance) : "—", "font-weight:bold;", data.payments.mpesaVariance !== null && data.payments.mpesaVariance < 0 ? "color:red;" : "font-weight:bold;")}
   ${divider()}
-  ${row("Cash (System)", money(data.payments.cashTotal))}
+  ${row("Total Cash", money(data.payments.cashTotal))}
+  ${row("Cash — Direct", money(data.payments.cashDirect))}
+  ${row("Cash — From Partial", money(data.payments.cashFromPartial))}
   ${row("Cash (Declared)", data.payments.declaredCash !== null ? money(data.payments.declaredCash) : "—")}
   ${row("Cash Variance", data.payments.cashVariance !== null ? money(data.payments.cashVariance) : "—", "font-weight:bold;", data.payments.cashVariance !== null && data.payments.cashVariance < 0 ? "color:red;" : "font-weight:bold;")}
+  ${divider()}
+  ${row("M-Pesa + Cash Orders", String(data.payments.partial.count))}
+  ${row("M-Pesa + Cash Total", money(data.payments.partial.total))}
   ${divider()}
   ${row("Unpaid Orders", String(data.payments.unpaid.count))}
   ${row("Unpaid Total", money(data.payments.unpaid.total))}

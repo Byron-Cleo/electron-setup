@@ -185,6 +185,12 @@ code {
   --color-brand-light: #F5EDE0;
   --color-brand-tan: #E5D2B6;
 
+  --color-brown-100: #d7ccc8;
+  --color-brown-200: #bcaaa4;
+  --color-brown-400: #8d6e63;
+  --color-brown-600: #6d4c41;
+  --color-brown-700: #5d4037;
+
   --color-admin-header: #F5F9FF;
   --color-admin-header-text: #562215;
   --color-admin-sidebar: #FFFFFF;

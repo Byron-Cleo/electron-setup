@@ -21,6 +21,7 @@ import {
   markOrderAsUnpaid,
 } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { isPartialMethod } from "@/lib/payment"
 
 function money(amount: number): string {
   return `KSH ${Number(amount).toLocaleString("en-KE", { maximumFractionDigits: 2 })}`
@@ -102,18 +103,27 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
     const paid = active.filter((o) => o.isPaid)
     const unpaid = active.filter((o) => !o.isPaid)
 
-    const cashTotal = paid
+    const cashDirect = paid
       .filter((o) => o.paymentMethod === "cash")
       .reduce((sum, o) => sum + Number(o.totalPrice), 0)
-    const mpesaTotal = paid
+    const mpesaDirect = paid
       .filter((o) => o.paymentMethod === "mpesa")
       .reduce((sum, o) => sum + Number(o.totalPrice), 0)
+    const partials = paid.filter((o) => isPartialMethod(o.paymentMethod))
+    const cashFromPartial = partials.reduce((sum, o) => sum + Number(o.cashAmount ?? 0), 0)
+    const mpesaFromPartial = partials.reduce((sum, o) => sum + Number(o.mpesaAmount ?? 0), 0)
+    // All-in: partial portions are real cash / M-Pesa money, matching the
+    // backend report shown after closing (variance compares declared vs these).
+    const cashTotal = cashDirect + cashFromPartial
+    const mpesaTotal = mpesaDirect + mpesaFromPartial
     const unpaidTotal = unpaid.reduce((sum, o) => sum + Number(o.totalPrice), 0)
     const unpaidCount = unpaid.length
     const blockingUnpaid = unpaid.filter((o) => !o.unpaidAcknowledged)
 
     const cashOrders = paid.filter((o) => o.paymentMethod === "cash").length
     const mpesaOrders = paid.filter((o) => o.paymentMethod === "mpesa").length
+    const partialOrders = partials.length
+    const partialTotal = cashFromPartial + mpesaFromPartial
 
     const revenueByMealType: Record<string, { orders: number; total: number }> = {}
     let revenue = 0
@@ -133,6 +143,12 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
       blockingUnpaid,
       cashTotal,
       mpesaTotal,
+      cashDirect,
+      cashFromPartial,
+      mpesaDirect,
+      mpesaFromPartial,
+      partialOrders,
+      partialTotal,
       unpaidTotal,
       revenue,
       revenueByMealType,
@@ -333,20 +349,30 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
               {step === 1 && (
                 <Card className="p-4">
                   <p className="mb-3 text-sm font-medium text-admin-header-text">Payment Summary (System)</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div className="rounded-lg border border-green-200 bg-green-50 p-3">
                       <p className="text-xs text-green-700 font-medium flex items-center gap-1">
                         <Wallet className="h-3 w-3" /> M-Pesa
                       </p>
                       <p className="text-lg font-bold text-green-700">{money(stats.mpesaTotal)}</p>
-                      <p className="text-xs text-green-600">{stats.mpesaOrders} orders</p>
+                      <p className="text-xs text-green-600">Direct: {money(stats.mpesaDirect)} ({stats.mpesaOrders} orders)</p>
+                      <p className="text-xs text-green-600">From M-Pesa + Cash: {money(stats.mpesaFromPartial)}</p>
                     </div>
                     <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
                       <p className="text-xs text-orange-700 font-medium flex items-center gap-1">
                         <Landmark className="h-3 w-3" /> Cash
                       </p>
                       <p className="text-lg font-bold text-orange-700">{money(stats.cashTotal)}</p>
-                      <p className="text-xs text-orange-600">{stats.cashOrders} orders</p>
+                      <p className="text-xs text-orange-600">Direct: {money(stats.cashDirect)} ({stats.cashOrders} orders)</p>
+                      <p className="text-xs text-orange-600">From M-Pesa + Cash: {money(stats.cashFromPartial)}</p>
+                    </div>
+                    <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
+                      <p className="text-xs text-violet-700 font-medium flex items-center gap-1">
+                        <Wallet className="h-3 w-3" /> M-Pesa + Cash
+                      </p>
+                      <p className="text-lg font-bold text-violet-700">{money(stats.partialTotal)}</p>
+                      <p className="text-xs text-violet-600">{stats.partialOrders} order{stats.partialOrders !== 1 ? "s" : ""} paid by both</p>
+                      <p className="text-xs text-violet-600">M-Pesa {money(stats.mpesaFromPartial)} · Cash {money(stats.cashFromPartial)}</p>
                     </div>
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                       <p className="text-xs text-amber-700 font-medium flex items-center gap-1">
@@ -620,21 +646,29 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
               {p && (
                 <Card className="p-4">
                   <p className="mb-3 text-sm font-medium text-admin-header-text">Payment Reconciliation</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div className="rounded-lg border border-green-200 bg-green-50 p-3">
                       <p className="text-xs text-green-700 font-medium flex items-center gap-1">
                         <Wallet className="h-3 w-3" /> M-Pesa
                       </p>
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-green-600">System Total</span>
-                          <span className="font-medium text-green-700">{money(p.mpesaTotal)}</span>
+                          <span className="text-xs text-green-600">Direct M-Pesa Amount:</span>
+                          <span className="font-medium text-green-700">{money(p.mpesaDirect)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-green-600">Declared</span>
+                          <span className="text-xs text-green-600">From M-Pesa + Cash Orders' Amount:</span>
+                          <span className="font-medium text-green-700">{money(p.mpesaFromPartial)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-xs text-green-600">Manager Declared Amount:</span>
                           <span className="font-medium text-green-700">
                             {p.declaredMpesa !== null ? money(p.declaredMpesa) : "—"}
                           </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-bold text-green-600">Total M-Pesa</span>
+                          <span className="font-bold text-green-700">{money(p.mpesaTotal)}</span>
                         </div>
                         <div className="flex justify-between border-t border-green-200 pt-1">
                           <span className="font-medium text-green-600">Variance</span>
@@ -654,14 +688,22 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                       </p>
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-orange-600">System Total</span>
-                          <span className="font-medium text-orange-700">{money(p.cashTotal)}</span>
+                          <span className="text-xs text-orange-600">Direct Cash Amount:</span>
+                          <span className="font-medium text-orange-700">{money(p.cashDirect)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-orange-600">Declared</span>
+                          <span className="text-xs text-orange-600">From M-Pesa + Cash Orders' Amount:</span>
+                          <span className="font-medium text-orange-700">{money(p.cashFromPartial)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-xs text-orange-600">Manager Declared Amount:</span>
                           <span className="font-medium text-orange-700">
                             {p.declaredCash !== null ? money(p.declaredCash) : "—"}
                           </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-bold text-orange-600">Total Cash</span>
+                          <span className="font-bold text-orange-700">{money(p.cashTotal)}</span>
                         </div>
                         <div className="flex justify-between border-t border-orange-200 pt-1">
                           <span className="font-medium text-orange-600">Variance</span>
@@ -675,6 +717,29 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                         </div>
                       </div>
                     </div>
+                    <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
+                      <p className="text-xs text-violet-700 font-medium flex items-center gap-1">
+                        <Wallet className="h-3 w-3" /> M-Pesa + Cash
+                      </p>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-xs text-violet-600">Total Orders:</span>
+                          <span className="font-medium text-violet-700">{p.partial.count}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-xs text-violet-600">M-Pesa Portion Amount:</span>
+                          <span className="font-medium text-green-700">{money(p.partial.mpesaTotal)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-xs text-violet-600">Cash Portion Amount:</span>
+                          <span className="font-medium text-orange-700">{money(p.partial.cashTotal)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-violet-200 pt-1">
+                          <span className="font-bold text-violet-600">Total Partial Amount:</span>
+                          <span className="font-bold text-violet-700">{money(p.partial.total)}</span>
+                        </div>
+                      </div>
+                    </div>
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                       <p className="text-xs text-amber-700 font-medium flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" /> Unpaid
@@ -685,7 +750,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                           <span className="font-medium text-amber-700">{p.unpaid.count}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-amber-600">Unpaid Total</span>
+                          <span className="text-amber-600">Unpaid Total Amount:</span>
                           <span className="font-medium text-amber-700">{money(p.unpaid.total)}</span>
                         </div>
                         <div className="flex justify-between border-t border-amber-200 pt-1">

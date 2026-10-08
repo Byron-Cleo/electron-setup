@@ -167,6 +167,10 @@ interface Order {
   voidedOrderId: string | null;
   paymentType: string | null;
   batchId: string | null;
+  /** M-Pesa portion when paymentMethod = "mpesa-cash-partial"; null otherwise. */
+  mpesaAmount: number | null;
+  /** Cash portion when paymentMethod = "mpesa-cash-partial"; null otherwise. */
+  cashAmount: number | null;
   shiftId: string | null;
   unpaidAcknowledged: boolean;
   unpaidAcknowledgedAt: string | null;
@@ -944,6 +948,11 @@ interface ShiftReport {
   payments: {
     cashTotal: number;
     mpesaTotal: number;
+    cashDirect: number;
+    cashFromPartial: number;
+    mpesaDirect: number;
+    mpesaFromPartial: number;
+    partial: { count: number; total: number; mpesaTotal: number; cashTotal: number };
     unpaid: { count: number; total: number };
     declaredCash: number | null;
     declaredMpesa: number | null;
@@ -1021,6 +1030,11 @@ interface ShiftReportData {
   payments: {
     cashTotal: number;
     mpesaTotal: number;
+    cashDirect: number;
+    cashFromPartial: number;
+    mpesaDirect: number;
+    mpesaFromPartial: number;
+    partial: { count: number; total: number; mpesaTotal: number; cashTotal: number };
     unpaid: { count: number; total: number };
     declaredCash: number | null;
     declaredMpesa: number | null;
@@ -1168,7 +1182,7 @@ interface ElectronAPI {
     getCount: () => Promise<{ count: number }>;
     getUnpaidCount: () => Promise<{ count: number }>;
     void: (orderId: string, data: { voidedById: string; reason?: string }) => Promise<Order>;
-    updatePayment: (orderId: string, data: { paymentMethod: "cash" | "mpesa"; paymentType?: "SINGLE" | "BATCH"; batchId?: string }) => Promise<Order>;
+    updatePayment: (orderId: string, data: { paymentMethod: "cash" | "mpesa" | "mpesa-cash-partial"; paymentType?: "SINGLE" | "BATCH"; batchId?: string; mpesaAmount?: number; cashAmount?: number }) => Promise<Order>;
     markUnpaid: (orderId: string, data: { acknowledgedById: string; customerId?: string }) => Promise<Order>;
     unmarkUnpaid: (orderId: string) => Promise<Order>;
     assignCustomer: (orderId: string, data: { customerId: string; assignedById: string }) => Promise<Order>;

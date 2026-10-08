@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark, Lock } from "lucide-react"
+import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark, Lock, Smartphone } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -13,8 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs, markOrderUnpaidWithCustomer, assignOrderCustomer, unassignOrderCustomer, unmarkOrderAsUnpaid } from "@/lib/api"
+import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs, getUnpaidOrderCount, markOrderUnpaidWithCustomer, assignOrderCustomer, unassignOrderCustomer, unmarkOrderAsUnpaid } from "@/lib/api"
 import { cn, formatElapsed, elapsedSeverity, ELAPSED_SEVERITY_CLASS, unpaidMarkedByLabel } from "@/lib/utils"
+import { PARTIAL_METHOD, isPartialMethod, formatPaymentMethod, validateSplit, allocateBatchSplit, type PaymentMethodValue } from "@/lib/payment"
 import { useAuthStore } from "@/stores/auth"
 import { useUserRoles } from "@/hooks/useUserRoles"
 import { usePagination } from "@/hooks/usePagination"
@@ -107,14 +108,99 @@ function AccompanimentLine({ name, price }: { name: string; price: number }) {
   )
 }
 
+/** Cashier-keyed amount from a number input: blank or invalid reads as 0. */
+function parseAmountInput(raw: string): number {
+  const n = Number(raw)
+  return Number.isFinite(n) && n >= 0 ? n : 0
+}
+
+/**
+ * The two keyed portions of an M-Pesa + Cash partial payment, with live
+ * reconciliation against the expected total. The Confirm buttons are gated on
+ * the same validateSplit() call, so the feedback shown here can never
+ * disagree with the gating.
+ */
+function PartialSplitFields({
+  idPrefix,
+  mpesa,
+  cash,
+  onMpesaChange,
+  onCashChange,
+  total,
+}: {
+  idPrefix: string
+  mpesa: string
+  cash: string
+  onMpesaChange: (v: string) => void
+  onCashChange: (v: string) => void
+  total: number
+}) {
+  const keyedMpesa = parseAmountInput(mpesa)
+  const keyedCash = parseAmountInput(cash)
+  const { ok, difference } = validateSplit(keyedMpesa, keyedCash, total)
+  return (
+    <div
+      className={`space-y-2 rounded-lg border p-3 transition-colors ${
+        ok ? "border-green-300 bg-green-50/60" : "border-red-300 bg-red-50/60"
+      }`}
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idPrefix}-mpesa-amount`} className="flex items-center gap-1.5 text-xs font-medium text-green-700">
+            <Smartphone className="h-3.5 w-3.5" />
+            M-Pesa amount
+          </Label>
+          <Input
+            id={`${idPrefix}-mpesa-amount`}
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            value={mpesa}
+            onChange={(e) => onMpesaChange(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idPrefix}-cash-amount`} className="flex items-center gap-1.5 text-xs font-medium text-orange-700">
+            <Banknote className="h-3.5 w-3.5" />
+            Cash amount
+          </Label>
+          <Input
+            id={`${idPrefix}-cash-amount`}
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            value={cash}
+            onChange={(e) => onCashChange(e.target.value)}
+          />
+        </div>
+      </div>
+      {ok ? (
+        <p className="text-xs font-semibold text-green-600">
+          Balanced — {money(keyedMpesa + keyedCash)} of {money(total)}
+        </p>
+      ) : (
+        <p className="text-xs font-semibold">
+          <span className={difference > 0 ? "text-amber-600" : "text-red-600"}>
+            {difference > 0 ? `Remaining: ${money(difference)}` : `Over by ${money(-difference)}`}
+          </span>
+          <span className="text-red-600"> — keyed {money(keyedMpesa + keyedCash)} of {money(total)}</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
 type CashierView = "dashboard" | "orders-entry" | "orders" | "payment-entry" | "payment" | "void-entry" | "void"
 
-type OrderTab = "ALL" | "MPESA" | "CASH" | "VOID" | "UNPAID" | "MARKED_UNPAID" | "BATCH"
+type OrderTab = "ALL" | "MPESA" | "CASH" | "PARTIAL" | "VOID" | "UNPAID" | "MARKED_UNPAID" | "BATCH"
 
 const TAB_LABELS: Record<OrderTab, string> = {
   ALL: "All",
   MPESA: "M-Pesa",
   CASH: "Cash",
+  PARTIAL: "Partial",
   VOID: "Void",
   UNPAID: "New Unpaid",
   MARKED_UNPAID: "Marked Unpaid",
@@ -133,6 +219,10 @@ const TAB_COLORS: Record<OrderTab, { active: string; inactive: string }> = {
   CASH: {
     active: "bg-orange-100 text-orange-700",
     inactive: "text-orange-400 hover:text-orange-600",
+  },
+  PARTIAL: {
+    active: "bg-brown-100 text-brown-700",
+    inactive: "text-brown-400 hover:text-brown-600",
   },
   VOID: {
     active: "bg-red-100 text-red-700",
@@ -207,6 +297,7 @@ function columnsForOrdersTab(tab: OrderTab, scopedToOperationDay: boolean): Colu
         return UNPAID_COLUMNS
       case "MPESA":
       case "CASH":
+      case "PARTIAL":
       case "BATCH":
         return PAID_COLUMNS
       case "MARKED_UNPAID":
@@ -389,7 +480,7 @@ function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?
                   <span className="text-sm text-admin-muted">All orders paid</span>
                 )}
               </div>
-              <p className="text-xs text-admin-muted mt-1">Mark an order as paid via M-Pesa or Cash.</p>
+              <p className="text-xs text-admin-muted mt-1">Mark an order as paid via M-Pesa, Cash, or a split of both.</p>
             </div>
           </div>
         </Card>
@@ -475,6 +566,12 @@ interface ShiftEntryCardProps {
   isOpen: boolean
   disabled: boolean
   onClick?: () => void
+  /**
+   * Marked-unpaid backlog (the sidebar cashier badge number). Rendered as a
+   * red attention badge so the figure can be traced: sidebar → All Shifts
+   * card → Marked Unpaid tab. Hidden when 0/undefined.
+   */
+  badge?: number
 }
 
 /**
@@ -494,17 +591,26 @@ function ShiftEntryCard({
   isOpen,
   disabled,
   onClick,
+  badge,
 }: ShiftEntryCardProps) {
   return (
     <Card
       className={cn(
-        "w-60 shrink-0 snap-start p-4 text-center transition-colors",
+        "relative w-60 shrink-0 snap-start p-4 text-center transition-colors",
         disabled
           ? "cursor-not-allowed border-2 border-red-300 bg-red-50 opacity-60"
           : "cursor-pointer hover:border-admin-accent",
       )}
       onClick={disabled ? undefined : onClick}
     >
+      {badge !== undefined && badge > 0 && (
+        <span
+          title={`${badge} marked-unpaid order${badge !== 1 ? "s" : ""} awaiting reconciliation`}
+          className="absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm"
+        >
+          {badge}
+        </span>
+      )}
       <div className={cn("mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg", iconWrapClassName)}>
         <Icon size={24} className={iconClassName} />
       </div>
@@ -530,8 +636,10 @@ function ShiftEntryCard({
 function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string | undefined, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
+  const [unpaidCount, setUnpaidCount] = useState(0)
   useEffect(() => {
     getShiftConfigs().then(setShiftConfigs).catch(() => {})
+    getUnpaidOrderCount().then(setUnpaidCount).catch(() => {})
     listShifts()
       .then((shifts) => {
         // Prefer the shift that is actually running: the newest operationDay
@@ -602,6 +710,7 @@ function OrdersEntryView({ onSelectShift, isCashier, currentstring }: { onSelect
             timeRange="No shift scope"
             isOpen={false}
             disabled={false}
+            badge={unpaidCount}
             onClick={() => onSelectShift(undefined, undefined)}
           />
         </ShiftEntryRow>
@@ -708,6 +817,9 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
       case "CASH":
         source = source.filter((o) => o.isPaid && o.paymentMethod === "cash")
         break
+      case "PARTIAL":
+        source = source.filter((o) => o.isPaid && isPartialMethod(o.paymentMethod))
+        break
       case "VOID":
         source = source.filter((o) => o.isVoid)
         break
@@ -718,7 +830,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
         source = source.filter((o) => o.isPaid && o.paymentType === "BATCH")
         break
       case "MARKED_UNPAID":
-        source = source.filter((o) => o.unpaidAcknowledged && !o.isVoid)
+        source = source.filter((o) => o.unpaidAcknowledged && !o.isPaid && !o.isVoid)
         break
     }
     if (searchInput) {
@@ -747,9 +859,10 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
     ALL: orders.length,
     MPESA: orders.filter((o) => o.isPaid && o.paymentMethod === "mpesa").length,
     CASH: orders.filter((o) => o.isPaid && o.paymentMethod === "cash").length,
+    PARTIAL: orders.filter((o) => o.isPaid && isPartialMethod(o.paymentMethod)).length,
     VOID: orders.filter((o) => o.isVoid).length,
     UNPAID: orders.filter((o) => !o.isPaid && !o.isVoid && !o.unpaidAcknowledged).length,
-    MARKED_UNPAID: orders.filter((o) => o.unpaidAcknowledged && !o.isVoid).length,
+    MARKED_UNPAID: orders.filter((o) => o.unpaidAcknowledged && !o.isPaid && !o.isVoid).length,
     BATCH: orders.filter((o) => o.isPaid && o.paymentType === "BATCH").length,
   }), [orders])
 
@@ -863,7 +976,9 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
         }
         return (
           <div className="flex items-center justify-center gap-1.5">
-            {order.paymentMethod === "mpesa" ? (
+            {isPartialMethod(order.paymentMethod) ? (
+              <span className="inline-flex items-center rounded-full bg-brown-100 px-2 py-0.5 text-xs font-semibold text-brown-700">M-Pesa + Cash</span>
+            ) : order.paymentMethod === "mpesa" ? (
               <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">M-Pesa</span>
             ) : (
               <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">Cash</span>
@@ -955,7 +1070,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
       {!loading && !error && (
         <div className="flex items-center justify-center gap-2 mb-4">
           <Heading as="h2" className="text-admin-header-text text-xl">
-            {shiftType ? `${shiftType} Shift Orders` : "Orders"}
+            {shiftType ? `${shiftType} Shift Orders` : "All Shift Orders"}
           </Heading>
           {shiftType && (
             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
@@ -968,7 +1083,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
       )}
 
       <div className="flex flex-wrap gap-2 justify-center">
-        {(["ALL", "UNPAID", "MPESA", "CASH", "VOID", "BATCH", "MARKED_UNPAID"] as OrderTab[]).map((tab) => (
+        {(["ALL", "UNPAID", "MPESA", "CASH", "PARTIAL", "VOID", "BATCH", "MARKED_UNPAID"] as OrderTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -979,7 +1094,16 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
             }`}
           >
             {TAB_LABELS[tab]}
-            <span className="ml-1.5 opacity-70">({counts[tab]})</span>
+            {tab === "MARKED_UNPAID" && counts[tab] > 0 ? (
+              <span
+                title={`${counts[tab]} marked-unpaid order${counts[tab] !== 1 ? "s" : ""} awaiting reconciliation`}
+                className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+              >
+                {counts[tab]}
+              </span>
+            ) : (
+              <span className="ml-1.5 opacity-70">({counts[tab]})</span>
+            )}
           </button>
         ))}
       </div>
@@ -1036,7 +1160,14 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
                 <div className="text-admin-muted">Date</div>
                 <div className="font-medium">{formatDate(detailOrder.createdAt)}</div>
                 <div className="text-admin-muted">Payment</div>
-                <div className="font-medium">{detailOrder.paymentMethod}</div>
+                <div className="font-medium">
+                  {formatPaymentMethod(detailOrder.paymentMethod)}
+                  {isPartialMethod(detailOrder.paymentMethod) && detailOrder.isPaid && (
+                    <span className="block text-xs font-normal text-admin-muted">
+                      M-Pesa {money(detailOrder.mpesaAmount ?? 0)} · Cash {money(detailOrder.cashAmount ?? 0)}
+                    </span>
+                  )}
+                </div>
                 <div className="text-admin-muted">Status</div>
                 <div className="font-medium">
                   <div className="flex items-center gap-1.5">
@@ -1505,8 +1636,10 @@ function VoidView({ shiftType, operationDay }: { shiftType?: string; operationDa
 function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelectShift: (shiftType: string | undefined, operationDay?: string) => void; isCashier: boolean; currentstring?: string }) {
   const [shiftConfigs, setShiftConfigs] = useState<{ id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean }[]>([])
   const [opDays, setOpDays] = useState<Record<string, string>>({})
+  const [unpaidCount, setUnpaidCount] = useState(0)
   useEffect(() => {
     getShiftConfigs().then(setShiftConfigs).catch(() => {})
+    getUnpaidOrderCount().then(setUnpaidCount).catch(() => {})
     listShifts()
       .then((shifts) => {
         // Prefer the shift that is actually running: the newest operationDay
@@ -1576,6 +1709,7 @@ function PaymentEntryView({ onSelectShift, isCashier, currentstring }: { onSelec
             timeRange="No shift scope"
             isOpen={false}
             disabled={false}
+            badge={unpaidCount}
             onClick={() => onSelectShift(undefined, undefined)}
           />
         </ShiftEntryRow>
@@ -1591,14 +1725,20 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
   const [error, setError] = useState("")
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardStep, setWizardStep] = useState<1 | 2>(1)
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodValue | null>(null)
   const [selectedOrders, setSelectedOrders] = useState<Order[]>([])
   const [orderSearch, setOrderSearch] = useState("")
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [processing, setProcessing] = useState(false)
   const [payOrder, setPayOrder] = useState<Order | null>(null)
-  const [payMethod, setPayMethod] = useState<"cash" | "mpesa" | null>(null)
+  const [payMethod, setPayMethod] = useState<PaymentMethodValue | null>(null)
   const [payProcessing, setPayProcessing] = useState(false)
+  // Keyed portions for M-Pesa + Cash partial payments, as raw input strings;
+  // blank reads as 0 and they must reconcile with the total to confirm.
+  const [payMpesaAmount, setPayMpesaAmount] = useState("")
+  const [payCashAmount, setPayCashAmount] = useState("")
+  const [batchMpesaTotal, setBatchMpesaTotal] = useState("")
+  const [batchCashTotal, setBatchCashTotal] = useState("")
   const [payCategory, setPayCategory] = useState<"NEW" | "MARKED">("NEW")
   const [unpaidPickerOrder, setUnpaidPickerOrder] = useState<Order | null>(null)
   const [markingUnpaidId, setMarkingUnpaidId] = useState<string | null>(null)
@@ -1696,6 +1836,11 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     return source
   }, [orders, orderSearch, selectedDate, payCategory, shiftType, shiftOpDayById])
 
+  // The marked-unpaid chase count — the same figure as the sidebar cashier
+  // badge, so the number can be traced: sidebar → All Shifts card → this
+  // category. Payment view orders are already !isPaid && !isVoid.
+  const markedCount = useMemo(() => orders.filter((o) => o.unpaidAcknowledged).length, [orders])
+
   const {
     currentPage,
     totalPages,
@@ -1711,11 +1856,26 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     [selectedOrders]
   )
 
+  // Live reconciliation of the keyed partial splits; the Confirm buttons stay
+  // disabled until these balance, mirroring the PartialSplitFields feedback.
+  const singleSplit = validateSplit(
+    parseAmountInput(payMpesaAmount),
+    parseAmountInput(payCashAmount),
+    payOrder ? Number(payOrder.totalPrice) : 0,
+  )
+  const batchSplit = validateSplit(
+    parseAmountInput(batchMpesaTotal),
+    parseAmountInput(batchCashTotal),
+    accumulatedTotal,
+  )
+
   function openWizard() {
     setWizardStep(1)
     setPaymentMethod(null)
     setSelectedOrders([])
     setOrderSearch("")
+    setBatchMpesaTotal("")
+    setBatchCashTotal("")
     setWizardOpen(true)
   }
 
@@ -1729,13 +1889,32 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
 
   async function handleConfirmPayment() {
     if (!paymentMethod || selectedOrders.length === 0) return
+    // Partial batch: the keyed totals are poured across the selected orders
+    // (sequential fill) so every order row carries its own M-Pesa/cash
+    // portions — the report then reads its split straight off the orders.
+    const allocationById = isPartialMethod(paymentMethod)
+      ? new Map(
+          allocateBatchSplit(
+            selectedOrders.map((o) => ({ id: o.id, total: Number(o.totalPrice) })),
+            parseAmountInput(batchMpesaTotal),
+          ).map((a) => [a.id, a]),
+        )
+      : null
     setProcessing(true)
     try {
       const batchId = crypto.randomUUID()
       await Promise.all(
-        selectedOrders.map((o) =>
-          updateOrderPayment(o.id, paymentMethod, "BATCH", batchId)
-        )
+        selectedOrders.map((o) => {
+          const split = allocationById?.get(o.id)
+          return updateOrderPayment(
+            o.id,
+            paymentMethod,
+            "BATCH",
+            batchId,
+            split?.mpesaAmount,
+            split?.cashAmount,
+          )
+        })
       )
       const paidIds = new Set(selectedOrders.map((o) => o.id))
       setOrders((prev) => prev.filter((o) => !paidIds.has(o.id)))
@@ -1862,7 +2041,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
             <Button
               size="sm"
               className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
-              onClick={() => { setPayOrder(order); setPayMethod(null) }}
+              onClick={() => { setPayOrder(order); setPayMethod(null); setPayMpesaAmount(""); setPayCashAmount("") }}
             >
               <Banknote />
               Pay
@@ -1926,7 +2105,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
       {!loading && !error && (
         <div className="flex items-center justify-center gap-2 mb-4">
           <Heading as="h2" className="text-admin-header-text text-xl">
-            {shiftType ? `${shiftType} Shift Payments` : "Payment"}
+            {shiftType ? `${shiftType} Shift Payments` : "All Shift Payments"}
           </Heading>
           {shiftType && (
             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
@@ -1967,6 +2146,14 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
             }`}
           >
             {tab.label}
+            {tab.key === "MARKED" && markedCount > 0 && (
+              <span
+                title={`${markedCount} marked-unpaid order${markedCount !== 1 ? "s" : ""} awaiting reconciliation`}
+                className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+              >
+                {markedCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -2008,7 +2195,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
 
       {/* Single Order Payment Dialog */}
       <Dialog open={payOrder !== null} onOpenChange={(open) => { if (!open) setPayOrder(null) }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="text-center text-xs font-black uppercase tracking-widest text-green-600">Pay Order #{payOrder?.orderNumber}</DialogTitle>
           </DialogHeader>
@@ -2049,34 +2236,52 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
               </div>
 
               <p className="text-sm font-medium text-admin-header-text mb-2">Select payment method</p>
-              <RadioGroup value={payMethod ?? ""} onValueChange={(v) => setPayMethod(v as "cash" | "mpesa")} className="flex flex-row gap-4">
+              <RadioGroup value={payMethod ?? ""} onValueChange={(v) => setPayMethod(v as PaymentMethodValue)} className="grid grid-cols-3 gap-2">
                 <Label
                   htmlFor="single-mpesa"
-                  className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-4 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-admin-card-border p-2.5 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
                 >
                   <RadioGroupItem value="mpesa" id="single-mpesa" className="mt-0.5" />
-                  <span className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">M</span>
-                    <span>
-                      <span className="block mb-1 font-medium text-admin-header-text">M-Pesa</span>
-                      <span className="block text-xs text-admin-muted">Mobile money payment</span>
-                    </span>
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 text-[11px] font-bold text-green-700">M</span>
+                    <span className="text-xs font-medium leading-tight text-admin-header-text">M-Pesa</span>
+                    <span className="text-[10px] leading-snug text-admin-muted">Mobile money payment</span>
                   </span>
                 </Label>
                 <Label
                   htmlFor="single-cash"
-                  className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-4 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-admin-card-border p-2.5 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
                 >
                   <RadioGroupItem value="cash" id="single-cash" className="mt-0.5" />
-                  <span className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">C</span>
-                    <span>
-                      <span className="block mb-1 font-medium text-admin-header-text">Cash</span>
-                      <span className="block text-xs text-admin-muted">Physical cash payment</span>
-                    </span>
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">C</span>
+                    <span className="text-xs font-medium leading-tight text-admin-header-text">Cash</span>
+                    <span className="text-[10px] leading-snug text-admin-muted">Physical cash payment</span>
+                  </span>
+                </Label>
+                <Label
+                  htmlFor="single-partial"
+                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-admin-card-border p-2.5 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-violet-500"
+                >
+                  <RadioGroupItem value={PARTIAL_METHOD} id="single-partial" className="mt-0.5" />
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700">MC</span>
+                    <span className="text-xs font-medium leading-tight text-admin-header-text">M-Pesa + Cash</span>
+                    <span className="text-[10px] leading-snug text-admin-muted">Split payment — enter both amounts</span>
                   </span>
                 </Label>
               </RadioGroup>
+
+              {isPartialMethod(payMethod) && (
+                <PartialSplitFields
+                  idPrefix="single"
+                  mpesa={payMpesaAmount}
+                  cash={payCashAmount}
+                  onMpesaChange={setPayMpesaAmount}
+                  onCashChange={setPayCashAmount}
+                  total={Number(payOrder.totalPrice)}
+                />
+              )}
             </div>
           )}
 
@@ -2084,12 +2289,19 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
             <Button
               type="button"
               className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200"
-              disabled={!payMethod || payProcessing}
+              disabled={!payMethod || payProcessing || (isPartialMethod(payMethod) && !singleSplit.ok)}
               onClick={async () => {
                 if (!payOrder || !payMethod) return
                 setPayProcessing(true)
                 try {
-                  await updateOrderPayment(payOrder.id, payMethod, "SINGLE")
+                  await updateOrderPayment(
+                    payOrder.id,
+                    payMethod,
+                    "SINGLE",
+                    undefined,
+                    isPartialMethod(payMethod) ? parseAmountInput(payMpesaAmount) : undefined,
+                    isPartialMethod(payMethod) ? parseAmountInput(payCashAmount) : undefined,
+                  )
                   setOrders((prev) => prev.filter((o) => o.id !== payOrder.id))
                   setPayOrder(null)
                 } catch (err) {
@@ -2136,31 +2348,38 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
           {wizardStep === 1 && (
             <div className="space-y-3 py-2">
               <p className="text-sm font-medium text-admin-header-text mb-2">Select payment method</p>
-              <RadioGroup value={paymentMethod ?? ""} onValueChange={(v) => setPaymentMethod(v as "cash" | "mpesa")} className="flex flex-row gap-4">
+              <RadioGroup value={paymentMethod ?? ""} onValueChange={(v) => setPaymentMethod(v as PaymentMethodValue)} className="grid grid-cols-3 gap-2">
                 <Label
                   htmlFor="pay-mpesa"
-                  className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-4 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-admin-card-border p-2.5 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
                 >
                   <RadioGroupItem value="mpesa" id="pay-mpesa" className="mt-0.5" />
-                  <span className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">M</span>
-                    <span>
-                      <span className="block mb-1 font-medium text-admin-header-text">M-Pesa</span>
-                      <span className="block text-xs text-admin-muted">Mobile money payment</span>
-                    </span>
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 text-[11px] font-bold text-green-700">M</span>
+                    <span className="text-xs font-medium leading-tight text-admin-header-text">M-Pesa</span>
+                    <span className="text-[10px] leading-snug text-admin-muted">Mobile money payment</span>
                   </span>
                 </Label>
                 <Label
                   htmlFor="pay-cash"
-                  className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-admin-card-border p-4 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
+                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-admin-card-border p-2.5 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
                 >
                   <RadioGroupItem value="cash" id="pay-cash" className="mt-0.5" />
-                  <span className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">C</span>
-                    <span>
-                      <span className="block mb-1 font-medium text-admin-header-text">Cash</span>
-                      <span className="block text-xs text-admin-muted">Physical cash payment</span>
-                    </span>
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">C</span>
+                    <span className="text-xs font-medium leading-tight text-admin-header-text">Cash</span>
+                    <span className="text-[10px] leading-snug text-admin-muted">Physical cash payment</span>
+                  </span>
+                </Label>
+                <Label
+                  htmlFor="pay-partial"
+                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-admin-card-border p-2.5 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-violet-500"
+                >
+                  <RadioGroupItem value={PARTIAL_METHOD} id="pay-partial" className="mt-0.5" />
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700">MC</span>
+                    <span className="text-xs font-medium leading-tight text-admin-header-text">M-Pesa + Cash</span>
+                    <span className="text-[10px] leading-snug text-admin-muted">Split payment — enter both amounts</span>
                   </span>
                 </Label>
               </RadioGroup>
@@ -2237,6 +2456,16 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
                   <span className="text-lg font-bold text-blue-700">{money(accumulatedTotal)}</span>
                 </div>
               )}
+              {isPartialMethod(paymentMethod) && selectedOrders.length > 0 && (
+                <PartialSplitFields
+                  idPrefix="batch"
+                  mpesa={batchMpesaTotal}
+                  cash={batchCashTotal}
+                  onMpesaChange={setBatchMpesaTotal}
+                  onCashChange={setBatchCashTotal}
+                  total={accumulatedTotal}
+                />
+              )}
             </div>
           )}
 
@@ -2269,7 +2498,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
                   <Button
                     type="button"
                     className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200"
-                    disabled={selectedOrders.length === 0 || processing}
+                    disabled={selectedOrders.length === 0 || processing || (isPartialMethod(paymentMethod) && !batchSplit.ok)}
                     onClick={handleConfirmPayment}
                   >
                     {processing ? "Processing..." : `Confirm Payment`}
