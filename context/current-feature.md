@@ -5,7 +5,35 @@ fullstack
 
 ## Status
 
-Not Started
+Complete
+
+## Goals
+
+1. Let a supply's whole produced pool be sellable by every dish derived from it, with **zero allocation clicks** when the split cannot be guessed (Fish, milk, Chapati)
+2. Keep today's hard-cap allocation where a real reservation decision exists, but make it **weighted** so fractional servings deduct correctly (Boiled Meat Half `0.5` deducts `2.0` plates for 4 servings, not `4`)
+3. Support **portions** (Fried Eggs 1pc / 2pc) reusing the existing accompaniment convention, priced separately and summed
+4. Preserve exact traceability: every sold plate recorded against its `CookingRecord` + menu, void restores to the same batch
+5. Preserve carry-over semantics: unallocated (`ALLOCATED`) or unconsumed pool (`SHARED`) becomes the next shift's opening stock
+6. Make fractional pools survive shift boundaries — a 9.5 pool must carry over as **exactly 9.5**
+7. Ship with **Fish left on `ALLOCATED`** (behaviour byte-identical to today) as the safety net
+
+## Notes
+
+- **Two engines in one codebase, chosen per supply.** `ALLOCATED` (default) = today's hard-cap behaviour. `SHARED` = whole pool sellable by every dish, no clicks. Both weighted, FIFO, traceable, void-restoreable.
+- **Mode is frozen onto `CookingRecord` at cook time**, never read from `StockSupply` at order time — a mid-service flip must not rewrite the meaning of a batch cooked an hour earlier. Lets supplies migrate one at a time.
+- **Engine rule:** `SHARED` is legal only when every dish on the supply consumes exactly 1 unit. Enforced in `KitchenStockConfig` so the illegal state is unreachable. Backed by one helper, `consumptionFactorsForMenu()`, covering both factor placements (supply link for standalone dishes, portion row for dishes with portions).
+- **`platesPerServing`** on `StockSupplyMenu` (boiled meat: 0.5 / 1.0) and on `MenuAccompaniment` PORTION rows (fried eggs: 1 / 2). `CookingRecordMenu.platesAllocated/platesRemaining` already `Decimal(12,2)` — no new storage. Servings recover via `platesAllocated ÷ platesPerServing`.
+- **Portions reuse `MenuAccompaniment`** with a new `PORTION` category, inheriting the existing price/receipt/kitchen-ticket machinery. `OrderItem.portionId` joins the unique key and the cart line key. **Portion price replaces `menu.price`**, it does not add to it — 1pc and 2pc are different prices, not extras.
+- **Allocation stays at menu level in base units** — "10 eggs to Fried Eggs", never "4 two-piece + 2 one-piece". The manager guesses only their own cooking decision, never the customer split.
+- **Boiled Egg (Half) / (Full) need nothing special** — same pot, same unit, 1 each. Already the ordinary shared-pool case with factor 1.
+- **Phase 1 bug fixes come first:** (a) `orders.ts:209` throws `Insufficient stock…` into the catch at `:269-275` which discards it, and `WaiterMenu.tsx:283` reloads the page losing the whole order table — must become a real `409`, no reload; (b) `AssignmentModal.tsx:162-170` double-writes `Menu.stock` from a stale snapshot after `/allocate` already recomputed it — server becomes sole writer; (c) `menu.ts:270-272` `totalAvailable` returns sellable-remaining but gates *assignment* — split into `assignmentCapacity` (`produced − allocated`) and `sellableRemaining`.
+- **Int → Decimal(12,2) is mandatory**, not cosmetic: `Menu.stock` plus 7 `ShiftSnapshot` columns. A 9.5 pool truncated to 9 compounds every shift. Display floors, storage never does.
+- **Sold-out dishes stay hidden entirely** (confirmed decision) — today's behaviour, no change. The greyed "Sold Out" card at `WaiterMenuGrid.tsx:374-398` stays unreachable dead code. Dishes reappear within 5s of a new batch (grid polls at `WaiterMenu.tsx:240`).
+- **Known accepted gap:** `SHARED` ships with no production user because Fish stays `ALLOCATED` by request, so the new path can't be proven in the real restaurant until a supply is flipped. `milk` or `Chapati Flour` are the natural first candidates.
+- **Report inflation is real:** 4 shared fish menus each mirror one tray, so summing them reads 40 on a tray of 10. Solved via `ShiftSnapshot.sellingMode`, but the daily report must be walked end to end.
+- Two coexisting modes is intended — every stock query branches, so the branch belongs in one shared helper, not scattered across routes.
+- Ref: `context/fix-plan/shared-production-pool-engine.md` · Branch: `feature/admin/shared-production-pool`
+- Build order: Phase 1 bugs → Phase 2 schema/migration → Phase 3 backend → Phase 4 frontend → Phase 5 data config. Deploy per AGENTS.md (`db:sync` → `build --prefix backend` → `server:restart` → `/health`).
 
 ## Goals
 
@@ -37,7 +65,17 @@ Not Started
 
 ## History
 
-### fullstack - 2026-10-05 — Batch Number FIFO + Shift Enforcement (Production Quality)
+### fullstack - 2026-10-08 — Shared Production Pool Engine (Production Quality)
+
+- **Shared production pool engine:** `ALLOCATED` (default hard-cap) and `SHARED` (whole pool sellable by every dish) modes implemented across backend routes, Prisma schema, and pool engine service
+- **Pool-carry-over semantics:** unallocated/plates remaining carries over between shifts as `SHARED` mode; fractional values preserved as `Decimal(12,2)` 
+- **Portion support:** `MenuAccompaniment` PORTION category reuses existing price/receipt/kitchen-ticket machinery; `OrderItem.portionId` links to portion rows; portion price replaces `menu.price`
+- **Backend routes:** `pools.ts`, updated `accompaniments.ts`, `menu.ts`, `orders.ts`, `shifts.ts`, `dailyReport.ts`, `cookingRecords.ts`, `kitchenConfig.ts`, `kitchenInventory.ts`, `stockRemaining.ts`, `carryOver.ts`, `scheduler.ts`
+- **New Prisma migration:** `20261006000000_shared_production_pool/migration.sql` adding pool engine tables and schema updates
+- **Frontend UI:** `MenuForm.tsx`, `KitchenStockConfig.tsx`, `AssignedLeftoversTable.tsx`, `AssignmentModal.tsx`, `CookedFoodTable.tsx`, `MenuStockStatusCard.tsx`, `ProductionGuidanceCard.tsx`, `RemainingStockDashboard.tsx`, `RemainingStockTable.tsx`, `ShiftReport.tsx`, `ShiftCloseDialog.tsx`, `WaiterMenuGrid.tsx`, `WaiterOrderContext.tsx`, `WaiterMenu.tsx`, `Menu.tsx`, `electron.ipc-handlers`, `electron.preload`, `electron.receipt.ts`, `electron.receiptTemplate.ts`, `electron.d.ts` types
+- **Pool engine test:** `backend/tests/pool-engine.test.ts` with 343 lines of test coverage
+- **Phase 1 bug fixes:** orders.ts allocation error handling, AssignmentModal stale snapshot, menu.ts totalAvailable gating split
+- **Pushed to remote:** `restaurant-build` branch with 39 files changed, 4650 insertions, 1240 deletions
 
 - **Shift enforcement (new records only):** `CookingRecord` creation requires an active shift (`findShiftIdForTime`); PUT rejects clearing `shiftId`/`batchNumber`. Schema remains nullable to preserve legacy NULL-shift rows; enforcement applies only to new records.
 - **Batch numbering per (stockSupplyId, shiftId):** Next batch is computed per supply+shift starting at 1; FIFO enforced in allocate/top-up (cannot allocate from newer batch while older batches in same shift have unallocated plates). Legacy rows with NULL shift retain their existing batch numbers.
