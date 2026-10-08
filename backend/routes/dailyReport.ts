@@ -108,13 +108,23 @@ router.get("/shift/:id", async (req, res) => {
     const totalSales = paidOrders.reduce((sum, order) => sum + Number(order.totalPrice), 0);
 
     // Payment summary: cash / mpesa collected per system, unpaid tracked amount,
-    // manager-declared amounts and per-mode variance.
-    const cashTotal = paidOrders
+    // manager-declared amounts and per-mode variance. Partial (mpesa-cash)
+    // payments contribute their keyed portions to both mode totals; the
+    // direct / from-partial breakdown is exposed so reports can show which
+    // money came from each mode. cashTotal / mpesaTotal are ALL-IN (direct +
+    // partial portions) so cashTotal + mpesaTotal keeps equaling paid revenue
+    // and the declared-vs-system variance stays correct.
+    const cashDirect = paidOrders
       .filter((o) => o.paymentMethod === "cash")
       .reduce((sum, o) => sum + Number(o.totalPrice), 0);
-    const mpesaTotal = paidOrders
+    const mpesaDirect = paidOrders
       .filter((o) => o.paymentMethod === "mpesa")
       .reduce((sum, o) => sum + Number(o.totalPrice), 0);
+    const partialOrders = paidOrders.filter((o) => o.paymentMethod === "mpesa-cash-partial");
+    const cashFromPartial = partialOrders.reduce((sum, o) => sum + Number(o.cashAmount ?? 0), 0);
+    const mpesaFromPartial = partialOrders.reduce((sum, o) => sum + Number(o.mpesaAmount ?? 0), 0);
+    const cashTotal = cashDirect + cashFromPartial;
+    const mpesaTotal = mpesaDirect + mpesaFromPartial;
     const unpaidTotal = unpaidOrders.reduce((sum, o) => sum + Number(o.totalPrice), 0);
     const declaredCash = shift.declaredCash !== null && shift.declaredCash !== undefined
       ? Number(shift.declaredCash)
@@ -125,6 +135,16 @@ router.get("/shift/:id", async (req, res) => {
     const payments = {
       cashTotal,
       mpesaTotal,
+      cashDirect,
+      cashFromPartial,
+      mpesaDirect,
+      mpesaFromPartial,
+      partial: {
+        count: partialOrders.length,
+        total: cashFromPartial + mpesaFromPartial,
+        mpesaTotal: mpesaFromPartial,
+        cashTotal: cashFromPartial,
+      },
       unpaid: {
         count: unpaidOrders.length,
         total: unpaidTotal,

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { Heading } from "@/components/ui/heading"
 import BackButton from "@/components/shared/BackButton"
 import { getCustomerById, type CustomerDetail, type LedgerOrder } from "@/lib/api"
+import { formatPaymentMethod } from "@/lib/payment"
 
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>()
@@ -93,7 +94,7 @@ export default function CustomerDetail() {
                 <tr key={o.id} className="border-t hover:bg-muted/10">
                   <td className="px-4 py-2">#{o.orderNumber ?? o.id.slice(0, 6)}</td>
                   <td className="px-4 py-2 text-muted-foreground text-xs">{o.paidAt ? new Date(o.paidAt).toLocaleString() : "—"}</td>
-                  <td className="px-4 py-2 text-xs">{o.paymentMethod || "—"}</td>
+                  <td className="px-4 py-2 text-xs">{formatPaymentMethod(o.paymentMethod) || "—"}</td>
                 </tr>
               ))}
               {settledOrders.length === 0 && <tr><td colSpan={3} className="text-center py-4 text-muted-foreground">No settled orders</td></tr>}

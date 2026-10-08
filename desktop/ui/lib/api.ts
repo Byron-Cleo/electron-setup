@@ -660,13 +660,20 @@ export async function voidOrder(orderId: string, voidedById: string, reason?: st
   })
 }
 
-export async function updateOrderPayment(orderId: string, paymentMethod: "cash" | "mpesa", paymentType?: "SINGLE" | "BATCH", batchId?: string): Promise<Order> {
+export async function updateOrderPayment(
+  orderId: string,
+  paymentMethod: "cash" | "mpesa" | "mpesa-cash-partial",
+  paymentType?: "SINGLE" | "BATCH",
+  batchId?: string,
+  mpesaAmount?: number,
+  cashAmount?: number,
+): Promise<Order> {
   if (window.electron?.order?.updatePayment) {
-    return window.electron.order.updatePayment(orderId, { paymentMethod, paymentType, batchId })
+    return window.electron.order.updatePayment(orderId, { paymentMethod, paymentType, batchId, mpesaAmount, cashAmount })
   }
   return apiFetch(`/orders/${orderId}/payment`, {
     method: "PATCH",
-    body: JSON.stringify({ paymentMethod, paymentType, batchId }),
+    body: JSON.stringify({ paymentMethod, paymentType, batchId, mpesaAmount, cashAmount }),
   })
 }
 

@@ -190,7 +190,7 @@ function AdminLayout() {
                   </span>
                 )}
                 {item.label === "Cashier" && unpaidBacklogCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-amber-600 text-white text-[9px] font-bold px-1" title={`${unpaidBacklogCount} unpaid order(s)`}>
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${unpaidBacklogCount} marked-unpaid order(s) awaiting reconciliation`}>
                     {unpaidBacklogCount}
                   </span>
                 )}

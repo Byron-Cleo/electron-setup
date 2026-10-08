@@ -352,14 +352,26 @@ const lineKey = (item: {
 // Update payment method and mark as paid
 router.patch("/:id/payment", async (req, res) => {
   const { id } = req.params;
-  const { paymentMethod, paymentType, batchId } = req.body;
+  const { paymentMethod, paymentType, batchId, mpesaAmount, cashAmount } = req.body;
 
-  if (!paymentMethod || !["cash", "mpesa"].includes(paymentMethod)) {
-    return res.status(400).json({ error: "paymentMethod must be 'cash' or 'mpesa'" });
+  if (!paymentMethod || !["cash", "mpesa", "mpesa-cash-partial"].includes(paymentMethod)) {
+    return res.status(400).json({ error: "paymentMethod must be 'cash', 'mpesa' or 'mpesa-cash-partial'" });
   }
 
   if (paymentType && !["SINGLE", "BATCH"].includes(paymentType)) {
     return res.status(400).json({ error: "paymentType must be 'SINGLE' or 'BATCH'" });
+  }
+
+  // A partial payment must carry the cashier-keyed portions; they are
+  // checked against the order total (in cents) after the order is fetched.
+  const isPartial = paymentMethod === "mpesa-cash-partial";
+  if (isPartial) {
+    if (typeof mpesaAmount !== "number" || typeof cashAmount !== "number") {
+      return res.status(400).json({ error: "mpesaAmount and cashAmount are required for mpesa-cash-partial payments" });
+    }
+    if (!Number.isFinite(mpesaAmount) || !Number.isFinite(cashAmount) || mpesaAmount < 0 || cashAmount < 0) {
+      return res.status(400).json({ error: "mpesaAmount and cashAmount must be non-negative numbers" });
+    }
   }
 
   try {
@@ -373,6 +385,14 @@ router.patch("/:id/payment", async (req, res) => {
       return res.status(400).json({ error: "Order is already paid" });
     }
 
+    if (isPartial) {
+      const keyedCents = Math.round((mpesaAmount + cashAmount) * 100);
+      const totalCents = Math.round(Number(order.totalPrice) * 100);
+      if (keyedCents !== totalCents) {
+        return res.status(400).json({ error: "mpesaAmount plus cashAmount must equal the order total" });
+      }
+    }
+
     const updated = await prisma.order.update({
       where: { id },
       data: {
@@ -381,6 +401,9 @@ router.patch("/:id/payment", async (req, res) => {
         paidAt: new Date(),
         ...(paymentType ? { paymentType } : {}),
         ...(batchId ? { batchId } : {}),
+        // Partial payments persist the keyed portions; pure methods clear any
+        // stale split left by a previous partial (mark-unpaid → re-pay cycle).
+        ...(isPartial ? { mpesaAmount, cashAmount } : { mpesaAmount: null, cashAmount: null }),
       },
     });
 
