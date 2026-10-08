@@ -5,13 +5,24 @@ Not Specified
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
 ## Notes
 
 ## History
+
+### 2026-10-09 — Cashier M-Pesa + Cash Partial Payments, All-Shift Headings, Marked-Unpaid Traceability
+
+- **M-Pesa + Cash (Partial)** — third payment method `"mpesa-cash-partial"` in BOTH payment dialogs (single-order Pay dialog + batch wizard Step 1), all three method cards side by side in a compact 3-column row (MC / M / C circles); cashier keys the M-Pesa and Cash portions (Smartphone / Banknote input icons) and **Confirm Payment stays disabled** with live `Remaining / Over by — keyed KSH X of KSH Y` feedback until the portions sum exactly to the order total (cents comparison); the split-input card itself renders red until balanced, green when it is
+- **Persistence** — `Order.mpesaAmount` / `cashAmount` `Decimal(12,2)` nullable + hand-written migration `20261008130000_mpesa_cash_partial` (`db push` per convention); `PATCH /orders/:id/payment` whitelists the new method, requires non-negative amounts summing to `totalPrice` (400s: invalid method / missing amounts / negative / sum mismatch) and clears stale amounts on pure cash/mpesa re-payment; batch mode keys two batch-level totals ONCE and `allocateBatchSplit` (new `lib/payment.ts`) pours M-Pesa across the selected orders sequentially so per-order portions sum exactly — no rounding drift
+- **Reports** — `cashTotal`/`mpesaTotal` now ALL-IN (direct + partial portions) so `cashTotal + mpesaTotal === paid revenue` and variance-vs-declared keep working; new `cashDirect/cashFromPartial/mpesaDirect/mpesaFromPartial` + `partial {count,total,mpesaTotal,cashTotal}`; 4-card reconciliation in ShiftCloseDialog (live stats, Step-1 summary, post-close view), ShiftReport and the printed HTML template — cards read `Direct … Amount:` → `From M-Pesa + Cash Orders' Amount:` → `Manager Declared Amount:` → bold Total (last, just before Variance); partial card: `Total Orders:` / portion amounts / bold `Total Partial Amount:`; declaration deliberately stays 2 inputs (partial money is physically mixed into drawer/M-Pesa — variance compares against all-in totals)
+- **All-Shift headings** — "All Shift Orders" / "All Shift Payments" when the All Shifts card is selected (was generic "Orders" / "Payment")
+- **Marked-unpaid traceability** — sidebar cashier badge recolored red (was amber); the same `GET /orders/unpaid-count` figure now shows as red badges on the All Shifts entry cards and as red pills on the Marked Unpaid tabs in BOTH Orders and Payment views; OrdersView MARKED_UNPAID filter/count aligned with the sidebar definition (`unpaidAcknowledged && !isPaid && !isVoid` — the missing `!isPaid` made the tab read 16 vs the sidebar's 2 on live data: 14 historically-marked orders had since been paid)
+- **Lists** — Partial tab + "M-Pesa + Cash" badge in brown (new `brown-100..700` tokens in index.css); formatted method + split portions in the order details dialog and CustomerDetail
+- Checks: `npm run db:sync` (client regenerated, columns pushed), `tsc -b` + backend `tsc` clean, ESLint zero new errors; live smoke on :3001 — all four 400 gates with no data mutation, report returns the new payments shape. Tests DEFERRED per operator (eraevadb_test server-pointer caveat recorded in the fix-plan)
+- Ref: `context/fix-plan/mpesa-cash-partial-payment.md` · Branch: `feature/cashier/mpesa-cash-partial` (kept, not deleted) · Commit `3298b54`, merged `--no-ff` as `a43b575`, **pushed** to `origin/restaurant-build` · Deploy PENDING on the restaurant server (SSH flow): `git pull origin restaurant-build` → `npm run db:sync` → `npm run build --prefix backend` → `schtasks /run /tn pos-backend-restart` → verify `sc query EraevaBackend` + `/health`
 
 ### 2026-10-08 — Shift Reporting Update (Bounded Drift, Live-Pool Openings, Window-Accurate Reports)
 
