@@ -163,7 +163,6 @@ electron.contextBridge.exposeInMainWorld("electron", {
   },
   report: {
     getShiftReport: (shiftId: string) => electron.ipcRenderer.invoke("shift-report:get", shiftId),
-    getStockRemaining: () => electron.ipcRenderer.invoke("report:stock-remaining"),
     getWastedStock: () => electron.ipcRenderer.invoke("report:stock-wasted"),
     getVoidReport: (date: string) => electron.ipcRenderer.invoke("report:void", date),
   },

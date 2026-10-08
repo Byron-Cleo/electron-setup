@@ -1,8 +1,15 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
+import { recomputeMenuStock, round2, soldByMenuForBatches } from "../pools.js";
 import { findShiftIdForTime } from "./shiftCarryOver.js";
+import { emitLiveEvent } from "../events.js";
 
 const router = Router();
+
+/** Any change to a batch's produced/split/disposed plates moves sellable stock. */
+function emitPoolUpdated() {
+  emitLiveEvent({ type: "pool.updated", at: new Date().toISOString() });
+}
 
 // GET /api/cooking-records/underproduced-count - Count records where actual plates < expected
 // platesActual being null means production was exactly as expected (no variance to report)
@@ -140,41 +147,67 @@ router.get("/:id", async (req, res) => {
   });
   if (!record) return res.status(404).json({ error: "Cooking record not found" });
 
-  const shift = await prisma.shift.findFirst({
+  // The shift window the modal uses to decide "carry-over vs cooked this
+  // shift": the shift actually operating now (window contains the clock),
+  // falling back to the batch's own shift, then the latest open shift.
+  const now = new Date();
+  const openShifts = await prisma.shift.findMany({
     where: { isOpen: true },
-    orderBy: { createdAt: "asc" },
-    include: { snapshots: true },
+    orderBy: { autoOpenTime: "asc" },
+    select: { id: true, type: true, autoOpenTime: true, autoCloseTime: true },
   });
-  const snapshots = shift?.snapshots ?? [];
-  const soldByMenu = new Map<string, number>();
-  const openingByMenu = new Map<string, number>();
-  for (const snap of snapshots) {
-    soldByMenu.set(snap.menuId, (soldByMenu.get(snap.menuId) ?? 0) + Number(snap.platesSold));
-    if (!openingByMenu.has(snap.menuId)) {
-      openingByMenu.set(snap.menuId, Number(snap.openingPlates) || 0);
-    }
-  }
+  const currentShift =
+    openShifts.find((s) => s.autoOpenTime <= now && now < s.autoCloseTime) ??
+    (record.shift ? openShifts.find((s) => s.id === record.shift!.id) : undefined) ??
+    openShifts[openShifts.length - 1] ??
+    null;
 
-  // Attach sold/opening per linked menu from the snapshots; 0 when no snapshot
-  // exists (menu not opened this shift / produced outside the shift).
-  const menuSolds: Record<string, number> = {};
-  const menuOpenings: Record<string, number> = {};
+  // Sold is BATCH-scoped: the assignment modal is about this batch alone, so it
+  // must never read the shift's cross-batch snapshot totals. The allocation
+  // ledger keyed by (cookingRecordId, orderItem.menuId) is the source of truth.
+  // Batch-scoped sold per linked menu. Two sources, and we take the larger:
+  //   • the allocation ledger (OrderItemAllocation bucketed by batch)
+  //   • the split's own consumed delta (allocated − remaining), which is how
+  //     sales were recorded before the ledger existed.
+  // Using the max means a legacy batch's already-consumed plates are never
+  // reported as 0 (which would resurrect them on the next reallocation).
+  const batchSolds = await soldByMenuForBatches(prisma, [id]);
+  const soldForBatch = batchSolds.get(id);
+  const splitByMenu = new Map(
+    record.cookingRecordMenus.map((s) => [
+      s.menuId,
+      { allocated: Number(s.platesAllocated), remaining: Number(s.platesRemaining) },
+    ]),
+  );
+  const batchSoldByMenu: Record<string, number> = {};
   for (const sm of record.stockSupply.menus) {
     const menuId = sm.menu.id;
-    menuSolds[menuId] = Number(soldByMenu.get(menuId) ?? 0);
-    menuOpenings[menuId] = Number(openingByMenu.get(menuId) ?? 0);
+    const ledger = round2(soldForBatch?.get(menuId)?.sold ?? 0);
+    const split = splitByMenu.get(menuId);
+    const legacy = split ? Math.max(0, round2(split.allocated - split.remaining)) : 0;
+    batchSoldByMenu[menuId] = round2(Math.max(ledger, legacy));
   }
 
   res.json({
     ...record,
-    menuSolds,
-    menuOpenings,
-    shift: shift
+    batchSoldByMenu,
+    // The batch's OWN shift (where it was cooked) — the carry-over origin. The
+    // spread above already carried it, but we re-attach it explicitly because
+    // `shift` below is overwritten with the *currently operating* shift.
+    cookedInShift: record.shift
       ? {
-          id: shift.id,
-          type: shift.type,
-          autoOpenTime: shift.autoOpenTime,
-          autoCloseTime: shift.autoCloseTime,
+          id: record.shift.id,
+          type: record.shift.type,
+          autoOpenTime: record.shift.autoOpenTime,
+          autoCloseTime: record.shift.autoCloseTime,
+        }
+      : null,
+    shift: currentShift
+      ? {
+          id: currentShift.id,
+          type: currentShift.type,
+          autoOpenTime: currentShift.autoOpenTime,
+          autoCloseTime: currentShift.autoCloseTime,
         }
       : null,
   });
@@ -199,6 +232,7 @@ router.post("/", async (req, res) => {
   // Verify stock supply exists and has isMenuStock = true
   const stockSupply = await prisma.stockSupply.findUnique({
     where: { id: stockSupplyId },
+    include: { menus: { select: { menuId: true } } },
   });
   if (!stockSupply) return res.status(404).json({ error: "Stock supply not found" });
 
@@ -272,22 +306,16 @@ router.post("/", async (req, res) => {
     include: RECORD_INCLUDE,
   });
 
+  // A SHARED batch becomes sellable through every linked dish immediately, so
+  // mirror the new pool onto each linked dish's stock. (ALLOCATED batches have
+  // no splits yet, so this is a no-op for them.)
+  for (const sm of stockSupply.menus) {
+    await recomputeMenuStock(prisma, sm.menuId);
+  }
+
+  emitPoolUpdated();
   res.status(201).json(record);
 });
-
-// Recompute Menu.stock for a menu = sum of that menu's split platesRemaining
-async function recomputeMenuStock(menuId: string) {
-  const agg = await prisma.cookingRecordMenu.aggregate({
-    _sum: { platesRemaining: true },
-    where: { menuId },
-  });
-  const total = Number(agg._sum.platesRemaining ?? 0);
-  await prisma.menu.update({
-    where: { id: menuId },
-    data: { stock: total },
-  });
-  return total;
-}
 
 // POST /api/cooking-records/:id/allocate - Set the batch's per-menu plate splits
 // body: { allocations: [{ menuId, plates }] }  — replaces the full set for the batch
@@ -295,7 +323,7 @@ router.post("/:id/allocate", async (req, res) => {
   const { id } = req.params;
   const { allocations } = req.body;
 
-  if (!Array.isArray(allocations) || allocations.length === 0) {
+  if (!Array.isArray(allocations)) {
     return res.status(400).json({ error: "allocations array is required" });
   }
 
@@ -329,6 +357,11 @@ router.post("/:id/allocate", async (req, res) => {
     });
 
     for (const batch of olderBatches) {
+      // A SHARED batch has no allocation step (the whole tray is sellable by
+      // every dish), and a disposed batch's plates are gone. Neither can hold
+      // unallocated plates that must be assigned before this newer batch.
+      if (batch.sellingMode === "SHARED" || batch.disposed) continue;
+
       const produced = Number(batch.platesActual ?? batch.platesExpected);
       const totalEverAllocated = batch.cookingRecordMenus.reduce(
         (sum, crm) => sum + Number(crm.platesAllocated),
@@ -347,8 +380,27 @@ router.post("/:id/allocate", async (req, res) => {
   const validMenus = new Set(record.stockSupply.menus.map((sm) => sm.menuId));
   const validMenuNames = new Map(record.stockSupply.menus.map((sm) => [sm.menuId, sm.menu.name]));
 
+  // Sold plates per dish for THIS batch, straight from the allocation ledger.
+  // `plates` in the payload is the new ASSIGNED amount, so an allocation can
+  // never drop below what has already sold (that would resurrect gone plates),
+  // and a dish that sold from this batch cannot be dropped from the split set.
+  const batchSolds = await soldByMenuForBatches(prisma, [id]);
+  const soldForBatch = batchSolds.get(id);
+  const splitByMenu = new Map(
+    record.cookingRecordMenus.map((s) => [
+      s.menuId,
+      { allocated: Number(s.platesAllocated), remaining: Number(s.platesRemaining) },
+    ]),
+  );
+  const soldForMenu = (menuId: string) => {
+    const ledger = round2(soldForBatch?.get(menuId)?.sold ?? 0);
+    const split = splitByMenu.get(menuId);
+    const legacy = split ? Math.max(0, round2(split.allocated - split.remaining)) : 0;
+    return round2(Math.max(ledger, legacy));
+  };
+
   let totalAllocated = 0;
-  const parsed: { menuId: string; plates: number }[] = [];
+  const parsed: { menuId: string; plates: number; sold: number }[] = [];
   for (const a of allocations) {
     const menuId = String(a.menuId ?? "");
     const plates = Number(a.plates ?? 0);
@@ -358,7 +410,14 @@ router.post("/:id/allocate", async (req, res) => {
     if (!Number.isFinite(plates) || plates < 0) {
       return res.status(400).json({ error: "Allocated plates must be >= 0" });
     }
-    parsed.push({ menuId, plates });
+    const sold = soldForMenu(menuId);
+    if (plates < sold) {
+      return res.status(400).json({
+        error: `${validMenuNames.get(menuId) ?? menuId} already sold ${sold} plate(s) from this batch; its allocation cannot go below that.`,
+        code: "BELOW_SOLD",
+      });
+    }
+    parsed.push({ menuId, plates, sold });
     totalAllocated += plates;
   }
 
@@ -367,6 +426,18 @@ router.post("/:id/allocate", async (req, res) => {
       error: `Cannot allocate more plates than produced. Produced: ${produced}, Allocated: ${totalAllocated}`,
     });
   }
+
+  const keepMenuIds = new Set(parsed.map((p) => p.menuId));
+  for (const split of record.cookingRecordMenus) {
+    if (!keepMenuIds.has(split.menuId) && soldForMenu(split.menuId) > 0) {
+      return res.status(400).json({
+        error: `${validMenuNames.get(split.menuId) ?? split.menuId} already sold from this batch; it cannot be removed from the allocation.`,
+        code: "BELOW_SOLD",
+      });
+    }
+  }
+
+  const menuIdsToRecompute = new Set(parsed.map((p) => p.menuId));
 
   await prisma.$transaction(async (tx) => {
     const newMenuIds = new Set(parsed.map((p) => p.menuId));
@@ -378,28 +449,34 @@ router.post("/:id/allocate", async (req, res) => {
     });
     const toDelete = existingSplits.filter((s) => !newMenuIds.has(s.menuId)).map((s) => s.menuId);
     for (const menuId of toDelete) {
+      menuIdsToRecompute.add(menuId);
       await tx.cookingRecordMenu.deleteMany({ where: { cookingRecordId: id, menuId } });
     }
 
-    // Upsert each allocation (fresh allocation -> remaining = allocated)
+    // Upsert each allocation. `plates` is the new ASSIGNED amount; remaining
+    // keeps already-sold plates baked in, so reallocation never resurrects
+    // stock that orders have consumed.
     for (const p of parsed) {
+      const remaining = round2(p.plates - p.sold);
       await tx.cookingRecordMenu.upsert({
         where: { cookingRecordId_menuId: { cookingRecordId: id, menuId: p.menuId } },
-        create: { cookingRecordId: id, menuId: p.menuId, platesAllocated: p.plates, platesRemaining: p.plates },
-        update: { platesAllocated: p.plates, platesRemaining: p.plates },
+        create: { cookingRecordId: id, menuId: p.menuId, platesAllocated: p.plates, platesRemaining: remaining },
+        update: { platesAllocated: p.plates, platesRemaining: remaining },
       });
     }
     return parsed;
   });
 
-  // Recompute Menu.stock for all affected menus
+  // Recompute Menu.stock for all affected menus — including any whose split was
+  // dropped, so their availability reflects the removed plates.
   const stockUpdates: { menuId: string; menuName?: string; stock: number }[] = [];
-  for (const p of parsed) {
-    const stock = await recomputeMenuStock(p.menuId);
-    stockUpdates.push({ menuId: p.menuId, menuName: validMenuNames.get(p.menuId), stock });
+  for (const menuId of menuIdsToRecompute) {
+    const stock = await recomputeMenuStock(prisma, menuId);
+    stockUpdates.push({ menuId, menuName: validMenuNames.get(menuId), stock });
   }
 
   const updated = await prisma.cookingRecord.findUnique({ where: { id }, include: RECORD_INCLUDE });
+  emitPoolUpdated();
   res.json({ record: updated, stockUpdates });
 });
 
@@ -470,8 +547,9 @@ router.post("/:id/menu/:menuId/top-up", async (req, res) => {
     });
   });
 
-  const stock = await recomputeMenuStock(menuId);
+  const stock = await recomputeMenuStock(prisma, menuId);
   const updated = await prisma.cookingRecord.findUnique({ where: { id }, include: RECORD_INCLUDE });
+  emitPoolUpdated();
   res.json({ record: updated, menuId, stock });
 });
 
@@ -482,7 +560,7 @@ router.put("/:id", async (req, res) => {
 
   const existing = await prisma.cookingRecord.findUnique({
     where: { id },
-    include: { stockSupply: { select: { platesPerUnit: true } } },
+    include: { stockSupply: { select: { platesPerUnit: true, menus: { select: { menuId: true } } } } },
   });
   if (!existing) return res.status(404).json({ error: "Cooking record not found" });
 
@@ -517,6 +595,13 @@ router.put("/:id", async (req, res) => {
     include: RECORD_INCLUDE,
   });
 
+  // Changing produced plates changes the pool, so every linked dish's mirrored
+  // stock must be refreshed.
+  for (const sm of existing.stockSupply.menus) {
+    await recomputeMenuStock(prisma, sm.menuId);
+  }
+
+  emitPoolUpdated();
   res.json(record);
 });
 
@@ -528,7 +613,12 @@ router.post("/:id/dispose", async (req, res) => {
 
   const existing = await prisma.cookingRecord.findUnique({
     where: { id },
-    select: { id: true, disposed: true, disposedAt: true },
+    select: {
+      id: true,
+      disposed: true,
+      disposedAt: true,
+      stockSupply: { select: { menus: { select: { menuId: true } } } },
+    },
   });
   if (!existing) return res.status(404).json({ error: "Cooking record not found" });
 
@@ -541,6 +631,13 @@ router.post("/:id/dispose", async (req, res) => {
     data: { disposed: true, disposedAt: new Date() },
   });
 
+  // Disposed batches drop out of every sellable pool, so each linked dish's
+  // stock must be recomputed to shed the wasted plates.
+  for (const sm of existing.stockSupply.menus) {
+    await recomputeMenuStock(prisma, sm.menuId);
+  }
+
+  emitPoolUpdated();
   res.json({ record });
 });
 
@@ -550,7 +647,10 @@ router.delete("/:id", async (req, res) => {
 
   const record = await prisma.cookingRecord.findUnique({
     where: { id },
-    include: { cookingRecordMenus: { select: { menuId: true } } },
+    include: {
+      cookingRecordMenus: { select: { menuId: true } },
+      stockSupply: { select: { menus: { select: { menuId: true } } } },
+    },
   });
   if (!record) return res.status(404).json({ error: "Cooking record not found" });
 
@@ -558,11 +658,18 @@ router.delete("/:id", async (req, res) => {
     await tx.cookingRecord.delete({ where: { id } }); // cascades splits
   });
 
-  // Recompute Menu.stock for all menus that had a split in this batch
-  for (const split of record.cookingRecordMenus) {
-    await recomputeMenuStock(split.menuId);
+  // Recompute Menu.stock for every dish this batch could feed. A SHARED batch
+  // has no splits, so relying on cookingRecordMenus alone would leave the pool
+  // stranded in each linked dish's stock after deletion.
+  const menuIds = new Set<string>([
+    ...record.cookingRecordMenus.map((s) => s.menuId),
+    ...record.stockSupply.menus.map((sm) => sm.menuId),
+  ]);
+  for (const menuId of menuIds) {
+    await recomputeMenuStock(prisma, menuId);
   }
 
+  emitPoolUpdated();
   res.json({ message: "Cooking record deleted" });
 });
 

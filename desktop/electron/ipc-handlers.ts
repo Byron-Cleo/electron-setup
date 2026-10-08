@@ -261,7 +261,6 @@ export function registerShiftHandlers() {
 
 export function registerReportHandlers() {
   ipcMain.handle("shift-report:get", async (_event, shiftId: string) => apiFetch(`/reports/shift/${shiftId}`));
-  ipcMain.handle("report:stock-remaining", async () => apiFetch("/stock/remaining"));
   ipcMain.handle("report:stock-wasted", async () => apiFetch("/stock/wasted"));
   ipcMain.handle("report:void", async (_event, date: string) =>
     apiFetch(`/reports/voids?date=${encodeURIComponent(date)}`)

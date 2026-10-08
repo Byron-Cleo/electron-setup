@@ -257,6 +257,15 @@ export interface ShiftReportData {
       unassigned: number;
     }[];
   };
+  unassignedOutgoing?: {
+    total: number;
+    batches: {
+      stockSupplyName: string;
+      totalProduced: number;
+      totalAssigned: number;
+      unassigned: number;
+    }[];
+  };
   payments?: {
     cashTotal: number;
     mpesaTotal: number;
@@ -318,11 +327,18 @@ ${data.plateMovement.map((p) =>
 ${blockCenter("OPEN = carry-forward opening plates from previous shift", "font-size:11px; margin-top:4px;")}` : ""}
   ${data.plateMovement.length > 0 ? divider() : ""}
   ${data.unassignedCarryOver && data.unassignedCarryOver.total > 0 ? `${divider()}
-  ${blockCenter("UNASSIGNED CARRY-OVER", "font-weight:bold; font-size:13px;")}
+  ${blockCenter("UNASSIGNED CARRY-OVER (IN)", "font-weight:bold; font-size:13px;")}
   ${divider()}
   ${data.unassignedCarryOver.batches.map((b) => row(b.stockSupplyName, `${b.unassigned} of ${b.totalProduced} produced`)).join("")}
   ${divider()}
   ${row("Total unassigned plates", String(data.unassignedCarryOver.total), "font-weight:bold;", "font-weight:bold;")}
+  ${divider()}` : ""}
+  ${data.unassignedOutgoing && data.unassignedOutgoing.total > 0 ? `${divider()}
+  ${blockCenter("UNASSIGNED CARRY-FORWARD (OUT)", "font-weight:bold; font-size:13px;")}
+  ${divider()}
+  ${data.unassignedOutgoing.batches.map((b) => row(b.stockSupplyName, `${b.unassigned} of ${b.totalProduced} produced`)).join("")}
+  ${divider()}
+  ${row("Total unassigned plates", String(data.unassignedOutgoing.total), "font-weight:bold;", "font-weight:bold;")}
   ${divider()}` : ""}
   ${blockCenter("PRODUCTION vs SALES", "font-weight:bold; font-size:13px;")}
   ${divider()}

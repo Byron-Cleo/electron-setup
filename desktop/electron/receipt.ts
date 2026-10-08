@@ -173,13 +173,24 @@ function shiftReportLines(data: ShiftReportData): Line[] {
   push(line);
 
   if (data.unassignedCarryOver && data.unassignedCarryOver.total > 0) {
-    pushCenter("UNASSIGNED CARRY-OVER", true);
+    pushCenter("UNASSIGNED CARRY-OVER (IN)", true);
     push(line);
     for (const b of data.unassignedCarryOver.batches) {
       pushRow(b.stockSupplyName, `${b.unassigned} of ${b.totalProduced} produced`);
     }
     push(line);
     pushRow("Total unassigned plates", String(data.unassignedCarryOver.total), true);
+    push(line);
+  }
+
+  if (data.unassignedOutgoing && data.unassignedOutgoing.total > 0) {
+    pushCenter("UNASSIGNED CARRY-FORWARD (OUT)", true);
+    push(line);
+    for (const b of data.unassignedOutgoing.batches) {
+      pushRow(b.stockSupplyName, `${b.unassigned} of ${b.totalProduced} produced`);
+    }
+    push(line);
+    pushRow("Total unassigned plates", String(data.unassignedOutgoing.total), true);
     push(line);
   }
 

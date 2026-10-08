@@ -52,7 +52,11 @@ function isFreeAccompaniment(a: OrderAccompaniment): boolean {
 }
 
 function linePrice(item: OrderLineItem): number {
-  return (Number(item.menuItem.price) + Number(item.starch?.price ?? 0) + Number(item.vegetable?.price ?? 0)) * item.quantity
+  // A chosen portion is the item being sold, so its price replaces the dish
+  // price — mirrors WaiterOrderContext.linePrice so the cart line and the total
+  // never disagree.
+  const base = item.portion ? Number(item.portion.price) : Number(item.menuItem.price)
+  return (base + Number(item.starch?.price ?? 0) + Number(item.vegetable?.price ?? 0)) * item.quantity
 }
 
 // Full unit price of a dish with its selected accompaniments: charged starches
@@ -399,10 +403,13 @@ export function WaiterMenuGrid({
 
   const renderItemCard = (item: MenuItem) => {
     // Servings, not plates: a dish with a 0.5 factor can be sold twice from one
-    // plate, and it is the servings that are actually orderable.
-    const servings = sellableServingsFor(item, defaultPortionFor(item))
+    // plate, and it is the servings that are actually orderable. The default
+    // portion sets the rate, so a dish whose default is a 2pc option reads its
+    // plates at twice the cost.
+    const defaultPortion = defaultPortionFor(item)
+    const servings = sellableServingsFor(item, defaultPortion)
     const plates = Number(item.availablePlates ?? item.stock ?? 0)
-    const factor = Number(item.platesPerServing ?? 1)
+    const factor = Number(defaultPortion?.platesPerServing ?? item.platesPerServing ?? 1)
     const soldOut = servings <= 0
     const runningLow = servings > 0 && servings <= 5
     const inStock = servings > 5
@@ -610,15 +617,21 @@ export function WaiterMenuGrid({
                     </span>
                   )}
                 </div>
-                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", platesBadgeClass(selectedServings))}>
-                  {selectedServings > 0 ? `${selectedServings} available` : "Sold Out"}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", platesBadgeClass(selectedServings))}>
+                    {selectedServings > 0 ? `${selectedServings} available` : "Sold Out"}
+                  </span>
+                  {selectedItem.sellingMode && (
+                    <span className="text-[11px] font-medium tracking-wide text-brand-gold whitespace-nowrap">
+                      {selectedItem.sellingMode === "SHARED"
+                        ? `Shared Pool ${Number(selectedItem.availablePlates ?? selectedItem.stock ?? 0)} plates`
+                        : selectedItem.sellingMode === "ALLOCATED"
+                          ? `Allocated ${Number(selectedItem.availablePlates ?? selectedItem.stock ?? 0)} plates`
+                          : `Mixed ${Number(selectedItem.availablePlates ?? selectedItem.stock ?? 0)} plates`}
+                    </span>
+                  )}
+                </div>
               </div>
-              {selectedItem.sellingMode === "SHARED" && (
-                <p className="mt-2 text-[11px] text-brand-ebony/50 text-center">
-                  Shared pool — every dish on this ingredient draws from the same tray.
-                </p>
-              )}
 
               <div className="grid grid-cols-[2fr_3fr] gap-4 pt-4">
                 {/* Left — Image gallery (40%) */}

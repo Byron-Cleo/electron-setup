@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import BackButton from "@/components/shared/BackButton"
 import { Heading } from "@/components/ui/heading"
 
@@ -38,6 +39,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
   const [platesPerUnit, setPlatesPerUnit] = useState("")
   const [sellingMode, setSellingMode] = useState<SellingMode>("ALLOCATED")
   const [factors, setFactors] = useState<Record<string, string>>({})
+  const [excluded, setExcluded] = useState<Record<string, boolean>>({})
   const [formError, setFormError] = useState("")
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState("")
@@ -65,32 +67,18 @@ export default function KitchenStockConfig({ onBack }: Props) {
     setFactors(
       Object.fromEntries(item.menus.map((m) => [m.id, String(m.platesPerServing ?? 1)])),
     )
+    setExcluded(
+      Object.fromEntries(item.menus.map((m) => [m.id, m.excludedFromSharedPool === true])),
+    )
     setFormError("")
     setShowForm(true)
   }
-
-  // A shared pool is consumed whole by any dish on it, so every dish and
-  // portion must cost the same rate. Warn before submitting rather than
-  // letting the server reject it.
-  const nonFlatDishes = editItem
-    ? editItem.menus.filter((m) => Number(factors[m.id] ?? 1) !== 1)
-    : []
-  const hasFlatPortions = editItem?.menus.some((m) =>
-    (m.portions ?? []).some((p) => Number(p.platesPerServing) !== 1),
-  )
-  const sharedBlocked = sellingMode === "SHARED" && (nonFlatDishes.length > 0 || hasFlatPortions === true)
 
   async function handleSave() {
     if (!editItem) return
     const plates = parseFloat(platesPerUnit)
     if (!plates || plates <= 0) {
       setFormError("Plates per unit must be greater than 0")
-      return
-    }
-    if (sharedBlocked) {
-      setFormError(
-        "A shared pool must use a flat 1-for-1 rate. Set every dish and portion below to 1 first.",
-      )
       return
     }
 
@@ -103,6 +91,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
         menuFactors: editItem.menus.map((m) => ({
           menuId: m.id,
           platesPerServing: Number(factors[m.id] ?? 1),
+          excludedFromSharedPool: excluded[m.id] === true,
         })),
       })
       setShowForm(false)
@@ -183,17 +172,23 @@ export default function KitchenStockConfig({ onBack }: Props) {
               case "menu":
                 return item.menus && item.menus.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
-                    {item.menus.map((m) => (
-                      <span
-                        key={m.id}
-                        className="text-xs px-2 py-0.5 rounded bg-admin-content text-admin-header-text/70 border border-admin-card-border"
-                      >
-                        {m.name}
-                        {m.platesPerServing !== 1 && (
-                          <span className="ml-1 text-amber-600">×{m.platesPerServing}</span>
-                        )}
-                      </span>
-                    ))}
+{item.menus.map((m) => (
+  <span
+    key={m.id}
+    className={cn(
+      "text-xs px-2 py-0.5 rounded border",
+      m.excludedFromSharedPool === true
+        ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+        : "bg-admin-content text-admin-header-text/70 border-admin-card-border",
+    )}
+  >
+    {m.name}
+    {m.platesPerServing !== 1 && (
+      <span className={cn("ml-1", m.excludedFromSharedPool === true ? "text-amber-600" : "text-amber-600")}>×{m.platesPerServing}</span>
+    )}
+    {m.excludedFromSharedPool === true && <span className="ml-1">(held back)</span>}
+  </span>
+))}
                   </div>
                 ) : (
                   <span className="text-admin-header-text/60">—</span>
@@ -285,12 +280,12 @@ export default function KitchenStockConfig({ onBack }: Props) {
                       blurb:
                         "A manager splits each tray between dishes. Only the allocated amounts can be ordered; anything left over carries over untouched.",
                     },
-                    {
-                      value: "SHARED",
-                      title: "Shared pool",
-                      blurb:
-                        "The whole tray is sellable through every dish on this item, with no allocation step. Requires every dish and portion to use a flat 1-for-1 rate.",
-                    },
+{
+  value: "SHARED",
+  title: "Shared pool",
+  blurb:
+    "The whole tray is sellable through every dish on this item, with no allocation step. Any consumption rate works; use a dish's Exclude toggle to hold it back from the pool.",
+},
                   ] as const
                 ).map((option) => (
                   <button
@@ -338,6 +333,22 @@ export default function KitchenStockConfig({ onBack }: Props) {
                           {p.name} ×{p.platesPerServing}
                         </span>
                       ))}
+                      {sellingMode === "SHARED" && (
+                        <label
+                          className={cn(
+                            "flex items-center gap-1.5 text-xs cursor-pointer select-none",
+                            excluded[m.id] === true ? "text-amber-600" : "text-admin-header-text/60",
+                          )}
+                        >
+                          <Checkbox
+                            checked={excluded[m.id] === true}
+                            onCheckedChange={(v) =>
+                              setExcluded((e) => ({ ...e, [m.id]: v === true }))
+                            }
+                          />
+                          Exclude from pool
+                        </label>
+                      )}
                       <Input
                         type="number"
                         min="0.01"
@@ -351,13 +362,6 @@ export default function KitchenStockConfig({ onBack }: Props) {
                     </div>
                   ))}
                 </div>
-                {sharedBlocked && (
-                  <p className="mt-2 text-xs text-amber-600">
-                    Shared pools need a flat 1-for-1 rate. Set these to 1:{" "}
-                    {nonFlatDishes.map((m) => m.name).join(", ")}
-                    {hasFlatPortions ? " (and every portion listed above)" : ""}.
-                  </p>
-                )}
               </div>
             )}
           </div>

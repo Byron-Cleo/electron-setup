@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
 import { getMenuStockStatus, type MenuStockStatus } from "@/lib/api"
+import { useLiveRefresh } from "@/hooks/useLiveRefresh"
 
 type Guidance = "ok" | "assign" | "cookNow" | "cookSoon"
 
@@ -71,6 +72,30 @@ function StatusPill({ g }: { g: Guidance }) {
   )
 }
 
+function buildRows(data: MenuStockStatus): GuidanceRow[] {
+  const all = [...data.selling, ...data.soldOut]
+  const unique = new Map<string, MenuStockStatus["selling"][number]>()
+  for (const item of all) unique.set(item.id, item)
+  const built: GuidanceRow[] = [...unique.values()].map((item) => {
+    const remaining = item.remaining
+    const assignable = item.assignable ?? 0
+    return {
+      id: item.id,
+      name: item.name,
+      remaining,
+      produced: item.produced,
+      sold: item.sold,
+      assignable,
+      guidance: classify(remaining, assignable),
+    }
+  })
+  built.sort((a, b) => {
+    const order: Record<Guidance, number> = { cookNow: 0, assign: 1, cookSoon: 2, ok: 3 }
+    return order[a.guidance] - order[b.guidance]
+  })
+  return built
+}
+
 export default function ProductionGuidanceCard() {
   const [rows, setRows] = useState<GuidanceRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,27 +108,7 @@ export default function ProductionGuidanceCard() {
     getMenuStockStatus()
       .then((data: MenuStockStatus) => {
         if (cancelled) return
-        const all = [...data.selling, ...data.soldOut]
-        const unique = new Map<string, MenuStockStatus["selling"][number]>()
-        for (const item of all) unique.set(item.id, item)
-        const built: GuidanceRow[] = [...unique.values()].map((item) => {
-          const remaining = item.remaining
-          const assignable = item.assignable ?? 0
-          return {
-            id: item.id,
-            name: item.name,
-            remaining,
-            produced: item.produced,
-            sold: item.sold,
-            assignable,
-            guidance: classify(remaining, assignable),
-          }
-        })
-        built.sort((a, b) => {
-          const order: Record<Guidance, number> = { cookNow: 0, assign: 1, cookSoon: 2, ok: 3 }
-          return order[a.guidance] - order[b.guidance]
-        })
-        setRows(built)
+        setRows(buildRows(data))
         setLoading(false)
       })
       .catch((err: unknown) => {
@@ -116,6 +121,15 @@ export default function ProductionGuidanceCard() {
       cancelled = true
     }
   }, [])
+
+  // Cook / split / dispose / sale elsewhere changes the guidance cues.
+  useLiveRefresh(["pool.updated", "order.created", "order.voided", "shift.closed"], () => {
+    getMenuStockStatus()
+      .then((data) => setRows(buildRows(data)))
+      .catch(() => {
+        // keep the last good guidance on a transient refresh failure
+      })
+  })
 
   return (
     <Card className="p-6">

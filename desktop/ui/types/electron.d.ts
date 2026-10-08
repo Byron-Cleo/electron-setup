@@ -57,8 +57,30 @@ interface MenuItem {
   platesPerServing?: number;
   /** How many servings the pool can still cover: floor(plates / factor). */
   sellableServings?: number;
-  /** Engine backing this dish, so the UI can explain shared vs allocated. */
-  sellingMode?: SellingMode;
+  /**
+   * Engine of the batches actually feeding this dish right now, read from the
+   * live pool rather than the supply's current setting. `"MIXED"` when both
+   * allocated and shared batches contribute; absent when the dish is sold out.
+   */
+  sellingMode?: MenuSellingEngine;
+  /** Plates currently supplied by ALLOCATED batches (reserved for this dish). */
+  allocatedPlates?: number;
+  /** Plates currently supplied by SHARED batches (common pool). */
+  sharedPlates?: number;
+  /** Names of the stock supplies this dish can be made from. */
+  supplyNames?: string[];
+}
+
+/**
+ * A portion as the dish editor sends it. `id` is present when the option
+ * already exists (so it is updated in place) and absent for a new one.
+ */
+interface PortionInput {
+  id?: string;
+  name: string;
+  price: number;
+  platesPerServing: number;
+  isDefault?: boolean;
 }
 
 interface MenuCreateData {
@@ -73,6 +95,8 @@ interface MenuCreateData {
   hasVegetable?: boolean;
   starchId?: string | null;
   vegetableId?: string | null;
+  /** Dish-owned portion options (Fried Eggs 1pc / 2pc). Omit to leave them alone. */
+  portions?: PortionInput[];
 }
 
 type MenuUpdateData = Partial<MenuCreateData>;
@@ -492,9 +516,17 @@ interface CookingRecord {
   cookedBy: { id: string; name: string };
   cookingRecordMenus: CookingRecordMenu[];
   availablePlates?: number;
-  menuSolds?: Record<string, number>;
-  menuOpenings?: Record<string, number>;
+  /** Plates of THIS batch already sold, keyed by menu id (batch-scoped). */
+  batchSoldByMenu?: Record<string, number>;
+  /** The shift currently operating (window contains now); used for carry-over vs fresh. */
   shift?: {
+    id: string;
+    type: string;
+    autoOpenTime: string;
+    autoCloseTime: string;
+  } | null;
+  /** The shift this batch was cooked in — the carry-over origin. */
+  cookedInShift?: {
     id: string;
     type: string;
     autoOpenTime: string;
@@ -525,6 +557,9 @@ interface CookedMenuItem {
   name: string;
   stock: number;
   cookedDate: string;
+  /** True once this batch has been disposed/wasted; blocks further assignment. */
+  disposed?: boolean;
+  disposedAt?: string | null;
   shiftId?: string | null;
   shiftType?: string | null;
   operationDay?: string | null;
@@ -544,6 +579,8 @@ interface CookedMenuItem {
     menuName: string;
     allocated: number;
     remaining: number;
+    /** Plates actually sold off this batch for this dish (ledger-derived). */
+    sold?: number;
   }[];
   cooking: {
     totalProduced: number;
@@ -606,6 +643,9 @@ interface KitchenInventory {
  */
 type SellingMode = "ALLOCATED" | "SHARED";
 
+/** The engine of live batches feeding a dish: a mode, both, or none. */
+type MenuSellingEngine = SellingMode | "MIXED";
+
 /** One portion option configured on a dish (e.g. Fried Eggs = 1pc / 2pc). */
 interface MenuPortionOption {
   id: string;
@@ -630,6 +670,8 @@ interface KitchenConfigItem {
     name: string;
     /** Plates one serving of this dish consumes. 0.5 = a half portion. */
     platesPerServing: number;
+    /** Held back from this supply's SHARED pool (any factor is allowed if false). */
+    excludedFromSharedPool?: boolean;
     hasPortion?: boolean;
     portions?: MenuPortionOption[];
   }[];
@@ -638,8 +680,12 @@ interface KitchenConfigItem {
 interface KitchenConfigData {
   platesPerUnit?: number;
   sellingMode?: SellingMode;
-  /** Per-dish consumption rates, e.g. Boiled Meat Half = 0.5 / Full = 1. */
-  menuFactors?: { menuId: string; platesPerServing: number }[];
+  /**
+   * Per-dish consumption rates, e.g. Boiled Meat Half = 0.5 / Full = 1.
+   * `excludedFromSharedPool` withholds a dish from the supply's SHARED pool
+   * while leaving the engine shared for the rest.
+   */
+  menuFactors?: { menuId: string; platesPerServing: number; excludedFromSharedPool?: boolean }[];
 }
 
 type PosPrinterTransport = "usb" | "lan";
@@ -724,21 +770,6 @@ interface AutoCloseResult {
   shifts: Shift[];
 }
 
-interface StockRemainingPreviousShift {
-  id: string;
-  type: ShiftType;
-  operationDay: string;
-  closeTime: string | null;
-}
-
-interface StockRemainingCarryForward {
-  menuId: string;
-  menuName: string;
-  closingPlates: number;
-  stockSupplyId: string | null;
-  stockSupplyName: string | null;
-}
-
 interface StockRemainingUnassignedBatch {
   cookingRecordId: string;
   stockSupplyId: string;
@@ -794,12 +825,29 @@ interface StockRemainingCycle {
   operationDay: string;
 }
 
-interface StockRemaining {
-  previousShift: StockRemainingPreviousShift | null;
+interface AssignedLeftoverRow {
+  key: string;
+  engine: SellingMode;
+  menuId: string | null;
+  menuName: string | null;
+  linkedMenuNames: string[];
+  stockSupplyId: string;
+  stockSupplyName: string;
+  operationDay: string | null;
+  shiftType: ShiftType | null;
+  cookedAt: string;
+  assigned: number;
+  sold: number;
+  remaining: number;
+  batchCount: number;
+}
+
+interface AssignedLeftovers {
   cycle: StockRemainingCycle | null;
-  carryForwardPerMenu: StockRemainingCarryForward[];
-  unassignedBatches: StockRemainingUnassignedBatch[];
-  expiredBatches: StockRemainingUnassignedBatch[];
+  currentOperationDay: string | null;
+  current: AssignedLeftoverRow[];
+  previous: AssignedLeftoverRow[];
+  unassigned: StockRemainingUnassignedBatch[];
 }
 
 interface VoidReportWaiter {
@@ -885,6 +933,10 @@ interface ShiftReport {
     total: number;
     batches: ShiftUnassignedCarryOverBatch[];
   };
+  unassignedOutgoing: {
+    total: number;
+    batches: ShiftUnassignedCarryOverBatch[];
+  };
   payments: {
     cashTotal: number;
     mpesaTotal: number;
@@ -939,6 +991,15 @@ interface ShiftReportData {
     isLiveCurrent?: boolean;
   }[];
   unassignedCarryOver?: {
+    total: number;
+    batches: {
+      stockSupplyName: string;
+      totalProduced: number;
+      totalAssigned: number;
+      unassigned: number;
+    }[];
+  };
+  unassignedOutgoing?: {
     total: number;
     batches: {
       stockSupplyName: string;
@@ -1140,7 +1201,6 @@ interface ElectronAPI {
   };
   report: {
     getShiftReport: (shiftId: string) => Promise<ShiftReport>;
-    getStockRemaining: () => Promise<StockRemaining>;
     getWastedStock: () => Promise<WastedStock>;
     getVoidReport: (date: string) => Promise<{ date: string; waiters: VoidReportWaiter[] }>;
   };

@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
 import { getMenuStockStatus, type MenuStockStatus } from "@/lib/api"
+import { useLiveRefresh } from "@/hooks/useLiveRefresh"
 import { getActiveMealPeriods, type MealPeriodLabel } from "@/lib/mealPeriod"
 
 const PERIOD_ICONS: Record<MealPeriodLabel, typeof Sunrise> = {
@@ -105,6 +106,18 @@ export default function MenuStockStatusCard() {
       cancelled = true
     }
   }, [period])
+
+  // Plate movement (cook / split / dispose / sale) shifts this card's buckets.
+  useLiveRefresh(["pool.updated", "order.created", "order.voided", "shift.closed"], () => {
+    getMenuStockStatus(period)
+      .then((data) => {
+        setStatus(data)
+        setError("")
+      })
+      .catch(() => {
+        // keep the last good buckets on a transient refresh failure
+      })
+  })
 
   const periods = useMemo(() => getActiveMealPeriods(new Date().getHours()), [])
 

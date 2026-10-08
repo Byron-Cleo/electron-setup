@@ -1,5 +1,6 @@
 import prisma from "./db/db.js";
 import { emitLiveEvent } from "./events.js";
+import { recomputeMenuStock } from "./pools.js";
 
 // Shift scheduler using an anchor-based operational cycle.
 //
@@ -231,18 +232,33 @@ export async function autoCloseExpiredShifts() {
           }
         }
 
-        // Capture auto-close snapshot (current menu stock at scheduled close time)
+        // Heal the sellable mirror before snapshotting. `Menu.stock` can lag for
+        // SHARED pools (cooking creates no splits), and the snapshot value is what
+        // carries into the next shift's opening. Recompute from the pool ledger so
+        // the pool's true remainder is carried forward — identical to the
+        // manual-close path. Doing it here means even a fully automated close
+        // (finalCloseSource=AUTO, no manual step) records the correct value.
         const snapshots = await tx.shiftSnapshot.findMany({
           where: { shiftId: shift.id },
-          include: { menu: { select: { id: true, stock: true } } },
+          select: { id: true, menuId: true, platesSold: true },
         });
-
         for (const snapshot of snapshots) {
-          const currentStock = snapshot.menu.stock ?? 0;
+          await recomputeMenuStock(tx, snapshot.menuId);
+        }
+        for (const snapshot of snapshots) {
+          const liveMenu = await tx.menu.findUnique({
+            where: { id: snapshot.menuId },
+            select: { stock: true },
+          });
+          const currentStock = Number(liveMenu?.stock ?? 0);
           await tx.shiftSnapshot.update({
             where: { id: snapshot.id },
             data: {
               closingStockAtAutoClose: currentStock,
+              // Also stamp the carry-over value so a fully auto-closed shift
+              // (which never runs the manual-close route) still feeds the next
+              // shift's opening. A later manual close overwrites it.
+              closingStockAtManualClose: currentStock,
               platesSoldAtAutoClose: snapshot.platesSold,
               autoCloseTime: now,
             },

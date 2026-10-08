@@ -67,6 +67,7 @@ function buildShiftReportData(report: ShiftReport): ShiftReportData {
     plateMovement: report.plateMovement,
     production: report.production,
     unassignedCarryOver: report.unassignedCarryOver,
+    unassignedOutgoing: report.unassignedOutgoing,
     payments: report.payments,
   }
 }
@@ -411,8 +412,8 @@ function ShiftReportView({ report }: Props) {
                       <th className="px-3 py-2 text-center font-medium">Item</th>
                       <th className="px-3 py-2 text-center font-medium bg-yellow-100 text-yellow-900">Opening</th>
                       <th className="px-3 py-2 text-center font-medium">Cooked</th>
-                      <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="Plates sold before the auto-close tick">Main-Sale Count</th>
-                      <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="opening + cooked − sold before auto-close">Main-Sale<br />Closing Stock</th>
+                      <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="Plates sold before the auto-close tick">Sold</th>
+                        <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="opening + cooked − sold before auto-close">Closing-Sale</th>
                       <th className="px-3 py-2 text-center font-medium bg-orange-100 text-orange-900">Drift Minutes</th>
                       <th className="px-3 py-2 text-center font-medium bg-orange-100 text-orange-900" title="plates sold after auto-close">Drift Sold<br />Count</th>
                       <th className="px-3 py-2 text-center font-medium">Wasted</th>
@@ -449,22 +450,42 @@ function ShiftReportView({ report }: Props) {
                   <p className="pt-2 text-[10px] text-admin-muted">* Live shift — current menu stock (no final close yet).</p>
                 )}
               </div>
-              {report.unassignedCarryOver && report.unassignedCarryOver.total > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
                   <div className="text-sm font-semibold text-orange-700">
-                    Total Unassigned Carry-Over:{" "}
-                    {report.unassignedCarryOver.total} plates
+                    Unassigned Carry-Over (In): {report.unassignedCarryOver?.total ?? 0} plates
                   </div>
+                  <p className="text-[11px] text-admin-muted">Brought in from the previous shift</p>
                   <div className="mt-2 space-y-1">
-                    {report.unassignedCarryOver.batches.map((b) => (
-                      <div key={b.stockSupplyName} className="text-xs text-admin-muted">
+                    {(report.unassignedCarryOver?.batches ?? []).map((b, i) => (
+                      <div key={`${b.stockSupplyName}-${i}`} className="text-xs text-admin-muted">
                         {b.stockSupplyName}: {b.unassigned} of {b.totalProduced} produced still
                         unassigned
                       </div>
                     ))}
+                    {(report.unassignedCarryOver?.batches ?? []).length === 0 && (
+                      <div className="text-xs text-admin-muted">None</div>
+                    )}
                   </div>
                 </div>
-              )}
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <div className="text-sm font-semibold text-blue-700">
+                    Unassigned Carry-Forward (Out): {report.unassignedOutgoing?.total ?? 0} plates
+                  </div>
+                  <p className="text-[11px] text-admin-muted">Handed to the next shift</p>
+                  <div className="mt-2 space-y-1">
+                    {(report.unassignedOutgoing?.batches ?? []).map((b, i) => (
+                      <div key={`${b.stockSupplyName}-${i}`} className="text-xs text-admin-muted">
+                        {b.stockSupplyName}: {b.unassigned} of {b.totalProduced} produced still
+                        unassigned
+                      </div>
+                    ))}
+                    {(report.unassignedOutgoing?.batches ?? []).length === 0 && (
+                      <div className="text-xs text-admin-muted">None</div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

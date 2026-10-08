@@ -16,254 +16,6 @@ function belongsToOperationDay(createdAt: Date, operationDay: Date): boolean {
   return t >= start && t < start + 86_400_000;
 }
 
-// GET /api/reports/daily?date=YYYY-MM-DD
-router.get("/", async (req, res) => {
-  const { date } = req.query;
-
-  if (!date) {
-    return res.status(400).json({ error: "date query parameter is required (YYYY-MM-DD)" });
-  }
-
-  const targetDate = new Date(date as string);
-  if (isNaN(targetDate.getTime())) {
-    return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
-  }
-
-  // Start and end of day
-  const startOfDay = new Date(targetDate);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(targetDate);
-  endOfDay.setHours(23, 59, 59, 999);
-
-  // Get all cooking records for the day
-  const cookingRecords = await prisma.cookingRecord.findMany({
-    where: { cookedDate: targetDate },
-    include: {
-      stockSupply: { select: { id: true, name: true, unit: true, platesPerUnit: true } },
-      cookingRecordMenus: {
-        select: {
-          menuId: true,
-          platesAllocated: true,
-          platesRemaining: true,
-          menu: { select: { id: true, name: true } },
-        },
-      },
-    },
-  });
-
-  // Get all fulfilled items for the day (what was delivered to kitchen)
-  const fulfilledItems = await prisma.stockFulfillmentItem.findMany({
-    where: {
-      stockFulfillment: { createdAt: { gte: startOfDay, lte: endOfDay } },
-    },
-    include: {
-      stockRequestItem: { select: { stockSupplyId: true } },
-    },
-  });
-
-  // Aggregate by stock supply: ordered (fulfilled) vs cooked
-  const stockSupplyMap = new Map<
-    string,
-    { name: string; ordered: number; cooked: number; platesProduced: number; platesSold: number }
-  >();
-
-  // Process fulfilled items (ordered)
-  for (const item of fulfilledItems) {
-    const stockSupplyId = item.stockRequestItem.stockSupplyId;
-    const qty = Number(item.quantityDelivered);
-    const existing = stockSupplyMap.get(stockSupplyId);
-    if (existing) {
-      existing.ordered += qty;
-    } else {
-      stockSupplyMap.set(stockSupplyId, {
-        name: "",
-        ordered: qty,
-        cooked: 0,
-        platesProduced: 0,
-        platesSold: 0,
-      });
-    }
-  }
-
-  // Process cooking records (cooked + plates)
-  for (const record of cookingRecords) {
-    const stockSupplyId = record.stockSupplyId;
-    const qty = Number(record.quantityCooked);
-    const plates = Number(record.platesActual ?? record.platesExpected);
-    const platesRemaining = record.cookingRecordMenus.reduce(
-      (sum, crm) => sum + Number(crm.platesRemaining),
-      0
-    );
-    const platesConsumed = Math.max(0, plates - platesRemaining);
-
-    const existing = stockSupplyMap.get(stockSupplyId);
-    if (existing) {
-      existing.cooked += qty;
-      existing.platesProduced += plates;
-      existing.platesSold += platesConsumed;
-      existing.name = record.stockSupply.name;
-    } else {
-      stockSupplyMap.set(stockSupplyId, {
-        name: record.stockSupply.name,
-        ordered: 0,
-        cooked: qty,
-        platesProduced: plates,
-        platesSold: platesConsumed,
-      });
-    }
-  }
-
-  // Build byStockItem
-  const byStockItem = Array.from(stockSupplyMap.entries()).map(([id, data]) => ({
-    id,
-    name: data.name,
-    ordered: data.ordered,
-    cooked: data.cooked,
-    rawRemaining: data.ordered - data.cooked,
-    platesProduced: data.platesProduced,
-    platesSold: data.platesSold,
-    platesRemaining: data.platesProduced - data.platesSold,
-  }));
-
-  // Aggregate by menu item (each split feeds exactly one menu)
-  const menuVariantMap = new Map<string, { name: string; platesProduced: number; platesSold: number }>();
-
-  for (const record of cookingRecords) {
-    for (const crm of record.cookingRecordMenus) {
-      const menuId = crm.menuId;
-      const plates = Number(crm.platesAllocated);
-      const platesRemaining = Number(crm.platesRemaining);
-      const platesConsumed = Math.max(0, plates - platesRemaining);
-
-      const existing = menuVariantMap.get(menuId);
-      if (existing) {
-        existing.platesProduced += plates;
-        existing.platesSold += platesConsumed;
-      } else {
-        menuVariantMap.set(menuId, {
-          name: crm.menu.name,
-          platesProduced: plates,
-          platesSold: platesConsumed,
-        });
-      }
-    }
-  }
-
-  const byMenuVariant = Array.from(menuVariantMap.values()).map((data) => ({
-    name: data.name,
-    platesProduced: Math.round(data.platesProduced),
-    platesSold: data.platesSold,
-    platesRemaining: Math.round(data.platesProduced) - data.platesSold,
-  }));
-
-  // Summary
-  const totalCooked = byStockItem.reduce((sum, item) => sum + item.cooked, 0);
-  const totalPlatesProduced = byStockItem.reduce((sum, item) => sum + item.platesProduced, 0);
-  const totalPlatesSold = byStockItem.reduce((sum, item) => sum + item.platesSold, 0);
-  const totalPlatesRemaining = totalPlatesProduced - totalPlatesSold;
-
-  // Carry over to tomorrow
-  const yesterday = new Date(targetDate);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  // Raw stock carry over: ordered - cooked for all days up to yesterday
-  const allPreviousRecords = await prisma.cookingRecord.findMany({
-    where: { cookedDate: { lt: targetDate } },
-    include: {
-      stockSupply: { select: { id: true, name: true } },
-      cookingRecordMenus: {
-        select: {
-          menuId: true,
-          platesRemaining: true,
-          menu: { select: { id: true, name: true } },
-        },
-      },
-    },
-  });
-
-  const allPreviousFulfilled = await prisma.stockFulfillmentItem.findMany({
-    where: {
-      stockFulfillment: { createdAt: { lt: startOfDay } },
-    },
-    include: {
-      stockRequestItem: { select: { stockSupplyId: true } },
-    },
-  });
-
-  // Calculate carry over raw stock
-  const carryOverRawMap = new Map<string, { name: string; ordered: number; cooked: number }>();
-  for (const item of allPreviousFulfilled) {
-    const stockSupplyId = item.stockRequestItem.stockSupplyId;
-    const qty = Number(item.quantityDelivered);
-    const existing = carryOverRawMap.get(stockSupplyId);
-    if (existing) {
-      existing.ordered += qty;
-    } else {
-      carryOverRawMap.set(stockSupplyId, { name: "", ordered: qty, cooked: 0 });
-    }
-  }
-  for (const record of allPreviousRecords) {
-    const stockSupplyId = record.stockSupplyId;
-    const qty = Number(record.quantityCooked);
-    const existing = carryOverRawMap.get(stockSupplyId);
-    if (existing) {
-      existing.cooked += qty;
-      existing.name = record.stockSupply.name;
-    } else {
-      carryOverRawMap.set(stockSupplyId, { name: record.stockSupply.name, ordered: 0, cooked: qty });
-    }
-  }
-
-  const carryOverRawStock = Array.from(carryOverRawMap.entries())
-    .map(([id, data]) => ({
-      id,
-      name: data.name,
-      quantity: data.ordered - data.cooked,
-    }))
-    .filter((item) => item.quantity > 0);
-
-  // Calculate carry over cooked plates per menu = live remaining on previous splits
-  const carryOverPlatesMap = new Map<string, { name: string; plates: number }>();
-  for (const record of allPreviousRecords) {
-    for (const crm of record.cookingRecordMenus) {
-      const platesCarried = Number(crm.platesRemaining);
-      if (platesCarried <= 0) continue;
-      const existing = carryOverPlatesMap.get(crm.menuId);
-      if (existing) {
-        existing.plates += platesCarried;
-      } else {
-        carryOverPlatesMap.set(crm.menuId, {
-          name: crm.menu.name,
-          plates: platesCarried,
-        });
-      }
-    }
-  }
-
-  const carryOverCookedPlates = Array.from(carryOverPlatesMap.values())
-    .map((data) => ({
-      name: data.name,
-      plates: Math.round(data.plates),
-    }))
-    .filter((item) => item.plates > 0);
-
-  res.json({
-    date: date as string,
-    summary: {
-      totalCooked,
-      totalPlatesProduced: Math.round(totalPlatesProduced),
-      totalPlatesSold,
-      totalPlatesRemaining: Math.round(totalPlatesRemaining),
-    },
-    byStockItem,
-    byMenuVariant,
-    carryOverToTomorrow: {
-      rawStock: carryOverRawStock,
-      cookedPlates: carryOverCookedPlates,
-    },
-  });
-});
-
 // GET /api/reports/shift/:id - Full shift report
 router.get("/shift/:id", async (req, res) => {
   const { id } = req.params;
@@ -287,11 +39,11 @@ router.get("/shift/:id", async (req, res) => {
       return res.status(404).json({ error: "Shift not found" });
     }
 
-    // A shift's report is scoped to ITS OWN orders, intersected with the
-    // operation-date window [operationDay, operationDay + 1d). This keeps every
-    // shift's generated data per-shift (DAY and NIGHT stays separate on the same
-    // date) while excluding orders a stale open shift picked up from other dates.
-    const dayOrders = shift.orders.filter((o) => belongsToOperationDay(o.createdAt, shift.operationDay));
+    // A shift's report uses all orders attached to this shift (shift.orders),
+    // which represents exactly the orders placed while the shift was the current
+    // shift (including any drift period). This keeps the report aligned with the
+    // shift's actual open/close window.
+    const dayOrders = shift.orders;
 
     // Revenue is computed from paid non-void orders only. Unpaid (including
     // manager-marked-unpaid) orders stay in the total count but are excluded
@@ -493,7 +245,7 @@ router.get("/shift/:id", async (req, res) => {
       }));
     }
 
-    // Unassigned carry-over brought in from the previous shift. These plates are
+    // Unassigned plates brought IN from the previous shift. These plates are
     // produced but not yet allocated, and stay independent until assigned via the
     // cooking-record allocation UI.
     const previousShift = await prisma.shift.findFirst({
@@ -517,6 +269,20 @@ router.get("/shift/:id", async (req, res) => {
         })),
       };
     }
+
+    // Unassigned plates produced by THIS shift that are still not allocated to
+    // any menu — these carry OUT to the next shift. Mirror of the incoming
+    // block above so the report shows both sides of the handoff.
+    const currentUnassigned = await computeShiftUnassignedBatches(shift);
+    const unassignedOutgoing = {
+      total: currentUnassigned.total,
+      batches: currentUnassigned.batches.map((b) => ({
+        stockSupplyName: b.stockSupplyName,
+        totalProduced: b.totalProduced,
+        totalAssigned: b.totalAssigned,
+        unassigned: b.unassigned,
+      })),
+    };
 
     res.json({
       shift: {
@@ -561,6 +327,7 @@ router.get("/shift/:id", async (req, res) => {
         records: driftRecords,
       },
       unassignedCarryOver,
+      unassignedOutgoing,
     });
   } catch (e) {
     console.error("Error getting shift report:", e);

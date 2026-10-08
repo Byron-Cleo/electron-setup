@@ -9,6 +9,7 @@ export interface Props {
   onAssign?: (batch: StockRemainingUnassignedBatch) => void
   onCarryOver?: (batch: StockRemainingUnassignedBatch) => void
   onWaste?: (batch: StockRemainingUnassignedBatch) => void
+  showHeading?: boolean
 }
 
 function formatDay(iso: string | null): string {
@@ -44,7 +45,7 @@ const columnHeaders = [
   "Actions",
 ]
 
-export default function RemainingStockTable({ variant, batches, currentOpDay, disposingId, onAssign, onCarryOver, onWaste }: Props) {
+export default function RemainingStockTable({ variant, batches, currentOpDay, disposingId, onAssign, onCarryOver, onWaste, showHeading = true }: Props) {
   const isCurrent = variant === "current"
 
   if (batches.length === 0) {
@@ -59,29 +60,33 @@ export default function RemainingStockTable({ variant, batches, currentOpDay, di
 
   return (
     <div>
-      <div
-        className={`mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${
-          isCurrent ? "text-green-700" : "text-amber-700"
-        }`}
-      >
-        {isCurrent ? "Today's Production" : "Previous Operation Date"}
-        {isCurrent ? (
-          <span className="font-medium normal-case text-admin-muted">· {currentOpDay ? formatDay(currentOpDay) : "—"}</span>
-        ) : (
-          <span className="font-medium normal-case text-admin-muted">· looks back, not in Today's Cooked Food</span>
-        )}
-      </div>
-      <p className={`mb-2 text-[11px] leading-relaxed ${isCurrent ? "text-admin-muted" : "text-amber-700"}`}>
-        {isCurrent ? (
-          <>Produced within today's operation date window — these batches can be assigned to menus now.</>
-        ) : (
-          <>
-            These batches were produced before the current operation date, so they are{" "}
-            <span className="font-semibold">not shown in "Today's Cooked Food"</span> and are no longer
-            assignable by default. Handle them now: carry over as a manual exception or mark as wasted.
-          </>
-        )}
-      </p>
+      {showHeading && (
+        <>
+          <div
+            className={`mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${
+              isCurrent ? "text-green-700" : "text-amber-700"
+            }`}
+          >
+            {isCurrent ? "Today's Production" : "Previous Operation Date"}
+            {isCurrent ? (
+              <span className="font-medium normal-case text-admin-muted">· {currentOpDay ? formatDay(currentOpDay) : "—"}</span>
+            ) : (
+              <span className="font-medium normal-case text-admin-muted">· looks back, not in Today's Cooked Food</span>
+            )}
+          </div>
+          <p className={`mb-2 text-[11px] leading-relaxed ${isCurrent ? "text-admin-muted" : "text-amber-700"}`}>
+            {isCurrent ? (
+              <>Produced within today's operation date window — these batches can be assigned to menus now.</>
+            ) : (
+              <>
+                These batches were produced before the current operation date, so they are{" "}
+                <span className="font-semibold">not shown in "Today's Cooked Food"</span> and are no longer
+                assignable by default. Handle them now: carry over as a manual exception or mark as wasted.
+              </>
+            )}
+          </p>
+        </>
+      )}
       <div
         className={`overflow-x-auto rounded-md border ${
           isCurrent ? "border-admin-card-border" : "border-amber-200 bg-amber-50/30"
@@ -189,7 +194,7 @@ export default function RemainingStockTable({ variant, batches, currentOpDay, di
                           >
                             <span className={isCurrent ? "text-admin-header-text" : "text-amber-900"}>{m.menuName}</span>
                             <span className="rounded-full bg-blue-500/15 text-blue-600 px-1.5 py-0 text-[9px] font-semibold tabular-nums leading-tight">
-                              {Math.max(0, Number(m.platesAllocated ?? 0) - Number((m as any).platesRemaining ?? 0))}
+                              {Math.max(0, Number(m.platesSold ?? 0))}
                             </span>
                           </span>
                         ))}

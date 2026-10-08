@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
 import { getCookedMenus, stockSupplyImageUrl } from "@/lib/api"
+import { useLiveRefresh } from "@/hooks/useLiveRefresh"
 import AssignmentModal from "./AssignmentModal"
 
 interface Props {
@@ -22,22 +23,31 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     item: null,
   })
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       setError("")
       const data = await getCookedMenus()
       setItems(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cooked foods")
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Plates move when a batch is cooked, split, disposed, or sold elsewhere.
+  useLiveRefresh(
+    ["pool.updated", "order.created", "order.voided", "shift.closed"],
+    () => {
+      void loadData({ silent: true })
+    },
+  )
 
   useEffect(() => {
     onRefresh?.()
@@ -59,14 +69,26 @@ export default function CookedFoodTable({ onRefresh }: Props) {
   const sellableOf = (item: CookedMenuItem) =>
     item.cooking.sellableRemaining ?? item.cooking.totalAvailable
 
+  // A batch is only "done" when there is genuinely nothing left to do with it:
+  // every plate is assigned AND every assigned plate is already sold. While
+  // there are still unassigned plates (assignmentCapacity > 0) the row stays
+  // active so a manager can hand them out; while a dish still holds unsold
+  // plates the row stays active so they can be rebalanced.
+  const isDone = useCallback((item: CookedMenuItem) => {
+    if (item.sellingMode === "SHARED") {
+      return (item.cooking.sellableRemaining ?? item.cooking.totalAvailable) <= 0
+    }
+    return (item.cooking.assignmentCapacity ?? 0) <= 0 && (item.cooking.sellableRemaining ?? 0) <= 0
+  }, [])
+
   const sortedItems = useMemo(() => {
     return [...filteredItems].sort((a, b) => {
-      const aHas = sellableOf(a) > 0 ? 1 : 0
-      const bHas = sellableOf(b) > 0 ? 1 : 0
+      const aHas = isDone(a) ? 0 : 1
+      const bHas = isDone(b) ? 0 : 1
       if (aHas !== bHas) return bHas - aHas
       return b.cooking.totalProduced - a.cooking.totalProduced
     })
-  }, [filteredItems])
+  }, [filteredItems, isDone])
 
   const {
     currentPage,
@@ -137,6 +159,11 @@ export default function CookedFoodTable({ onRefresh }: Props) {
                 className="inline-flex items-center gap-1 px-2 py-0 rounded-full text-[10px] font-medium bg-admin-content border border-admin-card-border whitespace-nowrap leading-tight"
               >
                 <span className="text-admin-header-text">{m.menuName}</span>
+                {m.sold !== undefined && m.sold > 0 && (
+                  <span className="rounded-full bg-sky-500/15 text-sky-700 px-1.5 py-0 text-[9px] font-semibold tabular-nums leading-tight">
+                    sold {m.sold}
+                  </span>
+                )}
                 <span className="rounded-full bg-red-500/15 text-red-600 px-1.5 py-0 text-[9px] font-semibold tabular-nums leading-tight">
                   {m.remaining}
                 </span>
@@ -193,7 +220,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
             <Button
               size="sm"
               variant="outline"
-              disabled={row.cooking.totalAvailable <= 0}
+              disabled={row.disposed === true || isDone(row)}
               onClick={() => setEditDialog({ open: true, item: row })}
             >
               <Utensils size={14} className="mr-1" />
@@ -220,7 +247,7 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         data={paginatedItems}
         renderCell={renderCell}
         keyExtractor={(row) => row.id}
-        rowClassName={(row) => (sellableOf(row) <= 0 ? "opacity-40" : "")}
+        rowClassName={(row) => (row.disposed === true || isDone(row) ? "opacity-40" : "")}
         emptyMessage={
           search
             ? "No cooked foods match your search."

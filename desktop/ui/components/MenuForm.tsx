@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { useForm, useWatch, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { ImagePlus } from "lucide-react"
+import { ImagePlus, Plus, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -45,6 +45,20 @@ const formSchema = z
     hasVegetable: z.enum(["yes", "no"]),
     starchId: z.string().optional(),
     vegetableId: z.string().optional(),
+    hasPortion: z.enum(["yes", "no"]),
+    // Dish-owned sizes (Fried Eggs 1pc / 2pc). Exactly one row carries
+    // isDefault, which the server turns into Menu.portionId.
+    portions: z
+      .array(
+        z.object({
+          id: z.string().optional(),
+          name: z.string().trim().min(1, "Name is required"),
+          price: z.coerce.number().min(0, "Price must be 0 or more"),
+          platesPerServing: z.coerce.number().min(0.01, "Must be more than 0"),
+          isDefault: z.boolean(),
+        }),
+      )
+      .default([]),
   })
   .superRefine((data, ctx) => {
     if (data.hasStarch === "yes" && !data.starchId) {
@@ -59,6 +73,13 @@ const formSchema = z
         code: z.ZodIssueCode.custom,
         path: ["vegetableId"],
         message: "Vegetable accompaniment is required when serving with vegetable",
+      })
+    }
+    if (data.hasPortion === "yes" && data.portions.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["portions"],
+        message: "Add at least one portion option",
       })
     }
   })
@@ -165,11 +186,15 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
       mealTypes: [],
       hasStarch: "no",
       hasVegetable: "no",
+      hasPortion: "no",
+      portions: [],
     },
   })
 
   const watchedHasStarch = useWatch({ control: form.control, name: "hasStarch" })
   const watchedHasVegetable = useWatch({ control: form.control, name: "hasVegetable" })
+  const watchedHasPortion = useWatch({ control: form.control, name: "hasPortion" })
+  const watchedPortions = useWatch({ control: form.control, name: "portions" }) ?? []
 
   useEffect(() => {
     async function load() {
@@ -186,6 +211,16 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
     if (!editId) return
     getMenuById(editId)
       .then((item) => {
+        const hasDefault = (item.portionOptions ?? []).some((p) => p.id === item.defaultPortionId)
+        const portions = (item.portionOptions ?? []).map((p, index) => ({
+          id: p.id,
+          name: p.name,
+          price: Number(p.price),
+          platesPerServing: Number(p.platesPerServing ?? 1),
+          // Fall back to the first option so the radio always has a value,
+          // even for rows saved before the default pointer existed.
+          isDefault: p.id === item.defaultPortionId || (index === 0 && !hasDefault),
+        }))
         form.reset({
           name: item.name,
           category: item.category,
@@ -196,12 +231,44 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
           hasVegetable: item.hasVegetable ? "yes" : "no",
           starchId: item.starchId ?? undefined,
           vegetableId: item.vegetableId ?? undefined,
+          hasPortion: portions.length > 0 ? "yes" : "no",
+          portions,
         })
       })
       .catch((err) => {
         form.setError("root", { message: err instanceof Error ? err.message : "An error occurred" })
       })
   }, [editId, form])
+
+  function writePortions(next: FormValues["portions"]) {
+    form.setValue("portions", next, { shouldDirty: true, shouldValidate: true })
+  }
+
+  function updatePortion(index: number, patch: Partial<FormValues["portions"][number]>) {
+    writePortions(watchedPortions.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+  }
+
+  function addPortion() {
+    // A 1 pc option is what the dish already costs, so start from that.
+    writePortions([
+      ...watchedPortions,
+      {
+        name: "",
+        price: Number(form.getValues("price")) || 0,
+        platesPerServing: 1,
+        isDefault: watchedPortions.length === 0,
+      },
+    ])
+  }
+
+  function removePortion(index: number) {
+    const next = watchedPortions.filter((_, i) => i !== index)
+    // Keep exactly one default so the radio group never goes dark.
+    if (next.length > 0 && !next.some((row) => row.isDefault)) {
+      next[0] = { ...next[0], isDefault: true }
+    }
+    writePortions(next)
+  }
 
   async function onSubmit(data: FormValues) {
     try {
@@ -216,6 +283,19 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
         hasVegetable: data.hasVegetable === "yes",
         starchId: data.starchId || null,
         vegetableId: data.vegetableId || null,
+        // Turning portions off clears them, the same way "no starch" nulls
+        // starchId — otherwise the dish would keep selling sizes it no longer
+        // offers.
+        portions:
+          data.hasPortion === "yes"
+            ? data.portions.map((p) => ({
+                id: p.id,
+                name: p.name,
+                price: p.price,
+                platesPerServing: p.platesPerServing,
+                isDefault: p.isDefault,
+              }))
+            : [],
       }
       if (editId) {
         await updateMenu(editId, payload)
@@ -467,6 +547,142 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                 />
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <FormField
+                  control={form.control}
+                  name="hasPortion"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Sold in Portions?</FormLabel>
+                      <FormControl>
+                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                          <div className="flex items-center gap-2">
+                            <RadioGroupItem value="yes" id="portion-yes" />
+                            <Label htmlFor="portion-yes" className="font-normal cursor-pointer">Yes</Label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <RadioGroupItem value="no" id="portion-no" />
+                            <Label htmlFor="portion-no" className="font-normal cursor-pointer">No</Label>
+                          </div>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {watchedHasPortion === "yes" && (
+                  <FormField
+                    control={form.control}
+                    name="portions"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>
+                          Portion Options <span className="text-red-500 text-base font-bold">*</span>
+                        </FormLabel>
+                        <p className="text-xs text-gray-500">
+                          e.g. <span className="font-semibold">1 pc</span> = 1 egg and{" "}
+                          <span className="font-semibold">2 pc</span> = 2 eggs. Three eggs is
+                          quantity 3 on 1 pc.
+                        </p>
+
+                        {/* The default choice spans the whole list, so the
+                            RadioGroup owns the rows and the field inputs are
+                            driven straight off form state. */}
+                        <RadioGroup
+                          value={String(Math.max(0, watchedPortions.findIndex((p) => p.isDefault)))}
+                          onValueChange={(value) => {
+                            const chosen = Number(value)
+                            writePortions(
+                              watchedPortions.map((row, i) => ({ ...row, isDefault: i === chosen })),
+                            )
+                          }}
+                          className="space-y-2"
+                        >
+                          {watchedPortions.map((row, index) => (
+                            <div key={index} className="flex items-end gap-2 rounded-md border p-3">
+                              <div className="grid flex-1 grid-cols-3 gap-2">
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-gray-500" htmlFor={`portion-name-${index}`}>
+                                    Name
+                                  </Label>
+                                  <Input
+                                    id={`portion-name-${index}`}
+                                    value={row.name}
+                                    onChange={(e) => updatePortion(index, { name: e.target.value })}
+                                    placeholder="1 pc"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-gray-500" htmlFor={`portion-price-${index}`}>
+                                    Price
+                                  </Label>
+                                  <Input
+                                    id={`portion-price-${index}`}
+                                    type="number"
+                                    min={0}
+                                    value={row.price}
+                                    onChange={(e) =>
+                                      updatePortion(index, {
+                                        price: e.target.value === "" ? 0 : Number(e.target.value),
+                                      })
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-gray-500" htmlFor={`portion-plates-${index}`}>
+                                    Plates / serving
+                                  </Label>
+                                  <Input
+                                    id={`portion-plates-${index}`}
+                                    type="number"
+                                    min={0.01}
+                                    step="any"
+                                    value={row.platesPerServing}
+                                    onChange={(e) =>
+                                      updatePortion(index, {
+                                        platesPerServing: e.target.value === "" ? 0 : Number(e.target.value),
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col items-center gap-1 pb-1">
+                                <RadioGroupItem value={String(index)} id={`portion-default-${index}`} />
+                                <Label
+                                  htmlFor={`portion-default-${index}`}
+                                  className="text-xs cursor-pointer"
+                                >
+                                  Default
+                                </Label>
+                              </div>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-sm"
+                                aria-label={`Remove ${row.name || "portion"}`}
+                                onClick={() => removePortion(index)}
+                                className="text-red-500 hover:text-red-500"
+                              >
+                                <Trash2 />
+                              </Button>
+                            </div>
+                          ))}
+                        </RadioGroup>
+
+                        <Button type="button" variant="outline" size="sm" onClick={addPortion}>
+                          <Plus className="mr-1" /> Add portion
+                        </Button>
+
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

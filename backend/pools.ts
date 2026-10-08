@@ -120,8 +120,10 @@ export async function batchPools(
   tx: Prisma.TransactionClient,
   where: Prisma.CookingRecordWhereInput,
 ): Promise<Map<string, BatchPool>> {
+  // A disposed batch has been written off as waste: its plates are gone, so it
+  // can no longer serve a dish and must not count toward sellable stock.
   const batches = await tx.cookingRecord.findMany({
-    where,
+    where: { ...where, disposed: false },
     select: {
       id: true,
       stockSupplyId: true,
@@ -203,10 +205,6 @@ export async function factorForSupplyMenu(
 /**
  * Every consumption rate that applies to a dish: the rate from each supply it
  * can be made from, plus the rate of each of its portions when it has any.
- *
- * A supply may only run SHARED when this returns nothing but 1 — otherwise
- * servings compete for one pool at different rates, which is exactly the
- * situation a person must decide, so it must stay ALLOCATED.
  */
 export async function consumptionFactorsForMenu(
   tx: Prisma.TransactionClient,
@@ -226,33 +224,43 @@ export async function consumptionFactorsForMenu(
   return factors.length > 0 ? factors : [DEFAULT_PLATES_PER_SERVING];
 }
 
-/**
- * Every consumption rate in use across a supply's dishes, including its
- * dishes' portions. Used to decide whether SHARED is legal for this supply.
- */
-export async function consumptionFactorsForSupply(
-  tx: Prisma.TransactionClient,
-  stockSupplyId: string,
-): Promise<{ menuId: string; menuName: string; factors: number[] }[]> {
-  const links = await tx.stockSupplyMenu.findMany({
-    where: { stockSupplyId },
-    select: { menuId: true, platesPerServing: true, menu: { select: { name: true, hasPortion: true, portionId: true } } },
-    orderBy: { menuId: "asc" },
-  });
+/** Narrow DB surface needed by allocation-derived helpers. */
+type PoolDb = Pick<Prisma.TransactionClient, "orderItemAllocation">;
 
-  const out: { menuId: string; menuName: string; factors: number[] }[] = [];
-  for (const link of links) {
-    const factors = [Number(link.platesPerServing)];
-    if (link.menu.hasPortion) {
-      const portions = await tx.menuAccompaniment.findMany({
-        where: { category: "PORTION", menuId: link.menuId },
-        select: { platesPerServing: true },
-      });
-      factors.push(...portions.map((p) => Number(p.platesPerServing)));
+/**
+ * Plates sold off one or more batches, grouped per dish. Works for BOTH
+ * engines: every consumed plate writes an `OrderItemAllocation` linked to the
+ * order line's dish, so this is the one true per-dish trace — where an
+ * ALLOCATED batch can also be read from split remainders, a SHARED pool has no
+ * splits and only this exists.
+ */
+export async function soldByMenuForBatches(
+  db: PoolDb,
+  batchIds: string[],
+): Promise<Map<string, Map<string, { name: string; sold: number }>>> {
+  const allocations = await db.orderItemAllocation.findMany({
+    where: { cookingRecordId: { in: batchIds } },
+    select: {
+      cookingRecordId: true,
+      plates: true,
+      orderItem: { select: { menuId: true, Menu: { select: { name: true } } } },
+    },
+  });
+  const byBatch = new Map<string, Map<string, { name: string; sold: number }>>();
+  for (const a of allocations) {
+    let byMenu = byBatch.get(a.cookingRecordId);
+    if (!byMenu) {
+      byMenu = new Map();
+      byBatch.set(a.cookingRecordId, byMenu);
     }
-    out.push({ menuId: link.menuId, menuName: link.menu.name, factors });
+    const plates = round2(Number(a.plates));
+    const prev = byMenu.get(a.orderItem.menuId);
+    byMenu.set(a.orderItem.menuId, {
+      name: a.orderItem.Menu.name,
+      sold: round2((prev?.sold ?? 0) + plates),
+    });
   }
-  return out;
+  return byBatch;
 }
 
 /**
@@ -285,33 +293,76 @@ export async function factorForServing(
 }
 
 /**
- * The plates of one dish that can currently be ordered.
+ * The live supply behind one dish, and the engine that actually produced it.
+ *
+ * The engine is read from the batches feeding the dish *now*, not from the
+ * supply's current configuration: reconfiguring a supply later must never
+ * reinterpret trays that were already cooked. When a dish is fed by both kinds
+ * of batch the result is MIXED.
+ */
+export type MenuSellableInfo = {
+  /** Total plates currently orderable for this dish. */
+  plates: number;
+  /** Plates coming from ALLOCATED splits (reserved for this dish). */
+  allocated: number;
+  /** Plates coming from SHARED pools (common to every dish on the supply). */
+  shared: number;
+  /** Engine of the live batches, or undefined when nothing is left. */
+  sellingMode: SellingMode | "MIXED" | undefined;
+};
+
+/**
+ * The plates of one dish that can currently be ordered, plus the engine that
+ * produced them.
  *
  * ALLOCATED batches contribute their split remainders (never their unassigned
  * remainder — that is not sellable). SHARED batches contribute their whole
  * remaining pool, because the pool is sellable by every dish on the supply.
  */
-export async function sellableForMenu(
+export async function sellableInfoForMenu(
   tx: Prisma.TransactionClient,
   menuId: string,
-): Promise<number> {
+): Promise<MenuSellableInfo> {
   const splitAgg = await tx.cookingRecordMenu.aggregate({
     where: { menuId },
     _sum: { platesRemaining: true },
   });
-  let sellable = Number(splitAgg._sum?.platesRemaining ?? 0);
+  const allocated = round2(Number(splitAgg._sum?.platesRemaining ?? 0));
 
-  const supplyIds = (
-    await tx.stockSupplyMenu.findMany({ where: { menuId }, select: { stockSupplyId: true } })
-  ).map((l) => l.stockSupplyId);
+  // A held-back link (excludedFromSharedPool) must not credit this dish with
+  // the supply's shared pools, so the availability it sees downs to zero even
+  // while the dish still appears on the menu.
+  const links = await tx.stockSupplyMenu.findMany({
+    where: { menuId },
+    select: { stockSupplyId: true, excludedFromSharedPool: true },
+  });
+  const supplyIds = links.filter((l) => !l.excludedFromSharedPool).map((l) => l.stockSupplyId);
 
+  let shared = 0;
+  let sharedLive = false;
   if (supplyIds.length > 0) {
     const pools = await batchPools(tx, { sellingMode: SellingMode.SHARED, stockSupplyId: { in: supplyIds } });
     for (const pool of pools.values()) {
-      sellable += pool.poolRemaining;
+      shared = round2(shared + pool.poolRemaining);
+      if (pool.poolRemaining > 0) sharedLive = true;
     }
   }
-  return round2(sellable);
+
+  const allocatedLive = allocated > 0;
+  let sellingMode: MenuSellableInfo["sellingMode"];
+  if (allocatedLive && sharedLive) sellingMode = "MIXED";
+  else if (allocatedLive) sellingMode = SellingMode.ALLOCATED;
+  else if (sharedLive) sellingMode = SellingMode.SHARED;
+
+  return { plates: round2(allocated + shared), allocated, shared, sellingMode };
+}
+
+/** The plates of one dish that can currently be ordered. */
+export async function sellableForMenu(
+  tx: Prisma.TransactionClient,
+  menuId: string,
+): Promise<number> {
+  return (await sellableInfoForMenu(tx, menuId)).plates;
 }
 
 /**
@@ -324,9 +375,13 @@ export async function sourcesForMenu(
   tx: Prisma.TransactionClient,
   menuId: string,
 ): Promise<PoolSource[]> {
-  const supplyIds = (
-    await tx.stockSupplyMenu.findMany({ where: { menuId }, select: { stockSupplyId: true } })
-  ).map((l) => l.stockSupplyId);
+  // A held-back link is Shared-only: it withholds the supply's shared pools
+  // from this dish but leaves any ALLOCATED splits speaking for themselves.
+  const links = await tx.stockSupplyMenu.findMany({
+    where: { menuId },
+    select: { stockSupplyId: true, excludedFromSharedPool: true },
+  });
+  const supplyIds = links.filter((l) => !l.excludedFromSharedPool).map((l) => l.stockSupplyId);
 
   const sharedWhere: Prisma.CookingRecordWhereInput =
     supplyIds.length > 0
@@ -523,4 +578,151 @@ export async function recomputeMenuStock(
   const total = await sellableForMenu(tx, menuId);
   await tx.menu.update({ where: { id: menuId }, data: { stock: round2(total) } });
   return total;
+}
+
+/**
+ * Recompute `Menu.stock` for `menuId` and every sibling dish that shares one of
+ * its stock supplies.
+ *
+ * A SHARED pool belongs to the supply and credits every linked dish, so a sale
+ * through one dish drains the pool for all of them. Recomputing only the sold
+ * menu would leave its siblings' mirrors frozen at the pool's old value.
+ */
+export async function recomputeMenuStockWithSiblings(
+  tx: Prisma.TransactionClient,
+  menuId: string,
+): Promise<void> {
+  const links = await tx.stockSupplyMenu.findMany({
+    where: { menuId },
+    select: { stockSupplyId: true },
+  });
+  const supplyIds = links.map((l) => l.stockSupplyId);
+  if (supplyIds.length === 0) {
+    await recomputeMenuStock(tx, menuId);
+    return;
+  }
+
+  const siblings = await tx.stockSupplyMenu.findMany({
+    where: { stockSupplyId: { in: supplyIds } },
+    select: { menuId: true },
+  });
+  const menuIds = new Set<string>([menuId, ...siblings.map((s) => s.menuId)]);
+  for (const id of menuIds) {
+    await recomputeMenuStock(tx, id);
+  }
+}
+
+/**
+ * Discard `plates` of the SHARED pools belonging to `supplyIds`, oldest first,
+ * by inflating each batch's `wastedPlates`. Because a pool is *derived* as
+ * produced − sold − wasted, this is the only write needed: every linked dish's
+ * sellable stock re-derives downward on the next recompute.
+ *
+ * Returns the amount still unwasted (0 when fully satisfied).
+ */
+async function wasteSharedPools(
+  tx: Prisma.TransactionClient,
+  supplyIds: string[],
+  plates: number,
+): Promise<number> {
+  let left = round2(plates);
+  if (left <= 0 || supplyIds.length === 0) return left;
+
+  const pools = await batchPools(tx, {
+    sellingMode: SellingMode.SHARED,
+    stockSupplyId: { in: supplyIds },
+  });
+  const ordered = [...pools.values()]
+    .filter((pool) => pool.poolRemaining > 0)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  for (const pool of ordered) {
+    if (left <= 0) break;
+    const take = round2(Math.min(pool.poolRemaining, left));
+    if (take <= 0) continue;
+    await tx.cookingRecord.update({
+      where: { id: pool.id },
+      data: { wastedPlates: { increment: take } },
+    });
+    left = round2(left - take);
+  }
+  return left;
+}
+
+/**
+ * Discard `plates` of one dish's sellable stock as waste.
+ *
+ * ALLOCATED splits are drained FIFO. Each drained split loses the plates from
+ * BOTH `platesAllocated` and `platesRemaining` so its sold figure
+ * (allocated − remaining) is unchanged and the waste can never be mistaken for
+ * a sale; the owning batch's `wastedPlates` grows by the same amount so the
+ * derived pool drops too. Any remainder the dish cannot cover from its own
+ * splits is taken from the SHARED pools it draws on.
+ *
+ * Returns the amount wasted (may be less than requested when the dish has less
+ * sellable stock than asked).
+ */
+export async function wasteMenuPlates(
+  tx: Prisma.TransactionClient,
+  menuId: string,
+  plates: number,
+): Promise<number> {
+  const original = round2(plates);
+  if (original <= 0) return 0;
+  let left = original;
+
+  const splits = await tx.cookingRecordMenu.findMany({
+    where: { menuId, platesRemaining: { gt: 0 } },
+    select: {
+      id: true,
+      platesRemaining: true,
+      cookingRecord: { select: { id: true, sellingMode: true } },
+    },
+    orderBy: { cookingRecord: { createdAt: "asc" } },
+  });
+
+  for (const split of splits) {
+    if (left <= 0) break;
+    if (split.cookingRecord.sellingMode !== SellingMode.ALLOCATED) continue;
+    const take = round2(Math.min(Number(split.platesRemaining), left));
+    if (take <= 0) continue;
+    await tx.cookingRecordMenu.update({
+      where: { id: split.id },
+      data: {
+        platesAllocated: { decrement: take },
+        platesRemaining: { decrement: take },
+      },
+    });
+    await tx.cookingRecord.update({
+      where: { id: split.cookingRecord.id },
+      data: { wastedPlates: { increment: take } },
+    });
+    left = round2(left - take);
+  }
+
+  if (left > 0) {
+    const links = await tx.stockSupplyMenu.findMany({
+      where: { menuId, excludedFromSharedPool: false },
+      select: { stockSupplyId: true },
+    });
+    left = await wasteSharedPools(tx, links.map((l) => l.stockSupplyId), left);
+  }
+
+  return round2(original - left);
+}
+
+/**
+ * Discard `plates` from one supply's SHARED pools as waste. This is the
+ * supply-level counterpart of `wasteMenuPlates`, for when the manager decides on
+ * a whole shared tray rather than one dish. Returns the amount wasted.
+ */
+export async function wasteSupplyPool(
+  tx: Prisma.TransactionClient,
+  stockSupplyId: string,
+  plates: number,
+): Promise<number> {
+  const original = round2(plates);
+  if (original <= 0) return 0;
+  const left = await wasteSharedPools(tx, [stockSupplyId], original);
+  return round2(original - left);
 }

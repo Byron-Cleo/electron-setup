@@ -230,6 +230,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
       plateMovement: r.plateMovement,
       production: r.production,
       unassignedCarryOver: r.unassignedCarryOver,
+      unassignedOutgoing: r.unassignedOutgoing,
       payments: r.payments,
     }
   }
@@ -777,11 +778,14 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                         <span className="text-right tabular-nums">{row.closingStockAtManualClose ?? "—"}</span>
                       </div>
                     ))}
-                    {report.unassignedCarryOver && report.unassignedCarryOver.total > 0 && (
-                      <div className="border-t border-orange-200 bg-orange-50 px-2 py-1.5 text-xs font-medium text-orange-700">
-                        Total Unassigned Carry-Over: {report.unassignedCarryOver.total} plates
+                    <div className="border-t border-orange-200 bg-orange-50 px-2 py-1.5 text-xs font-medium text-orange-700">
+                        Unassigned Carry-Over (In): {report.unassignedCarryOver?.total ?? 0} plates
+                        <span className="font-normal text-orange-600"> · from previous shift</span>
                       </div>
-                    )}
+                      <div className="border-t border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700">
+                        Unassigned Carry-Forward (Out): {report.unassignedOutgoing?.total ?? 0} plates
+                        <span className="font-medium text-blue-600"> · to next shift</span>
+                      </div>
                     <p className="pt-1 text-center text-[10px] leading-snug text-admin-muted">
                       * Final = final closing stock for the shift.
                     </p>

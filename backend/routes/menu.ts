@@ -1,32 +1,173 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { computeCurrentCycle, computeAllUnassignedBatches } from "./shiftCarryOver.js";
-import { ServiceTime } from "../db/generated/prisma/client.js";
+import { Prisma, ServiceTime } from "../db/generated/prisma/client.js";
 import multer from "multer";
 import path from "path";
 import crypto from "crypto";
 import { uploadsDir } from "../db/uploads.js";
-import { batchPools, sellableForMenu } from "../pools.js";
-
-/**
- * Plates left in a shared batch, derived from its allocation ledger. Resolved
- * per batch and memoised because the cooked table maps over many records.
- */
-const sharedRemainingCache = new Map<string, number>();
-async function sharedRemaining(batchId: string, produced: number): Promise<number> {
-  const cached = sharedRemainingCache.get(batchId);
-  if (cached !== undefined) return cached;
-  const pools = await batchPools(prisma, { id: batchId });
-  const pool = pools.get(batchId);
-  const remaining = pool ? pool.poolRemaining : produced;
-  sharedRemainingCache.set(batchId, remaining);
-  return remaining;
-}
+import { batchPools, round2, sellableInfoForMenu, soldByMenuForBatches } from "../pools.js";
 import fs from "fs/promises";
 
 const router = Router();
 
 const VALID_MEAL_TYPES = Object.values(ServiceTime) as string[];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A portion option (Fried Eggs "1 pc" / "2 pc"), ready to be written.
+ *
+ * Portions are dish-owned — MenuAccompaniment.menuId — rather than entries in
+ * the global accompaniment list, because "1 pc" means nothing outside the dish
+ * it belongs to. They are edited on MenuForm and therefore arrive as a nested
+ * payload on POST/PUT /menu, never through /accompaniments.
+ */
+interface NormalizedPortion {
+  id?: string;
+  name: string;
+  price: number;
+  platesPerServing: number;
+  isDefault: boolean;
+}
+
+/**
+ * Validates the request's portion payload before anything touches the
+ * transaction, returning an error string so both POST and PUT can 400 the same
+ * way instead of failing half-way through a write.
+ */
+function parsePortions(
+  input: unknown,
+): { error: string } | { portions: NormalizedPortion[] } {
+  if (!Array.isArray(input)) return { error: "portions must be an array" };
+
+  const portions: NormalizedPortion[] = [];
+  let defaults = 0;
+
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") return { error: "each portion must be an object" };
+
+    const { id, name, price, platesPerServing, isDefault } = raw as Record<string, unknown>;
+    const trimmed = typeof name === "string" ? name.trim() : "";
+    if (!trimmed) return { error: "each portion needs a name" };
+
+    const amount = Number(price ?? 0);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return { error: `portion "${trimmed}" needs a price of 0 or more` };
+    }
+
+    const plates = Number(platesPerServing ?? 1);
+    if (!Number.isFinite(plates) || plates <= 0) {
+      return { error: `portion "${trimmed}" needs platesPerServing greater than 0` };
+    }
+
+    if (id !== undefined && (typeof id !== "string" || !UUID_RE.test(id))) {
+      return { error: `portion "${trimmed}" has an invalid id` };
+    }
+
+    if (isDefault === true) defaults += 1;
+    portions.push({
+      id: typeof id === "string" ? id : undefined,
+      name: trimmed,
+      price: amount,
+      platesPerServing: plates,
+      isDefault: isDefault === true,
+    });
+  }
+
+  if (defaults > 1) return { error: "only one portion can be the default" };
+  return { portions };
+}
+
+/**
+ * Writes a dish's portion options inside the caller's transaction.
+ *
+ * The order of operations is load-bearing. Menu.portionId and
+ * OrderItem.portionId are both ON DELETE SET NULL, so deleting a row first
+ * would quietly detach it — losing the default pointer, and scrubbing the
+ * portion's name off historical receipts — rather than failing loudly. So:
+ * upsert every kept row, move the dish's pointer onto a row that now exists,
+ * and only then delete what was removed (refusing if orders still name it).
+ */
+async function syncPortions(
+  tx: Prisma.TransactionClient,
+  menuId: string,
+  portions: NormalizedPortion[],
+): Promise<void> {
+  const keptIds: string[] = [];
+
+  for (const portion of portions) {
+    if (portion.id) {
+      // Scoped to this dish: adopting another dish's row would move it out
+      // from under whoever owns it, so reject the whole payload instead.
+      const owned = await tx.menuAccompaniment.findFirst({
+        where: { id: portion.id, menuId, category: "PORTION" },
+        select: { id: true },
+      });
+      if (!owned) {
+        throw Object.assign(new Error(`Unknown portion id: ${portion.id}`), { status: 400 });
+      }
+
+      await tx.menuAccompaniment.update({
+        where: { id: portion.id },
+        data: {
+          name: portion.name,
+          price: portion.price,
+          platesPerServing: portion.platesPerServing,
+          isDefault: portion.isDefault,
+        },
+      });
+      keptIds.push(portion.id);
+    } else {
+      const created = await tx.menuAccompaniment.create({
+        data: {
+          name: portion.name,
+          category: "PORTION",
+          image: "",
+          price: portion.price,
+          platesPerServing: portion.platesPerServing,
+          isDefault: portion.isDefault,
+          menuId,
+        },
+      });
+      keptIds.push(created.id);
+    }
+  }
+
+  // With no explicit default, the first option is the default — which is what
+  // the waiter's defaultPortionFor() falls back to anyway, so pin it down.
+  const defaultIndex = portions.findIndex((p) => p.isDefault);
+  const defaultId = keptIds[defaultIndex >= 0 ? defaultIndex : keptIds.length > 0 ? 0 : -1];
+
+  await tx.menu.update({
+    where: { id: menuId },
+    data: { hasPortion: portions.length > 0, portionId: defaultId ?? null },
+  });
+
+  const where: Prisma.MenuAccompanimentWhereInput = { menuId, category: "PORTION" };
+  if (keptIds.length > 0) where.id = { notIn: keptIds };
+
+  const removed = await tx.menuAccompaniment.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      _count: { select: { OrderItem_portionIdToMenuAccompaniment: true } },
+    },
+  });
+
+  const inUse = removed.find((r) => r._count.OrderItem_portionIdToMenuAccompaniment > 0);
+  if (inUse) {
+    throw Object.assign(
+      new Error(`"${inUse.name}" is used by past orders and can't be removed`),
+      { status: 409 },
+    );
+  }
+
+  if (removed.length > 0) {
+    await tx.menuAccompaniment.deleteMany({ where: { id: { in: removed.map((r) => r.id) } } });
+  }
+}
 
 // Keep a readable, sanitized copy of the original filename at the end so the
 // waiter gallery's endsWith-based accompaniment matching works for uploaded
@@ -65,6 +206,7 @@ function serializeMenu(menu: any) {
     MenuMealType,
     MenuAccompaniment_Menu_starchIdToMenuAccompaniment: starchRel,
     MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: vegetableRel,
+    portionOptions,
     ...rest
   } = menu
   return {
@@ -72,8 +214,35 @@ function serializeMenu(menu: any) {
     mealTypes: MenuMealType.map((mt: any) => mt.mealType),
     starch: starchRel,
     vegetable: vegetableRel,
+    ...(portionOptions !== undefined && {
+      // Prisma Decimal serialises as a string; the client types these numbers.
+      portionOptions: portionOptions.map(
+        (p: { id: string; name: string; price?: unknown; platesPerServing?: unknown }) => ({
+          ...p,
+          price: Number(p.price ?? 0),
+          platesPerServing: Number(p.platesPerServing ?? 1),
+        }),
+      ),
+      // Same pointer the list endpoint exposes, so MenuForm's edit mode and the
+      // waiter agree on which option is preselected.
+      defaultPortionId: menu.portionId ?? null,
+      hasPortion: portionOptions.length > 0,
+    }),
   }
 }
+
+// Column set every menu-shaped response is built from, including the dish's
+// own portion options (MENU.portionOptions) so edit round-trips are lossless.
+const MENU_INCLUDE = {
+  MenuMealType: { select: { mealType: true } },
+  MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
+  MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
+  portionOptions: {
+    where: { category: "PORTION" as const },
+    orderBy: { price: "asc" as const },
+    select: { id: true, name: true, price: true, platesPerServing: true },
+  },
+} satisfies Prisma.MenuInclude;
 
 const RUNNING_LOW_THRESHOLD = 5;
 
@@ -266,6 +435,17 @@ router.get("/cooked", async (req, res) => {
       }
     }
 
+    // Shared batches' remaining pools in one aggregate query (produced − sold −
+    // wasted), so the cooked table shows a ledger-derived number per batch.
+    const sharedIds = records.filter((r) => r.sellingMode === "SHARED").map((r) => r.id);
+    const sharedPools =
+      sharedIds.length > 0 ? await batchPools(prisma, { id: { in: sharedIds } }) : new Map();
+
+    // Per-dish sold per batch, straight from the allocation ledger. A SHARED
+    // pool has no splits, so this is the only per-dish trace for it.
+    const batchSoldByMenu =
+      records.length > 0 ? await soldByMenuForBatches(prisma, records.map((r) => r.id)) : new Map();
+
     const result = await Promise.all(records.map(async (record) => {
       const produced = Number(record.platesActual ?? record.platesExpected);
       const linkableMenus = record.stockSupply.menus.map((sm) => sm.menu);
@@ -283,7 +463,11 @@ router.get("/cooked", async (req, res) => {
       //    that is the split remainders; for SHARED it is the derived pool.
       const isShared = record.sellingMode === "SHARED";
       const assignmentCapacity = Math.max(0, produced - allocatedTotal);
-      const sellableRemaining = isShared ? await sharedRemaining(record.id, produced) : remainingTotal;
+      // SHARED remainders are derived (produced − sold − wasted), never cached —
+      // the ledger is the only source of truth across restarts and shifts.
+      const sellableRemaining = isShared
+        ? (sharedPools.get(record.id)?.poolRemaining ?? produced)
+        : remainingTotal;
       const soldTotal = isShared
         ? Math.max(0, produced - sellableRemaining)
         : allocatedTotal > 0
@@ -299,6 +483,8 @@ router.get("/cooked", async (req, res) => {
 
       return {
         id: record.id,
+        disposed: record.disposed,
+        disposedAt: record.disposedAt ? record.disposedAt.toISOString() : null,
         cookedDate: record.cookedDate.toISOString().slice(0, 10),
         shiftId: record.shift?.id ?? null,
         shiftType: record.shift?.type ?? null,
@@ -319,11 +505,19 @@ router.get("/cooked", async (req, res) => {
         stock: primaryMenuStock?.stock ?? 0,
         menus: linkableMenus.map((menu) => {
           const split = splitByMenu.get(menu.id);
+          // Sold per dish — ALLOCATED reads split remainders, SHARED reads the
+          // allocation ledger because the shared pool has no splits to subtract.
+          const sold = isShared
+            ? Math.max(0, round2(batchSoldByMenu.get(record.id)?.get(menu.id)?.sold ?? 0))
+            : split
+              ? Math.max(0, round2(Number(split.platesAllocated) - Number(split.platesRemaining)))
+              : 0;
           return {
             menuId: menu.id,
             menuName: menu.name,
             allocated: split ? Number(split.platesAllocated) : 0,
             remaining: split ? Number(split.platesRemaining) : 0,
+            sold,
           };
         }),
         cooking: {
@@ -405,9 +599,11 @@ router.get("/", async (req, res) => {
   });
 
   // Availability comes from the pool ledger, not the Menu.stock mirror, so a
-  // shared pool is credited in full to every dish on its supply.
+  // shared pool is credited in full to every dish on its supply. The engine is
+  // read from the live batches too, so a supply reconfigured after cooking never
+  // relabels trays that were already produced under the other engine.
   const availability = await Promise.all(
-    items.map((menu) => sellableForMenu(prisma, menu.id)),
+    items.map((menu) => sellableInfoForMenu(prisma, menu.id)),
   );
 
   const result = items.map(({
@@ -418,14 +614,19 @@ router.get("/", async (req, res) => {
     stockSupplyMenus,
     ...menu
   }, index) => {
-    const plates = availability[index] ?? 0;
+    const plates = availability[index]?.plates ?? 0;
     // Per-dish factor: the max across its feeds keeps the served cap honest.
     const dishRates = stockSupplyMenus
       .map((l) => Number(l.platesPerServing))
       .filter((n) => n > 0);
-    const platesPerServing = dishRates.length > 0 ? Math.max(...dishRates) : 1;
-    // Every feeding supply must agree on the engine or the dish is ambiguous.
-    const modes = new Set(stockSupplyMenus.map((l) => l.stockSupply.sellingMode));
+    const supplyFactor = dishRates.length > 0 ? Math.max(...dishRates) : 1;
+    // A dish sold in portions takes its rate from the default portion, not the
+    // supply link, so the returned servings match what the waiter sees when
+    // that portion is preselected.
+    const defaultPortion =
+      portionOptions.find((p) => p.id === menu.portionId) ?? portionOptions[0];
+    const portionFactor = defaultPortion ? Number(defaultPortion.platesPerServing) : 0;
+    const platesPerServing = portionFactor > 0 ? portionFactor : supplyFactor;
 
     return {
       ...menu,
@@ -435,12 +636,22 @@ router.get("/", async (req, res) => {
       platesPerServing,
       // Whole servings only — a partial plate is not orderable.
       sellableServings: Math.floor(plates / platesPerServing),
-      sellingMode: modes.size === 1 ? [...modes][0] : undefined,
+      // The engine of the batches actually feeding this dish, not the supply's
+      // current configuration: ALLOCATED, SHARED, MIXED, or undefined when sold out.
+      sellingMode: availability[index]?.sellingMode,
+      allocatedPlates: availability[index]?.allocated ?? 0,
+      sharedPlates: availability[index]?.shared ?? 0,
+      supplyNames: stockSupplyMenus.map((l) => l.stockSupply.name),
       hasPortion: portionOptions.length > 0,
       portionId: menu.portionId,
       defaultPortionId: menu.portionId,
       defaultQty: Number(menu.defaultQty ?? 1),
-      portionOptions,
+      portionOptions: portionOptions.map((p) => ({
+        ...p,
+        // Prisma Decimal serialises as a string; every caller does price maths.
+        price: Number(p.price ?? 0),
+        platesPerServing: Number(p.platesPerServing ?? 1),
+      })),
       mealTypes: MenuMealType.map((mt) => mt.mealType),
       starch: starchRel,
       vegetable: vegetableRel,
@@ -481,13 +692,13 @@ router.get("/images", async (_req, res) => {
 
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
+  // Prisma parses the where-clause id itself and throws P2007 on a non-UUID,
+  // which the catch below would re-throw into an unhandled rejection and exit
+  // the process. A non-UUID can never name a menu, so 404 before we get there.
+  if (!UUID_RE.test(id)) return res.status(404).json({ error: "Not found" });
   const item = await prisma.menu.findUnique({
     where: { id },
-    include: {
-      MenuMealType: { select: { mealType: true } },
-      MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
-      MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
-    },
+    include: MENU_INCLUDE,
   });
   if (!item) return res.status(404).json({ error: "Not found" });
   res.json(serializeMenu(item));
@@ -501,7 +712,7 @@ router.post("/upload", uploadMenuImage.single("image"), (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images } = req.body;
+  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images, portions } = req.body;
   if (!name || !category) {
     return res.status(400).json({ error: "name, category are required" });
   }
@@ -526,6 +737,13 @@ router.post("/", async (req, res) => {
   }
   if (hasVegetable && !vegetableId) {
     return res.status(400).json({ error: "vegetableId is required when hasVegetable is true" });
+  }
+
+  let normalizedPortions: NormalizedPortion[] | undefined;
+  if (portions !== undefined) {
+    const parsed = parsePortions(portions);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+    normalizedPortions = parsed.portions;
   }
 
   try {
@@ -554,26 +772,28 @@ router.post("/", async (req, res) => {
         });
       }
 
+      if (normalizedPortions !== undefined) {
+        await syncPortions(tx, menu.id, normalizedPortions);
+      }
+
       return tx.menu.findUnique({
         where: { id: menu.id },
-        include: {
-          MenuMealType: { select: { mealType: true } },
-          MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
-          MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
-        },
+        include: MENU_INCLUDE,
       });
     });
 
     res.status(201).json(serializeMenu(result));
   } catch (e: any) {
     if (e.code === "P2002") return res.status(409).json({ error: "Slug already exists" });
+    if (typeof e?.status === "number") return res.status(e.status).json({ error: e.message });
     throw e;
   }
 });
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images } = req.body;
+  if (!UUID_RE.test(id)) return res.status(404).json({ error: "Not found" });
+  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images, portions } = req.body;
 
   if (images !== undefined && !Array.isArray(images)) {
     return res.status(400).json({ error: "images must be an array of strings" });
@@ -588,6 +808,15 @@ router.put("/:id", async (req, res) => {
         return res.status(400).json({ error: `Invalid mealType: ${mt}. Must be one of: ${VALID_MEAL_TYPES.join(", ")}` });
       }
     }
+  }
+
+  // Validated before the first read so a bad payload 400s without doing any
+  // work; omitted entirely means "leave this dish's portions alone".
+  let normalizedPortions: NormalizedPortion[] | undefined;
+  if (portions !== undefined) {
+    const parsed = parsePortions(portions);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+    normalizedPortions = parsed.portions;
   }
 
   try {
@@ -647,13 +876,13 @@ router.put("/:id", async (req, res) => {
         }
       }
 
+      if (normalizedPortions !== undefined) {
+        await syncPortions(tx, id, normalizedPortions);
+      }
+
       return tx.menu.findUnique({
         where: { id },
-        include: {
-          MenuMealType: { select: { mealType: true } },
-          MenuAccompaniment_Menu_starchIdToMenuAccompaniment: { select: { name: true, price: true } },
-          MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment: { select: { name: true, price: true } },
-        },
+        include: MENU_INCLUDE,
       });
     });
 
@@ -661,12 +890,14 @@ router.put("/:id", async (req, res) => {
   } catch (e: any) {
     if (e.code === "P2025") return res.status(404).json({ error: "Not found" });
     if (e.code === "P2002") return res.status(409).json({ error: "Slug already exists" });
+    if (typeof e?.status === "number") return res.status(e.status).json({ error: e.message });
     throw e;
   }
 });
 
 router.put("/:id/availability", async (req, res) => {
   const { id } = req.params;
+  if (!UUID_RE.test(id)) return res.status(404).json({ error: "Not found" });
   const { isAvailable } = req.body;
   if (typeof isAvailable !== "boolean") {
     return res.status(400).json({ error: "isAvailable must be a boolean" });
@@ -685,6 +916,7 @@ router.put("/:id/availability", async (req, res) => {
 
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
+  if (!UUID_RE.test(id)) return res.status(404).json({ error: "Not found" });
   try {
     await prisma.menu.delete({ where: { id } });
     res.json({ message: "Deleted", id });

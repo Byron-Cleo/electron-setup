@@ -1,5 +1,6 @@
 import prisma from "../db/db.js";
 import { SellingMode } from "../db/generated/prisma/client.js";
+import { batchPools, round2 } from "../pools.js";
 
 export interface UnassignedBatch {
   cookingRecordId: string;
@@ -158,10 +159,6 @@ export async function findShiftIdForTime(date: Date): Promise<string | null> {
   return date.getTime() < windowEnd.getTime() ? shift.id : null;
 }
 
-interface SoldByMenuMap {
-  soldByMenu: Map<string, number>;
-}
-
 async function soldByMenuForShiftWhere(where: object): Promise<Map<string, number>> {
   const snapshots = await prisma.shiftSnapshot.findMany({
     where,
@@ -243,11 +240,13 @@ export async function computeAllUnassignedBatches(
     if (record.sellingMode === "SHARED") continue;
 
     const produced = Number(record.platesActual ?? record.platesExpected);
-    const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
     const totalEverAllocated = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
     const currentlyAvailable = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
     const batchSold = totalEverAllocated - currentlyAvailable;
-    const unassigned = produced - totalEverAllocated;
+    // Wasted plates are physically gone, so subtract them too — otherwise a
+    // dish-level waste (which lowers platesAllocated) would resurface as
+    // "unassigned" and be offered for assignment again.
+    const unassigned = round2(produced - totalEverAllocated - Number(record.wastedPlates ?? 0));
     if (unassigned <= 0) continue;
 
     const attribution = attributionForCookingRecord(record, cycle);
@@ -262,7 +261,7 @@ export async function computeAllUnassignedBatches(
       unassigned,
       expired: false,
       validUnassigned: unassigned,
-      sellingNow: produced - batchSold - unassigned,
+      sellingNow: currentlyAvailable,
       soldTotal: batchSold,
       cookedAt: record.createdAt.toISOString(),
       batchNumber: record.batchNumber,
@@ -313,11 +312,10 @@ export async function computeExpiredUnassignedBatches(
     if (record.sellingMode === "SHARED") continue;
 
     const produced = Number(record.platesActual ?? record.platesExpected);
-    const remainingTotal = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
     const totalEverAllocated = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
     const currentlyAvailable = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesRemaining), 0);
     const batchSold = totalEverAllocated - currentlyAvailable;
-    const unassigned = produced - totalEverAllocated;
+    const unassigned = round2(produced - totalEverAllocated - Number(record.wastedPlates ?? 0));
     if (unassigned <= 0) continue;
 
     const attribution = attributionForCookingRecord(record, cycle);
@@ -332,7 +330,7 @@ export async function computeExpiredUnassignedBatches(
       unassigned,
       expired: true,
       validUnassigned: 0,
-      sellingNow: produced - batchSold - unassigned,
+      sellingNow: currentlyAvailable,
       soldTotal: batchSold,
       cookedAt: record.createdAt.toISOString(),
       batchNumber: record.batchNumber,
@@ -443,31 +441,197 @@ export async function computeWastedBatches(
   batches.sort((a, b) => (a.disposedAt < b.disposedAt ? 1 : -1));
   return { batches };
 }
-// starts before a given time (used to find the shift immediately preceding
-// another shift).
-export async function findPreviousClosedShift(before?: Date) {
-  return prisma.shift.findFirst({
-    where: {
-      isOpen: false,
-      ...(before ? { autoOpenTime: { lt: before } } : {}),
-    },
-    orderBy: { autoOpenTime: "desc" },
+
+// A dish (ALLOCATED) or supply pool (SHARED) that still has sellable plates on
+// it, grouped per operation date so the UI can split "today" from earlier
+// dates. These are the plates a manager decides to carry over (the default —
+// they stay sellable and become the next shift's opening stock) or to waste.
+export interface AssignedLeftoverRow {
+  key: string;
+  engine: SellingMode;
+  // ALLOCATED: the dish. SHARED: null (the pool is the unit, shared by dishes).
+  menuId: string | null;
+  menuName: string | null;
+  // SHARED only: the dishes this pool currently credits.
+  linkedMenuNames: string[];
+  stockSupplyId: string;
+  stockSupplyName: string;
+  operationDay: string | null;
+  shiftType: string | null;
+  cookedAt: string;
+  // ALLOCATED: ever-allocated plates and (allocated − remaining) sold.
+  assigned: number;
+  sold: number;
+  // Plates still sellable on this row.
+  remaining: number;
+  batchCount: number;
+}
+
+// Assigned-but-unsold stock (ALLOCATED splits' platesRemaining) plus every
+// SHARED pool's live remainder, grouped per operation date. The current
+// operation date is what a shift-close decision acts on; earlier dates are the
+// leftovers never carried over or wasted.
+export async function computeAssignedLeftovers(
+  cycle: OperationCycle
+): Promise<{ rows: AssignedLeftoverRow[] }> {
+  const records = await prisma.cookingRecord.findMany({
+    where: { disposed: false },
     include: {
-      snapshots: {
-        include: {
-          menu: {
-            select: {
-              id: true,
-              name: true,
-              stockSupplyMenus: {
-                include: { stockSupply: { select: { id: true, name: true } } },
-              },
-            },
-          },
+      stockSupply: {
+        select: {
+          id: true,
+          name: true,
+          menus: { select: { menu: { select: { name: true } } } },
         },
       },
+      cookingRecordMenus: {
+        select: {
+          menuId: true,
+          platesAllocated: true,
+          platesRemaining: true,
+          menu: { select: { name: true } },
+        },
+      },
+      shift: { select: { id: true, type: true, operationDay: true, autoOpenTime: true, autoCloseTime: true } },
     },
   });
+
+  const sharedIds = records.filter((r) => r.sellingMode === "SHARED").map((r) => r.id);
+  const sharedPools =
+    sharedIds.length > 0 ? await batchPools(prisma, { id: { in: sharedIds } }) : new Map();
+
+  interface Acc {
+    menuId: string | null;
+    menuName: string | null;
+    linkedMenuNames: string[];
+    stockSupplyNames: Set<string>;
+    stockSupplyIds: Set<string>;
+    operationDay: string | null;
+    shiftTypes: Set<string>;
+    cookedAtMs: number;
+    assigned: number;
+    sold: number;
+    remaining: number;
+    batchCount: number;
+  }
+  const groups = new Map<string, Acc>();
+
+  const upsert = (
+    key: string,
+    base: {
+      menuId: string | null;
+      menuName: string | null;
+      linkedMenuNames: string[];
+      stockSupplyId: string;
+      stockSupplyName: string;
+      operationDay: string | null;
+      shiftType: string | null;
+      cookedAtMs: number;
+    },
+    add: { assigned: number; sold: number; remaining: number },
+  ) => {
+    let acc = groups.get(key);
+    if (!acc) {
+      acc = {
+        menuId: base.menuId,
+        menuName: base.menuName,
+        linkedMenuNames: base.linkedMenuNames,
+        stockSupplyNames: new Set(),
+        stockSupplyIds: new Set(),
+        operationDay: base.operationDay,
+        shiftTypes: new Set(),
+        cookedAtMs: base.cookedAtMs,
+        assigned: 0,
+        sold: 0,
+        remaining: 0,
+        batchCount: 0,
+      };
+      groups.set(key, acc);
+    }
+    acc.stockSupplyNames.add(base.stockSupplyName);
+    acc.stockSupplyIds.add(base.stockSupplyId);
+    if (base.shiftType) acc.shiftTypes.add(base.shiftType);
+    acc.cookedAtMs = Math.min(acc.cookedAtMs, base.cookedAtMs);
+    acc.assigned = round2(acc.assigned + add.assigned);
+    acc.sold = round2(acc.sold + add.sold);
+    acc.remaining = round2(acc.remaining + add.remaining);
+    acc.batchCount += 1;
+  };
+
+  for (const record of records) {
+    const attr = attributionForCookingRecord(record, cycle);
+
+    if (record.sellingMode === "SHARED") {
+      const pool = sharedPools.get(record.id);
+      const remaining = round2(pool?.poolRemaining ?? 0);
+      if (remaining <= 0) continue;
+      upsert(
+        `shared:${record.stockSupplyId}|${attr.operationDay ?? "unknown"}`,
+        {
+          menuId: null,
+          menuName: null,
+          linkedMenuNames: record.stockSupply.menus.map((m) => m.menu.name),
+          stockSupplyId: record.stockSupplyId,
+          stockSupplyName: record.stockSupply.name,
+          operationDay: attr.operationDay,
+          shiftType: attr.shiftType,
+          cookedAtMs: record.createdAt.getTime(),
+        },
+        { assigned: 0, sold: round2(pool?.sold ?? 0), remaining },
+      );
+      continue;
+    }
+
+    for (const crm of record.cookingRecordMenus) {
+      const remaining = Number(crm.platesRemaining);
+      if (remaining <= 0) continue;
+      const assigned = Number(crm.platesAllocated);
+      upsert(
+        `${crm.menuId}|${attr.operationDay}`,
+        {
+          menuId: crm.menuId,
+          menuName: crm.menu.name,
+          linkedMenuNames: [],
+          stockSupplyId: record.stockSupplyId,
+          stockSupplyName: record.stockSupply.name,
+          operationDay: attr.operationDay,
+          shiftType: attr.shiftType,
+          cookedAtMs: record.createdAt.getTime(),
+        },
+        { assigned, sold: round2(assigned - remaining), remaining },
+      );
+    }
+  }
+
+  const rows: AssignedLeftoverRow[] = [];
+  for (const [key, acc] of groups) {
+    if (acc.remaining <= 0) continue;
+    rows.push({
+      key,
+      engine: acc.menuId ? SellingMode.ALLOCATED : SellingMode.SHARED,
+      menuId: acc.menuId,
+      menuName: acc.menuName,
+      linkedMenuNames: acc.linkedMenuNames,
+      stockSupplyId: [...acc.stockSupplyIds][0] ?? "",
+      stockSupplyName: [...acc.stockSupplyNames].join(", "),
+      operationDay: acc.operationDay,
+      shiftType: acc.shiftTypes.size === 1 ? [...acc.shiftTypes][0] : null,
+      cookedAt: new Date(acc.cookedAtMs).toISOString(),
+      assigned: acc.assigned,
+      sold: acc.sold,
+      remaining: acc.remaining,
+      batchCount: acc.batchCount,
+    });
+  }
+
+  rows.sort((a, b) => {
+    if ((a.operationDay ?? "") !== (b.operationDay ?? "")) {
+      return (b.operationDay ?? "").localeCompare(a.operationDay ?? "");
+    }
+    return b.remaining - a.remaining;
+  });
+
+  return { rows };
 }
 
 // Compute the unassigned production from a shift's cooking records.
@@ -539,7 +703,7 @@ export async function computeShiftUnassignedBatches(shift: {
       (sum, sm) => sum + (soldByMenu.get(sm.menuId) ?? 0),
       0
     );
-    const unassigned = produced - remainingTotal - batchSold;
+    const unassigned = round2(produced - remainingTotal - batchSold - Number(record.wastedPlates ?? 0));
     if (unassigned <= 0) continue;
     batches.push({
       cookingRecordId: record.id,

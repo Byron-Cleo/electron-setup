@@ -1,7 +1,7 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { Prisma } from "../db/generated/prisma/client.js";
-import { consumptionFactorsForSupply } from "../pools.js";
+import { emitLiveEvent } from "../events.js";
 
 const router = Router();
 
@@ -20,6 +20,7 @@ const SUPPLY_SELECT = {
   menus: {
     select: {
       platesPerServing: true,
+      excludedFromSharedPool: true,
       menu: {
         select: {
           id: true,
@@ -55,6 +56,7 @@ function serializeConfigItem(supply: ConfigSupply) {
       return {
         ...menu,
         platesPerServing: Number(link.platesPerServing),
+        excludedFromSharedPool: link.excludedFromSharedPool,
         portions: portionOptions.map((p) => ({
           ...p,
           price: p.price == null ? p.price : Number(p.price),
@@ -100,29 +102,10 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ error: "sellingMode must be ALLOCATED or SHARED" });
     }
 
-    // A shared pool is consumed whole by any dish on it, so every dish and
-    // portion must cost the same rate. Mixed rates would make "one serving"
-    // mean different amounts of food depending on who ordered, which is a
-    // judgement call a person has to make — keep it ALLOCATED.
-    if (sellingMode === "SHARED") {
-      const factors = await consumptionFactorsForSupply(prisma, id);
-      const offenders = factors.filter((f) => f.factors.some((n) => n !== 1));
-      if (offenders.length > 0) {
-        const detail = offenders
-          .map((o) => `${o.menuName} (${o.factors.filter((n) => n !== 1).join(", ")})`)
-          .join(", ");
-        return res.status(400).json({
-          error:
-            `A shared pool must use a flat 1-for-1 rate, but these dishes do not: ${detail}. ` +
-            `Set every dish and portion on this supply to 1 first, or keep it ALLOCATED.`,
-          code: "SHARED_REQUIRES_FLAT_RATE",
-          offenders: offenders.map((o) => ({ menuId: o.menuId, menuName: o.menuName, factors: o.factors })),
-        });
-      }
-    }
-
     const updated = await prisma.$transaction(async (tx) => {
-      // Per-dish consumption rates, e.g. Boiled Meat Half = 0.5 / Full = 1.
+      // Per-dish consumption rates, e.g. Boiled Meat Half = 0.5 / Full = 1. A
+      // dish can optionally be held back from a SHARED pool (excluded) so the
+      // engine is not abandoned just to keep one dish off the shared tray.
       if (Array.isArray(menuFactors)) {
         for (const entry of menuFactors) {
           const factor = Number(entry?.platesPerServing);
@@ -131,10 +114,14 @@ router.put("/:id", async (req, res) => {
               statusCode: 400,
             });
           }
+          const excluded =
+            entry.excludedFromSharedPool !== undefined && entry.excludedFromSharedPool !== null
+              ? Boolean(entry.excludedFromSharedPool)
+              : undefined;
           await tx.stockSupplyMenu.upsert({
             where: { stockSupplyId_menuId: { stockSupplyId: id, menuId: entry.menuId } },
-            create: { stockSupplyId: id, menuId: entry.menuId, platesPerServing: factor },
-            update: { platesPerServing: factor },
+            create: { stockSupplyId: id, menuId: entry.menuId, platesPerServing: factor, ...(excluded !== undefined && { excludedFromSharedPool: excluded }) },
+            update: { platesPerServing: factor, ...(excluded !== undefined && { excludedFromSharedPool: excluded }) },
           });
         }
       }
@@ -151,6 +138,9 @@ router.put("/:id", async (req, res) => {
       return serializeConfigItem(supply);
     });
 
+    // Selling engine / consumption-rate changes shift how the pool is read, so
+    // tell live clients to re-pull their stock views.
+    emitLiveEvent({ type: "pool.updated", at: new Date().toISOString() });
     res.json(updated);
   } catch (e: unknown) {
     const err = e as { code?: string; statusCode?: number; message?: string };

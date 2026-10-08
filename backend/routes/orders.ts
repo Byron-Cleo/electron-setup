@@ -7,7 +7,7 @@ import {
   assertLinesServable,
   consumeForOrderItem,
   factorForServing,
-  recomputeMenuStock,
+  recomputeMenuStockWithSiblings,
   restoreForOrderItem,
   round2,
   sellableForMenu,
@@ -159,6 +159,9 @@ const lineKey = (item: {
     const order = await prisma.$transaction(async (tx) => {
       let itemsPrice = 0;
       const resolvedAccompaniments: { starchId: string | null; vegetableId: string | null; portionId: string | null }[] = [];
+      // Resolved unit price per line (portion-aware), persisted on the OrderItem
+      // so the stored line price matches the order total exactly.
+      const lineUnitPrices: number[] = [];
       for (const item of lines) {
         const [starch, vegetable, portion] = await Promise.all([
           item.starchId
@@ -176,8 +179,13 @@ const lineKey = (item: {
         ]);
         // A portion prices the serving (2 eggs is not "1 egg plus 1"), so its
         // price replaces the dish price rather than adding to it.
+        // Prefer the DB price for a portion; otherwise trust the client's dish
+        // price. `basePrice` is what the order total below is built from, and it
+        // is ALSO what gets persisted on the line (see orderItem.create), so the
+        // stored line price and the order total can never disagree.
         const basePrice = portion?.category === "PORTION" ? Number(portion.price ?? 0) : Number(item.price);
         itemsPrice += (basePrice + Number(starch?.price ?? 0) + Number(vegetable?.price ?? 0)) * item.qty;
+        lineUnitPrices.push(basePrice);
         resolvedAccompaniments.push({
           starchId: starch ? item.starchId ?? null : null,
           vegetableId: vegetable ? item.vegetableId ?? null : null,
@@ -220,7 +228,7 @@ const lineKey = (item: {
             orderId: created.id,
             menuId: item.menuId,
             qty: item.qty,
-            price: item.price,
+            price: lineUnitPrices[i] ?? item.price,
             name: item.name,
             slug: item.slug,
             image: item.image,
@@ -264,7 +272,7 @@ const lineKey = (item: {
           });
         }
         // Align Menu.stock with pool truth after order creation
-        await recomputeMenuStock(tx, item.menuId);
+        await recomputeMenuStockWithSiblings(tx, item.menuId);
       }
 
       return tx.order.findUnique({
@@ -555,7 +563,7 @@ router.post("/:id/void", async (req, res) => {
         });
         const platesConsumed = Number(consumed._sum?.plates ?? 0);
         await restoreForOrderItem(tx, item.id);
-        await recomputeMenuStock(tx, item.menuId);
+        await recomputeMenuStockWithSiblings(tx, item.menuId);
 
         // Update shift snapshot if exists
         if (order.shiftId) {

@@ -13,7 +13,7 @@ import CreateMenuDialog from "@/components/menu/CreateMenuDialog"
 import MenuStockStatusCard from "@/components/menu/MenuStockStatusCard"
 import ProductionGuidanceCard from "@/components/menu/ProductionGuidanceCard"
 import RemainingStockDashboard from "@/components/menu/RemainingStockDashboard"
-import { getCookedMenus, getStockRemaining } from "@/lib/api"
+import { getCookedMenus, getAssignedLeftovers } from "@/lib/api"
 
 type MenuView = "dashboard" | "cooked-food" | "remaining-stock" | "all-menu"
 type MenuSubView = "list" | "discontinued" | "accompaniments" | null
@@ -64,8 +64,8 @@ function Menu() {
   }
 
   function loadRemainingCount() {
-    getStockRemaining()
-      .then((data) => setRemainingCount(data.expiredBatches.length))
+    getAssignedLeftovers()
+      .then((data) => setRemainingCount(data.unassigned.length + data.previous.length))
       .catch(() => {})
   }
 
@@ -156,14 +156,14 @@ function Menu() {
                   {remainingCount > 0 ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
                       <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                      {remainingCount} Batch{remainingCount === 1 ? "" : "es"} to Review
+                      {remainingCount} Item{remainingCount === 1 ? "" : "s"} to Review
                     </span>
                   ) : (
                     <span className="text-sm text-admin-muted">No past production to review</span>
                   )}
                 </div>
                 <p className="text-xs text-admin-muted mt-1">
-                  Stock produced more than 24 hours ago but never assigned — carry over or mark as wasted
+                  Past-date leftovers — assigned-unsold and never-assigned stock you still need to decide on
                 </p>
               </div>
             </div>

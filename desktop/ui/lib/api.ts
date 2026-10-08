@@ -784,18 +784,26 @@ export async function getShiftReport(shiftId: string): Promise<ShiftReport> {
   return apiFetch(`/reports/shift/${shiftId}`)
 }
 
-export async function getStockRemaining(): Promise<StockRemaining> {
-  if (window.electron?.report?.getStockRemaining) {
-    return window.electron.report.getStockRemaining()
-  }
-  return apiFetch("/stock/remaining")
-}
-
 export async function getWastedStock(): Promise<WastedStock> {
   if (window.electron?.report?.getWastedStock) {
     return window.electron.report.getWastedStock()
   }
   return apiFetch("/stock/wasted")
+}
+
+export async function getAssignedLeftovers(): Promise<AssignedLeftovers> {
+  return apiFetch("/stock/assigned-leftovers")
+}
+
+export async function wasteAssignedPlates(input: {
+  menuId?: string
+  stockSupplyId?: string
+  plates: number
+}): Promise<{ wasted: number }> {
+  return apiFetch("/stock/assigned-leftovers/waste", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
 }
 
 export async function getVoidReport(date: string): Promise<VoidReportWaiter[]> {

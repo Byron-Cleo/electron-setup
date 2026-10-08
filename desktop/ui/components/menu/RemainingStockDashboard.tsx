@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { History, Layers, Loader2, PackageOpen, Trash2 } from "lucide-react"
+import { PackageOpen, Trash2, Utensils } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,9 +12,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import BackButton from "@/components/shared/BackButton"
-import { getStockRemaining, getWastedStock, disposeCookingRecord } from "@/lib/api"
+import { getWastedStock, getAssignedLeftovers, disposeCookingRecord } from "@/lib/api"
+import { useLiveRefresh } from "@/hooks/useLiveRefresh"
 import AssignmentModal from "./AssignmentModal"
 import RemainingStockTable from "./RemainingStockTable"
+import AssignedLeftoversTable from "./AssignedLeftoversTable"
 import WastedStockCard from "./WastedStockCard"
 
 interface Props {
@@ -22,11 +24,11 @@ interface Props {
   onBack: () => void
 }
 
-type StockTab = "previous" | "wasted" | null
+type StockTab = "wasted" | "leftovers" | null
 
 export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
   const [tab, setTab] = useState<StockTab>(null)
-  const [data, setData] = useState<StockRemaining | null>(null)
+  const [leftovers, setLeftovers] = useState<AssignedLeftovers | null>(null)
   const [wasted, setWasted] = useState<WastedStockBatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -50,30 +52,37 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
 
   async function loadData() {
     try {
-      setLoading(true)
+      const [assignedLeftovers, wastedStock] = await Promise.all([
+        getAssignedLeftovers(),
+        getWastedStock(),
+      ])
+      setLeftovers(assignedLeftovers)
+      setWasted(wastedStock.wastedBatches)
       setError("")
-      const [remaining, wastedData] = await Promise.all([getStockRemaining(), getWastedStock()])
-      setData(remaining)
-      setWasted(wastedData.wastedBatches)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load remaining stock")
-    } finally {
-      setLoading(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load leftover stock")
     }
   }
 
+  // Reflect cooks, allocations, disposals, sales and shift closes made
+  // elsewhere without a manual reload.
+  useLiveRefresh(
+    ["pool.updated", "order.created", "order.voided", "order.paid", "shift.closed"],
+    () => void loadData(),
+  )
+
   useEffect(() => {
     let cancelled = false
-    Promise.all([getStockRemaining(), getWastedStock()])
-      .then(([remaining, wastedData]) => {
+    Promise.all([getAssignedLeftovers(), getWastedStock()])
+      .then(([assignedLeftovers, wastedStock]) => {
         if (cancelled) return
-        setData(remaining)
-        setWasted(wastedData.wastedBatches)
+        setLeftovers(assignedLeftovers)
+        setWasted(wastedStock.wastedBatches)
         setError("")
       })
-      .catch((err) => {
+      .catch((e) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : "Failed to load remaining stock")
+        setError(e instanceof Error ? e.message : "Failed to load leftover stock")
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -83,114 +92,97 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
     }
   }, [])
 
-  function handleAssigned() {
-    setAssigning({ open: false, batchId: null, title: "", expired: false })
-    void loadData()
-    onAssigned?.()
-  }
-
-  function openAssign(batch: StockRemainingUnassignedBatch, expired: boolean) {
-    setAssigning({ open: true, batchId: batch.cookingRecordId, title: batch.stockSupplyName, expired })
+  function openAssign(batch: StockRemainingUnassignedBatch) {
+    setAssigning({ open: true, batchId: batch.cookingRecordId, title: batch.stockSupplyName, expired: true })
   }
 
   function openWaste(batch: StockRemainingUnassignedBatch) {
     setConfirmingWaste({ open: true, batchId: batch.cookingRecordId, title: batch.stockSupplyName })
   }
 
-  async function handleMarkWasted(batchId: string) {
+  async function handleAssigned() {
+    setAssigning({ open: false, batchId: null, title: "", expired: false })
+    await loadData()
+    onAssigned?.()
+  }
+
+  async function handleMarkWasted() {
+    const id = confirmingWaste.batchId
+    if (!id) return
+    setDisposingId(id)
     try {
-      setDisposingId(batchId)
-      await disposeCookingRecord(batchId)
-      void loadData()
-    } catch {
-      // best-effort; the row stays visible and can be retried
+      await disposeCookingRecord(id)
+      await loadData()
+      onAssigned?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to mark batch as wasted")
     } finally {
       setDisposingId(null)
+      setConfirmingWaste({ open: false, batchId: null, title: "" })
     }
   }
 
-  const totalCarryForward = (data?.carryForwardPerMenu ?? []).reduce((sum, row) => sum + row.closingPlates, 0)
-  const hasCarryForward = Boolean(data && data.carryForwardPerMenu.length > 0)
-  const hasExpired = Boolean(data && data.expiredBatches.length > 0)
-
-  const previousBatches = data?.expiredBatches.length ?? 0
-  const previousPlates = (data?.expiredBatches ?? []).reduce((sum, b) => sum + b.unassigned, 0)
-  const wastedPlates = wasted.reduce((sum, b) => sum + b.wastedQty, 0)
-
-  if (loading) return <div className="text-admin-muted">Loading remaining stock...</div>
-  if (error) return <div className="text-red-500">{error}</div>
+  const previousRows = leftovers?.previous ?? []
+  const assignedRows = [...(leftovers?.current ?? []), ...(leftovers?.previous ?? [])]
+  const unassignedBatches = leftovers?.unassigned ?? []
+  const assignedPlates = assignedRows.reduce((sum, row) => sum + row.remaining, 0)
+  const previousPlates = previousRows.reduce((sum, row) => sum + row.remaining, 0)
+  const unassignedPlates = unassignedBatches.reduce((sum, batch) => sum + batch.unassigned, 0)
+  const wastedPlates = wasted.reduce((sum, batch) => sum + batch.wastedQty, 0)
+  const dishCount = assignedRows.length + unassignedBatches.length
+  const plateCount = assignedPlates + unassignedPlates
 
   return (
     <div className="space-y-4">
-      {tab === null ? <BackButton onClick={onBack} /> : <BackButton onClick={() => setTab(null)} />}
+      <BackButton onClick={tab === null ? onBack : () => setTab(null)} />
 
-      <Heading as="h2" className="text-admin-header-text text-center">
-        Remaining Stock Production
-      </Heading>
+      <div className="flex items-center justify-center gap-3">
+        <Utensils size={22} className="text-admin-accent" />
+        <Heading as="h2" className="text-xl text-admin-header-text">Leftover Stock</Heading>
+      </div>
+      <p className="mx-auto max-w-2xl text-center text-sm text-admin-muted">
+        Every plate still needing a decision in one place — assigned stock that did not sell, and past
+        batches that were never put on a menu. Carry over is the default; waste only what you discard.
+      </p>
 
-      {tab === null && (
+      {loading && <p className="text-center text-sm text-admin-muted">Loading leftover stock…</p>}
+
+      {error && (
+        <Card>
+          <CardContent className="p-6 text-center text-sm text-red-600">
+            {error}
+            <div className="mt-3">
+              <Button size="sm" variant="outline" onClick={() => void loadData()}>
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && !error && tab === null && (
         <>
-          {hasCarryForward && (
-            <Card>
-              <CardContent className="pt-5">
-                <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-admin-muted">
-                  <Layers size={12} />
-                  Carry-forward by Menu
-                </div>
-                <div className="overflow-hidden rounded-md border border-admin-card-border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-admin-card-border bg-muted text-xs text-admin-muted uppercase">
-                        <th className="px-3 py-2 text-left font-semibold">Menu</th>
-                        <th className="px-3 py-2 text-center font-semibold">Carry-Forward (Closing)</th>
-                        <th className="px-3 py-2 text-left font-semibold">Stock Supply</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data?.carryForwardPerMenu ?? []).map((row, i) => (
-                        <tr key={`${row.menuId}-${i}`} className="border-b border-admin-card-border last:border-b-0">
-                          <td className="px-3 py-2 font-medium text-admin-header-text">{row.menuName}</td>
-                          <td className="px-3 py-2 text-center tabular-nums">{row.closingPlates}</td>
-                          <td className="px-3 py-2 text-admin-muted">{row.stockSupplyName ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-muted">
-                        <td className="px-3 py-2 font-semibold">Total</td>
-                        <td className="px-3 py-2 text-center font-semibold tabular-nums">{totalCarryForward}</td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Card
               className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
-              onClick={() => setTab("previous")}
+              onClick={() => setTab("leftovers")}
             >
               <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                  <History size={24} className="text-amber-600" />
+                <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <Utensils size={24} className="text-blue-600" />
                 </div>
                 <div>
-                  <Heading as="h3" className="text-lg text-admin-header-text">
-                    Previous Operation Date
-                  </Heading>
-                  {hasExpired ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 mt-1">
-                      {previousBatches} Batch{previousBatches === 1 ? "" : "es"} · {previousPlates} Plates to Decide
+                  <Heading as="h3" className="text-lg text-admin-header-text">Assigned / Unsold Stock</Heading>
+                  {plateCount > 0 ? (
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                      {dishCount} Item{dishCount === 1 ? "" : "s"} · {plateCount} Plates
                     </span>
                   ) : (
-                    <p className="text-sm text-admin-muted mt-1">No expired batches</p>
+                    <p className="mt-1 text-sm text-admin-muted">Nothing to decide</p>
                   )}
-                  <p className="text-xs text-admin-muted mt-1">
-                    Stock produced more than 24 hours ago (past op-dates), never assigned — carry over
-                    as an exception or mark as wasted
+                  <p className="mt-1 text-xs text-admin-muted">
+                    Assigned dishes/pools that did not sell plus past batches never put on a menu — the
+                    single place to carry over or waste
                   </p>
                 </div>
               </div>
@@ -205,17 +197,15 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
                   <Trash2 size={24} className="text-red-600" />
                 </div>
                 <div>
-                  <Heading as="h3" className="text-lg text-admin-header-text">
-                    Wasted Stock
-                  </Heading>
+                  <Heading as="h3" className="text-lg text-admin-header-text">Wasted Stock</Heading>
                   {wastedPlates > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 mt-1">
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
                       {wastedPlates} Plates · {wasted.length} Batch{wasted.length === 1 ? "" : "es"} Wasted
                     </span>
                   ) : (
-                    <p className="text-sm text-admin-muted mt-1">No wasted batches</p>
+                    <p className="mt-1 text-sm text-admin-muted">No wasted batches</p>
                   )}
-                  <p className="text-xs text-admin-muted mt-1">
+                  <p className="mt-1 text-xs text-admin-muted">
                     All batches marked as wasted, attributed to their production op-date
                   </p>
                 </div>
@@ -223,14 +213,13 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
             </Card>
           </div>
 
-          {!hasExpired && !hasCarryForward && wastedPlates === 0 && (
+          {dishCount === 0 && wastedPlates === 0 && (
             <Card>
               <CardContent className="p-8 text-center">
                 <PackageOpen size={24} className="mx-auto mb-2 text-admin-muted" />
                 <p className="text-sm text-admin-muted">
-                  {data?.previousShift
-                    ? "No past-operation-date production to carry over or waste."
-                    : "No previous shift data yet. Open and close a shift to see carry-over here."}
+                  No leftover stock to review. Assigned stock that did not sell and past-dated batches
+                  never put on a menu will appear here.
                 </p>
               </CardContent>
             </Card>
@@ -238,14 +227,66 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
         </>
       )}
 
-      {tab === "previous" && (
-        <RemainingStockTable
-          variant="previous"
-          batches={data?.expiredBatches ?? []}
-          disposingId={disposingId}
-          onCarryOver={(batch) => openAssign(batch, true)}
-          onWaste={openWaste}
-        />
+      {tab === "leftovers" && (
+        <div className="space-y-8">
+          <AssignedLeftoversTable
+            variant="current"
+            rows={leftovers?.current ?? []}
+            operationDay={leftovers?.currentOperationDay ?? null}
+            onWasted={() => void loadData()}
+          />
+
+          <div className="space-y-5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+              Earlier Operation Dates
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center gap-2">
+                <Heading as="h4" className="text-sm text-amber-900">Not yet assigned</Heading>
+                {unassignedBatches.length > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                    {unassignedBatches.length} Batch{unassignedBatches.length === 1 ? "" : "es"} ·{" "}
+                    {unassignedPlates} Plates
+                  </span>
+                )}
+              </div>
+              <p className="mb-2 text-[11px] leading-relaxed text-amber-700">
+                Cooked on an earlier operation date but never put on a menu, so it is not sellable and not
+                in stock. Assign it to carry over, or waste it.
+              </p>
+              <RemainingStockTable
+                variant="previous"
+                batches={unassignedBatches}
+                disposingId={disposingId}
+                onCarryOver={openAssign}
+                onWaste={openWaste}
+                showHeading={false}
+              />
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center gap-2">
+                <Heading as="h4" className="text-sm text-amber-900">Assigned · unsold</Heading>
+                {previousRows.length > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                    {previousRows.length} Item{previousRows.length === 1 ? "" : "s"} · {previousPlates} Plates
+                  </span>
+                )}
+              </div>
+              <p className="mb-2 text-[11px] leading-relaxed text-amber-700">
+                Plates already on a menu that did not sell. They carry over automatically — waste only what
+                you are discarding.
+              </p>
+              <AssignedLeftoversTable
+                variant="previous"
+                rows={previousRows}
+                onWasted={() => void loadData()}
+                showHeading={false}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {tab === "wasted" && <WastedStockCard />}
@@ -269,28 +310,25 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
           <DialogHeader>
             <DialogTitle>Mark as wasted?</DialogTitle>
             <DialogDescription>
-              {confirmingWaste.title} will be removed from the assignable pool. The batch stays recorded
-              in the database for audit.
+              {confirmingWaste.title} will be removed and attributed as waste to its production
+              operation date. The batch stays on record.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmingWaste({ open: false, batchId: null, title: "" })}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmingWaste({ open: false, batchId: null, title: "" })}
+              disabled={disposingId !== null}
+            >
               Cancel
             </Button>
             <Button
               variant="default"
               className="bg-red-600 text-white hover:bg-red-700"
-              disabled={disposingId === confirmingWaste.batchId}
-              onClick={() => {
-                if (confirmingWaste.batchId) void handleMarkWasted(confirmingWaste.batchId)
-                setConfirmingWaste({ open: false, batchId: null, title: "" })
-              }}
+              onClick={() => void handleMarkWasted()}
+              disabled={disposingId !== null}
             >
-              {disposingId === confirmingWaste.batchId ? (
-                <Loader2 size={12} className="animate-spin mr-1" />
-              ) : (
-                <Trash2 size={12} className="mr-1" />
-              )}
+              <Trash2 size={14} className="mr-1" />
               Waste
             </Button>
           </DialogFooter>

@@ -423,6 +423,10 @@ model StockSupplyMenu {
   // Resolved per (supply, dish) pair so a dish fed by two supplies would still
   // deduct at the correct rate for whichever batch served it.
   platesPerServing Decimal     @default(1) @db.Decimal(12, 2)
+  // Per-dish holdback on a SHARED supply: when true, this dish draws nothing
+  // from the supply's shared pools — a way to keep one dish off a shared tray
+  // without abandoning the engine for the whole supply. Ignored on ALLOCATED.
+  excludedFromSharedPool Boolean    @default(false)
   menu             Menu        @relation(fields: [menuId], references: [id], onDelete: Cascade)
   stockSupply      StockSupply @relation(fields: [stockSupplyId], references: [id])
 

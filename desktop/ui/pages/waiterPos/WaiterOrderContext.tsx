@@ -12,9 +12,17 @@ const STORAGE_KEY = "eraeva.waiterOrder.v2"
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function sellableServingsFor(item: MenuItem, portion: MenuPortionOption | null = null): number {
-  if (item.sellableServings !== undefined) return item.sellableServings
   const plates = Number(item.availablePlates ?? item.stock ?? 0)
-  const factor = Number(portion?.platesPerServing ?? item.platesPerServing ?? 1)
+  // A portion carries its own consumption rate, so it must win over the
+  // item-wide figure the server precomputed from the supply link. Otherwise a
+  // 2pc portion would show the same count as the 1pc default.
+  const portionRate = Number(portion?.platesPerServing)
+  if (Number.isFinite(portionRate) && portionRate > 0) {
+    if (!Number.isFinite(plates) || plates <= 0) return 0
+    return Math.floor(plates / portionRate)
+  }
+  if (item.sellableServings !== undefined) return item.sellableServings
+  const factor = Number(item.platesPerServing ?? 1)
   if (!Number.isFinite(plates) || plates <= 0) return 0
   if (!Number.isFinite(factor) || factor <= 0) return 0
   return Math.floor(plates / factor)

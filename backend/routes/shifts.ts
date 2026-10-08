@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { emitLiveEvent } from "../events.js";
+import { recomputeMenuStock } from "../pools.js";
 import { autoCloseExpiredShifts } from "../scheduler.js";
 
 const router = Router();
@@ -298,6 +299,14 @@ router.post("/:id/close", async (req, res) => {
 
       const autoCloseTime = shift.autoClosedAt ? new Date(shift.autoClosedAt) : null;
 
+      // Heal the sellable mirror before closing: Menu.stock can lag for SHARED
+      // pools (cooking does not split them), and the closing figure is what
+      // carries into the next shift's opening. Recompute from the pool ledger so
+      // the pool's live remainder carries forward correctly.
+      for (const snapshot of snapshots) {
+        await recomputeMenuStock(tx, snapshot.menuId);
+      }
+
       // Apply declared waste per menu item (removes wasted plates from inventory)
       const wasteEntries: Array<{ menuId?: string; plates?: number }> = Array.isArray(waste) ? waste : [];
       for (const w of wasteEntries) {
@@ -321,7 +330,10 @@ router.post("/:id/close", async (req, res) => {
       }
 
       for (const snapshot of snapshots) {
-        const currentStock = Number(snapshot.menu.stock ?? 0);
+        // Read live: the mirror was recomputed above (and waste applied), so the
+        // included relation is stale.
+        const liveMenu = await tx.menu.findUnique({ where: { id: snapshot.menuId }, select: { stock: true } });
+        const currentStock = Number(liveMenu?.stock ?? 0);
         const autoPlates = snapshot.closingStockAtAutoClose === null ? null : Number(snapshot.closingStockAtAutoClose);
         const autoTime = snapshot.autoCloseTime ? new Date(snapshot.autoCloseTime) : null;
 

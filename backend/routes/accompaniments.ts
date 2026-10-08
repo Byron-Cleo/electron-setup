@@ -50,7 +50,11 @@ router.post("/upload", uploadAccompanimentImage.single("image"), (req, res) => {
 });
 
 router.get("/", async (_req, res) => {
+  // PORTION rows are dish-owned (they carry menuId) and edited from MenuForm,
+  // so they stay out of the global list: otherwise this endpoint would offer a
+  // second, conflicting way to edit a dish's portion options.
   const items = await prisma.menuAccompaniment.findMany({
+    where: { category: { not: "PORTION" } },
     orderBy: [{ category: "asc" }, { name: "asc" }],
   })
   res.json(items)
@@ -91,8 +95,21 @@ router.put("/:id", async (req, res) => {
   if (category !== undefined && !VALID_CATEGORIES.includes(category)) {
     return res.status(400).json({ error: `Invalid category: ${category}. Must be one of: ${VALID_CATEGORIES.join(", ")}` });
   }
+  // Portions belong to a dish and are written through PUT /menu/:id, which
+  // keeps Menu.portionId in step. Editing one here would split the two.
+  if (category === "PORTION") {
+    return res.status(400).json({ error: "Portions are edited from the dish, not here" });
+  }
 
   try {
+    const owned = await prisma.menuAccompaniment.findUnique({
+      where: { id },
+      select: { category: true },
+    });
+    if (owned?.category === "PORTION") {
+      return res.status(400).json({ error: "Portions are edited from the dish, not here" });
+    }
+
     const item = await prisma.menuAccompaniment.update({
       where: { id },
       data: {

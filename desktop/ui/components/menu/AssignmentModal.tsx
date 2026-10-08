@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { getCookingRecord, allocateCookingRecord, getMenus } from "@/lib/api"
+import { getCookingRecord, allocateCookingRecord } from "@/lib/api"
 
 interface Props {
   open: boolean
@@ -21,23 +21,24 @@ interface Props {
   expired?: boolean
 }
 
-interface MenuWithStock {
+interface MenuSplit {
   id: string
   name: string
-  existingAllocated: number
-  stock: number
-  soldThisShift: number
-  openingStock: number
+  /** Plates of THIS batch assigned (allocated) to the dish. */
+  assigned: number
+  /** Plates of THIS batch already sold through the dish. */
+  sold: number
 }
 
 export default function AssignmentModal({ open, onClose, batchId, title, onRefresh, expired = false }: Props) {
-  const [deltas, setDeltas] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [produced, setProduced] = useState(0)
-  const [menus, setMenus] = useState<MenuWithStock[]>([])
+  const [menus, setMenus] = useState<MenuSplit[]>([])
   const [isCarryOver, setIsCarryOver] = useState(false)
+  const [origin, setOrigin] = useState("")
+  const [carryFrom, setCarryFrom] = useState("")
 
   useEffect(() => {
     if (!open || !batchId) return
@@ -46,51 +47,52 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
       .then((record) => {
         if (cancelled) return
         const producedTotal = Number(record.platesActual ?? record.platesExpected)
-        const linkedMenus: MenuWithStock[] = record.stockSupply.menus.map((sm) => {
+        // Everything shown here is scoped to THIS batch alone: assigned comes
+        // from the batch's own splits, sold from the batch's allocation ledger
+        // (batchSoldByMenu). Shift-wide snapshot totals are never used, so an
+        // earlier batch's sales cannot bleed into a newer batch's numbers.
+        const linkedMenus: MenuSplit[] = record.stockSupply.menus.map((sm) => {
           const split = record.cookingRecordMenus.find((crm) => crm.menuId === sm.menu.id)
           return {
             id: sm.menu.id,
             name: sm.menu.name,
-            existingAllocated: split ? Number(split.platesRemaining) : 0,
-            stock: 0,
-            // DB source of truth: sold/opening come from the open shift's
-            // snapshots via the batch endpoint — never availability buckets.
-            soldThisShift: record.menuSolds?.[sm.menu.id] ?? 0,
-            openingStock: record.menuOpenings?.[sm.menu.id] ?? 0,
+            assigned: split ? Number(split.platesAllocated) : 0,
+            sold: record.batchSoldByMenu?.[sm.menu.id] ?? 0,
           }
         })
-        const initialDeltas: Record<string, number> = {}
-        for (const menu of linkedMenus) {
-          initialDeltas[menu.id] = 0
-        }
         setLoading(false)
         setError("")
         setProduced(producedTotal)
         setMenus(linkedMenus)
-        setDeltas(initialDeltas)
         setIsCarryOver(false)
+        setCarryFrom("")
+
+        // Where the batch came from — batch number, cook time, and the shift it
+        // was cooked in. This is the carry-forward trail that survives shifts:
+        // the batch (and its unsold leftovers) belongs to its own shift, not to
+        // whatever shift is running when you open this modal.
+        const cookedAt = new Date(record.createdAt)
+        const originParts: string[] = []
+        if (record.batchNumber != null) originParts.push(`Batch #${record.batchNumber}`)
+        originParts.push(`cooked ${cookedAt.toLocaleString()}`)
+        if (record.cookedInShift) originParts.push(`${record.cookedInShift.type} shift`)
+        setOrigin(originParts.join(" · "))
 
         // A batch produced outside the current shift's time window is carry-over
-        // from the previous shift — label it as such instead of "Produced".
-        // The shift window comes from the batch endpoint (snapshot-derived).
+        // from the previous shift — name the source shift instead of "Produced".
         if (record.shift) {
           const start = new Date(record.shift.autoOpenTime).getTime()
           const end = new Date(record.shift.autoCloseTime).getTime()
-          const createdAt = new Date(record.createdAt).getTime()
-          setIsCarryOver(!(createdAt >= start && createdAt < end))
+          const carry = !(cookedAt.getTime() >= start && cookedAt.getTime() < end)
+          setIsCarryOver(carry)
+          if (carry) {
+            setCarryFrom(
+              record.cookedInShift
+                ? `${record.cookedInShift.type} shift on ${new Date(record.cookedInShift.autoOpenTime).toLocaleDateString()}`
+                : "a previous shift",
+            )
+          }
         }
-
-        // Fetch current menu stock for each linked menu
-        getMenus().then((allMenus) => {
-          if (cancelled) return
-          const menuStockMap = new Map(allMenus.map((m) => [m.id, m.stock ?? 0]))
-          setMenus((prev) =>
-            prev.map((menu) => ({
-              ...menu,
-              stock: menuStockMap.get(menu.id) ?? 0,
-            }))
-          )
-        }).catch(() => {})
       })
       .catch((e) => {
         if (!cancelled) {
@@ -105,49 +107,39 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
 
   if (!open) return null
 
-  // Correct allocation logic:
-  // Each menu is independent. Remaining pool is shared.
-  // menu.stock = actual menu stock from database (source of truth)
-  // + button limited by Remaining Pool (shared)
-  // - button limited by menu.stock per menu (independent)
-  // Sale removes plates from the system permanently (does not return to pool)
-  // Sold plates reduce the pool; deduct returns the plate to the pool
-  // Remaining Pool = produced - allocated - sold (+/- uncommitted deltas)
-
-  const totalAllocated = menus.reduce((sum, menu) => sum + menu.existingAllocated, 0)
-  const totalSold = menus.reduce((sum, menu) => sum + menu.soldThisShift, 0)
-  const totalDelta = menus.reduce((sum, menu) => sum + (deltas[menu.id] ?? 0), 0)
-  const remainingPool = produced - (totalAllocated + totalSold + totalDelta)
-  const overCap = (totalAllocated + totalSold + totalDelta) > produced
+  // Batch-scoped arithmetic — everything is about THIS batch alone:
+  //   produced  = plates cooked in the batch
+  //   assigned  = plates handed to dishes (allocated)
+  //   sold      = plates of the batch already sold (never un-assignable)
+  //   remaining = produced − assigned  (still to hand out to dishes)
+  // A dish's own leftover = assigned − sold.
+  const totalAssigned = menus.reduce((sum, m) => sum + m.assigned, 0)
+  const totalSold = menus.reduce((sum, m) => sum + m.sold, 0)
+  const remaining = produced - totalAssigned
+  const overCap = totalAssigned > produced
   const canSave = menus.length > 0 && !overCap
 
-  const updateDelta = (menuId: string, value: number) => {
-    const menu = menus.find((m) => m.id === menuId)
-    if (!menu) return
-    // Current stock for this menu = menu.stock (from database)
-    const currentStock = menu.stock
-    const maxDelta = remainingPool + (deltas[menuId] ?? 0)  // + limited by pool
-    const minDelta = -currentStock  // - limited by current stock (can't deduct more than in stock)
-    const clamped = Math.max(minDelta, Math.min(value, maxDelta))
-    setDeltas((prev) => ({ ...prev, [menuId]: clamped }))
+  const setAssigned = (menuId: string, value: number) => {
+    setMenus((prev) => {
+      const pool = produced - prev.reduce((s, m) => s + m.assigned, 0)
+      return prev.map((m) => {
+        if (m.id !== menuId) return m
+        // Never below what the dish already sold from this batch; never draw
+        // more than the batch's unassigned pool.
+        const min = m.sold
+        const max = m.assigned + pool
+        const clamped = Math.max(min, Math.min(value, max))
+        return { ...m, assigned: clamped }
+      })
+    })
   }
 
-  const increment = (menuId: string) => {
-    const current = deltas[menuId] ?? 0
-    if (current < remainingPool + current) {
-      updateDelta(menuId, current + 1)
-    }
+  const increment = (m: MenuSplit) => {
+    if (remaining >= 1) setAssigned(m.id, m.assigned + 1)
   }
 
-  const decrement = (menuId: string) => {
-    const current = deltas[menuId] ?? 0
-    const menu = menus.find((m) => m.id === menuId)
-    if (!menu) return
-    const currentStock = menu.stock
-    const newStock = currentStock + current - 1
-    if (newStock >= 0) {
-      updateDelta(menuId, current - 1)
-    }
+  const decrement = (m: MenuSplit) => {
+    if (m.assigned - m.sold >= 1) setAssigned(m.id, m.assigned - 1)
   }
 
   const handleSave = async () => {
@@ -155,10 +147,13 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
     setError("")
     setSubmitting(true)
     try {
-      const payload = menus.map((menu) => ({
-        menuId: menu.id,
-        plates: menu.existingAllocated + (deltas[menu.id] ?? 0),
-      }))
+      // `plates` is the new ASSIGNED amount per dish. The server preserves the
+      // batch's sold plates (remaining = assigned − sold) so a reallocation can
+      // never resurrect stock an order already consumed. Omitting zero-assigned
+      // dishes clears their split.
+      const payload = menus
+        .filter((m) => m.assigned > 0)
+        .map((m) => ({ menuId: m.id, plates: m.assigned }))
       await allocateCookingRecord(batchId, payload)
 
       // Menu.stock is deliberately NOT written from here. The server derives it
@@ -193,23 +188,26 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
         ) : (
           <div className="space-y-4">
             <div className="rounded-md bg-muted p-3 text-sm space-y-2">
+              {origin && (
+                <div className="text-[11px] text-admin-muted">{origin}</div>
+              )}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="flex items-baseline gap-1">
                   <span className="text-xs text-admin-muted">Produced Plates:</span>
                   <span className="font-bold text-lg">{produced} plates</span>
                 </div>
                 <div className="flex items-baseline gap-1">
+                  <span className="text-xs text-green-600">Assigned Plates:</span>
+                  <span className="font-bold text-lg text-green-600">{totalAssigned} plates</span>
+                </div>
+                <div className="flex items-baseline gap-1">
                   <span className="text-xs text-orange-600">Sold Plates:</span>
                   <span className="font-bold text-lg text-orange-600">{totalSold} plates</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-xs text-green-600">Selling Now Plates:</span>
-                  <span className="font-bold text-lg text-green-600">{totalAllocated} plates</span>
-                </div>
-                <div className="flex items-baseline gap-1">
                   <span className="text-xs text-blue-600">Remaining Plates:</span>
-                  <span className={`font-bold text-lg text-blue-600`}>
-                    {remainingPool} plates
+                  <span className={`font-bold text-lg ${overCap ? "text-red-600" : "text-blue-600"}`}>
+                    {remaining} plates
                   </span>
                 </div>
               </div>
@@ -221,32 +219,33 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
               )}
               {!expired && isCarryOver && (
                 <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
-                  Carry-over batch from previous shift. Assign plates to restock current shift.
+                  Carried over from the {carryFrom}. Plates left below are still sellable this
+                  shift — reassign only if you need to move them.
                 </div>
               )}
               {overCap && (
                 <p className="text-xs text-red-600 mt-1">
-                  Cannot allocate more than {produced} produced plates.
+                  Cannot assign more than {produced} produced plates.
                 </p>
               )}
             </div>
 
             <div className="space-y-3">
-{menus.length === 0 ? (
+              {menus.length === 0 ? (
                 <p className="text-sm text-admin-muted">
                   No menu items are linked to this batch&apos;s stock item.
                 </p>
               ) : (
                 menus.map((menu) => {
-                  const currentStock = menu.stock
+                  const left = menu.assigned - menu.sold
                   return (
                     <div key={menu.id} className="flex items-center justify-between gap-3">
                       <div className="flex flex-col min-w-0 flex-1">
                         <Label className="text-xs font-medium truncate">{menu.name}</Label>
                         <div className="flex items-center gap-3 text-[11px] text-admin-muted">
-                          <span>Open Stk: <span className="font-medium text-admin-header-text">{menu.openingStock}</span></span>
-                          <span className="text-green-600">Selling Now: <span className="font-medium">{currentStock}</span></span>
-                          <span className="text-orange-600">Sold: <span className="font-medium text-orange-600">{menu.soldThisShift}</span></span>
+                          <span className="text-green-600">Assigned: <span className="font-medium">{menu.assigned}</span></span>
+                          <span className="text-orange-600">Sold: <span className="font-medium">{menu.sold}</span></span>
+                          <span className="text-blue-600">Left: <span className="font-medium">{left}</span></span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -255,8 +254,8 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
                             type="button"
                             variant="outline"
                             size="icon"
-                            onClick={() => decrement(menu.id)}
-                            disabled={submitting || currentStock + (deltas[menu.id] ?? 0) <= 0}
+                            onClick={() => decrement(menu)}
+                            disabled={submitting || left <= 0}
                             className="h-8 w-8"
                           >
                             <Minus size={14} />
@@ -264,8 +263,8 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
                           <Input
                             type="number"
                             step={1}
-                            value={deltas[menu.id] ?? 0}
-                            onChange={(e) => updateDelta(menu.id, parseInt(e.target.value) || 0)}
+                            value={menu.assigned}
+                            onChange={(e) => setAssigned(menu.id, parseInt(e.target.value) || 0)}
                             className="w-20 text-center"
                             readOnly
                           />
@@ -273,8 +272,8 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
                             type="button"
                             variant="outline"
                             size="icon"
-                            onClick={() => increment(menu.id)}
-                            disabled={submitting || (deltas[menu.id] ?? 0) >= remainingPool + (deltas[menu.id] ?? 0)}
+                            onClick={() => increment(menu)}
+                            disabled={submitting || remaining <= 0}
                             className="h-8 w-8"
                           >
                             <Plus size={14} />
