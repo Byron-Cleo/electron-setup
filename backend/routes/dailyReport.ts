@@ -1,19 +1,34 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { computeShiftUnassignedBatches } from "./shiftCarryOver.js";
-import { round2 } from "../pools.js";
+import { round2, factorForServing } from "../pools.js";
 
 const router = Router();
 
-// An order belongs to a shift's operationDay when createdAt falls within
-// [operationDay, operationDay + 1d) — UTC-midnight alignment, the same
-// convention used by parseDateQueryRange. Applied ON TOP of shift membership:
-// every shift keeps its own generated data, and off-date (stale) orders never
-// leak into a shift's report.
-function belongsToOperationDay(createdAt: Date, operationDay: Date): boolean {
-  const t = new Date(createdAt).getTime();
-  const start = operationDay.getTime();
-  return t >= start && t < start + 86_400_000;
+// A shift's ACTUAL end time — when it stopped serving. A final close wins
+// (MANUAL = manager closed it; FORCED = system closed it at its drift
+// deadline — a manager-extended shift owns its drift period either way),
+// else the auto-close tick, else the scheduled close time (fallback for a
+// shift with no close stamps). Reports pair this with effectiveStart so
+// consecutive shifts form mutually exclusive windows and every order
+// belongs to exactly one shift. Shared with the shift-list endpoint so its
+// orderCount/revenue summaries always match the report.
+export function shiftActualEndTime(shift: {
+  finalCloseSource: string | null;
+  finalClosedAt: Date | null;
+  autoClosedAt: Date | null;
+  autoCloseTime: Date;
+}): Date {
+  if (
+    (shift.finalCloseSource === "MANUAL" || shift.finalCloseSource === "FORCED") &&
+    shift.finalClosedAt
+  ) {
+    return shift.finalClosedAt;
+  }
+  if (shift.autoClosedAt) {
+    return shift.autoClosedAt;
+  }
+  return shift.autoCloseTime;
 }
 
 // GET /api/reports/shift/:id - Full shift report
@@ -26,12 +41,6 @@ router.get("/shift/:id", async (req, res) => {
       include: {
         finalClosedBy: { select: { id: true, name: true } },
         snapshots: { include: { menu: { select: { id: true, name: true, price: true, stock: true } } } },
-        orders: {
-          include: {
-            OrderItem: true,
-            User: { select: { name: true } },
-          },
-        },
       },
     });
 
@@ -39,11 +48,42 @@ router.get("/shift/:id", async (req, res) => {
       return res.status(404).json({ error: "Shift not found" });
     }
 
-    // A shift's report uses all orders attached to this shift (shift.orders),
-    // which represents exactly the orders placed while the shift was the current
-    // shift (including any drift period). This keeps the report aligned with the
-    // shift's actual open/close window.
-    const dayOrders = shift.orders;
+    // Mutually exclusive time windows: every order belongs to exactly one
+    // shift. The window opens at this shift's start time, or later when the
+    // IMMEDIATELY PRECEDING shift is still serving (manual or forced
+    // deadline) and actually ended, and closes at this shift's actual end
+    // (exclusive bound). Drift-period orders stay with the extending shift,
+    // and orders across midnight stay under this shift's (immutable)
+    // operationDay — no calendar-day splitting.
+    //
+    // Only the immediate predecessor clamps the start — deliberately. An
+    // OLDER shift closed out of order (a stale shift the manager finally
+    // clicked days late) must not swallow this shift's window; the drift
+    // limit on manual configs makes such out-of-order closes impossible
+    // going forward, so the immediate predecessor is the only real overlap.
+    const precedingShift = await prisma.shift.findFirst({
+      where: { autoOpenTime: { lt: shift.autoOpenTime } },
+      orderBy: { autoOpenTime: "desc" },
+      select: { finalCloseSource: true, finalClosedAt: true, autoClosedAt: true, autoCloseTime: true },
+    });
+
+    const effectiveEnd = shiftActualEndTime(shift);
+    const effectiveStart = precedingShift
+      ? new Date(Math.max(shift.autoOpenTime.getTime(), shiftActualEndTime(precedingShift).getTime()))
+      : shift.autoOpenTime;
+
+    // Orders attributed strictly by the effective window — not by the
+    // shift.orders relation (unreliable during drift/overlap) and not by
+    // operationDay (which would split midnight-crossing shifts).
+    const dayOrders = await prisma.order.findMany({
+      where: {
+        createdAt: { gte: effectiveStart, lt: effectiveEnd },
+      },
+      include: {
+        OrderItem: true,
+        User: { select: { name: true } },
+      },
+    });
 
     // Revenue is computed from paid non-void orders only. Unpaid (including
     // manager-marked-unpaid) orders stay in the total count but are excluded
@@ -95,24 +135,13 @@ router.get("/shift/:id", async (req, res) => {
       mpesaVariance: declaredMpesa !== null ? declaredMpesa - mpesaTotal : null,
     };
 
-    // Find the next shift's autoOpenTime to define the upper boundary of this shift's window
-    const nextShift = await prisma.shift.findFirst({
-      where: {
-        autoOpenTime: { gt: shift.autoOpenTime },
-        operationDay: shift.operationDay,
-      },
-      orderBy: { autoOpenTime: "asc" },
-      select: { autoOpenTime: true },
-    });
-
-    const windowEnd = nextShift?.autoOpenTime ?? shift.autoCloseTime;
-
-    // Core cooking records: within the shift's scheduled time window
+    // Core cooking records: within the shift's effective window, so drift-period
+    // cooking stays with the extending shift instead of leaking to the next one
     const cookingRecords = await prisma.cookingRecord.findMany({
       where: {
         createdAt: {
-          gte: shift.autoOpenTime,
-          lt: windowEnd,
+          gte: effectiveStart,
+          lt: effectiveEnd,
         },
       },
       include: {
@@ -121,11 +150,11 @@ router.get("/shift/:id", async (req, res) => {
       },
     });
 
-    const totalProductionCost = cookingRecords.reduce((sum, record) => {
-      const costPrice = Number(record.stockSupply.costPrice ?? 0);
-      const quantityCooked = Number(record.quantityCooked);
-      return sum + costPrice * quantityCooked;
-    }, 0);
+    // Production = the raw-material cost of the menus sold. Raw-material
+    // costing is NOT implemented yet, so the figure is deliberately projected
+    // as 0 (the UI marks the card "(Projection not yet implemented)") and
+    // variance/margin stay consistent with the zero cost basis until real
+    // costing lands later.
 
     // Aggregate plates cooked per menu item from splits
     const platesCookedByMenu = new Map<string, number>();
@@ -136,6 +165,33 @@ router.get("/shift/:id", async (req, res) => {
       }
     }
 
+    // Plate sales are DERIVED from the same window orders the revenue comes
+    // from — plate movement is order placement, so the report can never
+    // disagree with its own orders (the snapshot tick tallies stay as the
+    // structural record). Same weight as at placement: factor × qty per
+    // OrderItem, non-void only (voids restore plates).
+    const salesByMenu = new Map<string, { sold: number; soldBeforeAutoClose: number }>();
+    const factorCache = new Map<string, number>();
+    for (const order of dayOrders) {
+      if (order.isVoid) continue;
+      const beforeAutoClose = order.createdAt.getTime() < shift.autoCloseTime.getTime();
+      for (const item of order.OrderItem) {
+        const factorKey = `${item.menuId}|${item.portionId ?? ""}`;
+        let factor = factorCache.get(factorKey);
+        if (factor === undefined) {
+          factor = await factorForServing(prisma, item.menuId, item.portionId);
+          factorCache.set(factorKey, factor);
+        }
+        const plates = round2(factor * item.qty);
+        const entry = salesByMenu.get(item.menuId) ?? { sold: 0, soldBeforeAutoClose: 0 };
+        entry.sold = round2(entry.sold + plates);
+        if (beforeAutoClose) {
+          entry.soldBeforeAutoClose = round2(entry.soldBeforeAutoClose + plates);
+        }
+        salesByMenu.set(item.menuId, entry);
+      }
+    }
+
     // Calculate plate movement — only items that were cooked or sold.
     // For an open shift (live or awaiting manual close) there is no final
     // closingStockAtManualClose yet, so use the current live menu stock as the
@@ -143,14 +199,17 @@ router.get("/shift/:id", async (req, res) => {
     const isOpenShift = shift.isOpen;
     const plateMovement = shift.snapshots
       .map((snapshot) => {
-        // Snapshot counters are Decimal(12,2) because a weighted supply leaves a
-        // fractional pool. Coerce once here so the arithmetic below stays exact.
+        // Sales figures are DERIVED from the window orders (salesByMenu) so
+        // plate movement matches order placement exactly; opening/closing
+        // stock and waste stay from the snapshot tick-stamps (they are stock
+        // photos, attachment-independent). Coerce once so the arithmetic
+        // below stays exact.
         const opening = Number(snapshot.openingPlates);
-        const sold = Number(snapshot.platesSold);
-        const soldAtAutoClose =
-          snapshot.platesSoldAtAutoClose !== null && snapshot.platesSoldAtAutoClose !== undefined
-            ? Number(snapshot.platesSoldAtAutoClose)
-            : null;
+        const derived = salesByMenu.get(snapshot.menuId);
+        const sold = derived?.sold ?? 0;
+        // Pre-drift sales only exist once the shift was auto-captured — the
+        // same derivation cut at the scheduled close time.
+        const soldAtAutoClose = shift.autoClosed ? derived?.soldBeforeAutoClose ?? 0 : null;
         const platesCooked = platesCookedByMenu.get(snapshot.menuId) ?? 0;
         const closingStock = round2(opening + platesCooked - sold);
         const closingStockAtManualClose = isOpenShift
@@ -187,20 +246,68 @@ router.get("/shift/:id", async (req, res) => {
       })
       .filter((row) => row.platesSold > 0 || row.platesCooked > 0);
 
+    // Menus sold in the window but absent from this shift's snapshots — a
+    // dish added mid-shift (created with no opening stock, e.g. Matumbo CFF
+    // on 10-07) or one whose historical orders attached to a different
+    // shift. It still sold on this shift, so it still gets a row: opening 0
+    // (nothing existed when the shift opened), cooked from the window's
+    // cooking records, sold derived from the window orders.
+    const snapshotMenuIds = new Set(shift.snapshots.map((s) => s.menuId));
+    const missingMenuIds = [...salesByMenu.keys()].filter((id) => !snapshotMenuIds.has(id));
+    let plateMovementAll = plateMovement;
+    if (missingMenuIds.length > 0) {
+      const missingMenus = await prisma.menu.findMany({
+        where: { id: { in: missingMenuIds } },
+        select: { id: true, name: true, stock: true },
+      });
+      const missingLinks = await prisma.stockSupplyMenu.findMany({
+        where: { menuId: { in: missingMenuIds } },
+        select: { menuId: true, stockSupply: { select: { sellingMode: true } } },
+      });
+      const modeByMenu = new Map(missingLinks.map((l) => [l.menuId, l.stockSupply.sellingMode]));
+      const appendedRows = missingMenus.map((menu) => {
+        const derived = salesByMenu.get(menu.id);
+        const sold = derived?.sold ?? 0;
+        const soldAtAutoClose = shift.autoClosed ? derived?.soldBeforeAutoClose ?? 0 : null;
+        const platesCooked = platesCookedByMenu.get(menu.id) ?? 0;
+        const opening = 0;
+        return {
+          menuId: menu.id,
+          menuName: menu.name,
+          sellingMode: modeByMenu.get(menu.id) ?? "ALLOCATED",
+          openingPlates: opening,
+          platesCooked,
+          platesSold: sold,
+          platesSoldAtAutoClose: soldAtAutoClose,
+          driftSold: soldAtAutoClose !== null ? round2(sold - soldAtAutoClose) : null,
+          closingStock: round2(opening + platesCooked - sold),
+          platesWasted: 0,
+          closingStockAtAutoClose:
+            soldAtAutoClose !== null
+              ? round2(opening + platesCooked - soldAtAutoClose)
+              : null,
+          driftMinutes: null,
+          closingStockAtManualClose: isOpenShift ? Number(menu.stock ?? 0) : null,
+          isLiveCurrent: isOpenShift,
+        };
+      });
+      plateMovementAll = [...plateMovement, ...appendedRows];
+    }
+
     // A SHARED pool is one set of plates mirrored onto every dish it feeds, so
     // summing its figures per dish would report 4x the food that was actually
     // cooked. Count each shared pool once (on its first dish) and mark the
     // other dishes as mirrors, which the UI shows but the totals skip.
     const sharedSupplyByMenu = new Map<string, string>();
     const supplyLinks = await prisma.stockSupplyMenu.findMany({
-      where: { menuId: { in: plateMovement.map((r) => r.menuId) } },
+      where: { menuId: { in: plateMovementAll.map((r) => r.menuId) } },
       select: { menuId: true, stockSupplyId: true },
     });
     for (const link of supplyLinks) {
       if (!sharedSupplyByMenu.has(link.menuId)) sharedSupplyByMenu.set(link.menuId, link.stockSupplyId);
     }
     const countedSharedPools = new Set<string>();
-    const plateMovementDeduped = plateMovement.map((row) => {
+    const plateMovementDeduped = plateMovementAll.map((row) => {
       if (row.sellingMode !== "SHARED") return { ...row, isSharedMirror: false };
       const supplyId = sharedSupplyByMenu.get(row.menuId) ?? row.menuId;
       const first = !countedSharedPools.has(supplyId);
@@ -213,14 +320,23 @@ router.get("/shift/:id", async (req, res) => {
       ? Math.round((shift.autoClosedAt.getTime() - shift.autoCloseTime.getTime()) / 60000)
       : 0;
 
-    // Clocking drift (signed, early = negative / late = positive) for the Shift Clocking Summary
+    // Clocking drift (signed, early = negative / late = positive) for the Shift Clocking Summary.
+    // A final close (MANUAL or FORCED) is when the shift actually stopped, so
+    // its drift is measured against that moment — an auto-close tick alone
+    // would report 0 for a shift that was actually closed hours late.
     const msPerMinute = 60000;
     const openingDriftMinutes = shift.createdAt
       ? Math.round((shift.createdAt.getTime() - shift.autoOpenTime.getTime()) / msPerMinute)
       : null;
-    const closingDriftMinutes = shift.autoClosedAt
-      ? Math.round((shift.autoClosedAt.getTime() - shift.autoCloseTime.getTime()) / msPerMinute)
-      : null;
+    const finalCloseMs =
+      (shift.finalCloseSource === "MANUAL" || shift.finalCloseSource === "FORCED") && shift.finalClosedAt
+        ? shift.finalClosedAt.getTime()
+        : null;
+    const closingDriftMinutes = finalCloseMs !== null
+      ? Math.round((finalCloseMs - shift.autoCloseTime.getTime()) / msPerMinute)
+      : shift.autoClosedAt
+        ? Math.round((shift.autoClosedAt.getTime() - shift.autoCloseTime.getTime()) / msPerMinute)
+        : null;
 
     // Drift records: created after autoCloseTime but before actualCloseTime (carried forward to next shift)
     let driftRecords: { menuName: string; quantityCooked: number; platesProduced: number; costPrice: number }[] = [];
@@ -284,6 +400,13 @@ router.get("/shift/:id", async (req, res) => {
       })),
     };
 
+    // Actual capture span of the window's orders — the exact createdAt of the
+    // first and last order, so the report shows the timing the orders were
+    // gathered between (always under this shift's operationDay).
+    const orderTimes = dayOrders.map((o) => o.createdAt.getTime());
+    const firstOrderAt = orderTimes.length > 0 ? new Date(Math.min(...orderTimes)) : null;
+    const lastOrderAt = orderTimes.length > 0 ? new Date(Math.max(...orderTimes)) : null;
+
     res.json({
       shift: {
         id: shift.id,
@@ -297,6 +420,8 @@ router.get("/shift/:id", async (req, res) => {
         isOpen: shift.isOpen,
         autoClosed: shift.autoClosed,
         autoClosedAt: shift.autoClosedAt,
+        finalClosedAt: shift.finalClosedAt,
+        finalCloseSource: shift.finalCloseSource,
         finalClosedBy: shift.finalClosedBy,
       },
       plateMovement: plateMovementDeduped,
@@ -312,14 +437,16 @@ router.get("/shift/:id", async (req, res) => {
         total: totalSales,
       },
       production: {
-        totalCost: totalProductionCost,
+        totalCost: 0,
         totalSales,
-        variance: totalSales - totalProductionCost,
-        profitMargin: totalSales > 0 ? `${((totalSales - totalProductionCost) / totalSales * 100).toFixed(1)}%` : "0%",
+        variance: totalSales,
+        profitMargin: totalSales > 0 ? "100.0%" : "0%",
       },
       summary: {
         totalOrders: dayOrders.length,
         voidedOrders: dayOrders.filter((o) => o.isVoid).length,
+        firstOrderAt,
+        lastOrderAt,
       },
       payments,
       drift: {

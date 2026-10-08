@@ -920,7 +920,7 @@ export async function testServerConnection(): Promise<ServerStatus> {
 
 // ─── User Management ────────────────────────────────────────────────────────
 
-export type ShiftConfig = { id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean; manual: boolean; anchorIntervalMinutes: number }
+export type ShiftConfig = { id: string; type: string; autoOpenTime: string; autoCloseTime: string; isActive: boolean; manual: boolean; strictClose: boolean; maxDriftMinutes: number | null; anchorIntervalMinutes: number }
 
 export async function getShiftConfigs(): Promise<ShiftConfig[]> {
   if (window.electron?.shiftConfig?.getAll) {
@@ -929,7 +929,7 @@ export async function getShiftConfigs(): Promise<ShiftConfig[]> {
   return apiFetch("/shift-config")
 }
 
-export async function createShiftConfig(data: { type: string; autoOpenTime: string; autoCloseTime: string; manual?: boolean; anchorIntervalMinutes?: number }): Promise<ShiftConfig> {
+export async function createShiftConfig(data: { type: string; autoOpenTime: string; autoCloseTime: string; manual?: boolean; strictClose?: boolean; maxDriftMinutes?: number | null; anchorIntervalMinutes?: number }): Promise<ShiftConfig> {
   if (window.electron?.shiftConfig?.create) {
     return window.electron.shiftConfig.create(data)
   }

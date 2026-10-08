@@ -37,6 +37,8 @@ function ShiftManagement() {
   const [deleteConfigId, setDeleteConfigId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [configManual, setConfigManual] = useState(false)
+  const [configStrict, setConfigStrict] = useState(false)
+  const [configDrift, setConfigDrift] = useState("")
   const [configIntervalMinutes, setConfigIntervalMinutes] = useState("1440")
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [, setClock] = useState(0)
@@ -112,11 +114,27 @@ function ShiftManagement() {
       alert("Cycle interval must be a positive whole number of minutes (e.g. 5, 480 for 8h, 1440 for 24h).")
       return
     }
+    // Drift policy applies to manual shifts only: strict clears the limit,
+    // empty input means unlimited (the red-flag default), otherwise the
+    // limit is strictly user-defined — any positive whole number of minutes.
+    let strictClose = false
+    let maxDriftMinutes: number | null = null
+    if (configManual) {
+      strictClose = configStrict
+      if (!strictClose && configDrift.trim() !== "") {
+        const drift = Number(configDrift)
+        if (!Number.isInteger(drift) || drift < 1) {
+          alert("Drift limit must be a positive whole number of minutes — or leave it empty for unlimited.")
+          return
+        }
+        maxDriftMinutes = drift
+      }
+    }
     try {
       if (isEditing && editConfigId) {
-        await updateShiftConfig(editConfigId, { type: configType, autoOpenTime: configOpenTime, autoCloseTime: configCloseTime, isActive: true, manual: configManual, anchorIntervalMinutes: intervalUpdate })
+        await updateShiftConfig(editConfigId, { type: configType, autoOpenTime: configOpenTime, autoCloseTime: configCloseTime, isActive: true, manual: configManual, strictClose, maxDriftMinutes, anchorIntervalMinutes: intervalUpdate })
       } else {
-        await createShiftConfig({ type: configType, autoOpenTime: configOpenTime, autoCloseTime: configCloseTime, manual: configManual, anchorIntervalMinutes: intervalUpdate })
+        await createShiftConfig({ type: configType, autoOpenTime: configOpenTime, autoCloseTime: configCloseTime, manual: configManual, strictClose, maxDriftMinutes, anchorIntervalMinutes: intervalUpdate })
       }
       setConfigOpen(false)
       setIsEditing(false)
@@ -125,6 +143,8 @@ function ShiftManagement() {
       setConfigOpenTime("05:30")
       setConfigCloseTime("17:30")
       setConfigManual(false)
+      setConfigStrict(false)
+      setConfigDrift("")
       setConfigIntervalMinutes("1440")
       getShiftConfigs().then(setConfigs).catch(() => {})
     } catch (e) {
@@ -166,6 +186,8 @@ function ShiftManagement() {
     setConfigOpenTime(config.autoOpenTime)
     setConfigCloseTime(config.autoCloseTime)
     setConfigManual(config.manual)
+    setConfigStrict(config.strictClose)
+    setConfigDrift(config.maxDriftMinutes !== null && config.maxDriftMinutes !== undefined ? String(config.maxDriftMinutes) : "")
     setConfigIntervalMinutes(String(config.anchorIntervalMinutes))
     setConfigOpen(true)
   }
@@ -177,6 +199,8 @@ function ShiftManagement() {
     setConfigOpenTime("05:30")
     setConfigCloseTime("17:30")
     setConfigManual(false)
+    setConfigStrict(false)
+    setConfigDrift("")
     setConfigIntervalMinutes("1440")
     setConfigOpen(true)
   }
@@ -203,6 +227,30 @@ function ShiftManagement() {
 
   function timeFormat(time: string): string {
     return new Date("1970-01-01T" + time + ":00").toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase()
+  }
+
+  // "90" -> "1h 30m" for the minutes inputs, so the user can read what they define.
+  function minutesLabel(raw: string): string | null {
+    const n = parseInt(raw, 10)
+    if (!Number.isFinite(n) || n <= 0) return null
+    const h = Math.floor(n / 60)
+    const m = n % 60
+    const parts: string[] = []
+    if (h > 0) parts.push(`${h}h`)
+    if (m > 0) parts.push(`${m}m`)
+    return parts.length ? parts.join(" ") : "0m"
+  }
+
+  // Drift policy badge for the config table: auto = no drift concept,
+  // strict = closes exactly on schedule, a number = bounded drift,
+  // and unlimited is the loud red flag that demands a limit be set.
+  function driftPolicyFor(c: ShiftConfig): { label: string; cls: string } {
+    if (!c.manual) return { label: "—", cls: "text-admin-muted" }
+    if (c.strictClose) return { label: "STRICT", cls: "bg-blue-100 text-blue-700 rounded-full px-2.5 py-0.5 font-semibold text-xs inline-flex items-center" }
+    if (c.maxDriftMinutes === null || c.maxDriftMinutes === undefined) {
+      return { label: "UNLIMITED ⚠", cls: "bg-red-100 text-red-700 rounded-full px-2.5 py-0.5 font-bold text-xs inline-flex items-center" }
+    }
+    return { label: `≤ ${c.maxDriftMinutes}m (${minutesLabel(String(c.maxDriftMinutes)) ?? ""})`, cls: "bg-green-100 text-green-700 rounded-full px-2.5 py-0.5 font-semibold text-xs inline-flex items-center" }
   }
 
   return (
@@ -431,6 +479,7 @@ function ShiftManagement() {
                     <th className="px-3 py-2 text-left font-medium">Open</th>
                     <th className="px-3 py-2 text-left font-medium">Close</th>
                     <th className="px-3 py-2 text-left font-medium">Manual</th>
+                    <th className="px-3 py-2 text-left font-medium">Drift</th>
                     <th className="px-3 py-2 text-left font-medium">Cycle</th>
                     <th className="px-3 py-2 text-center font-medium">Status</th>
                     <th className="px-3 py-2 text-right font-medium">Actions</th>
@@ -444,6 +493,9 @@ function ShiftManagement() {
                       <td className="px-3 py-3 text-admin-muted">{timeFormat(c.autoCloseTime)}</td>
                       <td className="px-3 py-3">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.manual ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>{c.manual ? "YES" : "NO"}</span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={driftPolicyFor(c).cls}>{driftPolicyFor(c).label}</span>
                       </td>
                       <td className="px-3 py-3 text-admin-muted">{c.anchorIntervalMinutes} min</td>
                       <td className="px-3 py-3 text-center">
@@ -523,8 +575,41 @@ function ShiftManagement() {
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="config-manual" checked={configManual} onCheckedChange={(v) => setConfigManual(v === true)} />
-              <Label htmlFor="config-manual">Manual close — stays open after auto-capture so the manager closes &amp; declares sales later</Label>
+              <Label htmlFor="config-manual">Manual close — stays open after auto-capture so the manager closes & declares sales later</Label>
             </div>
+            {configManual && (
+              <div className="space-y-3 rounded-md border border-admin-card-border p-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="config-strict" checked={configStrict} onCheckedChange={(v) => setConfigStrict(v === true)} />
+                  <Label htmlFor="config-strict">Close strictly at scheduled close time — no drift, no manager step</Label>
+                </div>
+                {!configStrict && (
+                  <div>
+                    <Label htmlFor="drift-minutes">Allow drift up to (minutes)</Label>
+                    <Input
+                      id="drift-minutes"
+                      type="number"
+                      min={1}
+                      value={configDrift}
+                      onChange={(e) => setConfigDrift(e.target.value)}
+                      className="w-full"
+                      placeholder="e.g. 120"
+                    />
+                    <p className="mt-1 text-xs">
+                      {minutesLabel(configDrift) ? (
+                        <span className="font-semibold text-blue-600">
+                          {configDrift} min ({minutesLabel(configDrift)}) — the system closes the shift at scheduled close + this drift
+                        </span>
+                      ) : (
+                        <span className="font-bold text-red-600">
+                          UNLIMITED ⚠ — no limit set: this shift stays open until manually closed and its report can swallow the next shift. Define a limit.
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" onClick={handleSaveConfig}>

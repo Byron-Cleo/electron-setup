@@ -531,6 +531,8 @@ model ShiftConfig {
   autoCloseTime         String // HH:MM format for scheduled close
   isActive              Boolean  @default(true)
   manual                Boolean  @default(false) // false = auto-close at autoCloseTime, true = manager closes manually later
+  strictClose           Boolean  @default(false) // manual shifts: finalize exactly at autoCloseTime — no manager step, no drift
+  maxDriftMinutes       Int? // manual shifts: allowed drift past autoCloseTime before the system force-closes; null = unlimited (red-flag default)
   anchorIntervalMinutes Int      @default(1440) // operational cycle window in minutes (1440 = 24h)
   createdAt             DateTime @default(now()) @db.Timestamptz(6)
   updatedAt             DateTime @updatedAt @db.Timestamptz(6)

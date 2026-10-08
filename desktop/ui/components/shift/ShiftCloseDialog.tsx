@@ -545,8 +545,10 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
               </DialogTitle>
               <DialogDescription>
                 {formatDate(report.shift.operationDay)} · opened {formatTime(report.shift.autoOpenTime)} ·
-                closed {formatTime(report.shift.autoClosedAt ?? report.shift.autoCloseTime)} by{" "}
-                {report.shift.finalClosedBy?.name ?? "—"}
+                closed {formatTime(report.shift.finalClosedAt ?? report.shift.autoClosedAt ?? report.shift.autoCloseTime)} by{" "}
+                {report.shift.finalCloseSource === "FORCED"
+                  ? "System — drift limit reached"
+                  : report.shift.finalClosedBy?.name ?? "—"}
               </DialogDescription>
             </DialogHeader>
 
@@ -725,7 +727,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
 
               <div className="rounded-lg border border-admin-card-border p-4">
                 <p className="mb-2 text-sm font-medium text-admin-header-text">
-                  Production vs Sales
+                  Production vs Sales <span className="font-bold text-red-600">(Projection not yet implemented)</span>
                 </p>
                 <div className="space-y-1 text-sm">
                   <div className="flex items-center justify-between">

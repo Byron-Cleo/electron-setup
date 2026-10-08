@@ -28,6 +28,60 @@ function dateOnly(d: Date): Date {
   return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 }
 
+// The shift new orders attach to — shared by order creation and the void
+// guard so both always agree. A shift still inside its allowed drift window
+// is the one actually serving, so orders attach to IT (the oldest such shift
+// if several), keeping snapshot tallies, unpaid scoping and close-gate
+// figures coherent with the window-based report attribution. Once it closes
+// (manually or at its drift deadline), attachment falls back to the newest
+// open shift of the current operation day.
+async function resolveCurrentShift(): Promise<{ id: string } | null> {
+  const now = new Date();
+
+  const drifting = await prisma.shift.findMany({
+    where: {
+      isOpen: true,
+      autoClosed: true,
+      finalCloseSource: null,
+      autoCloseTime: { lte: now },
+    },
+    orderBy: { autoOpenTime: "asc" },
+    select: { id: true, type: true, autoCloseTime: true },
+  });
+
+  if (drifting.length > 0) {
+    const configs = await prisma.shiftConfig.findMany({
+      where: { type: { in: drifting.map((s) => s.type) } },
+    });
+    const policyByType = new Map(configs.map((c) => [c.type, c]));
+    for (const candidate of drifting) {
+      const cfg = policyByType.get(candidate.type);
+      if (cfg?.manual !== true) continue; // auto shifts never sit open in drift
+      if (cfg.strictClose) continue; // strict shifts never sit open
+      if (cfg.maxDriftMinutes === null || cfg.maxDriftMinutes === undefined) {
+        return candidate; // unlimited — in its drift until closed
+      }
+      if (now.getTime() <= candidate.autoCloseTime.getTime() + cfg.maxDriftMinutes * 60_000) {
+        return candidate;
+      }
+    }
+  }
+
+  const operationDay = dateOnly(now);
+  return (
+    (await prisma.shift.findFirst({
+      where: { isOpen: true, operationDay },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    })) ??
+    (await prisma.shift.findFirst({
+      where: { isOpen: true },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    }))
+  );
+}
+
 // `Menu.stock` is a mirror maintained by recomputeMenuStock() in pools.ts —
 // which knows about both engines and weighted portions. It is deliberately not
 // decremented here.
@@ -120,25 +174,13 @@ const lineKey = (item: {
   const shippingPrice = 0;
   const taxPrice = 0;
 
-  // Every order must link to an open shift (no orphaned orders) and should be
-  // attributed to the shift of the CURRENT operation day. This keeps all
-  // shift-scoped workflows (manual close, unpaid enforcement, reports) aligned
-  // with the order's operation date. Fall back to the newest open shift (same
-  // rule as getCurrentShift) only when today's shift has not opened yet, so an
-  // order never lands on a stale previous-day shift while the current cycle's
-  // shift exists.
-  const operationDay = dateOnly(new Date());
-  const currentShift =
-    (await prisma.shift.findFirst({
-      where: { isOpen: true, operationDay },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    })) ??
-    (await prisma.shift.findFirst({
-      where: { isOpen: true },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    }));
+  // Every order must link to an open shift (no orphaned orders) and is
+  // attributed to the shift actually serving at placement time — a shift
+  // inside its allowed drift window wins over the newest open shift (see
+  // resolveCurrentShift), so attachment matches the report's window
+  // attribution. Fall back to the newest open shift of the current operation
+  // day once nothing is drifting.
+  const currentShift = await resolveCurrentShift();
   if (!currentShift) {
     return res.status(400).json({ error: "No active shift. The system cannot take orders without an active shift. Please contact the manager." });
   }
@@ -527,11 +569,10 @@ router.post("/:id/void", async (req, res) => {
       return res.status(400).json({ error: "Order is already voided" });
     }
 
-    // Check if order is in current open shift
-    const currentShift = await prisma.shift.findFirst({
-      where: { isOpen: true },
-      orderBy: { createdAt: "desc" },
-    });
+    // Check if order belongs to the shift currently taking orders — same
+    // resolution as order creation (drift-window aware), so an order placed
+    // on a drifting shift can still be voided while it serves.
+    const currentShift = await resolveCurrentShift();
 
     if (currentShift && order.shiftId && order.shiftId !== currentShift.id) {
       return res.status(400).json({ error: "Cannot void order from a different shift" });

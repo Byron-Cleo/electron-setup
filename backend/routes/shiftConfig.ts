@@ -10,6 +10,34 @@ function occurrenceOf(time: string, day: Date): Date {
   return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0);
 }
 
+// Resolve the drift policy for a manual shift config. Auto shifts have no
+// drift concept (fields cleared); strict close and a drift limit are mutually
+// exclusive (strict wins and clears the limit); the limit is strictly
+// user-defined — positive integer, no enforced cap, null = unlimited.
+function resolveDriftPolicy(
+  manual: boolean,
+  strictClose: boolean | undefined,
+  maxDriftMinutes: number | null | undefined,
+): { strictClose: boolean; maxDriftMinutes: number | null } {
+  if (!manual) return { strictClose: false, maxDriftMinutes: null };
+  const strict = strictClose ?? false;
+  return { strictClose: strict, maxDriftMinutes: strict ? null : maxDriftMinutes ?? null };
+}
+
+function validateDriftPolicyInput(strictClose: unknown, maxDriftMinutes: unknown): string | null {
+  if (strictClose !== undefined && typeof strictClose !== "boolean") {
+    return "strictClose must be a boolean";
+  }
+  if (
+    maxDriftMinutes !== undefined &&
+    maxDriftMinutes !== null &&
+    (!Number.isInteger(maxDriftMinutes) || (maxDriftMinutes as number) < 1)
+  ) {
+    return "maxDriftMinutes must be a positive integer (minutes), or null for unlimited";
+  }
+  return null;
+}
+
 router.get("/", async (_req, res) => {
   try {
     const configs = await prisma.shiftConfig.findMany({ orderBy: [{ isActive: "desc" }, { type: "asc" }] });
@@ -21,7 +49,7 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { type, autoOpenTime, autoCloseTime, manual, anchorIntervalMinutes } = req.body;
+  const { type, autoOpenTime, autoCloseTime, manual, strictClose, maxDriftMinutes, anchorIntervalMinutes } = req.body;
 
   if (!type || typeof type !== "string" || type.trim().length === 0) {
     return res.status(400).json({ error: "type is required and must be a non-empty string" });
@@ -38,11 +66,16 @@ router.post("/", async (req, res) => {
   if (manual !== undefined && typeof manual !== "boolean") {
     return res.status(400).json({ error: "manual must be a boolean" });
   }
+  const driftError = validateDriftPolicyInput(strictClose, maxDriftMinutes);
+  if (driftError) {
+    return res.status(400).json({ error: driftError });
+  }
   if (anchorIntervalMinutes !== undefined && (!Number.isInteger(anchorIntervalMinutes) || anchorIntervalMinutes < 1)) {
     return res.status(400).json({ error: "anchorIntervalMinutes must be a positive integer (minutes)" });
   }
 
   try {
+    const policy = resolveDriftPolicy(manual ?? false, strictClose, maxDriftMinutes);
     const config = await prisma.shiftConfig.create({
       data: {
         type: type.trim(),
@@ -50,6 +83,8 @@ router.post("/", async (req, res) => {
         autoCloseTime,
         isActive: true,
         manual: manual ?? false,
+        strictClose: policy.strictClose,
+        maxDriftMinutes: policy.maxDriftMinutes,
         anchorIntervalMinutes: anchorIntervalMinutes ?? 1440,
       },
     });
@@ -62,7 +97,7 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { type, autoOpenTime, autoCloseTime, isActive, manual, anchorIntervalMinutes } = req.body;
+  const { type, autoOpenTime, autoCloseTime, isActive, manual, strictClose, maxDriftMinutes, anchorIntervalMinutes } = req.body;
 
   if (type !== undefined) {
     if (typeof type !== "string" || type.trim().length === 0) {
@@ -81,11 +116,28 @@ router.put("/:id", async (req, res) => {
   if (manual !== undefined && typeof manual !== "boolean") {
     return res.status(400).json({ error: "manual must be a boolean" });
   }
+  const driftError = validateDriftPolicyInput(strictClose, maxDriftMinutes);
+  if (driftError) {
+    return res.status(400).json({ error: driftError });
+  }
   if (anchorIntervalMinutes !== undefined && (!Number.isInteger(anchorIntervalMinutes) || anchorIntervalMinutes < 1)) {
     return res.status(400).json({ error: "anchorIntervalMinutes must be a positive integer (minutes)" });
   }
 
   try {
+    const current = await prisma.shiftConfig.findUnique({ where: { id } });
+    if (!current) {
+      return res.status(404).json({ error: "Shift config not found" });
+    }
+
+    // Partial-update merge: drift fields only apply to manual shifts, strict
+    // clears the limit, and flipping manual off clears both.
+    const policy = resolveDriftPolicy(
+      manual !== undefined ? manual : current.manual,
+      strictClose !== undefined ? strictClose : current.strictClose,
+      maxDriftMinutes !== undefined ? maxDriftMinutes : current.maxDriftMinutes,
+    );
+
     const updated = await prisma.$transaction(async (tx) => {
       const config = await tx.shiftConfig.update({
         where: { id },
@@ -95,6 +147,8 @@ router.put("/:id", async (req, res) => {
           autoCloseTime,
           isActive,
           manual,
+          strictClose: policy.strictClose,
+          maxDriftMinutes: policy.maxDriftMinutes,
           anchorIntervalMinutes,
         },
       });

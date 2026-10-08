@@ -106,36 +106,35 @@ export async function autoCreateShifts() {
           },
         });
 
-        // Carry-forward: previous closed shift of same type -> closingStockAtManualClose
-        const prevShift = await tx.shift.findFirst({
-          where: { isOpen: false, type: cfg.type },
-          orderBy: { autoOpenTime: "desc" },
-          include: {
-            snapshots: { select: { menuId: true, closingStockAtManualClose: true } },
-          },
-        });
-        const prevClosingByMenu = new Map<string, number | null>();
-        if (prevShift && prevShift.snapshots) {
-          for (const snap of prevShift.snapshots) {
-            prevClosingByMenu.set(snap.menuId, snap.closingStockAtManualClose === null ? null : Number(snap.closingStockAtManualClose));
-          }
-        }
-
-        // Take opening snapshot of all active menu items
+        // Opening stock ALWAYS comes from the live pool at creation. Menu.stock
+        // is the recompute-maintained mirror of the true sellable pool, and the
+        // live pool IS the handover from the immediately preceding shift —
+        // whichever type it was — because every sale deducts from it in real
+        // time. The old same-type carry (previous DAY→DAY / NIGHT→NIGHT
+        // recorded closing) went stale whenever the other shift type sold
+        // plates after that shift had already closed (e.g. a NIGHT sale at
+        // 4:37AM after the previous DAY's close was stamped), so openings
+        // never reconciled with live truth.
         const activeMenus = await tx.menu.findMany({
           where: { isAvailable: true },
-          select: { id: true, stock: true },
+          select: { id: true },
         });
 
         for (const menu of activeMenus) {
-          const prevPlates = prevClosingByMenu.get(menu.id);
-          const openingPlates = prevPlates != null ? Number(prevPlates) : (menu.stock ?? 0);
+          // Heal the mirror before reading: SHARED pools can lag in Menu.stock
+          // (cooking creates no splits), so recompute from the pool ledger to
+          // snapshot the pool's true remainder at this exact moment.
+          await recomputeMenuStock(tx, menu.id);
+          const liveMenu = await tx.menu.findUnique({
+            where: { id: menu.id },
+            select: { stock: true },
+          });
 
           await tx.shiftSnapshot.create({
             data: {
               shiftId: shift.id,
               menuId: menu.id,
-              openingPlates,
+              openingPlates: Number(liveMenu?.stock ?? 0),
               platesSold: 0,
               platesWasted: 0,
             },
@@ -179,14 +178,17 @@ export async function autoCloseExpiredShifts() {
   if (expiredShifts.length === 0) return [];
 
   const configs = await prisma.shiftConfig.findMany();
-  const manualByType = new Map(configs.map((c) => [c.type, c.manual]));
+  const policyByType = new Map(configs.map((c) => [c.type, c]));
 
   const autoClosedShifts: Awaited<ReturnType<typeof prisma.shift.findUnique>>[] = [];
 
   for (const shift of expiredShifts) {
     try {
-      const manualClose =
-        (manualByType.get(shift.type) ?? false) === true;
+      // Strict-close manual shifts finalize at their scheduled close exactly
+      // like auto shifts — they never sit open, so they take the full close
+      // path below (isOpen=false, finalCloseSource="AUTO", unpaid acked).
+      const cfg = policyByType.get(shift.type);
+      const manualClose = cfg?.manual === true && cfg?.strictClose !== true;
 
       let markedUnpaidOrderIds: string[] = [];
 
@@ -306,6 +308,139 @@ export async function autoCloseExpiredShifts() {
   return autoClosedShifts;
 }
 
+// Force-close manual shifts that passed their allowed drift limit. The close
+// is stamped AT THE DEADLINE (autoCloseTime + maxDriftMinutes), not at the
+// tick moment, so report attribution stays deterministic even if the
+// scheduler was down. Unlimited (maxDriftMinutes=null) shifts are never
+// forced — that is the legacy red-flag default. The manager can always
+// close manually before the deadline; the limit is a maximum, not a delay.
+export async function forceCloseOverdueShifts(now = new Date()) {
+  const driftingShifts = await prisma.shift.findMany({
+    where: {
+      isOpen: true,
+      autoClosed: true,
+      finalCloseSource: null,
+    },
+  });
+
+  if (driftingShifts.length === 0) return [];
+
+  const configs = await prisma.shiftConfig.findMany();
+  const policyByType = new Map(configs.map((c) => [c.type, c]));
+
+  const forcedShifts: Awaited<ReturnType<typeof prisma.shift.findUnique>>[] = [];
+
+  for (const shift of driftingShifts) {
+    try {
+      const cfg = policyByType.get(shift.type);
+      if (cfg?.manual !== true) continue; // auto or unknown config: never forced
+      if (cfg.strictClose) continue; // strict shifts closed fully at auto-capture
+      const maxDrift = cfg.maxDriftMinutes;
+      if (maxDrift === null || maxDrift === undefined) continue; // unlimited — legacy default
+
+      const deadline = new Date(shift.autoCloseTime.getTime() + maxDrift * 60_000);
+      if (now.getTime() < deadline.getTime()) continue; // still inside its allowed drift
+
+      let acknowledgedOrderIds: string[] = [];
+
+      const closed = await prisma.$transaction(async (tx) => {
+        await tx.shift.update({
+          where: { id: shift.id },
+          data: {
+            isOpen: false,
+            finalClosedAt: deadline,
+            finalCloseSource: "FORCED",
+          },
+        });
+
+        // A forced close has no manager to review pending orders, so the
+        // scheduler acknowledges them — same rule as the auto-close path.
+        const pending = await tx.order.findMany({
+          where: {
+            shiftId: shift.id,
+            isVoid: false,
+            isPaid: false,
+            unpaidAcknowledged: false,
+          },
+          select: { id: true },
+        });
+        if (pending.length > 0) {
+          await tx.order.updateMany({
+            where: { id: { in: pending.map((o) => o.id) } },
+            data: {
+              unpaidAcknowledged: true,
+              unpaidAcknowledgedAt: now,
+              unpaidAcknowledgedById: null,
+            },
+          });
+          acknowledgedOrderIds = pending.map((o) => o.id);
+        }
+
+        // Closing snapshot: heal the sellable mirror first (SHARED pools lag
+        // in Menu.stock), then stamp the carry-over value — identical to the
+        // manual-close path, so the next shift's opening stays correct.
+        const snapshots = await tx.shiftSnapshot.findMany({
+          where: { shiftId: shift.id },
+          select: { id: true, menuId: true, closingStockAtAutoClose: true },
+        });
+        for (const snapshot of snapshots) {
+          await recomputeMenuStock(tx, snapshot.menuId);
+        }
+        for (const snapshot of snapshots) {
+          const liveMenu = await tx.menu.findUnique({
+            where: { id: snapshot.menuId },
+            select: { stock: true },
+          });
+          const currentStock = Number(liveMenu?.stock ?? 0);
+          const autoPlates =
+            snapshot.closingStockAtAutoClose === null
+              ? null
+              : Number(snapshot.closingStockAtAutoClose);
+          await tx.shiftSnapshot.update({
+            where: { id: snapshot.id },
+            data: {
+              closingStockAtManualClose: currentStock,
+              manualCloseTime: deadline,
+              driftPlates: autoPlates !== null ? currentStock - autoPlates : null,
+              driftMinutes: maxDrift,
+            },
+          });
+        }
+
+        return tx.shift.findUnique({ where: { id: shift.id } });
+      });
+
+      if (closed) {
+        forcedShifts.push(closed);
+        emitLiveEvent({
+          type: "shift.closed",
+          shiftId: closed.id,
+          at: new Date().toISOString(),
+        });
+        for (const orderId of acknowledgedOrderIds) {
+          emitLiveEvent({
+            type: "order.unpaid-ack",
+            orderId,
+            shiftId: closed.id,
+            at: now.toISOString(),
+          });
+        }
+        console.log(
+          `[scheduler] Force-closed ${closed.type} shift ${closed.id} at drift deadline ${deadline.toISOString()} ` +
+            `(scheduled close ${shift.autoCloseTime.toISOString()}, max drift ${maxDrift}min)` +
+            (acknowledgedOrderIds.length > 0
+              ? ` · marked ${acknowledgedOrderIds.length} pending order(s) unpaid`
+              : "")
+        );
+      }
+    } catch (e) {
+      console.error(`Error force-closing shift ${shift.id}:`, e);
+    }
+  }
+
+  return forcedShifts;
+}
+
 let running = false;
 
 export function startScheduler(intervalMs = 60_000) {
@@ -317,6 +452,7 @@ export function startScheduler(intervalMs = 60_000) {
       await autoCreateShifts();
 
       const autoClosedShifts = await autoCloseExpiredShifts();
+      await forceCloseOverdueShifts();
       if (autoClosedShifts.length > 0) {
         console.log(`[scheduler] Auto-captured ${autoClosedShifts.length} shift(s)`);
       }

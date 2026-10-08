@@ -873,6 +873,8 @@ interface ShiftReportMeta {
   isOpen: boolean;
   autoClosed?: boolean;
   autoClosedAt?: string | null;
+  finalClosedAt?: string | null;
+  finalCloseSource?: string | null; // "AUTO" | "MANUAL" | "FORCED" (drift deadline reached)
   finalClosedBy?: { id: string; name: string } | null;
 }
 
@@ -919,6 +921,8 @@ interface ShiftReport {
   summary: {
     totalOrders: number;
     voidedOrders: number;
+    firstOrderAt?: string | null;
+    lastOrderAt?: string | null;
   };
   drift: {
     minutes: number;
@@ -1052,6 +1056,8 @@ interface ShiftConfig {
   autoCloseTime: string;
   isActive: boolean;
   manual: boolean;
+  strictClose: boolean; // manual shifts: finalize exactly at autoCloseTime — no manager step, no drift
+  maxDriftMinutes: number | null; // manual shifts: allowed drift past autoCloseTime; null = unlimited (red-flag default)
   anchorIntervalMinutes: number;
 }
 
