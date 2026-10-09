@@ -1,41 +1,30 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Remove the redundant **Production Guidance** table from the Menu/Dispatch home dashboard; delete the dead `ProductionGuidanceCard.tsx` component so the dashboard is 3 cards → Menu Plate Movement (last section)
-- Keep `GET /api/menu/stock-status` / `getMenuStockStatus()` untouched — still feeds `MenuStockStatusCard` (menu plate movement), so it is NOT dead code
-- Raise the **Running Low** threshold from 5 → **10** plates in the Menu Plate Movement section (backend `RUNNING_LOW_THRESHOLD` + "Running Low (≤ 10)" title)
-- Apply the same 10 cutoff to the waiter POS grid cues (`runningLow` / `inStock` / `platesBadgeClass`) — operator opted in for consistency
-- **DESSERT stays** everywhere (plate movement chips, waiter POS landing, ServingPeriodBar, AllMenuTable, Prisma enum) — removal request reversed mid-planning
-- Dashboard cards renamed + reordered: **Leftover Food Stock** (operator iterated "Remaining Stock Production" → "Leftover Stock" → "Leftover Food Stock"; destination page heading updated to match) placed 2nd; **All Restaurant Menu** moved to the far end (3rd)
-- Menu item create/edit dialog (`MenuForm.tsx` via `CreateMenuDialog.tsx`) restructured two-column: left = name/category/price/images/meal periods; right = Served with Starch? and Served with Vegetable? radios **side by side** (`grid-cols-2`), "Sold in Portions?" below them with portion cards (`max-h-[55vh]` internal scroll); **Cancel/Save centered** (`justify-center`) below both columns; dialog width `sm:max-w-3xl` (896px proved too wide — trimmed per operator)
-- Waiter menu food cards compacted: `py-0` on the food Card strips the shared Card primitive's built-in 16px top/bottom padding (card's own `CardContent p-3` stays) — more dishes visible per screen
-- Accompaniment radio option cards (Served With / Vegetables + None card) vertically compacted — `p-1.5`, `gap-1`, image `h-8`, radio `size-3.5`, Size rows `py-1` — so the detail panel fits the smaller restaurant screen and Add to Order is reachable without scrolling; **Free/Charged toggle untouched** (operator stress: radio options only)
-- Receipt/report printing font centralized into one exported `RECEIPT_FONT` stack (`receiptTemplate.ts`) — applied to all tickets, shift report, plate-movement `<pre>`, and the printer test page; **candidate 1 = Consolas** (operator approved — kept), queue if ever needed: Lucida Console → Verdana → DejaVu Sans Mono → IBM Plex Mono/Roboto Mono/Courier Prime (one-line swap + `transpile:electron`)
-- Apydy printed footers: `services` = "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications" (operator iterating wording: Web Design → Website Applications and Design → "Website Apps"; Mobile Development → "Mobile Applications"; an "AI Chatbots & WhatsApp Ordering" line was added then **withdrawn by operator — "for now"**); shift report printing **gained** the Apydy footer (template never printed poweredBy/tel/services before) — payloads updated in WaiterMenu.tsx (receipt + preview), ShiftReport.tsx, ShiftCloseDialog.tsx; raw ESC/POS path prints `r.services` automatically
-- Dev-test locally first; production backend deploy deferred until the operator approves
-
 ## Notes
 
-- **Spec**: `context/fix-plan/production-guidance-removal-running-low-10.md` · **Branch**: `feature/admin/remove-production-guidance`
-- **Exact edits** (line numbers from current HEAD):
-  - `desktop/ui/pages/admin/Menu.tsx` — delete import L14 + `{view === "dashboard" && <ProductionGuidanceCard />}` L176; ALSO swapped card order (Leftover Stock 2nd, All Restaurant Menu 3rd) + renamed the "Remaining Stock Production" card heading to "Leftover Stock" — applied manually per operator decision after unusable deepseek-coder output (fallback rule)
-  - `desktop/ui/components/menu/ProductionGuidanceCard.tsx` — DELETE file (only consumer is Menu.tsx; local `RUNNING_LOW_THRESHOLD = 5` dies with it)
-  - `backend/routes/menu.ts` L247 — `RUNNING_LOW_THRESHOLD = 5` → `10` (drives the `runningLow` bucket of `/api/menu/stock-status`)
-  - `desktop/ui/components/menu/MenuStockStatusCard.tsx` L187 — `"Running Low (≤ 5)"` → `"Running Low (≤ 10)"`
-  - `desktop/ui/pages/waiterPos/WaiterMenuGrid.tsx` — L414 `servings <= 5` → `<= 10`; L415 `inStock = servings > 5` → `> 10`; L97 `platesBadgeClass` green cutoff `plates > 5` → `> 10` (used by grid card badge, detail panel, order-context badges)
-- **Expected side effect**: admin sidebar badge via `GET /api/menu/running-low-count` (`AdminLayout.tsx`) shares the backend constant — it will now count items with 1–10 plates
-- **Verification**: `npm run lint` + `npm run build`; backend `npm run build --prefix backend` (constant-only change, no schema/migration, no `db:sync`)
-- **Deploy (deferred until operator dev-tests)**: `npm run build --prefix backend` → `npm run server:restart` → verify `server:status` RUNNING + `/health`; after any plain `npm run build` / `build:win`, re-run `npm run build:web -- --server same-origin` (browser live-view rule)
-
 ## History
+
+### 2026-10-09 — Menu/Dispatch Cleanup, Running-Low ≤ 10, Receipt Font, Menu Dialog Redesign
+
+- **Production Guidance removed** — `ProductionGuidanceCard.tsx` deleted (only consumer was `Menu.tsx`); the Menu/Dispatch dashboard is now 3 cards → Menu Plate Movement (last section). `GET /api/menu/stock-status` kept untouched — still feeds `MenuStockStatusCard`, not dead code (operator rule)
+- **Running Low 5 → 10 plates** — backend `RUNNING_LOW_THRESHOLD` (`menu.ts` L247) drives the stock-status bucket and the sidebar badge (`/api/menu/running-low-count`, `AdminLayout`); section title "Running Low (≤ 10)"; waiter grid cues (`runningLow`/`inStock` L414–415) + `platesBadgeClass` green cutoff (L97) moved to 10 with operator opt-in
+- **DESSERT stays** — operator reversed the initial removal request mid-planning (a dish falls under it); `MEAL_PERIODS` + Prisma enum untouched
+- **Dashboard cards** — "Remaining Stock Production" → **Leftover Food Stock** (iterated via "Leftover Stock"; destination heading in `RemainingStockDashboard.tsx` updated to match), placed 2nd; All Restaurant Menu moved to the far end (3rd)
+- **Waiter POS** — food cards compacted (`py-0` strips the Card primitive's built-in 16px vertical padding; `CardContent p-3` stays); accompaniment radio option cards (`AccompanyRadioCard` + `NoneAccompanyCard`) compacted — `p-1.5`/`gap-1`/image `h-8`/radio `size-3.5`, None icon `h-5`, Size rows `py-1` — detail panel fits the smaller restaurant screen; Free/Charged toggle untouched
+- **Receipt/report printing** — font centralized into one exported `RECEIPT_FONT` stack (`receiptTemplate.ts`); candidate 1 **Consolas** applied to all tickets, shift report, plate-movement `<pre>` and the printer TEST page — operator-approved, kept (queue if ever needed: Lucida Console → Verdana → DejaVu Sans Mono → IBM Plex Mono); **shift report printing gained the Apydy footer** (template never rendered poweredBy/tel/services — body stopped at payments); services finalized as "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications" (an "AI Chatbots & WhatsApp Ordering" line was added then withdrawn by operator — "for now")
+- **Menu item create/edit dialog** — two-column layout: left = name/category/price/images/meal periods; right = Served with Starch? and Served with Vegetable? **side by side** + "Sold in Portions?" below with portion cards capped at `max-h-[55vh]` internal scroll — portion expansion no longer pushes Save off-screen; **Cancel/Save centered** below both columns; dialog width `sm:max-w-3xl` (896px proved too wide)
+- Checks: `npm run lint` zero new violations (pre-existing byte-identical to HEAD), `npm run build` (tsc + vite) clean, `npm run build --prefix backend` clean; deepseek-coder fallback rule invoked once (card reorder) — unusable output, operator chose manual implementation
+- **NEXT QUEUED:** `context/fix-plan/kitchen-adjustable-requests-returns.md` — kitchen request adjust + return-to-store feature, deliberately NOT committed (untracked, reserved for its own branch `feature/kitchen/adjustable-requests-returns`)
+- Ref: `context/fix-plan/production-guidance-removal-running-low-10.md` · Branch: `feature/admin/remove-production-guidance` (kept, not deleted) · Commit `313e04b`, merged `--no-ff` as `428c761` · Deploy PENDING on the restaurant server (backend changed — SSH flow): `git pull origin restaurant-build` → `npm run build --prefix backend` → `schtasks /run /tn pos-backend-restart` → verify `sc query EraevaBackend` + `/health`; after any plain `npm run build` / `build:win` re-run `npm run build:web -- --server same-origin`
 
 ### 2026-10-09 — Cashier M-Pesa + Cash Partial Payments, All-Shift Headings, Marked-Unpaid Traceability
 
