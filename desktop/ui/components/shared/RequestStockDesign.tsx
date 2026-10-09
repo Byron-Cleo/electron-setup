@@ -75,7 +75,7 @@ const ALL_COLUMNS: Column[] = [
   { label: "Department", key: "department", align: "left" },
   { label: "Requested By", key: "requestedBy", align: "left" },
   { label: "Req. Date", key: "reqDate", align: "left" },
-  { label: "Adjust", key: "adjust", isAction: true, align: "center" },
+  { label: "Adjust", key: "adjust", isAction: true, align: "center", className: "bg-red-100" },
   { label: "Action", key: "action", isAction: true, align: "center" },
 ]
 

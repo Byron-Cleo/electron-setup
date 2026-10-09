@@ -58,9 +58,10 @@ UI: an **Adjust** (pencil) action on request items in `RequestStockDesign` behin
 the lock. The adjust dialog keys a decimal amount, shows delivered + uncooked-remainder context,
 and refreshes the table on success. Column backgrounds (operator, refined after a first-pass
 font-colour attempt was reverted): the **Requested column washes blue** (`bg-blue-100`), the
-**Delivered column washes gray** (`bg-gray-100`), and the **Remaining column washes green**
-(`bg-green-100`) — the column `className` paints the header and every data cell the same colour;
-font colours stay the ORIGINAL status colouring (`STATUS_TEXT_COLOR`
+**Delivered column washes gray** (`bg-gray-100`), the **Remaining column washes green**
+(`bg-green-100`), and the **Adjust column washes red** (`bg-red-100` — operator first said yellow,
+then corrected to red) — the column `className` paints the header and every data cell the same
+colour; font colours stay the ORIGINAL status colouring (`STATUS_TEXT_COLOR`
 restored — delivered text keeps its pending/partial/completed colour).
 
 **My Requests tab pills (operator refinement):** the "My Requests" tab link carries **one pill per
@@ -150,7 +151,7 @@ model StockReturn {
 - [ ] Decimal request (e.g. 0.5 packets) displays correctly everywhere
 - [ ] Adjust button hidden + endpoint 400 for COMPLETED requests last touched on a past date
 - [ ] Completed-today requests stay adjustable; past-date PENDING/PARTIAL stay adjustable
-- [ ] My Requests: Requested column blue, Delivered gray, Remaining green backgrounds (header + cells); delivered font keeps its status colour
+- [ ] My Requests: Requested blue, Delivered gray, Remaining green, Adjust red column backgrounds (header + cells); delivered font keeps its status colour
 - [ ] Kitchen Production: actions stack vertically (Cook More → Edit → Return in red), compact so rows stay thin
 - [ ] Edit hidden for past-date cooking records; `PUT /cooking-records/:id` 400s on past-date records
 - [ ] Edit hidden for never-cooked supplies
