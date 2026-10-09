@@ -1,7 +1,7 @@
 
 ## Platform
 
-Not Specified
+backend
 
 ## Status
 
@@ -12,6 +12,15 @@ Complete
 ## Notes
 
 ## History
+
+### backend - 2026-10-10 — Order-Shift Attachment Guard + Production Migration History Squash
+
+- **`resolveCurrentShift()` operationDay guard (`backend/routes/orders.ts`)** — the drifting-shift branch matched any still-open shift inside its allowed drift window with **no operationDay bound**, so a stale shift left open across days (misconfig / unrestarted drift) captured new orders. Orders #116–118 (2026-10-09) were attached to a stale DAY shift (opDay 09-27) this way and never appeared in the Cashier Orders/Payment tabs for the running NIGHT shift. The drifting lookup is now scoped to the current operationDay (same `dateOnly` convention as the fallback query), so stale open shifts can no longer misattribute orders. Under the current production config the branch is already dead (DAY manual+strict, NIGHT auto), so behaviour today is unchanged — the guard protects future misconfiguration. Live state after deploy: current shift NIGHT `5d002826` (opDay 2026-10-09), order #119 correctly attached to it
+- **Deploy restructure** — the `EraevaBackend` service restart surfaced an **orphaned node process squatting on port 3001** (left over by an earlier stop), which had been serving the old build; killed it, then started the service — now binding with the freshly compiled `dist/`. Guard verified present in `backend/dist/routes/orders.js` (operationDay in the drifting where); `/health` ok; scheduler started; git tree clean
+- **Migration history squash** — production `eraevadb` `_prisma_migrations` was broken (1 FAILED row, 5 unrecorded) and the incoming migration files were incomplete (no `OrderItemAllocation` creator), so `migrate deploy` could not replay. Squashed to a single authoritative `20261010000000_baseline` (629 lines, generated `--from-empty` from the final schema), removed the 13 incomplete migration files, re-baselined the production DB (`migrate resolve --applied`, `TRUNCATE "_prisma_migrations"` — metadata only), and validated coherence on a scratch DB ("No difference detected"). `prisma migrate status` = **1 migration found · Database schema is up to date**. Going forward every schema change gets its own new migration stacked on the baseline
+- **Runbook** — `context/prod-deployment/production-db-migration-runbook.md` documents the full repair (DB credentials scrubbed to `<db-password>` placeholders before commit)
+- Commits: `9644b68` chore(db) squash + runbook; `1fba1f1` fix; merged `--no-ff` as `51a08b1`; both pushed to `origin/restaurant-build`. Branch `feature/cashier/current-shift-guard` kept (ask before deleting)
+- Deferred/optional: cleanup of orders #116–118 re-point + stale-shift finalize (declined — throwaway test data); `GET /shifts/current` alignment with the resolver's drift handling; scheduler auto-finalize of the three old unlimited-drift open DAY shifts (09-27/28/29)
 
 ### 2026-10-09 — Multi-Role Users: Default-Role Redirect + Cross-Journey Links
 
