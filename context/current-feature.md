@@ -1,38 +1,28 @@
 
 ## Platform
 
-backend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- **Adjustable request amounts** — `PUT /api/stock-requests/:id/adjust`: any kitchen user, decimals allowed. new ≥ delivered → pure adjust (reduce ⇒ refund difference to `currentStock`; increase ⇒ availability check + deduct). new < delivered (stock still raw) ⇒ implicit **return** of (delivered − new), capped by the supply's uncooked remainder; `quantityRequested` + `quantityDelivered` both set to new; `StockReturn` row logged; status recomputed (requested = delivered ⇒ COMPLETED). **Adjust lock:** COMPLETED requests adjustable only through the day of their last touch (`updatedAt`, Nairobi date) — past-date completed = closed history, 400 server-side + button hidden in UI; pending/partial always adjustable (operator refined: updatedAt is the basis, not createdAt)
-- **Return to Store — Kitchen Production table** — `POST /api/stock-returns` (supply-level): return the uncooked cook-more remainder, capped at Raw Stock Pending; `currentStock` restored
-- **StockReturn model** — audit trail for both paths: `stockSupplyId`, `stockRequestItemId?` (set when born from an adjust below delivered), `quantityReturned Decimal(12,2)`, `returnedById`, `notes`, `createdAt`; hand-written migration + `npm run db:sync`
-- **Inventory truthfulness** — `kitchenInventory.ts` + carry-over walk subtract `Σ returns` per supply so Raw Stock Pending reflects returns; store `currentStock` stays the single shelf truth
-- **Decimals** — already supported end-to-end (`Decimal(12,2)` + `step 0.01`); verify `formatQuantityWithUnit` renders fractions + add "decimals allowed" hints in request/adjust/return dialogs
-- **Wiring** — IPC handlers (`stock-request:adjust`, `stock-return:create`) → preload → `lib/api.ts` (`adjustStockRequest()`, `returnToStore()`) → types; UI: Adjust (pencil) in `RequestStockDesign` behind `allowAdjust` prop (kitchen only), Return to Store button on Inventory tab items with `rawStockPending > 0`; My Requests tab link carries **one pill per status** — amber Pending + partial-colored Partial with counts (dashboard-card pill design, kitchen-department scoped, same fetch as the tab, refreshes on click + after adjusts, each hides when zero); Requested column carries a **blue background**, Delivered a **gray background**, Remaining a **green background**, and Adjust a **red background** (header + cells via column `className`; fonts keep the original status colouring — operator corrected the first font-colour attempt; yellow was briefly requested then corrected to red for Adjust)
-- **Kitchen Production polish**: row actions stack vertically — Cook More (green) → Edit → **Return (red)** — compact `h-5 text-[10px]` buttons so records stay thin; Action column washes **green** (`bg-green-100`), Remaining column washes **gray** (`bg-gray-100`) per operator; **cooking edit lock**: only batches cooked today (Nairobi date) are editable — Edit button hidden for past-date/never-cooked supplies and `PUT /cooking-records/:id` 400s for past-date records (sold/assigned batches are immutable history)
-- Dev-test locally first; production deploy after operator approval
-
 ## Notes
 
-- **Spec**: `context/fix-plan/kitchen-adjustable-requests-returns.md` · **Branch**: `feature/kitchen/adjustable-requests-returns` (create on "start")
-- **Key context from exploration**:
-  - `POST /api/stock-requests` decrements `StockSupply.currentStock` at request time (`stockRequests.ts:105-137`) — the reservation model that makes refunds possible
-  - `kitchenInventory.ts` walks fulfillments vs cooking records **per supply** (`rawStockPending = activeOrdered − activeCooked`); cooking records link only `stockSupplyId` (NOT request items) — so the return cap MUST be per supply: `Σ delivered − Σ cooked − Σ prior returns`
-  - `/api/cooking-records/carry-over` runs the same walk — must subtract returns too
-  - Fulfillment trail (`StockFulfillmentItem`) is immutable history — returns never rewrite it; `StockReturn` rows are the corrective ledger
-- **Operator decisions**: any kitchen user may adjust (not requester-only); adjust up AND down; Return to Store lives in the Kitchen Production table AND emerges from adjust-below-delivered in requests; cap = uncooked remainder (cooked stock can never go back)
-- **Safety rules (server-enforced)**: cooked stock never goes back (400 with max returnable); increases gated on store availability; every adjust/return recorded (who/when/how much)
-- **Files planned**: `schema.prisma` + migration, `stockRequests.ts` (adjust), `stockReturns.ts` (new) + `app.ts` register, `kitchenInventory.ts`, `cookingRecords.ts`, `ipc-handlers.ts`, `preload.cts`, `lib/api.ts`, `electron.d.ts`, `RequestStockDesign.tsx`, `Kitchen.tsx`
-- **Testing checklist** (full list in the spec): adjust refunds/deducts correctly, status flips, below-delivered return with cap 400s, production-table return drops Raw Stock Pending, decimal display, lint + frontend + backend builds clean
-- **Deploy (after dev-test)**: `npm run db:sync` → `npm run build --prefix backend` → `npm run server:restart` (elevated) or SSH flow on the restaurant machine → verify `server:status` RUNNING + `/health`; browser live-view rule after plain builds
-
 ## History
+
+### 2026-10-09 — Kitchen Adjustable Requests + Returns to Store (Adjust Lock, Cooking Edit Lock, Status Pills)
+
+- **Adjustable requests** — `PUT /api/stock-requests/:id/adjust`: any kitchen user, decimals allowed. new ≥ delivered ⇒ pure adjust (reduce refunds the shelf; increase availability-gated + deducted). new < delivered ⇒ implicit **return** of (delivered − new) logged as a `StockReturn` row with both quantities dropped, capped per-supply by the uncooked remainder `Σ delivered − Σ cooked − Σ prior returns` (cooked stock can never go back — the 400 carries the max returnable); multi-item requests accumulate charges/returns per supply so together they can never over-charge or over-return; status recomputes freely (raising reopens a completed request)
+- **Adjust lock** — COMPLETED requests stay adjustable only through the day of their last touch (`updatedAt`, Nairobi date; operator chose updatedAt over createdAt: a request made yesterday that completed today keeps its allowance window, auto-locks tomorrow). Enforced twice: endpoint 400 + hidden button via `isAdjustableRequest()`
+- **Return to Store** — `POST /api/stock-returns` (supply-level, Kitchen Production remainder) + `GET /stock-returns` ledger; `StockReturn` model (`Decimal(12,2)`, optional request-item link for adjust-born returns, returned-by/notes) + hand-written migration `20261009120000_stock_returns` + `db push`; `kitchenInventory` Raw Stock Pending + the carry-over walk subtract returns — the store's `currentStock` stays the single shelf truth; the fulfilment trail stays immutable, `StockReturn` rows are the corrective ledger
+- **Cooking edit lock** — only batches cooked TODAY (Nairobi date) can be corrected: Edit hidden for past-date/never-cooked supplies (`isCookedToday`), `PUT /cooking-records/:id` 400s on past-date records — sold/assigned batches are immutable history
+- **Wiring** — IPC `stock-request:adjust` + `stock-return:get-all/create` → preload → `lib/api.ts` (`adjustStockRequest`, `returnToStore`, `getStockReturns`) → `electron.d.ts` types; Electron registration via `registerStockReturnHandlers`
+- **UI** — My Requests: kitchen-only `allowAdjust` Adjust column + adjust dialog (implicit-return warning below delivered); column washes Requested **blue** / Delivered **gray** / Remaining **green** / Adjust **red** (header + cells, fonts keep the original status colouring — a first-pass font-colour change was reverted per operator; Adjust was briefly yellow then corrected to red); **one pill per status** on the tab link — amber Pending + partial-colour Partial, dashboard-card design, kitchen-department scoped, derived from the same fetch as the tab (clear trace), refreshes on click + after every adjust, each hides at zero. Kitchen Production: vertical action stack — Cook More (green) → Edit → **Return (red)** — compact `h-5 text-[10px]` in a `w-24` column so rows stay thin; Action column washes **green** (operator tried gray first), Remaining washes **gray**; decimal hint in the request dialog; decimals verified end-to-end (`Decimal(12,2)`, `step 0.01`, `formatQuantityWithUnit` renders 0.50-style)
+- Checks: backend `tsc`, frontend build, Electron transpile clean; ESLint zero new (pre-existing byte-identical to HEAD); `StockReturn` table verified live in `eraevadb` via psql. **No ollama models used for this feature** — operator directive after the admin feature's deepseek fallback; implemented manually
+- Ref: `context/fix-plan/kitchen-adjustable-requests-returns.md` · Branch: `feature/kitchen/adjustable-requests-returns` (kept, not deleted) · Commits `c1f17a3`, `994f562`, `74761a1`, `48923a6`, merged `--no-ff` as `d294786`, pushed to `origin/restaurant-build` · Deploy PENDING on the restaurant server (SSH flow): `git pull origin restaurant-build` → `npm run db:sync` (StockReturn table) → `npm run build --prefix backend` → `schtasks /run /tn pos-backend-restart` → verify `sc query EraevaBackend` + `/health`; after any plain `npm run build` / `build:win` re-run `npm run build:web -- --server same-origin`
 
 ### 2026-10-09 — Menu/Dispatch Cleanup, Running-Low ≤ 10, Receipt Font, Menu Dialog Redesign
 
