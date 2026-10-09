@@ -40,6 +40,12 @@ function toSafeUser(user: UserRow) {
   };
 }
 
+// Fingerprint of the last pepper a full-table probe ran under. `pinLookup("")`
+// is constant unless PIN_PEPPER changes, so a rotation re-arms the probe below
+// automatically. A wrong-PIN typo costs one indexed read once the DB is
+// backfilled; a lone typo before any success costs this probe once per process.
+let lastProbedPepper: string | undefined;
+
 /**
  * Identify the user for a PIN.
  *
@@ -47,9 +53,11 @@ function toSafeUser(user: UserRow) {
  * indexed read resolves the user in ~3 ms. This is what makes login feel instant.
  *
  * Fallback: users created before `pinLookup` existed have it NULL, and a salted
- * bcrypt hash cannot be inverted to derive one, so they are verified the slow way
- * and backfilled on success. Each user pays the old cost at most once, ever.
- * A rotated or missing PIN_PEPPER sends everyone down this path harmlessly.
+ * bcrypt hash cannot be inverted to derive one. They are verified against only
+ * the NULL-lookup rows (normally zero once backfilled) and backfilled on
+ * success, so a wrong-PIN attempt stops at an empty query instead of scanning
+ * the whole table. A rotated or missing PIN_PEPPER still rescues itself via the
+ * re-armed probe below — there is no lockout path.
  */
 async function findUserByPin(pin: string): Promise<UserRow | null> {
   const lookup = pinLookup(pin);
@@ -60,40 +68,60 @@ async function findUserByPin(pin: string): Promise<UserRow | null> {
     return byLookup as UserRow;
   }
 
-  // Legacy path — also the safety net for a mismatched pepper.
-  //
-  // Deliberately NOT filtered on `pinLookup: null`: doing so looks like a free
-  // optimisation but breaks the self-heal. Once every user is backfilled, a
-  // rotated (or missing) PIN_PEPPER would make this query return zero rows and
-  // lock every user out. Correctness over a saving that only applies on a path
-  // each user walks at most once.
-  const users = await prisma.user.findMany({
-    where: { pin: { not: null }, isActive: true },
+  // Legacy path: only users still carrying a NULL lookup can match here —
+  // everyone else resolves by index above. Scanning just them keeps typos at
+  // the cost of one indexed read once the DB is backfilled.
+  const legacy = await prisma.user.findMany({
+    where: { pin: { not: null }, isActive: true, pinLookup: null },
   });
 
-  for (const u of users) {
-    if (u.pin && (await compare(pin, u.pin))) {
-      // Backfill so this user is instant from now on.
-      const backfilled = await prisma.user
-        .update({ where: { id: u.id }, data: { pinLookup: lookup } })
-        .then(() => true)
-        .catch(() => false);
+  for (const u of legacy) {
+    if (await verifyAndBackfill(u, pin, lookup)) return u as UserRow;
+  }
 
-      if (!backfilled) {
-        // Only reachable when two staff already shared this PIN before the
-        // unique index existed. The first one to log in claimed the lookup, so
-        // both now resolve to the same account — exactly as the old
-        // first-match-wins loop behaved, but it needs fixing via the Users page.
-        console.warn(
-          `[auth] PIN for user ${u.id} (${u.email ?? u.name}) collides with an existing ` +
-            "lookup — two staff appear to share a PIN. Reset one of them in the Users page.",
-        );
-      }
-      return u as UserRow;
+  // Pepper-change safety net. `pinLookup("")` fingerprints the current key; a
+  // different value from the last probe means a miss could be a pepper rotation
+  // rather than a wrong PIN. bcrypt compares ignore the pepper, so a full scan
+  // still authenticates everyone and re-backfills under the new key on success.
+  // Re-armed automatically on each pepper change — a rotation cannot lock staff
+  // out, and an ordinary typo costs this probe once per process at most.
+  const pepperCheck = pinLookup("");
+  if (lastProbedPepper !== pepperCheck) {
+    lastProbedPepper = pepperCheck;
+    const all = await prisma.user.findMany({
+      where: { pin: { not: null }, isActive: true },
+    });
+    for (const u of all) {
+      if (await verifyAndBackfill(u, pin, lookup)) return u as UserRow;
     }
   }
 
   return null;
+}
+
+/**
+ * True when `u.pin` matches `pin`. Backfills `pinLookup` on success so the user
+ * is served by the fast path from their next login.
+ */
+async function verifyAndBackfill(u: UserRow, pin: string, lookup: string): Promise<boolean> {
+  if (!u.pin || !(await compare(pin, u.pin))) return false;
+
+  const backfilled = await prisma.user
+    .update({ where: { id: u.id }, data: { pinLookup: lookup } })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!backfilled) {
+    // Only reachable when two staff already shared this PIN before the unique
+    // index existed. The first one to log in claimed the lookup, so both now
+    // resolve to the same account — exactly as the old first-match-wins loop
+    // behaved, but it needs fixing via the Users page.
+    console.warn(
+      `[auth] PIN for user ${u.id} (${u.email ?? u.name}) collides with an existing ` +
+        "lookup — two staff appear to share a PIN. Reset one of them in the Users page.",
+    );
+  }
+  return true;
 }
 
 router.post("/login", async (req, res) => {

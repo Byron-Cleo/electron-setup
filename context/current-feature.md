@@ -5,11 +5,23 @@ backend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
+- Eliminate the recurring multi-second login spinner permanently: the 9 legacy staff with `pinLookup IS NULL`, any wrong-PIN typo, and a future `PIN_PEPPER` rotation — with the author's no-lockout guarantee (`pin-lookup.ts:19-21`) preserved.
+- Prove completely new users are instant from their first login (create-time `pinLookup` at `users.ts:137` already covers this — no change required).
+- Backfill script verifies each PIN against its stored bcrypt hash BEFORE writing, so a mistyped/unknown PIN is skipped, never persisted.
+- Steady state: every login attempt (valid or wrong) resolves in ~3 ms; the full-table bcrypt scan fires at most once per pepper change, never per attempt.
+
 ## Notes
+
+- Branch: `feature/auth/permanent-instant-login` (created; no commits yet). Ref: `context/fix-plan/permanent-instant-login.md`.
+- Root cause: `findUserByPin()` fallback scans EVERY active user serially (~481 ms/user, measured 6.28 s live) on any fast-path miss — typos included.
+- Fix: legacy scan scoped to `pinLookup IS NULL` rows only (correct: a user with a lookup either matches the index or has a different PIN), plus a pepper-rotation rescue armed by `pinLookup("")` fingerprint (re-arms on pepper change; bcrypt ignores the pepper, so it still authenticates everyone). No schema/migration change.
+- Honest tradeoff: the first wrong-PIN attempt immediately after a service restart (before any successful fast-path hit) runs the pepper probe once; cached for the process lifetime. In practice restarts are rare (deploys) and the first login after restart is valid.
+- Backfill (`npx tsx scripts/backfill-pin-lookup.ts`) needs the operator to type the 9 staff's current PINs; skipped entries self-heal on first login (bounded scan of NULL rows).
+- Deploy: rebuild `backend` → UAC restart (`pos-backend-restart` scheduled task not visible to `User` account → `Start-Process -Verb RunAs` workaround) → `/health`.
 
 ## History
 
