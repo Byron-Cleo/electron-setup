@@ -30,13 +30,16 @@ function dateOnly(d: Date): Date {
 
 // The shift new orders attach to — shared by order creation and the void
 // guard so both always agree. A shift still inside its allowed drift window
-// is the one actually serving, so orders attach to IT (the oldest such shift
-// if several), keeping snapshot tallies, unpaid scoping and close-gate
-// figures coherent with the window-based report attribution. Once it closes
-// (manually or at its drift deadline), attachment falls back to the newest
-// open shift of the current operation day.
+// AND belonging to the current operation day is the one actually serving, so
+// orders attach to IT (the oldest such shift if several), keeping snapshot
+// tallies, unpaid scoping and close-gate figures coherent with the window-based
+// report attribution. The operation-day bound prevents a stale shift left open
+// across days (misconfig / unrestarted drift) from capturing today's orders.
+// Once it closes (manually or at its drift deadline), attachment falls back to
+// the newest open shift of the current operation day.
 async function resolveCurrentShift(): Promise<{ id: string } | null> {
   const now = new Date();
+  const operationDay = dateOnly(now);
 
   const drifting = await prisma.shift.findMany({
     where: {
@@ -44,6 +47,7 @@ async function resolveCurrentShift(): Promise<{ id: string } | null> {
       autoClosed: true,
       finalCloseSource: null,
       autoCloseTime: { lte: now },
+      operationDay,
     },
     orderBy: { autoOpenTime: "asc" },
     select: { id: true, type: true, autoCloseTime: true },
@@ -67,7 +71,6 @@ async function resolveCurrentShift(): Promise<{ id: string } | null> {
     }
   }
 
-  const operationDay = dateOnly(now);
   return (
     (await prisma.shift.findFirst({
       where: { isOpen: true, operationDay },
