@@ -280,6 +280,7 @@ interface User {
   emailVerified: string | null;
   image: string | null;
   role: "admin" | "manager" | "waiter" | "store" | "kitchen" | "cashier";
+  roles: ("admin" | "manager" | "waiter" | "store" | "kitchen" | "cashier")[];
   isActive: boolean;
   platform: string | null;
   address: unknown;
@@ -299,6 +300,7 @@ interface AdminUser {
   name: string;
   email: string | null;
   role: AdminUserRole;
+  roles: AdminUserRole[];
   isActive: boolean;
   hasPin: boolean;
   platform: string | null;
@@ -311,6 +313,7 @@ interface AdminUserCreateData {
   email: string | null;
   pin: string;
   role: AdminUserRole;
+  roles?: AdminUserRole[];
   isActive?: boolean;
 }
 
@@ -319,6 +322,7 @@ interface AdminUserUpdateData {
   email?: string | null;
   pin?: string;
   role?: AdminUserRole;
+  roles?: AdminUserRole[];
   isActive?: boolean;
 }
 

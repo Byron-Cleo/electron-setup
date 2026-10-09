@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
-import { LayoutDashboard, Users, Contact, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock } from "lucide-react"
+import { LayoutDashboard, Users, Contact, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock, ClipboardList } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount, getUnpaidOrderCount } from "@/lib/api"
 
@@ -25,6 +25,9 @@ const allNavItems: {
   { label: "Kitchen", path: "/admin/kitchen", icon: ChefHat, roles: ["admin", "manager", "kitchen"], pending: true, partial: true, underproduced: true },
   { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"], ready: true, runninglow: true },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager", "cashier"] },
+  // Cross-journey link: a user who also holds the waiter role (e.g. a
+  // cashier+waiter) jumps straight to the waiter POS to place orders.
+  { label: "Waiter POS", path: "/waiter", icon: ClipboardList, roles: ["waiter"] },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
   { label: "Customers", path: "/admin/customers", icon: Contact, roles: ["admin", "manager", "cashier"] },
@@ -33,6 +36,7 @@ const allNavItems: {
 
 function AdminLayout() {
   const user = useAuthStore((s) => s.user)
+  const userRoles = user?.roles?.length ? user.roles : user ? [user.role] : []
   const logout = useAuthStore((s) => s.logout)
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
   const [shiftType, setShiftType] = useState<string | null>(null)
@@ -107,7 +111,7 @@ function AdminLayout() {
   }, [])
 
   const navItems = allNavItems.filter((item) =>
-    item.roles.includes(user?.role as User["role"])
+    item.roles.some((r) => userRoles.includes(r))
   )
 
   return (

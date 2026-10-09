@@ -12,6 +12,7 @@ type UserRow = {
   emailVerified: Date | null;
   image: string | null;
   role: string;
+  roles: string[];
   isActive: boolean;
   pin: string | null;
   address: unknown;
@@ -28,6 +29,8 @@ function toSafeUser(user: UserRow) {
     emailVerified: user.emailVerified,
     image: user.image,
     role: user.role,
+    // Coalesce so an un-backfilled user still reads as [role] to the client.
+    roles: user.roles?.length ? user.roles : [user.role],
     isActive: user.isActive,
     platform: "desktop",
     address: user.address,

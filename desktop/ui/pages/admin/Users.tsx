@@ -59,6 +59,7 @@ export default function Users() {
   const [formEmail, setFormEmail] = useState("")
   const [formPin, setFormPin] = useState("")
   const [formRole, setFormRole] = useState<AdminUserRole>("waiter")
+  const [formRoles, setFormRoles] = useState<AdminUserRole[]>(["waiter"])
   const [formActive, setFormActive] = useState(true)
   const [formError, setFormError] = useState("")
   const [saving, setSaving] = useState(false)
@@ -92,6 +93,7 @@ export default function Users() {
     setFormName("")
     setFormEmail("")
     setFormPin("")
+    setFormRoles(["waiter"])
     setFormRole("waiter")
     setFormActive(true)
     setFormError("")
@@ -103,10 +105,24 @@ export default function Users() {
     setFormName(user.name)
     setFormEmail(user.email ?? "")
     setFormPin("")
+    setFormRoles(user.roles?.length ? user.roles : [user.role])
     setFormRole(user.role)
     setFormActive(user.isActive)
     setFormError("")
     setShowForm(true)
+  }
+
+  function toggleFormRole(role: AdminUserRole, checked: boolean) {
+    const next = checked
+      ? formRoles.includes(role)
+        ? formRoles
+        : [...formRoles, role]
+      : formRoles.filter((r) => r !== role)
+    setFormRoles(next)
+    // Never let the default role fall outside the ticked set.
+    if (!checked && role === formRole) {
+      setFormRole(next[0] ?? role)
+    }
   }
 
   async function handleSave() {
@@ -122,6 +138,14 @@ export default function Users() {
       setFormError("PIN must be at least 4 characters")
       return
     }
+    if (formRoles.length === 0) {
+      setFormError("Select at least one role")
+      return
+    }
+    if (!formRoles.includes(formRole)) {
+      setFormError("Default role must be one of the selected roles")
+      return
+    }
     setSaving(true)
     setFormError("")
     try {
@@ -131,6 +155,7 @@ export default function Users() {
           email: formEmail.trim() || null,
           pin: formPin || undefined,
           role: formRole,
+          roles: formRoles,
           isActive: formActive,
         })
       } else {
@@ -139,6 +164,7 @@ export default function Users() {
           email: formEmail.trim() || null,
           pin: formPin,
           role: formRole,
+          roles: formRoles,
           isActive: formActive,
         })
       }
@@ -245,8 +271,12 @@ export default function Users() {
                 )
               case "role":
                 return (
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${ROLE_STYLES[user.role] ?? "bg-gray-500/15 text-gray-600"}`}>
-                    {ROLE_LABELS[user.role] ?? user.role}
+                  <span className="inline-flex flex-col items-start gap-0.5">
+                    {(user.roles?.length ? user.roles : [user.role]).map((r) => (
+                      <span key={r} className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${ROLE_STYLES[r] ?? "bg-gray-500/15 text-gray-600"}`}>
+                        {ROLE_LABELS[r] ?? r}
+                      </span>
+                    ))}
                   </span>
                 )
               case "pin":
@@ -359,14 +389,35 @@ export default function Users() {
               />
             </div>
             <div>
-              <Label className="text-sm font-medium text-admin-header-text">Role *</Label>
+              <Label className="text-sm font-medium text-admin-header-text">Roles *</Label>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                {(Object.entries(ROLE_LABELS) as [AdminUserRole, string][]).map(([value, label]) => (
+                  <label
+                    key={value}
+                    htmlFor={`user-role-${value}`}
+                    className="flex items-center gap-2 rounded-lg border border-admin-card-border px-3 py-2 cursor-pointer hover:bg-admin-sidebar-hover"
+                  >
+                    <Checkbox
+                      id={`user-role-${value}`}
+                      checked={formRoles.includes(value)}
+                      onCheckedChange={(checked) => toggleFormRole(value, checked === true)}
+                    />
+                    <span className="text-sm text-admin-header-text">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-admin-header-text">
+                Default role (landing page after login) *
+              </Label>
               <Select value={formRole} onValueChange={(value) => setFormRole(value as AdminUserRole)}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue placeholder="Select default role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  {formRoles.map((value) => (
+                    <SelectItem key={value} value={value}>{ROLE_LABELS[value]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

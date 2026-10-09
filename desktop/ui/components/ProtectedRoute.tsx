@@ -15,7 +15,8 @@ function ProtectedRoute({ role, children }: Props) {
 
   if (role) {
     const allowedRoles = Array.isArray(role) ? role : [role]
-    if (!allowedRoles.includes(user.role)) {
+    const userRoles = user.roles?.length ? user.roles : [user.role]
+    if (!allowedRoles.some((r) => userRoles.includes(r))) {
       return <Navigate to="/" replace />
     }
   }

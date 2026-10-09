@@ -56,7 +56,7 @@ function CurrentShiftIndicator({ roles, showManageButton = true, className }: Pr
             !o.unpaidAcknowledged
         )
         setUnpaidCount(unpaid.length)
-        const manager = users.find((u) => u.role === "manager" && u.isActive)
+        const manager = users.find((u) => (u.roles ?? [u.role]).includes("manager") && u.isActive)
         setManagerName(manager?.name ?? null)
       })
       .catch(() => { /* ignore */ })
@@ -85,7 +85,8 @@ function CurrentShiftIndicator({ roles, showManageButton = true, className }: Pr
     return () => clearInterval(interval)
   }, [currentShift])
 
-  if (roles && user && !roles.includes(user.role)) {
+  const userRoles = user?.roles?.length ? user.roles : user ? [user.role] : []
+  if (roles && user && !userRoles.some((r) => roles.includes(r))) {
     return null
   }
 
@@ -94,7 +95,8 @@ function CurrentShiftIndicator({ roles, showManageButton = true, className }: Pr
   }
 
   const isDay = currentShift.type === "DAY"
-  const isCashier = user?.role === "cashier"
+  // Plain cashier: holds neither admin nor manager among their roles.
+  const isCashier = !userRoles.includes("admin") && !userRoles.includes("manager")
 
   function handleManageClick() {
     if (isCashier) {
