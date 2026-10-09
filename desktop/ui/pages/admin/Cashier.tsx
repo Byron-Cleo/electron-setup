@@ -309,6 +309,14 @@ function columnsForOrdersTab(tab: OrderTab, scopedToOperationDay: boolean): Colu
   return scopedToOperationDay ? base.filter((c) => c.key !== "createdAt") : base
 }
 
+// Multi-role aware "plain cashier" check: a user who holds admin or manager
+// among their roles keeps the void / any-shift capabilities those roles grant
+// (any-held-role wins), everyone else on this page behaves as a cashier.
+function isPlainCashier(user: User | null): boolean {
+  const roles = user?.roles?.length ? user.roles : user ? [user.role] : []
+  return !roles.includes("admin") && !roles.includes("manager")
+}
+
 function Cashier() {
   const [view, setView] = useState<CashierView>("dashboard")
   const [selectedstring, setSelectedstring] = useState<string | undefined>()
@@ -317,7 +325,7 @@ function Cashier() {
   const [selectedOperationDay, setSelectedOperationDay] = useState<string | undefined>()
   const [currentstring, setCurrentstring] = useState<string | undefined>()
   const user = useAuthStore((s) => s.user)
-  const isCashier = user?.role === "cashier"
+  const isCashier = isPlainCashier(user)
 
   const refreshCurrentShift = useCallback(async () => {
     try {
@@ -381,7 +389,7 @@ function Cashier() {
 function DashboardView({ onNavigate }: { onNavigate: (v: CashierView, shiftType?: string) => void }) {
   const [counts, setCounts] = useState({ total: 0, unpaid: 0, voided: 0, dayShift: 0, nightShift: 0 })
   const user = useAuthStore((s) => s.user)
-  const isCashier = user?.role === "cashier"
+  const isCashier = isPlainCashier(user)
 
   const refreshCounts = useCallback(async () => {
     try {
@@ -1317,7 +1325,7 @@ function VoidEntryView({ onSelectShift, isCashier, currentstring }: { onSelectSh
 
 function VoidView({ shiftType, operationDay }: { shiftType?: string; operationDay?: string }) {
   const user = useAuthStore((s) => s.user)
-  const isCashier = user?.role === "cashier"
+  const isCashier = isPlainCashier(user)
 
   const [orders, setOrders] = useState<Order[]>([])
   const [shiftOpDayById, setShiftOpDayById] = useState<Map<string, string>>(new Map())

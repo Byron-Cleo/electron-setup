@@ -31,9 +31,19 @@ import {
 
 function AdminIndex() {
   const user = useAuthStore((s) => s.user)
-  if (user?.role === "store") return <Navigate to="/admin/store" replace />
-  if (user?.role === "kitchen") return <Navigate to="/admin/kitchen" replace />
-  if (user?.role === "cashier") return <Navigate to="/admin/cashier" replace />
+  const userRoles = user?.roles?.length ? user.roles : user ? [user.role] : []
+  // Default role decides the landing page. A waiter-default hybrid (not the
+  // normal case — waiters stay single-role) falls through to their admin-side
+  // role instead of the admin/manager Dashboard.
+  if (user?.role === "store" || (user?.role === "waiter" && userRoles.includes("store"))) {
+    return <Navigate to="/admin/store" replace />
+  }
+  if (user?.role === "kitchen" || (user?.role === "waiter" && userRoles.includes("kitchen"))) {
+    return <Navigate to="/admin/kitchen" replace />
+  }
+  if (user?.role === "cashier" || (user?.role === "waiter" && userRoles.includes("cashier"))) {
+    return <Navigate to="/admin/cashier" replace />
+  }
   return <Dashboard />
 }
 

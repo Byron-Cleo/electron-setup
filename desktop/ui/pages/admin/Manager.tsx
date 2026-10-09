@@ -65,7 +65,10 @@ function Manager() {
   const user = useAuthStore((s) => s.user)
   const [activeView, setActiveView] = useState<ActiveView>(null)
 
-  const isManager = user?.role === "manager"
+  // Any-held-role: a user holding the manager role (even alongside others)
+  // keeps the manager restrictions — admin-only cards stay hidden for them.
+  const userRoles = user?.roles?.length ? user.roles : user ? [user.role] : []
+  const isManager = userRoles.includes("manager") && !userRoles.includes("admin")
 
   const visibleCards = isManager ? cards.filter((card) => !card.adminOnly) : cards
 

@@ -207,7 +207,13 @@ model User {
   // unique constraint is what stops two staff sharing a PIN and misattributing
   // orders to each other.
   pinLookup         String?            @unique(map: "user_pin_lookup_idx")
+  // Default role — decides the post-login landing journey. Kept as the single
+  // source of the default so existing single-role callers keep working.
   role              String             @default("staff")
+  // Every role this user holds. `role` (the default) is always a member of
+  // this array; an empty array means "not yet migrated" and serializers
+  // coalesce it to [role].
+  roles             String[]           @default([])
   isActive          Boolean            @default(true)
   platform          String?
   address           Json?              @db.Json

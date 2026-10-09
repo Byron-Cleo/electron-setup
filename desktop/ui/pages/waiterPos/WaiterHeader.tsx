@@ -1,5 +1,5 @@
-import { LogOut, ShoppingBag, Store } from "lucide-react"
-import { useLocation } from "react-router-dom"
+import { LogOut, Receipt, ShoppingBag, Store } from "lucide-react"
+import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
 import { useAuthStore } from "@/stores/auth"
@@ -14,6 +14,18 @@ export function WaiterHeader() {
   const itemCount = items.reduce((n, oi) => n + oi.quantity, 0)
   const mealMatch = location.pathname.match(/^\/waiter\/menu\/([^/]+)$/)
   const mealPeriod = mealMatch?.[1] ?? null
+  const userRoles = user?.roles?.length ? user.roles : user ? [user.role] : []
+  // Edge-case bridge: waiters normally stay single-role, but a waiter-default
+  // hybrid needs a way back to their admin-side journey.
+  const adminSideRole = userRoles.find((r) => r !== "waiter")
+  const adminSideLabel =
+    adminSideRole === "cashier"
+      ? "Cashier"
+      : adminSideRole === "store"
+        ? "Store"
+        : adminSideRole === "kitchen"
+          ? "Kitchen"
+          : "Admin"
 
   return (
     <header className="flex items-center justify-between shrink-0 p-4 pb-0">
@@ -52,6 +64,14 @@ export function WaiterHeader() {
           </div>
           <span className="text-sm font-medium text-brand-ebony">{user?.name || "Waiter"}</span>
         </div>
+        {adminSideRole && (
+          <Button variant="outline" size="sm" asChild title={`Switch to your ${adminSideLabel} journey`}>
+            <Link to="/admin">
+              <Receipt size={16} />
+              {adminSideLabel}
+            </Link>
+          </Button>
+        )}
         <Button variant="ghost" size="icon" onClick={logout}>
           <LogOut size={18} />
         </Button>

@@ -13,11 +13,32 @@ function isAllowedRole(role: string): role is UserRole {
   return (ALLOWED_ROLES as readonly string[]).includes(role);
 }
 
+class RolesValidationError extends Error {}
+
+// Normalises a submitted `roles` payload: every entry must be an allowed role,
+// duplicates collapse, and at least one must remain. `null` means "not provided".
+function normalizeRoles(input: unknown): UserRole[] | null {
+  if (input === undefined || input === null) return null;
+  if (!Array.isArray(input) || input.some((r) => typeof r !== "string" || !isAllowedRole(r))) {
+    throw new RolesValidationError(`Roles must be a non-empty array of: ${ALLOWED_ROLES.join(", ")}`);
+  }
+  const unique = [...new Set(input as string[])] as UserRole[];
+  if (unique.length === 0) {
+    throw new RolesValidationError("At least one role is required");
+  }
+  return unique;
+}
+
+function userRoles(user: { role: string; roles: string[] }): string[] {
+  return user.roles?.length ? user.roles : [user.role];
+}
+
 function serializeUser(user: {
   id: string;
   name: string;
   email: string | null;
   role: string;
+  roles: string[];
   isActive: boolean;
   platform: string | null;
   pin: string | null;
@@ -29,6 +50,7 @@ function serializeUser(user: {
     name: user.name,
     email: user.email,
     role: user.role,
+    roles: userRoles(user),
     isActive: user.isActive,
     hasPin: !!user.pin,
     platform: user.platform,
@@ -51,7 +73,7 @@ router.get("/", async (_req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { name, email, pin, role, isActive } = req.body ?? {};
+    const { name, email, pin, role, roles, isActive } = req.body ?? {};
 
     if (!name || typeof name !== "string" || !name.trim()) {
       res.status(400).json({ error: "Name is required" });
@@ -61,8 +83,35 @@ router.post("/", async (req, res) => {
       res.status(400).json({ error: "PIN must be at least 4 characters" });
       return;
     }
-    if (typeof role !== "string" || !isAllowedRole(role)) {
-      res.status(400).json({ error: `Role must be one of: ${ALLOWED_ROLES.join(", ")}` });
+
+    let finalRoles: UserRole[];
+    try {
+      const normalized = normalizeRoles(roles);
+      // `roles` omitted ⇒ single-role user (backward compatible); default `role`
+      // omitted ⇒ the first assigned role becomes the default.
+      finalRoles = normalized ?? [];
+      if (role === undefined) {
+        if (normalized === null) {
+          res.status(400).json({ error: "Role is required" });
+          return;
+        }
+      } else if (typeof role !== "string" || !isAllowedRole(role)) {
+        res.status(400).json({ error: `Role must be one of: ${ALLOWED_ROLES.join(", ")}` });
+        return;
+      } else if (normalized === null) {
+        finalRoles = [role];
+      }
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "Invalid roles" });
+      return;
+    }
+
+    const defaultRole =
+      role !== undefined && typeof role === "string" && isAllowedRole(role)
+        ? role
+        : finalRoles[0];
+    if (!finalRoles.includes(defaultRole)) {
+      res.status(400).json({ error: "Default role must be one of the assigned roles" });
       return;
     }
 
@@ -86,7 +135,8 @@ router.post("/", async (req, res) => {
         email: emailValue,
         pin: hashedPin,
         pinLookup: pinLookup(pin),
-        role,
+        role: defaultRole,
+        roles: finalRoles,
         isActive: isActive === undefined ? true : !!isActive,
         updatedAt: new Date(),
       },
@@ -114,7 +164,7 @@ router.put("/:id", async (req, res) => {
       return;
     }
 
-    const { name, email, pin, role, isActive } = req.body ?? {};
+    const { name, email, pin, role, roles, isActive } = req.body ?? {};
     const data: Record<string, unknown> = { updatedAt: new Date() };
 
     if (name !== undefined) {
@@ -155,18 +205,51 @@ router.put("/:id", async (req, res) => {
       }
     }
 
-    if (role !== undefined) {
-      if (typeof role !== "string" || !isAllowedRole(role)) {
+    let finalRoles: string[] | null = null;
+    try {
+      finalRoles = normalizeRoles(roles);
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "Invalid roles" });
+      return;
+    }
+
+    if (role !== undefined || finalRoles !== null) {
+      if (role !== undefined && (typeof role !== "string" || !isAllowedRole(role))) {
         res.status(400).json({ error: `Role must be one of: ${ALLOWED_ROLES.join(", ")}` });
         return;
       }
-      data.role = role;
+      const submittedRole = role === undefined ? undefined : (role as UserRole);
+
+      if (submittedRole !== undefined && finalRoles === null) {
+        // Old-style single-role update: role-only means "make this the only role".
+        data.role = submittedRole;
+        data.roles = [submittedRole];
+      } else if (finalRoles !== null) {
+        // Default must survive the new roles set: the submitted one, else the
+        // existing default — auto-picking the first role when the stored default
+        // is a legacy value ("staff") that can never be a member.
+        const existingDefaultIsMember = isAllowedRole(existing.role) && finalRoles.includes(existing.role);
+        const defaultRole =
+          submittedRole !== undefined
+            ? submittedRole
+            : existingDefaultIsMember
+              ? existing.role
+              : finalRoles[0];
+        if (!finalRoles.includes(defaultRole)) {
+          res.status(400).json({ error: "Default role must be one of the assigned roles" });
+          return;
+        }
+        data.role = defaultRole;
+        data.roles = finalRoles;
+      }
     }
 
     if (isActive !== undefined) {
-      const demote = !isActive && existing.role === "admin";
+      const demote = !isActive && userRoles(existing).includes("admin");
       if (demote) {
-        const activeAdmins = await prisma.user.count({ where: { role: "admin", isActive: true } });
+        const activeAdmins = await prisma.user.count({
+          where: { roles: { has: "admin" }, isActive: true },
+        });
         if (activeAdmins <= 1) {
           res.status(409).json({ error: "Cannot deactivate the last active admin" });
           return;
@@ -201,10 +284,10 @@ router.delete("/:id", async (req, res) => {
       prisma.stockRequest.count({ where: { requestedById: id } }),
       prisma.stockFulfillment.count({ where: { fulfilledById: id } }),
       prisma.cookingRecord.count({ where: { cookedById: id } }),
-      prisma.user.count({ where: { role: "admin", isActive: true } }),
+      prisma.user.count({ where: { roles: { has: "admin" }, isActive: true } }),
     ]);
 
-    if (existing.role === "admin" && activeAdmins <= 1) {
+    if (userRoles(existing).includes("admin") && activeAdmins <= 1) {
       res.status(409).json({ error: "Cannot delete the last active admin" });
       return;
     }
