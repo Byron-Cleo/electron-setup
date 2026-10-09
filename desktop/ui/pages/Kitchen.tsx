@@ -64,6 +64,18 @@ function computeRequestStatus(
   }
 }
 
+/**
+ * Cooking edit lock: only batches produced TODAY (Nairobi date) can be
+ * corrected in Kitchen Production — past-date batches may already be sold
+ * or allocated, making them immutable history. Never-cooked items have no
+ * record to edit either.
+ */
+function isCookedToday(lastCookedDate: string | null): boolean {
+  if (!lastCookedDate) return false
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
+  return new Date(lastCookedDate).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }) === today
+}
+
 function getLastRequestMap(requests: StockRequest[]): Map<string, StockRequestItem> {
   const map = new Map<string, StockRequestItem>()
   const sorted = [...requests].sort((a, b) =>
@@ -856,37 +868,40 @@ function KitchenInventoryView({ userId }: { userId: string }) {
       }
       case "action":
         return (
-          <div className="flex items-center justify-center gap-1.5">
+          <div className="flex flex-col items-stretch justify-center gap-0.5 w-24">
             {item.rawStockPending > 0 && (
               <Button
                 size="xs"
                 variant="outline"
-                className="text-green-600 border-green-200 hover:bg-green-50"
+                className="h-5 px-1.5 text-[10px] text-green-600 border-green-200 hover:bg-green-50"
                 onClick={() => openCookDialog(item)}
               >
                 <ChefHat />
                 Cook More
               </Button>
             )}
+            {isCookedToday(item.lastCookedDate) && (
+              <Button
+                size="xs"
+                variant="outline"
+                className="h-5 px-1.5 text-[10px]"
+                onClick={() => openEditDialog(item)}
+              >
+                <Pencil />
+                Edit
+              </Button>
+            )}
             {item.rawStockPending > 0 && (
               <Button
                 size="xs"
                 variant="outline"
-                className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                className="h-5 px-1.5 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
                 onClick={() => openReturnDialog(item)}
               >
                 <Undo2 />
                 Return
               </Button>
             )}
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => openEditDialog(item)}
-            >
-              <Pencil />
-              Edit
-            </Button>
           </div>
         )
       default:

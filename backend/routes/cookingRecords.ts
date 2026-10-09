@@ -577,6 +577,17 @@ router.put("/:id", async (req, res) => {
   });
   if (!existing) return res.status(404).json({ error: "Cooking record not found" });
 
+  // Past-date production is closed history: yesterday's batches may already be
+  // sold or allocated, so only records cooked today (Nairobi date) can be
+  // corrected. The same rule gates the Edit button in Kitchen Production.
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  const cookedStr = new Date(existing.createdAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  if (cookedStr !== todayStr) {
+    return res.status(400).json({
+      error: `Cooking record from a past date (${cookedStr}) can no longer be edited — sold/assigned batches are immutable`,
+    });
+  }
+
   // Reject attempts to set shiftId to null/falsy if provided
   if (req.body.shiftId !== undefined && !req.body.shiftId) {
     return res.status(400).json({ error: "shiftId cannot be null or empty" });

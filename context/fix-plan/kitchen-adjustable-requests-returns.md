@@ -57,9 +57,10 @@ UI: an **Adjust** (pencil) action on request items in `RequestStockDesign` behin
 `allowAdjust` prop (kitchen My Requests passes `true`; the store's view stays unchanged), gated by
 the lock. The adjust dialog keys a decimal amount, shows delivered + uncooked-remainder context,
 and refreshes the table on success. Column backgrounds (operator, refined after a first-pass
-font-colour attempt was reverted): the **Requested column washes blue** (`bg-blue-100`) and the
-**Delivered column washes gray** (`bg-gray-100`) — the column `className` paints the header and
-every data cell the same colour; font colours stay the ORIGINAL status colouring (`STATUS_TEXT_COLOR`
+font-colour attempt was reverted): the **Requested column washes blue** (`bg-blue-100`), the
+**Delivered column washes gray** (`bg-gray-100`), and the **Remaining column washes green**
+(`bg-green-100`) — the column `className` paints the header and every data cell the same colour;
+font colours stay the ORIGINAL status colouring (`STATUS_TEXT_COLOR`
 restored — delivered text keeps its pending/partial/completed colour).
 
 **My Requests tab pills (operator refinement):** the "My Requests" tab link carries **one pill per
@@ -81,6 +82,14 @@ Body: `{ stockSupplyId, quantityReturned, returnedById, notes? }` (supply-level,
 
 UI: **Return to Store** button on Kitchen Production → Inventory tab items with
 `rawStockPending > 0`; dialog with decimal amount ≤ remainder + notes.
+
+### 2b. Kitchen Production polish (operator, mid-feature)
+- **Vertical action stack** — the three row actions stack top-to-bottom: **Cook More** (green) →
+  **Edit** (default) → **Return** (red, `text-red-600 border-red-200`) — compact `h-5 text-[10px]`
+  buttons in a `w-24` column so records stay thin (was: horizontal side-by-side)
+- **Cooking edit lock** — only batches cooked TODAY (Nairobi date) can be corrected: the Edit button
+  hides for past-date/never-cooked supplies (`isCookedToday(item.lastCookedDate)`), and
+  `PUT /cooking-records/:id` 400s for past-date records — sold/assigned batches are immutable history
 
 ### 3. StockReturn model (audit trail for both paths)
 ```prisma
@@ -141,7 +150,10 @@ model StockReturn {
 - [ ] Decimal request (e.g. 0.5 packets) displays correctly everywhere
 - [ ] Adjust button hidden + endpoint 400 for COMPLETED requests last touched on a past date
 - [ ] Completed-today requests stay adjustable; past-date PENDING/PARTIAL stay adjustable
-- [ ] My Requests: Requested column has a blue background and Delivered a gray background (header + cells); delivered font keeps its status colour
+- [ ] My Requests: Requested column blue, Delivered gray, Remaining green backgrounds (header + cells); delivered font keeps its status colour
+- [ ] Kitchen Production: actions stack vertically (Cook More → Edit → Return in red), compact so rows stay thin
+- [ ] Edit hidden for past-date cooking records; `PUT /cooking-records/:id` 400s on past-date records
+- [ ] Edit hidden for never-cooked supplies
 - [ ] My Requests tab shows separate Pending (amber) and Partial pills with the kitchen-department counts; each hides when zero; refresh after an adjust
 - [ ] Raw Stock Pending reflects returns in kitchenInventory AND carry-over
 - [ ] `npm run lint` + `npm run build` + `npm run build --prefix backend` clean

@@ -70,7 +70,7 @@ const ALL_COLUMNS: Column[] = [
   { label: "Name", key: "name", align: "left" },
   { label: "Requested", key: "requested", align: "center", className: "bg-blue-100" },
   { label: "Delivered", key: "delivered", align: "center", className: "bg-gray-100" },
-  { label: "Remaining", key: "remaining", align: "center" },
+  { label: "Remaining", key: "remaining", align: "center", className: "bg-green-100" },
   { label: "Request Status", key: "status", align: "center" },
   { label: "Department", key: "department", align: "left" },
   { label: "Requested By", key: "requestedBy", align: "left" },
