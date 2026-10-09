@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Package, Send, Clock, ChefHat, History, Eye, Flame, Pencil } from "lucide-react"
+import { Package, Send, Clock, ChefHat, History, Eye, Flame, Pencil, Undo2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import BackButton from "@/components/shared/BackButton"
@@ -30,6 +30,7 @@ import {
   getDepartments,
   updateCookingRecord,
   getUnderproducedCookingCount,
+  returnToStore,
 } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
@@ -86,6 +87,7 @@ function Kitchen() {
   const [pendingCount, setPendingCount] = useState(0)
   const [partialCount, setPartialCount] = useState(0)
   const [underproducedCount, setUnderproducedCount] = useState(0)
+  const [kitchenRequestCounts, setKitchenRequestCounts] = useState({ pending: 0, partial: 0 })
 
   async function loadCounts() {
     try {
@@ -96,6 +98,10 @@ function Kitchen() {
       ])
       setPendingCount(pending.length)
       setPartialCount(partial.length)
+      setKitchenRequestCounts({
+        pending: pending.filter((r) => r.department === "kitchen").length,
+        partial: partial.filter((r) => r.department === "kitchen").length,
+      })
       setUnderproducedCount(underproduced.count)
     } catch (err) {
       console.error("Failed to load kitchen counts:", err)
@@ -196,7 +202,10 @@ function Kitchen() {
             ] as const).map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
-                onClick={() => setActiveTab(key)}
+                onClick={() => {
+                  setActiveTab(key)
+                  if (key === "history") loadCounts()
+                }}
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === key
                     ? "border-b-2 border-admin-accent text-admin-accent"
@@ -205,6 +214,24 @@ function Kitchen() {
               >
                 <Icon size={16} />
                 {label}
+                {key === "history" && kitchenRequestCounts.pending > 0 && (
+                  <span
+                    title={`${kitchenRequestCounts.pending} kitchen request(s) pending — awaiting the store`}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-status-pending-bg text-status-pending-text"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-status-pending-text" />
+                    {kitchenRequestCounts.pending} pending
+                  </span>
+                )}
+                {key === "history" && kitchenRequestCounts.partial > 0 && (
+                  <span
+                    title={`${kitchenRequestCounts.partial} kitchen request(s) partially fulfilled`}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-status-partial-bg text-status-partial-text"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-status-partial-text" />
+                    {kitchenRequestCounts.partial} partial
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -215,6 +242,8 @@ function Kitchen() {
               department="kitchen"
               showDepartmentColumn={false}
               showActionColumn={false}
+              allowAdjust
+              onRequestFulfilled={loadCounts}
               title="Kitchen Stock Item Requests"
             />
           )}
@@ -523,7 +552,7 @@ function CurrentStockView({ userId }: { userId: string }) {
                   </p>
                 )}
                 <p className="text-xs text-admin-muted">
-                  Unit: {requestDialog.item?.unit} | Current stock: {requestDialog.item?.currentStock}
+                  Unit: {requestDialog.item?.unit} | Current stock: {requestDialog.item?.currentStock} | Decimals allowed (e.g. 0.5)
                 </p>
               </div>
               <div className="space-y-2">
@@ -590,6 +619,16 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   const [editSuccess, setEditSuccess] = useState(false)
   const [editError, setEditError] = useState("")
   const [editLoadingRecord, setEditLoadingRecord] = useState(false)
+
+  const [returnDialog, setReturnDialog] = useState<{ open: boolean; item: KitchenStockItem | null }>({
+    open: false,
+    item: null,
+  })
+  const [returnQty, setReturnQty] = useState(0)
+  const [returnNotes, setReturnNotes] = useState("")
+  const [returnSubmitting, setReturnSubmitting] = useState(false)
+  const [returnError, setReturnError] = useState("")
+  const [returnSuccess, setReturnSuccess] = useState(false)
 
   async function openEditDialog(item: KitchenStockItem) {
     setEditDialog({ open: true, item })
@@ -689,6 +728,37 @@ function KitchenInventoryView({ userId }: { userId: string }) {
       setError(err instanceof Error ? err.message : "Failed to record cooking")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  function openReturnDialog(item: KitchenStockItem) {
+    setReturnDialog({ open: true, item })
+    setReturnQty(item.rawStockPending)
+    setReturnNotes("")
+    setReturnError("")
+    setReturnSuccess(false)
+  }
+
+  async function handleReturnSubmit() {
+    if (!returnDialog.item || returnQty <= 0) return
+    try {
+      setReturnSubmitting(true)
+      setReturnError("")
+      await returnToStore({
+        stockSupplyId: returnDialog.item.id,
+        quantityReturned: returnQty,
+        returnedById: userId,
+        notes: returnNotes || undefined,
+      })
+      setReturnSuccess(true)
+      setTimeout(() => {
+        setReturnDialog({ open: false, item: null })
+        loadInventory()
+      }, 1500)
+    } catch (err) {
+      setReturnError(err instanceof Error ? err.message : "Failed to return stock to store")
+    } finally {
+      setReturnSubmitting(false)
     }
   }
 
@@ -796,6 +866,17 @@ function KitchenInventoryView({ userId }: { userId: string }) {
               >
                 <ChefHat />
                 Cook More
+              </Button>
+            )}
+            {item.rawStockPending > 0 && (
+              <Button
+                size="xs"
+                variant="outline"
+                className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                onClick={() => openReturnDialog(item)}
+              >
+                <Undo2 />
+                Return
               </Button>
             )}
             <Button
@@ -932,6 +1013,87 @@ function KitchenInventoryView({ userId }: { userId: string }) {
                 <Button onClick={handleCookSubmit} disabled={submitting || cookQty <= 0}>
                   {submitting ? "Recording..." : "Record Cooking"}
                 </Button>              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={returnDialog.open}
+        onOpenChange={(open) => setReturnDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Return to Store: {returnDialog.item?.name}</DialogTitle>
+            <DialogDescription>
+              Hand the uncooked remainder back to the store — the shelf is restored and the
+              kitchen stops holding it.
+            </DialogDescription>
+          </DialogHeader>
+
+          {returnSuccess ? (
+            <div className="py-4 text-center text-green-600 font-medium">
+              Stock returned to the store successfully!
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-md bg-muted p-3 text-sm">
+                <div className="text-amber-600 font-medium">
+                  Uncooked remainder: {returnDialog.item?.rawStockPending} {returnDialog.item?.unit}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="returnQty">
+                  Quantity to Return ({returnDialog.item?.unit}) — decimals allowed
+                </Label>
+                <Input
+                  id="returnQty"
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  max={returnDialog.item?.rawStockPending ?? 0}
+                  value={returnQty}
+                  onChange={(e) => setReturnQty(parseFloat(e.target.value) || 0)}
+                />
+                <p className="text-xs text-admin-muted">
+                  Max: {returnDialog.item?.rawStockPending} {returnDialog.item?.unit} — cooked stock can never
+                  be returned.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="returnNotes">Notes (optional)</Label>
+                <Textarea
+                  id="returnNotes"
+                  placeholder="e.g., extra chapati flour not needed today"
+                  value={returnNotes}
+                  onChange={(e) => setReturnNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+
+              {returnError && <p className="text-sm text-red-500">{returnError}</p>}
+            </div>
+          )}
+
+          <DialogFooter>
+            {!returnSuccess && (
+              <>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button
+                  onClick={handleReturnSubmit}
+                  disabled={
+                    returnSubmitting ||
+                    returnQty <= 0 ||
+                    returnQty > (returnDialog.item?.rawStockPending ?? 0)
+                  }
+                >
+                  {returnSubmitting ? "Returning..." : "Return to Store"}
+                </Button>
+              </>
             )}
           </DialogFooter>
         </DialogContent>

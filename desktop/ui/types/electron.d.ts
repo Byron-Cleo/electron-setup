@@ -404,6 +404,33 @@ interface FulfillStockRequestData {
   items: { stockRequestItemId: string; quantityDelivered: number }[];
 }
 
+interface AdjustStockRequestData {
+  adjustedById: string;
+  notes?: string;
+  items: { stockRequestItemId: string; quantityRequested: number }[];
+}
+
+/** Uncooked stock handed back to the store — direct return or adjust-below-delivered. */
+interface StockReturn {
+  id: string;
+  stockSupplyId: string;
+  stockRequestItemId: string | null;
+  quantityReturned: number;
+  returnedById: string;
+  notes: string | null;
+  createdAt: string;
+  stockSupply: { id: string; name: string; unit: string };
+  returnedBy: { id: string; name: string };
+  stockRequestItem?: { id: string; stockRequestId: string } | null;
+}
+
+interface ReturnToStoreData {
+  stockSupplyId: string;
+  quantityReturned: number;
+  returnedById: string;
+  notes?: string;
+}
+
 interface Department {
   id: string;
   name: string;
@@ -1128,6 +1155,11 @@ interface ElectronAPI {
     getPartialCount: () => Promise<{ count: number }>;
     create: (data: CreateStockRequestData) => Promise<StockRequest>;
     fulfill: (id: string, data: FulfillStockRequestData) => Promise<StockRequest>;
+    adjust: (id: string, data: AdjustStockRequestData) => Promise<StockRequest>;
+  };
+  stockReturn: {
+    getAll: () => Promise<StockReturn[]>;
+    create: (data: ReturnToStoreData) => Promise<StockReturn>;
   };
   category: {
     getAll: () => Promise<Category[]>;

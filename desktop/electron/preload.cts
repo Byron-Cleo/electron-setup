@@ -61,6 +61,11 @@ electron.contextBridge.exposeInMainWorld("electron", {
     getPartialCount: () => electron.ipcRenderer.invoke("stock-request:get-partial-count"),
     create: (data: any) => electron.ipcRenderer.invoke("stock-request:create", data),
     fulfill: (id: string, data: any) => electron.ipcRenderer.invoke("stock-request:fulfill", id, data),
+    adjust: (id: string, data: any) => electron.ipcRenderer.invoke("stock-request:adjust", id, data),
+  },
+  stockReturn: {
+    getAll: () => electron.ipcRenderer.invoke("stock-return:get-all"),
+    create: (data: any) => electron.ipcRenderer.invoke("stock-return:create", data),
   },
   category: {
     getAll: () => electron.ipcRenderer.invoke("category:get-all"),

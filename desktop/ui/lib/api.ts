@@ -276,6 +276,29 @@ export async function fulfillStockRequest(id: string, data: FulfillStockRequestD
   return apiFetch(`/stock-requests/${id}/fulfill`, { method: "PUT", body: JSON.stringify(data) })
 }
 
+export async function adjustStockRequest(id: string, data: AdjustStockRequestData): Promise<StockRequest> {
+  if (window.electron?.stockRequest?.adjust) {
+    return window.electron.stockRequest.adjust(id, data)
+  }
+  return apiFetch(`/stock-requests/${id}/adjust`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+// ─── Stock Returns ───────────────────────────────────────────────────────────
+
+export async function returnToStore(data: ReturnToStoreData): Promise<StockReturn> {
+  if (window.electron?.stockReturn?.create) {
+    return window.electron.stockReturn.create(data)
+  }
+  return apiFetch("/stock-returns", { method: "POST", body: JSON.stringify(data) })
+}
+
+export async function getStockReturns(): Promise<StockReturn[]> {
+  if (window.electron?.stockReturn?.getAll) {
+    return window.electron.stockReturn.getAll()
+  }
+  return apiFetch("/stock-returns")
+}
+
 // ─── Departments ────────────────────────────────────────────────────────────
 
 export async function getDepartments(): Promise<Department[]> {

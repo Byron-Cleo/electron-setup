@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import { isDev } from "./utils.ts";
 const { app, BrowserWindow, ipcMain } = pkg;
 import { getPreloadPath } from "./pathResolver.ts";
-import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers, registerStockSupplyCategoryHandlers, registerStockSupplyHandlers, registerStockRequestHandlers, registerStockSupplyExtraHandlers, registerDepartmentHandlers, registerCookingRecordHandlers, registerKitchenConfigHandlers, registerOrderHandlers, registerUserHandlers, registerMenuExtraHandlers, registerAccompanimentHandlers, registerKitchenExtraHandlers, registerStockLowHandlers, registerOrderListHandlers, registerShiftHandlers, registerReportHandlers, registerShiftConfigHandlers, registerCategoryHandlers, registerCustomerHandlers, extendOrderHandlers } from "./ipc-handlers.ts";
+import { registerMealTypeHandlers, registerMenuHandlers, registerAuthHandlers, registerStockSupplyCategoryHandlers, registerStockSupplyHandlers, registerStockRequestHandlers, registerStockReturnHandlers, registerStockSupplyExtraHandlers, registerDepartmentHandlers, registerCookingRecordHandlers, registerKitchenConfigHandlers, registerOrderHandlers, registerUserHandlers, registerMenuExtraHandlers, registerAccompanimentHandlers, registerKitchenExtraHandlers, registerStockLowHandlers, registerOrderListHandlers, registerShiftHandlers, registerReportHandlers, registerShiftConfigHandlers, registerCategoryHandlers, registerCustomerHandlers, extendOrderHandlers } from "./ipc-handlers.ts";
 import { registerPrinterHandlers } from "./printers.ts";
 import { registerReceiptHandlers } from "./receipt.ts";
 import { registerServerConfigHandlers } from "./server-config.ts";
@@ -57,6 +57,7 @@ app.whenReady().then(() => {
   registerStockSupplyCategoryHandlers();
   registerStockSupplyHandlers();
   registerStockRequestHandlers();
+  registerStockReturnHandlers();
   registerStockSupplyExtraHandlers();
   registerDepartmentHandlers();
   registerCookingRecordHandlers();

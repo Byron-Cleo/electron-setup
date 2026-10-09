@@ -224,6 +224,7 @@ model User {
   Session           Session[]
   fulfillments      StockFulfillment[]
   StockRequest      StockRequest[]
+  stockReturns     StockReturn[]
 }
 
 model VerificationToken {
@@ -264,6 +265,7 @@ model StockSupply {
   DepartmentStockSupply DepartmentStockSupply[]
   StockRequestItem      StockRequestItem[]
   menus                 StockSupplyMenu[]
+  returns               StockReturn[]
 }
 
 model StockRequest {
@@ -288,6 +290,7 @@ model StockRequestItem {
   createdAt         DateTime               @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
   fulfillmentItems  StockFulfillmentItem[]
+  returns           StockReturn[]
   stockRequest      StockRequest           @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
   stockSupply       StockSupply            @relation(fields: [stockSupplyId], references: [id])
 }
@@ -350,6 +353,22 @@ model StockFulfillmentItem {
   createdAt          DateTime         @default(now()) @db.Timestamptz(3)
   stockFulfillment   StockFulfillment @relation(fields: [stockFulfillmentId], references: [id], onDelete: Cascade)
   stockRequestItem   StockRequestItem @relation(fields: [stockRequestItemId], references: [id])
+}
+
+// Corrective ledger for uncooked stock handed back to the store — either a
+// direct return from the Kitchen Production remainder or an implicit return
+// created when a request amount is adjusted below what was already delivered.
+model StockReturn {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockSupplyId      String             @db.Uuid
+  stockRequestItemId String?            @db.Uuid
+  quantityReturned   Decimal            @db.Decimal(12, 2)
+  returnedById       String             @db.Uuid
+  notes              String?
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  stockSupply        StockSupply        @relation(fields: [stockSupplyId], references: [id])
+  stockRequestItem   StockRequestItem?  @relation(fields: [stockRequestItemId], references: [id])
+  returnedBy         User               @relation(fields: [returnedById], references: [id])
 }
 
 model CookingRecord {
