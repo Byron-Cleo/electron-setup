@@ -810,8 +810,8 @@ function KitchenInventoryView({ userId }: { userId: string }) {
     { label: "Plates/Unit", key: "platesPerUnit" },
     { label: "Plates Made", key: "platesMade" },
     { label: "Cooked Date", key: "lastCooked" },
-    { label: "Remaining", key: "remaining" },
-    { label: "Action", key: "action", isAction: true, align: "center" },
+    { label: "Remaining", key: "remaining", className: "bg-gray-100" },
+    { label: "Action", key: "action", isAction: true, align: "center", className: "bg-green-100" },
   ]
 
   function renderCell(item: KitchenStockItem, column: Column) {

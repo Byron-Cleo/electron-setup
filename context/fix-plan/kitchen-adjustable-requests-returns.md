@@ -88,6 +88,9 @@ UI: **Return to Store** button on Kitchen Production → Inventory tab items wit
 - **Vertical action stack** — the three row actions stack top-to-bottom: **Cook More** (green) →
   **Edit** (default) → **Return** (red, `text-red-600 border-red-200`) — compact `h-5 text-[10px]`
   buttons in a `w-24` column so records stay thin (was: horizontal side-by-side)
+- **Production table column washes (operator)** — the Action column washes **green**
+  (`bg-green-100`; operator tried gray first, then switched), the Remaining column washes
+  **gray** (`bg-gray-100`) — header + every data cell, fonts untouched
 - **Cooking edit lock** — only batches cooked TODAY (Nairobi date) can be corrected: the Edit button
   hides for past-date/never-cooked supplies (`isCookedToday(item.lastCookedDate)`), and
   `PUT /cooking-records/:id` 400s for past-date records — sold/assigned batches are immutable history
@@ -153,6 +156,7 @@ model StockReturn {
 - [ ] Completed-today requests stay adjustable; past-date PENDING/PARTIAL stay adjustable
 - [ ] My Requests: Requested blue, Delivered gray, Remaining green, Adjust red column backgrounds (header + cells); delivered font keeps its status colour
 - [ ] Kitchen Production: actions stack vertically (Cook More → Edit → Return in red), compact so rows stay thin
+- [ ] Kitchen Production: Action column green background, Remaining column gray background (header + cells)
 - [ ] Edit hidden for past-date cooking records; `PUT /cooking-records/:id` 400s on past-date records
 - [ ] Edit hidden for never-cooked supplies
 - [ ] My Requests tab shows separate Pending (amber) and Partial pills with the kitchen-department counts; each hides when zero; refresh after an adjust
