@@ -244,7 +244,7 @@ const MENU_INCLUDE = {
   },
 } satisfies Prisma.MenuInclude;
 
-const RUNNING_LOW_THRESHOLD = 5;
+const RUNNING_LOW_THRESHOLD = 10;
 
 // Builds the current shift's stock status per menu item. If mealType is
 // provided, only menus linked to that meal period are included. Mirrors the

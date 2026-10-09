@@ -138,7 +138,7 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
 
       <div className="flex items-center justify-center gap-3">
         <Utensils size={22} className="text-admin-accent" />
-        <Heading as="h2" className="text-xl text-admin-header-text">Leftover Stock</Heading>
+        <Heading as="h2" className="text-xl text-admin-header-text">Leftover Food Stock</Heading>
       </div>
       <p className="mx-auto max-w-2xl text-center text-sm text-admin-muted">
         Every plate still needing a decision in one place — assigned stock that did not sell, and past

@@ -48,6 +48,11 @@ export interface ReceiptData {
   barcode: string;
 }
 
+// Thermal receipt font — swap this stack to test candidates one by one.
+// Must contain a monospace font while the plate-movement table is a space-aligned <pre>.
+// Candidate 1: Consolas (Windows built-in; Menlo covers Mac dev, DejaVu covers Linux).
+export const RECEIPT_FONT = "Consolas, Menlo, 'DejaVu Sans Mono', 'Courier New', monospace";
+
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`;
 }
@@ -74,7 +79,7 @@ function documentHtml(body: string): string {
     padding: 0;
     width: 72mm;
     box-sizing: border-box;
-    font-family:'Courier New',Courier,monospace;
+    font-family: ${RECEIPT_FONT};
     font-size:12px;
     line-height:1.35;
     color:#000;
@@ -324,7 +329,7 @@ function shiftReportBody(data: ShiftReportData): string {
   ${blockCenter("PLATE MOVEMENT", "font-weight:bold; font-size:13px;")}
   ${divider()}
   ${data.plateMovement.length === 0 ? blockCenter("No snapshots recorded.") : ""}
-  ${data.plateMovement.length > 0 ? `<pre style="margin:0; font-family:'Courier New',Courier,monospace; font-size:12px; line-height:1.5;">ITEM             OPEN  COOKED  SOLD  CLOSE
+  ${data.plateMovement.length > 0 ? `<pre style="margin:0; font-family:${RECEIPT_FONT}; font-size:12px; line-height:1.5;">ITEM             OPEN  COOKED  SOLD  CLOSE
 ${"─".repeat(44)}
 ${data.plateMovement.map((p) =>
   `<b>${p.menuName.slice(0, 16).padEnd(16)}</b>${String(p.openingPlates).padStart(5)}${String(p.platesCooked).padStart(7)}${String(p.platesSold).padStart(6)}${String(p.closingStockAtManualClose ?? "—").padStart(7)}`
@@ -376,6 +381,11 @@ ${blockCenter("OPEN = carry-forward opening plates from previous shift", "font-s
   ${row("Unpaid Total", money(data.payments.unpaid.total))}
   ${divider()}
   ` : ""}
+  ${divider()}
+  ${blockCenter("POS Designed and Build By:", "font-size:11px; font-weight:bold; margin-top:4px;")}
+  ${r.poweredBy ? blockCenter(`<span style="font-weight:bold;">${r.poweredBy}</span>`, "font-size:13px;") : ""}
+  ${r.tel ? blockCenter(`Tel: ${r.tel}`, "font-size:11px;") : ""}
+  ${r.services ? blockCenter(r.services, "font-size:11px;") : ""}
 `;
 }
 
