@@ -314,7 +314,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
         {editId ? "Edit Menu Item" : "New Menu Item"}
       </Heading>
 
-      <Card className="bg-admin-card border-admin-card-border mx-auto max-w-lg">
+      <Card className="bg-admin-card border-admin-card-border w-full">
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -323,6 +323,10 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                   {form.formState.errors.root.message}
                 </p>
               )}
+
+              <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-6">
+              {/* Left column — dish fields up to starch/vegetable + actions */}
+              <div className="space-y-4">
 
               <FormField
                 control={form.control}
@@ -441,7 +445,11 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              </div>
+
+              {/* Right column — starch, vegetable + Sold in Portions editors */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <FormField
                     control={form.control}
@@ -545,14 +553,13 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                     </FormItem>
                   )}
                 />
-                  )}
-                </div>
-              </div>
+                   )}
+                 </div>
+                 </div>
 
-              <div className="space-y-3">
-                <FormField
-                  control={form.control}
-                  name="hasPortion"
+                 <FormField
+                   control={form.control}
+                   name="hasPortion"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Sold in Portions?</FormLabel>
@@ -599,7 +606,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                               watchedPortions.map((row, i) => ({ ...row, isDefault: i === chosen })),
                             )
                           }}
-                          className="space-y-2"
+                          className="space-y-2 max-h-[55vh] overflow-y-auto pr-1"
                         >
                           {watchedPortions.map((row, index) => (
                             <div key={index} className="flex items-end gap-2 rounded-md border p-3">
@@ -684,8 +691,9 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                   />
                 )}
               </div>
+              </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-center gap-2 pt-2">
                 <Button
                   type="button"
                   onClick={onCancel}

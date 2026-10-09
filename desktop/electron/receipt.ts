@@ -3,7 +3,7 @@ import net from "net";
 import fs from "fs";
 import { execFile } from "child_process";
 import { findPrinterByRole, checkPrinterStatus, type PosPrinter, type PosPrinterRole } from "./printers.ts";
-import { customerReceiptHtml, kitchenReceiptHtml, barReceiptHtml, shiftReportHtml, type ReceiptData, type ShiftReportData } from "./receiptTemplate.ts";
+import { customerReceiptHtml, kitchenReceiptHtml, barReceiptHtml, shiftReportHtml, RECEIPT_FONT, type ReceiptData, type ShiftReportData } from "./receiptTemplate.ts";
 
 export interface PrintResult {
   ok: boolean;
@@ -411,7 +411,7 @@ function testHtml(name: string): string {
         padding: 0;
         width: 72mm;
         box-sizing: border-box;
-        font-family: "Courier New", monospace;
+        font-family: ${RECEIPT_FONT};
         font-size: 12px;
         color: #000;
       }

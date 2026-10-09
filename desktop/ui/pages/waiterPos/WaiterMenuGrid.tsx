@@ -94,7 +94,7 @@ function matchAccompanimentForImage(url: string, accs: Accompaniment[]): Accompa
 }
 
 function platesBadgeClass(plates: number) {
-  if (plates > 5) return "bg-green-200 text-green-800"
+  if (plates > 10) return "bg-green-200 text-green-800"
   if (plates > 0) return "bg-orange-100 text-orange-700"
   return "bg-red-100 text-red-600"
 }
@@ -131,14 +131,14 @@ function AccompanyRadioCard({
   const src = menuImageUrl(image)
   return (
     <Label
-      className="flex w-fit max-w-[130px] flex-col items-center gap-1.5 rounded-lg border p-2 cursor-pointer transition-colors has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5"
+      className="flex w-fit max-w-[130px] flex-col items-center gap-1 rounded-lg border p-1.5 cursor-pointer transition-colors has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5"
     >
       <div className="flex items-center gap-1.5">
-        <RadioGroupItem value={value} />
+        <RadioGroupItem value={value} className="size-3.5" />
         {src ? (
-          <img src={src} alt={name} className="h-10 w-10 rounded-md object-cover" />
+          <img src={src} alt={name} className="h-8 w-8 rounded-md object-cover" />
         ) : (
-          <div className="h-10 w-10 rounded-md bg-gray-100" />
+          <div className="h-8 w-8 rounded-md bg-gray-100" />
         )}
       </div>
       <span className="max-w-full text-center text-xs font-medium leading-tight text-brand-ebony/80">{name}</span>
@@ -200,10 +200,10 @@ function AccompModeToggle({
 // without that accompaniment (captured on the order + printed on tickets).
 function NoneAccompanyCard({ value, hint }: { value: string; hint: string }) {
   return (
-    <Label className="flex w-fit max-w-[130px] flex-col items-center gap-1.5 rounded-lg border border-dashed p-2 cursor-pointer transition-colors has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5">
+    <Label className="flex w-fit max-w-[130px] flex-col items-center gap-1 rounded-lg border border-dashed p-1.5 cursor-pointer transition-colors has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5">
       <div className="flex items-center gap-1.5">
-        <RadioGroupItem value={value} />
-        <Ban className="h-6 w-6 text-brand-maroon/70" />
+        <RadioGroupItem value={value} className="size-3.5" />
+        <Ban className="h-5 w-5 text-brand-maroon/70" />
       </div>
       <span className="max-w-full text-center text-xs font-medium leading-tight text-brand-ebony/80">None</span>
       <span className="max-w-full text-center text-[10px] font-medium leading-tight text-brand-ebony/50">{hint}</span>
@@ -411,8 +411,8 @@ export function WaiterMenuGrid({
     const plates = Number(item.availablePlates ?? item.stock ?? 0)
     const factor = Number(defaultPortion?.platesPerServing ?? item.platesPerServing ?? 1)
     const soldOut = servings <= 0
-    const runningLow = servings > 0 && servings <= 5
-    const inStock = servings > 5
+    const runningLow = servings > 0 && servings <= 10
+    const inStock = servings > 10
     // Only worth showing when the factor makes plates and servings disagree.
     const weighted = factor > 0 && factor !== 1
     return (
@@ -424,7 +424,7 @@ export function WaiterMenuGrid({
           setActiveOrderKey(null)
         }}
         className={cn(
-          "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
+          "py-0 cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
           inStock &&
             "border-green-400 bg-green-100/70 hover:border-green-500 hover:bg-green-100",
           runningLow &&
@@ -668,7 +668,7 @@ export function WaiterMenuGrid({
                           <div
                             key={p.id}
                             className={cn(
-                              "flex items-center gap-2 rounded-md px-2 py-1.5 border transition-colors",
+                              "flex items-center gap-2 rounded-md px-2 py-1 border transition-colors",
                               disabled && "opacity-40",
                             )}
                           >

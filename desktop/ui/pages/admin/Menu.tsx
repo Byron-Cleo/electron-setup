@@ -11,7 +11,6 @@ import DiscontinuedMenusTable from "@/components/menu/DiscontinuedMenusTable"
 import AccompanimentsTable from "@/components/menu/AccompanimentsTable"
 import CreateMenuDialog from "@/components/menu/CreateMenuDialog"
 import MenuStockStatusCard from "@/components/menu/MenuStockStatusCard"
-import ProductionGuidanceCard from "@/components/menu/ProductionGuidanceCard"
 import RemainingStockDashboard from "@/components/menu/RemainingStockDashboard"
 import { getCookedMenus, getAssignedLeftovers } from "@/lib/api"
 
@@ -124,24 +123,6 @@ function Menu() {
 
           <Card
             className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
-            onClick={() => { setView("all-menu"); setSubView(null) }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <List size={24} className="text-green-600" />
-              </div>
-              <div>
-                <Heading as="h3" className="text-lg text-admin-header-text">
-                  All Restaurant Menu
-                </Heading>
-                <p className="text-sm text-admin-muted">View all menu items</p>
-                <p className="text-xs text-admin-muted mt-1">Manage the full restaurant menu catalog</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card
-            className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
             onClick={() => setView("remaining-stock")}
           >
             <div className="flex items-center gap-4">
@@ -150,7 +131,7 @@ function Menu() {
               </div>
               <div>
                 <Heading as="h3" className="text-lg text-admin-header-text">
-                  Remaining Stock Production
+                  Leftover Food Stock
                 </Heading>
                 <div className="flex items-center gap-2 mt-1">
                   {remainingCount > 0 ? (
@@ -168,12 +149,28 @@ function Menu() {
               </div>
             </div>
           </Card>
+
+          <Card
+            className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+            onClick={() => { setView("all-menu"); setSubView(null) }}
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
+                <List size={24} className="text-green-600" />
+              </div>
+              <div>
+                <Heading as="h3" className="text-lg text-admin-header-text">
+                  All Restaurant Menu
+                </Heading>
+                <p className="text-sm text-admin-muted">View all menu items</p>
+                <p className="text-xs text-admin-muted mt-1">Manage the full restaurant menu catalog</p>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 
       {view === "dashboard" && <MenuStockStatusCard />}
-
-      {view === "dashboard" && <ProductionGuidanceCard />}
 
       {view === "cooked-food" && (
         <div className="space-y-4">

@@ -230,6 +230,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
         address: "Nairobi",
         poweredBy: "Apydy Technologies",
         tel: "0701315250",
+        services: "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
       },
       shift: {
         type: r.shift.type,

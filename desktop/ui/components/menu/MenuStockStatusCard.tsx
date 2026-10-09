@@ -184,7 +184,7 @@ export default function MenuStockStatusCard() {
           />
           <StatusSection
             icon={AlertTriangle}
-            title="Running Low (≤ 5)"
+            title="Running Low (≤ 10)"
             color="red"
             items={status?.runningLow ?? []}
             showRemaining

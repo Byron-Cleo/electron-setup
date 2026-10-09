@@ -79,6 +79,7 @@ function buildShiftReportData(report: ShiftReport): ShiftReportData {
       address: "Nairobi",
       poweredBy: "Apydy Technologies",
       tel: "0701315250",
+      services: "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
     },
     shift: {
       type: report.shift.type,
