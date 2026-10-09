@@ -103,6 +103,16 @@ export function registerStockRequestHandlers() {
   ipcMain.handle("stock-request:fulfill", async (_event, id: string, data) =>
     apiFetch(`/stock-requests/${id}/fulfill`, { method: "PUT", body: JSON.stringify(data) })
   );
+  ipcMain.handle("stock-request:adjust", async (_event, id: string, data) =>
+    apiFetch(`/stock-requests/${id}/adjust`, { method: "PUT", body: JSON.stringify(data) })
+  );
+}
+
+export function registerStockReturnHandlers() {
+  ipcMain.handle("stock-return:get-all", async () => apiFetch("/stock-returns"));
+  ipcMain.handle("stock-return:create", async (_event, data) =>
+    apiFetch("/stock-returns", { method: "POST", body: JSON.stringify(data) })
+  );
 }
 
 export function registerCategoryHandlers() {

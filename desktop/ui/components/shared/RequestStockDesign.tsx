@@ -3,12 +3,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Heading } from "@/components/ui/heading"
 import { DataTable, type Column } from "@/components/ui/data-table"
-import { stockSupplyImageUrl, formatQuantityWithUnit } from "@/lib/api"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { stockSupplyImageUrl, formatQuantityWithUnit, getStockRequests, adjustStockRequest } from "@/lib/api"
 import { formatDate } from "@/lib/utils"
-import { getStockRequests } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import { FulfillItemDialog } from "@/components/store/FulfillItemDialog"
-import { ShoppingBasket } from "lucide-react"
+import { useAuthStore } from "@/stores/auth"
+import { Pencil, ShoppingBasket } from "lucide-react"
 
 type TabStatus = "ALL" | "PENDING" | "PARTIAL" | "COMPLETED"
 
@@ -24,6 +33,8 @@ interface RequestStockDesignProps {
   showDepartmentColumn?: boolean
   /** Show the Action column (Fulfill button). Default: true */
   showActionColumn?: boolean
+  /** Show the Adjust column — kitchen edits requested amounts while stock is still raw. Default: false */
+  allowAdjust?: boolean
   /** Callback when a request is fulfilled */
   onRequestFulfilled?: () => void
   /** Table title */
@@ -42,23 +53,37 @@ const STATUS_TEXT_COLOR: Record<string, string> = {
   COMPLETED: "text-status-completed-text",
 }
 
+/**
+ * Adjust lock: pending/partial requests are always adjustable; a completed
+ * request only stays adjustable through the day it was last touched
+ * (updatedAt, Nairobi date). Completed on a past date is closed history.
+ */
+function isAdjustableRequest(request: StockRequest): boolean {
+  if (request.status !== "COMPLETED") return true
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
+  const touched = new Date(request.updatedAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
+  return touched === today
+}
+
 const ALL_COLUMNS: Column[] = [
   { label: "Image", key: "image", align: "center" },
   { label: "Name", key: "name", align: "left" },
-  { label: "Requested", key: "requested", align: "center" },
-  { label: "Delivered", key: "delivered", align: "center" },
-  { label: "Remaining", key: "remaining", align: "center" },
+  { label: "Requested", key: "requested", align: "center", className: "bg-blue-100" },
+  { label: "Delivered", key: "delivered", align: "center", className: "bg-gray-100" },
+  { label: "Remaining", key: "remaining", align: "center", className: "bg-green-100" },
   { label: "Request Status", key: "status", align: "center" },
   { label: "Department", key: "department", align: "left" },
   { label: "Requested By", key: "requestedBy", align: "left" },
   { label: "Req. Date", key: "reqDate", align: "left" },
-  { label: "Action", key: "action", isAction: true },
+  { label: "Adjust", key: "adjust", isAction: true, align: "center", className: "bg-red-100" },
+  { label: "Action", key: "action", isAction: true, align: "center" },
 ]
 
 export function RequestStockDesign({
   department,
   showDepartmentColumn = true,
   showActionColumn = true,
+  allowAdjust = false,
   onRequestFulfilled,
   title = "Stock Requests",
 }: RequestStockDesignProps) {
@@ -68,6 +93,7 @@ export function RequestStockDesign({
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
   const [fulfillingItem, setFulfillingItem] = useState<FlatItem | null>(null)
+  const [adjustingItem, setAdjustingItem] = useState<FlatItem | null>(null)
 
   useEffect(() => {
     loadRequests()
@@ -118,9 +144,10 @@ export function RequestStockDesign({
     return ALL_COLUMNS.filter((col) => {
       if (col.key === "department" && !showDepartmentColumn) return false
       if (col.key === "action" && !showActionColumn) return false
+      if (col.key === "adjust" && !allowAdjust) return false
       return true
     })
-  }, [showDepartmentColumn, showActionColumn])
+  }, [showDepartmentColumn, showActionColumn, allowAdjust])
 
   const {
     currentPage,
@@ -203,6 +230,21 @@ export function RequestStockDesign({
           </span>
         )
       }
+      case "adjust":
+        return allowAdjust && isAdjustableRequest(request) ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-amber-600 border-amber-200 hover:bg-amber-50"
+            onClick={(e) => {
+              e.stopPropagation()
+              setAdjustingItem(fi)
+            }}
+          >
+            <Pencil size={14} className="mr-1" />
+            Adjust
+          </Button>
+        ) : null
       case "action":
         return showActionColumn && request.status !== "COMPLETED" ? (
           <Button
@@ -280,6 +322,119 @@ export function RequestStockDesign({
           onFulfilled={handleFulfilled}
         />
       )}
+
+      {allowAdjust && adjustingItem && (
+        <AdjustItemDialog
+          flatItem={adjustingItem}
+          open={!!adjustingItem}
+          onClose={() => setAdjustingItem(null)}
+          onAdjusted={handleFulfilled}
+        />
+      )}
     </div>
+  )
+}
+
+/**
+ * Change a requested amount while the stock is still raw. Reducing above the
+ * delivered amount refunds the store shelf automatically; reducing below it
+ * returns the uncooked surplus via the backend's cap (cooked stock never
+ * goes back); increasing is gated on store availability.
+ */
+function AdjustItemDialog({
+  flatItem,
+  open,
+  onClose,
+  onAdjusted,
+}: {
+  flatItem: FlatItem
+  open: boolean
+  onClose: () => void
+  onAdjusted: () => void
+}) {
+  const { item, request } = flatItem
+  const user = useAuthStore((s) => s.user)
+  const [qty, setQty] = useState(Number(item.quantityRequested))
+  const [notes, setNotes] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
+
+  const requested = Number(item.quantityRequested)
+  const delivered = Number(item.quantityDelivered)
+  const isImplicitReturn = qty < delivered
+
+  async function handleSubmit() {
+    if (!user) return
+    try {
+      setSubmitting(true)
+      setError("")
+      await adjustStockRequest(request.id, {
+        adjustedById: user.id,
+        notes: notes || undefined,
+        items: [{ stockRequestItemId: item.id, quantityRequested: qty }],
+      })
+      onAdjusted()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to adjust request")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Adjust Requested Amount</DialogTitle>
+          <DialogDescription>
+            {item.stockSupply.name} — Order of stock still raw can be corrected up or down.
+            Requested {formatQuantityWithUnit(requested, item.stockSupply.unit)},
+            delivered {formatQuantityWithUnit(delivered, item.stockSupply.unit)}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="adjust-qty">New quantity ({item.stockSupply.unit}) — decimals allowed</Label>
+            <Input
+              id="adjust-qty"
+              type="number"
+              min={0.01}
+              step={0.01}
+              value={qty}
+              onChange={(e) => setQty(parseFloat(e.target.value) || 0)}
+            />
+            {isImplicitReturn ? (
+              <p className="text-xs text-amber-600 font-medium">
+                Below the delivered amount — {formatQuantityWithUnit(delivered - qty, item.stockSupply.unit)} of
+                uncooked stock will be returned to the store automatically. Cooked stock can never go back.
+              </p>
+            ) : (
+              <p className="text-xs text-admin-muted">
+                Reducing refunds the un-delivered difference to the store shelf; increasing is allowed when the
+                store has stock.
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="adjust-notes">Notes (optional)</Label>
+            <Input
+              id="adjust-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Reason for the adjustment"
+            />
+          </div>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={submitting || !user || qty <= 0}>
+            {submitting ? "Adjusting..." : "Adjust"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -88,11 +88,24 @@ router.get("/carry-over", async (_req, res) => {
     }
   }
 
+  // Stock returned to the store stops counting as kitchen carry-over.
+  const allReturns = await prisma.stockReturn.findMany({
+    where: { createdAt: { lt: today } },
+    select: { stockSupplyId: true, quantityReturned: true },
+  });
+  const returnsBySupply = new Map<string, number>();
+  for (const ret of allReturns) {
+    returnsBySupply.set(
+      ret.stockSupplyId,
+      (returnsBySupply.get(ret.stockSupplyId) ?? 0) + Number(ret.quantityReturned),
+    );
+  }
+
   const carryOver = Array.from(carryOverMap.entries())
     .map(([id, data]) => ({
       id,
       name: data.name,
-      quantity: data.ordered - data.cooked,
+      quantity: data.ordered - data.cooked - (returnsBySupply.get(id) ?? 0),
     }))
     .filter((item) => item.quantity > 0);
 
@@ -563,6 +576,17 @@ router.put("/:id", async (req, res) => {
     include: { stockSupply: { select: { platesPerUnit: true, menus: { select: { menuId: true } } } } },
   });
   if (!existing) return res.status(404).json({ error: "Cooking record not found" });
+
+  // Past-date production is closed history: yesterday's batches may already be
+  // sold or allocated, so only records cooked today (Nairobi date) can be
+  // corrected. The same rule gates the Edit button in Kitchen Production.
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  const cookedStr = new Date(existing.createdAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  if (cookedStr !== todayStr) {
+    return res.status(400).json({
+      error: `Cooking record from a past date (${cookedStr}) can no longer be edited — sold/assigned batches are immutable`,
+    });
+  }
 
   // Reject attempts to set shiftId to null/falsy if provided
   if (req.body.shiftId !== undefined && !req.body.shiftId) {

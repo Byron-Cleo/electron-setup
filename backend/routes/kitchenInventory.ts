@@ -33,6 +33,13 @@ router.get("/", async (req, res) => {
         where: { stockSupplyId: item.id },
       });
 
+      // Stock returned to the store is no longer raw stock the kitchen holds.
+      const returnedAgg = await prisma.stockReturn.aggregate({
+        _sum: { quantityReturned: true },
+        where: { stockSupplyId: item.id },
+      });
+      const totalReturned = Number(returnedAgg._sum.quantityReturned ?? 0);
+
       // Walk through fulfillments oldest-first, consuming them against cooked amount
       let remainingToConsume = Number(totalCookedAllTime._sum.quantityCooked ?? 0)
       let activeOrdered = 0
@@ -55,7 +62,7 @@ router.get("/", async (req, res) => {
       // Plates made = activeCooked × platesPerUnit (configured yield)
       const totalPlatesProduced = Number(item.platesPerUnit ?? 0) * activeCooked
 
-      const rawStockPending = activeOrdered - activeCooked
+      const rawStockPending = activeOrdered - activeCooked - totalReturned
 
       // Get the latest cooking record date for this item
       const latestRecord = await prisma.cookingRecord.findFirst({
