@@ -7,6 +7,9 @@ import path from "path";
 import crypto from "crypto";
 import { uploadsDir } from "../db/uploads.js";
 import { batchPools, round2, sellableInfoForMenu, soldByMenuForBatches } from "../pools.js";
+// Same shift resolution as order placement, so direct-sale top-ups stamp the
+// shift that is actually taking orders ("Received" in its report).
+import { resolveCurrentShift } from "./orders.js";
 import fs from "fs/promises";
 
 const router = Router();
@@ -712,9 +715,24 @@ router.post("/upload", uploadMenuImage.single("image"), (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images, portions } = req.body;
+  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images, portions, requiresCooking } = req.body;
   if (!name || !category) {
     return res.status(400).json({ error: "name, category are required" });
+  }
+
+  if (requiresCooking !== undefined && typeof requiresCooking !== "boolean") {
+    return res.status(400).json({ error: "requiresCooking must be a boolean" });
+  }
+
+  // Stock is the admin-keyed ledger of a DIRECT-SALE item only. A cooked
+  // item's stock is derived from the batch pool — keying it in would be
+  // silently overwritten by the next recompute, so it is rejected outright.
+  const isDirect = requiresCooking === false;
+  if (stock !== undefined && !isDirect) {
+    return res.status(400).json({ error: "stock can only be keyed in for direct-sale items (requiresCooking: false)" });
+  }
+  if (stock !== undefined && (typeof stock !== "number" || !Number.isFinite(stock) || stock < 0)) {
+    return res.status(400).json({ error: "stock must be a non-negative number" });
   }
 
   if (images !== undefined && !Array.isArray(images)) {
@@ -760,6 +778,7 @@ router.post("/", async (req, res) => {
           hasVegetable: hasVegetable ?? false,
           starchId: starchId ?? null,
           vegetableId: vegetableId ?? null,
+          requiresCooking: requiresCooking ?? true,
         },
       });
 
@@ -793,7 +812,11 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   if (!UUID_RE.test(id)) return res.status(404).json({ error: "Not found" });
-  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images, portions } = req.body;
+  const { name, slug, category, stock, price, mealTypes, hasStarch, hasVegetable, starchId, vegetableId, images, portions, requiresCooking } = req.body;
+
+  if (requiresCooking !== undefined && typeof requiresCooking !== "boolean") {
+    return res.status(400).json({ error: "requiresCooking must be a boolean" });
+  }
 
   if (images !== undefined && !Array.isArray(images)) {
     return res.status(400).json({ error: "images must be an array of strings" });
@@ -827,6 +850,8 @@ router.put("/:id", async (req, res) => {
         hasVegetable: true,
         starchId: true,
         vegetableId: true,
+        requiresCooking: true,
+        stock: true,
         MenuMealType: { select: { mealType: true } },
       },
     });
@@ -844,6 +869,31 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ error: "vegetableId is required when hasVegetable is true" });
     }
 
+    // Stock is keyable only while the item is (or becomes) direct-sale. A
+    // cooked item's stock is the derived pool mirror — writes are rejected so
+    // the ledger can never drift from the batches behind it.
+    const effectiveRequiresCooking = requiresCooking !== undefined ? requiresCooking : existing.requiresCooking;
+    if (stock !== undefined && effectiveRequiresCooking !== false) {
+      return res.status(400).json({ error: "stock can only be keyed in for direct-sale items (requiresCooking: false)" });
+    }
+    if (stock !== undefined && (typeof stock !== "number" || !Number.isFinite(stock) || stock < 0)) {
+      return res.status(400).json({ error: "stock must be a non-negative number" });
+    }
+
+    // Direct-sale top-up accounting: a POSITIVE delta keyed in while the shift
+    // that takes orders is running is "Received" stock for that shift's report.
+    // Reductions are corrections and record nothing. Top-ups keyed between
+    // shifts need no stamp — the next auto-open snapshots live stock as the
+    // opening figure, exactly like a tray cooked before opening.
+    let receivedStamp: { shiftId: string; delta: number } | null = null;
+    if (stock !== undefined && effectiveRequiresCooking === false) {
+      const delta = round2(stock - Number(existing.stock));
+      if (delta > 0) {
+        const runningShift = await resolveCurrentShift();
+        if (runningShift) receivedStamp = { shiftId: runningShift.id, delta };
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const data: Record<string, unknown> = {
         ...(name !== undefined && { name }),
@@ -856,12 +906,26 @@ router.put("/:id", async (req, res) => {
         ...(hasVegetable !== undefined && { hasVegetable }),
         ...(starchId !== undefined && { starchId: starchId ?? null }),
         ...(vegetableId !== undefined && { vegetableId: vegetableId ?? null }),
+        ...(requiresCooking !== undefined && { requiresCooking }),
       };
 
       await tx.menu.update({
         where: { id },
         data,
       });
+
+      if (receivedStamp) {
+        await tx.shiftSnapshot.upsert({
+          where: { shiftId_menuId: { shiftId: receivedStamp.shiftId, menuId: id } },
+          create: {
+            shiftId: receivedStamp.shiftId,
+            menuId: id,
+            openingPlates: Number(existing.stock),
+            platesReceived: receivedStamp.delta,
+          },
+          update: { platesReceived: { increment: receivedStamp.delta } },
+        });
+      }
 
       if (mealTypes !== undefined) {
         await tx.menuMealType.deleteMany({ where: { menuId: id } });

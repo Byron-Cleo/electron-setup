@@ -37,7 +37,9 @@ function dateOnly(d: Date): Date {
 // across days (misconfig / unrestarted drift) from capturing today's orders.
 // Once it closes (manually or at its drift deadline), attachment falls back to
 // the newest open shift of the current operation day.
-async function resolveCurrentShift(): Promise<{ id: string } | null> {
+// Exported for menu.ts: direct-sale stock top-ups stamp the shift currently
+// taking orders, so "Received" in the report matches the shift that sells them.
+export async function resolveCurrentShift(): Promise<{ id: string } | null> {
   const now = new Date();
   const operationDay = dateOnly(now);
 
@@ -298,11 +300,23 @@ const lineKey = (item: {
         // pre-sale stock when the item has no snapshot — e.g. added mid-shift).
         if (currentShift) {
           // Freeze the engine alongside the figures so reports can tell a
-          // shared pool from a split without re-deriving it later.
-          const supply = await tx.stockSupplyMenu.findFirst({
-            where: { menuId: item.menuId },
-            select: { stockSupply: { select: { sellingMode: true } } },
-          });
+          // shared pool from a split without re-deriving it later. Direct-sale
+          // items are their own ledger — never a shared mirror — so they are
+          // stamped ALLOCATED regardless of any dormant supply link.
+          const [supply, directRow] = await Promise.all([
+            tx.stockSupplyMenu.findFirst({
+              where: { menuId: item.menuId },
+              select: { stockSupply: { select: { sellingMode: true } } },
+            }),
+            tx.menu.findUnique({
+              where: { id: item.menuId },
+              select: { requiresCooking: true },
+            }),
+          ]);
+          const sellingMode =
+            directRow?.requiresCooking === false
+              ? ("ALLOCATED" as const)
+              : (supply?.stockSupply.sellingMode ?? "ALLOCATED");
           const plates = round2(factor * item.qty);
           await tx.shiftSnapshot.upsert({
             where: { shiftId_menuId: { shiftId: currentShift.id, menuId: item.menuId } },
@@ -311,7 +325,7 @@ const lineKey = (item: {
               menuId: item.menuId,
               openingPlates: sellableBefore,
               platesSold: plates,
-              sellingMode: supply?.stockSupply.sellingMode ?? "ALLOCATED",
+              sellingMode,
             },
             update: { platesSold: { increment: plates } },
           });
@@ -616,6 +630,33 @@ router.post("/:id/void", async (req, res) => {
         const menu = await tx.menu.findUnique({ where: { id: item.menuId } });
         if (!menu) {
           console.warn(`Menu item ${item.menuId} not found during void; stock restoration skipped for this item`);
+        }
+
+        // Direct-sale lines have NO allocation rows (their consumption went
+        // straight into the keyed Menu.stock ledger), so the ledger read below
+        // would report 0 and restore nothing. Restore from the line's own
+        // plates — the exact inverse of what consumeForOrderItem charged — and
+        // pull the shift snapshot down by the same amount.
+        if (menu && menu.requiresCooking === false) {
+          const directFactor = await factorForServing(tx, item.menuId, item.portionId);
+          const directPlates = round2(directFactor * item.qty);
+          await tx.menu.update({
+            where: { id: item.menuId },
+            data: { stock: { increment: directPlates } },
+          });
+
+          if (order.shiftId) {
+            const directSnapshot = await tx.shiftSnapshot.findUnique({
+              where: { shiftId_menuId: { shiftId: order.shiftId, menuId: item.menuId } },
+            });
+            if (directSnapshot) {
+              await tx.shiftSnapshot.update({
+                where: { id: directSnapshot.id },
+                data: { platesSold: Math.max(0, Number(directSnapshot.platesSold) - directPlates) },
+              });
+            }
+          }
+          continue;
         }
 
         // Restore from the allocation ledger rather than nudging Menu.stock:

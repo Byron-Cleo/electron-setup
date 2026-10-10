@@ -415,6 +415,8 @@ export function WaiterMenuGrid({
     const inStock = servings > 10
     // Only worth showing when the factor makes plates and servings disagree.
     const weighted = factor > 0 && factor !== 1
+    // Direct-sale items count units (sodas, packaging), never cooked plates.
+    const isDirectSale = item.requiresCooking === false
     return (
       <Card
         key={item.id}
@@ -442,7 +444,7 @@ export function WaiterMenuGrid({
                 platesBadgeClass(servings),
               )}
             >
-              {soldOut ? "Sold Out" : weighted ? `${servings} left` : `${servings} plates`}
+              {soldOut ? "Sold Out" : weighted || isDirectSale ? `${servings} left` : `${servings} plates`}
             </span>
           </div>
           {weighted && (

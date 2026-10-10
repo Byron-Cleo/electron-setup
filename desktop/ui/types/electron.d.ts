@@ -69,6 +69,11 @@ interface MenuItem {
   sharedPlates?: number;
   /** Names of the stock supplies this dish can be made from. */
   supplyNames?: string[];
+  /**
+   * False = direct-sale item: no cooking batches, stock is the admin-keyed
+   * ledger, decremented per sale. True/undefined = cooked dish (pool engine).
+   */
+  requiresCooking?: boolean;
 }
 
 /**
@@ -95,6 +100,8 @@ interface MenuCreateData {
   hasVegetable?: boolean;
   starchId?: string | null;
   vegetableId?: string | null;
+  /** False = direct-sale item; `stock` is only accepted for these. */
+  requiresCooking?: boolean;
   /** Dish-owned portion options (Fried Eggs 1pc / 2pc). Omit to leave them alone. */
   portions?: PortionInput[];
 }
@@ -918,6 +925,10 @@ interface ShiftPlateMovementRow {
   menuName: string;
   openingPlates: number;
   platesCooked: number;
+  /** Direct-sale units keyed in while the shift ran (0 for cooked rows). */
+  platesReceived: number;
+  requiresCooking: boolean;
+  isDirectSale: boolean;
   platesSold: number;
   platesSoldAtAutoClose: number | null;
   driftSold: number | null;
@@ -927,6 +938,8 @@ interface ShiftPlateMovementRow {
   driftMinutes: number | null;
   closingStockAtManualClose: number | null;
   isLiveCurrent?: boolean;
+  /** Shared-mirror rows are shown but skipped by the totals. */
+  isSharedMirror?: boolean;
 }
 
 interface ShiftRevenueEntry {
@@ -1024,6 +1037,9 @@ interface ShiftReportData {
     menuName: string;
     openingPlates: number;
     platesCooked: number;
+    /** Direct-sale units keyed in while the shift ran (0 for cooked rows). */
+    platesReceived: number;
+    isDirectSale: boolean;
     platesSold: number;
     platesSoldAtAutoClose: number | null;
     driftSold: number | null;
