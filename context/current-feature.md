@@ -1,15 +1,22 @@
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
+- Hide the login image carousel on ALL phones (portrait + landscape) — a phone shows only the PIN keypad.
+- Keep the carousel + two-column layout on laptop/desktop sizes.
+
 ## Notes
+
+- One file: `desktop/ui/pages/Login.tsx`. Carousel shown only when viewport is `@media(min-width:640px)_and_(min-height:600px)` (width alone can't exclude a ~844px-wide landscape phone); no `index.css` change.
+- Frontend-only: no backend rebuild/restart, no new installer (desktop visuals unchanged). Phone browser live view refreshed via `build:web -- --server same-origin`.
+- Ref: `context/features/frontend/login-hide-carousel-phone.md` · Branch: `feature/admin/login-hide-carousel-phone`
 
 ## History
 
