@@ -13,6 +13,29 @@ Complete
 
 ## History
 
+### backend - 2026-10-10 — Assigned/Unsold Leftovers: Batch Number Column
+
+- **`getAssignedLeftovers` payload gains `batchNumbers`** — `AssignedLeftoverRow` now carries `batchNumbers: number[]`; `computeAssignedLeftovers` accumulates each row's source `record.batchNumber` into a `Set<number>` (both `upsert` call sites pass `batchNumber`), emitted sorted ascending. Backend: `backend/routes/shiftCarryOver.ts`; row type `desktop/ui/types/electron.d.ts`
+- **UI** — `AssignedLeftoversTable.tsx` new first "Batch No." column rendered as `#N` / `#1, #2` / `—`, table footer `colSpan` 5→6
+- **Deploy + orphan cleanup** — backend rebuilt (`npm run build --prefix backend`), then an orphaned SYSTEM node process (**PID 10512**) was squatting `:3001`, so the service hit `EADDRINUSE` and sat in a bogus `PAUSED` state (old build served). Killed it via an elevated `RunAs` helper (netstat PID → `taskkill /F`), restarted `EraevaBackend` → **RUNNING** (NSSM PID 2992 / node child owns :3001), fresh `dist` confirmed (`batchNumbers` present in `dist/routes/shiftCarryOver.js`), `/health` ok
+- `tsc -b` + ESLint clean; production DB currently holds **0** leftover rows, so the column renders but real-data runtime is unverified
+- Branch `feature/admin/leftover-assigned-batch-column` (kept, not deleted) · commit `7c108fd`, merged `--no-ff` into `restaurant-build`
+
+### frontend - 2026-10-10 — Phone PIN Login Uses Server Origin
+
+- **Root cause** — `desktop/ui/stores/auth.ts` hardcoded `http://localhost:3001/api` as the fetch fallback, so phone browsers POSTed the PIN to their own device and login failed. Fixed by exporting `resolveApiOrigin()` from `desktop/ui/lib/api.ts` and using `import.meta.env.VITE_API_BASE ?? \`${resolveApiOrigin()}/api\`` (falls back to `window.location.origin` on the served web UI)
+- **Verified E2E (Playwright)** — from `http://192.168.100.45:3001`, PIN `1234` → POST to `http://192.168.100.45:3001/api/auth/login` → 200 → navigates to `/#/admin`
+- `tsc -b` + ESLint clean. Frontend-only → covered by the `build:web -- --server same-origin` rebuild
+- Branch: `feature/admin/phone-login-origin` (kept, not deleted) · commit `e0da94e`, merged `--no-ff` into `restaurant-build`
+
+### frontend - 2026-10-10 — Kitchen-Style Tabs for Leftover Food Stock Card
+
+- **Three tabs replace the stacked sections** — `RemainingStockDashboard.tsx` tab bar (`flex gap-1 border-b`, active `border-b-2 border-admin-accent`) with labels **Current Operation Date / Not yet assigned / Assigned · unsold** and count badges; `LeftoverTab = "current" | "unassigned" | "previous"` (default `"current"`), only the selected section renders (`showHeading={false}`) — mirrors the `MenuTableNav` / `Kitchen.tsx` pattern
+- **Verified** — Playwright: all three labels render, exactly one section visible per tab (active `border-b-2` confirmed)
+- `tsc -b` + ESLint clean; frontend-only
+- **Builds** — installer `release/Eraeva POS System-0.0.0-win-x64.exe` (via `npm run build:win`) then browser bundle restored with `npm run build:web -- --server same-origin` (`http://localhost:3001/` → 200, serving `/assets/index-CtWwIMYU.js`)
+- Branch `feature/admin/leftover-stock-tabs` (kept) · commit `bf33ed9`, merged `--no-ff`
+
 ### frontend - 2026-10-10 — Login Carousel Hidden on Phone Screens
 
 - **Carousel only on laptop/desktop** — the login two-column layout (image carousel left, PIN keypad right) now collapses to a single full-width keypad column on **all phones**, portrait *and* landscape. Shown only when the viewport is `@media (min-width:640px) and (min-height:600px)`; width alone couldn't exclude a landscape phone (~844px wide), so the height clause does the work (phone landscape heights top out ~448px, laptops are ≥720px). A resized-short desktop window also correctly hides it. One file: `desktop/ui/pages/Login.tsx` (container `grid-cols-1` + compound-variant `grid-cols-2`; left carousel column `hidden` + compound-variant `block`); `ImageCarousel`, the `getMenuImages` polling and the `fade-in` keyframe stay (desktop still uses them); no `index.css` change
