@@ -39,6 +39,10 @@ const formSchema = z
     name: z.string().min(1, "Name is required"),
     category: z.string().min(1, "Category is required"),
     price: z.coerce.number().min(0, "Price must be 0 or more"),
+    // Direct sale = no cooking batches: stock is keyed in here and decrements
+    // per order. Cooked items (the default) leave stock to the pool engine.
+    isDirectSale: z.enum(["yes", "no"]),
+    directStock: z.coerce.number().min(0, "Stock must be 0 or more"),
     images: z.array(z.string()).optional(),
     mealTypes: z.array(z.string()).min(1, "Select at least one meal period"),
     hasStarch: z.enum(["yes", "no"]),
@@ -61,6 +65,9 @@ const formSchema = z
       .default([]),
   })
   .superRefine((data, ctx) => {
+    // Starch/vegetable/portions only apply to cooked dishes — the controls are
+    // hidden for direct-sale items, so their rules must not fire either.
+    if (data.isDirectSale === "yes") return
     if (data.hasStarch === "yes" && !data.starchId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -182,6 +189,8 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
       name: "",
       category: "",
       price: 0,
+      isDirectSale: "no",
+      directStock: 0,
       images: [],
       mealTypes: [],
       hasStarch: "no",
@@ -191,6 +200,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
     },
   })
 
+  const watchedIsDirectSale = useWatch({ control: form.control, name: "isDirectSale" })
   const watchedHasStarch = useWatch({ control: form.control, name: "hasStarch" })
   const watchedHasVegetable = useWatch({ control: form.control, name: "hasVegetable" })
   const watchedHasPortion = useWatch({ control: form.control, name: "hasPortion" })
@@ -225,6 +235,8 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
           name: item.name,
           category: item.category,
           price: Number(item.price),
+          isDirectSale: item.requiresCooking === false ? "yes" : "no",
+          directStock: Number(item.stock ?? 0),
           images: item.images ?? [],
           mealTypes: item.mealTypes ?? [],
           hasStarch: item.hasStarch ? "yes" : "no",
@@ -277,6 +289,11 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
         slug: slugify(data.name),
         category: data.category,
         price: data.price,
+        requiresCooking: data.isDirectSale !== "yes",
+        // Only direct-sale items carry a keyed stock number. Cooked items do
+        // not send stock at all — the server rejects it to protect the
+        // pool-derived mirror.
+        ...(data.isDirectSale === "yes" ? { stock: data.directStock } : {}),
         images: data.images ?? [],
         mealTypes: data.mealTypes,
         hasStarch: data.hasStarch === "yes",
@@ -391,6 +408,34 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
 
               <FormField
                 control={form.control}
+                name="isDirectSale"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Direct sale (no cooking)?</FormLabel>
+                    <FormControl>
+                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="yes" id="direct-yes" />
+                          <Label htmlFor="direct-yes" className="font-normal cursor-pointer">Yes</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="no" id="direct-no" />
+                          <Label htmlFor="direct-no" className="font-normal cursor-pointer">No</Label>
+                        </div>
+                      </RadioGroup>
+                    </FormControl>
+                    <p className="text-xs text-gray-500">
+                      Yes for ready-to-sell items (soda, water, packaging): stock is
+                      keyed in and each order takes from it. No for kitchen dishes
+                      cooked in batches.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="images"
                 render={({ field }) => (
                   <FormItem>
@@ -447,8 +492,29 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
 
               </div>
 
-              {/* Right column — starch, vegetable + Sold in Portions editors */}
+              {/* Right column — direct-sale stock, or starch/vegetable + portions */}
               <div className="space-y-3">
+                {watchedIsDirectSale === "yes" ? (
+                  <FormField
+                    control={form.control}
+                    name="directStock"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Stock on hand</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" min="0" step="1" placeholder="e.g. 20" />
+                        </FormControl>
+                        <p className="text-xs text-gray-500">
+                          Units ready to sell right now. Each order takes from this
+                          number until it hits 0 (the waiter card then shows Sold
+                          Out). Key in a new amount here anytime to top up.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                <>
                 <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <FormField
@@ -689,6 +755,8 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                       </FormItem>
                     )}
                   />
+                )}
+                </>
                 )}
               </div>
               </div>

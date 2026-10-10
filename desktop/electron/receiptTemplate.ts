@@ -237,6 +237,9 @@ export interface ShiftReportData {
     menuName: string;
     openingPlates: number;
     platesCooked: number;
+    /** Direct-sale units keyed in while the shift ran (0 for cooked rows). */
+    platesReceived: number;
+    isDirectSale: boolean;
     platesSold: number;
     platesSoldAtAutoClose: number | null;
     driftSold: number | null;
@@ -329,10 +332,11 @@ function shiftReportBody(data: ShiftReportData): string {
   ${blockCenter("PLATE MOVEMENT", "font-weight:bold; font-size:13px;")}
   ${divider()}
   ${data.plateMovement.length === 0 ? blockCenter("No snapshots recorded.") : ""}
-  ${data.plateMovement.length > 0 ? `<pre style="margin:0; font-family:${RECEIPT_FONT}; font-size:12px; line-height:1.5;">ITEM             OPEN  COOKED  SOLD  CLOSE
+  ${data.plateMovement.length > 0 ? `<pre style="margin:0; font-family:${RECEIPT_FONT}; font-size:12px; line-height:1.5;">ITEM             OPEN  CKD/REC SOLD  CLOSE
 ${"─".repeat(44)}
 ${data.plateMovement.map((p) =>
-  `<b>${p.menuName.slice(0, 16).padEnd(16)}</b>${String(p.openingPlates).padStart(5)}${String(p.platesCooked).padStart(7)}${String(p.platesSold).padStart(6)}${String(p.closingStockAtManualClose ?? "—").padStart(7)}`
+  // Direct-sale rows never cook — the column carries their keyed-in units.
+  `<b>${p.menuName.slice(0, 16).padEnd(16)}</b>${String(p.openingPlates).padStart(5)}${String(p.isDirectSale ? p.platesReceived : p.platesCooked).padStart(7)}${String(p.platesSold).padStart(6)}${String(p.closingStockAtManualClose ?? "—").padStart(7)}`
 ).join("\n")}</pre>
 ${blockCenter("OPEN = carry-forward opening plates from previous shift", "font-size:11px; margin-top:4px;")}` : ""}
   ${data.plateMovement.length > 0 ? divider() : ""}

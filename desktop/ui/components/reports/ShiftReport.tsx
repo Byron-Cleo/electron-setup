@@ -504,9 +504,10 @@ function ShiftReportView({ report }: Props) {
                     <tr className="border-b border-admin-card-border text-admin-muted">
                       <th className="px-3 py-2 text-center font-medium">Item</th>
                       <th className="px-3 py-2 text-center font-medium bg-yellow-100 text-yellow-900">Opening</th>
-                      <th className="px-3 py-2 text-center font-medium">Cooked</th>
+                      <th className="px-3 py-2 text-center font-medium" title="Plates from cooking batches — direct-sale items never cook">Cooked</th>
+                        <th className="px-3 py-2 text-center font-medium bg-blue-100 text-blue-900" title="Direct-sale units keyed in while this shift ran">Received</th>
                         <th className="px-3 py-2 text-center font-medium bg-red-100 text-red-900" title="Plates sold before the auto-close tick">Sold</th>
-                        <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="opening + cooked − sold before auto-close">Closing Stock</th>
+                        <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="opening + cooked + received − sold before auto-close">Closing Stock</th>
                       <th className="px-3 py-2 text-center font-medium bg-orange-100 text-orange-900">Drift Minutes</th>
                         <th className="px-3 py-2 text-center font-medium bg-red-100 text-red-900" title="plates sold after auto-close">Drift Sold<br />Count</th>
                       <th className="px-3 py-2 text-center font-medium">Wasted</th>
@@ -521,7 +522,10 @@ function ShiftReportView({ report }: Props) {
                       >
                         <td className="px-3 py-2 text-center text-sm font-bold text-admin-header-text">{row.menuName}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-yellow-100">{row.openingPlates}</td>
-                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums">{row.platesCooked}</td>
+                        {/* Direct-sale items never cook — "—" (not 0) says "not applicable". */}
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums">{row.isDirectSale ? "—" : row.platesCooked}</td>
+                        {/* Received = direct-sale top-ups keyed in mid-shift; cooked rows never receive. */}
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-blue-100 text-blue-900">{row.isDirectSale ? row.platesReceived : "—"}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-red-100 text-red-900">{row.platesSoldAtAutoClose ?? "—"}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-green-100">{row.closingStockAtAutoClose ?? "—"}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-orange-100">{formatDriftMinutes(row.driftMinutes)}</td>

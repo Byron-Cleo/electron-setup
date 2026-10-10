@@ -824,7 +824,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                     <div className="grid grid-cols-[1fr_42px_42px_42px_54px_50px_48px_52px] gap-x-2 text-xs font-semibold uppercase tracking-wide text-admin-muted">
                       <span>Item</span>
                       <span className="text-right">Open</span>
-                      <span className="text-right">Cooked</span>
+                      <span className="text-right" title="Cooked plates — direct-sale items show units received mid-shift instead">Cooked/Rec</span>
                       <span className="text-right">Sold</span>
                       <span className="text-right" title="Plates sold before auto-close">Pre-Auto</span>
                       <span className="text-right" title="Plates sold during drift">Drift Sold</span>
@@ -838,7 +838,8 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                       >
                         <span className="truncate">{row.menuName}</span>
                         <span className="text-right tabular-nums">{row.openingPlates}</span>
-                        <span className="text-right tabular-nums">{row.platesCooked}</span>
+                        {/* Direct-sale rows: keyed-in units received (they never cook). */}
+                        <span className="text-right tabular-nums">{row.isDirectSale ? row.platesReceived : row.platesCooked}</span>
                         <span className="text-right tabular-nums">{row.platesSold}</span>
                         <span className="text-right tabular-nums">{row.platesSoldAtAutoClose ?? "—"}</span>
                         <span className="text-right tabular-nums">{row.driftSold ?? "—"}</span>
