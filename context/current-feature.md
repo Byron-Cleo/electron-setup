@@ -1,29 +1,38 @@
 
 ## Platform
 
-backend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Eliminate the recurring multi-second login spinner permanently: the 9 legacy staff with `pinLookup IS NULL`, any wrong-PIN typo, and a future `PIN_PEPPER` rotation — with the author's no-lockout guarantee (`pin-lookup.ts:19-21`) preserved.
-- Prove completely new users are instant from their first login (create-time `pinLookup` at `users.ts:137` already covers this — no change required).
-- Backfill script verifies each PIN against its stored bcrypt hash BEFORE writing, so a mistyped/unknown PIN is skipped, never persisted.
-- Steady state: every login attempt (valid or wrong) resolves in ~3 ms; the full-table bcrypt scan fires at most once per pepper change, never per attempt.
-
 ## Notes
 
-- Branch: `feature/auth/permanent-instant-login` (created; no commits yet). Ref: `context/fix-plan/permanent-instant-login.md`.
-- Root cause: `findUserByPin()` fallback scans EVERY active user serially (~481 ms/user, measured 6.28 s live) on any fast-path miss — typos included.
-- Fix: legacy scan scoped to `pinLookup IS NULL` rows only (correct: a user with a lookup either matches the index or has a different PIN), plus a pepper-rotation rescue armed by `pinLookup("")` fingerprint (re-arms on pepper change; bcrypt ignores the pepper, so it still authenticates everyone). No schema/migration change.
-- Honest tradeoff: the first wrong-PIN attempt immediately after a service restart (before any successful fast-path hit) runs the pepper probe once; cached for the process lifetime. In practice restarts are rare (deploys) and the first login after restart is valid.
-- Backfill (`npx tsx scripts/backfill-pin-lookup.ts`) needs the operator to type the 9 staff's current PINs; skipped entries self-heal on first login (bounded scan of NULL rows).
-- Deploy: rebuild `backend` → UAC restart (`pos-backend-restart` scheduled task not visible to `User` account → `Start-Process -Verb RunAs` workaround) → `/health`.
-
 ## History
+
+### frontend - 2026-10-10 — Login Keypad Responsive (Any Screen Size, Browser-Aware Exit)
+
+- **Keypad fits every screen** — all 12 keys (1–9, 0, ✕, →) + PIN dots + footer fully visible, no clipping and no scrolling, at 390×844 / 360×740 / 844×390 landscape / 768×1024 / 1280×800 (`getBoundingClientRect`-asserted). Keys shrink-to-fit via `flex-1 grid-rows-4` rows + `h-full max-h-[80px] min-h-[40px] w-full max-w-[80px]` — **exact px values because the app's 18px root font makes spacing utilities like `max-h-20` compute to 90px** (caught live during verification); card `overflow-hidden` → `overflow-y-auto overscroll-contain` safety net
+- **`vh` → `dvh` sweep** — inner sizes had tracked the LARGE viewport against the `h-dvh` root (mobile URL-bar mismatch = the root cause of the operator's clipped 7-8-9/0/✕/submit rows); desktop-identical after the swap
+- **Responsive wording (operator request)** — header title → `text-[clamp(1.125rem,min(6dvh,5.5vw),3.75rem)]` (was wrapping to TWO 58px lines on phones), card title "Enter LOGIN PIN" → `text-[clamp(1rem,min(4dvh,4.5vw),2.25rem)]`; desktop values unchanged (48px / 32px); the freed space grew 390×844 keys from 47px to a full 80px tall
+- **Short-screen header compaction** — `[@media(max-height:560px)]:` overrides (logo/title/paddings) make rotated phones fit everything; zero effect on desktop
+- **Exit button Electron-only** — `{isElectron && …}` with `!!window.electron`; hidden in the phone browser (was a dead confirm popup), unchanged in the desktop app
+- **Touch polish** — `touch-manipulation` + `select-none` on all keys (no double-tap-zoom delay, no long-press selection)
+- Interaction-verified: 1-2-3-4 → dots fill → submit enables → **real login navigated to `#/admin`**; ✕ deletes digits and disables submit; Exit button count in browser = 0. `tsc -b` + `npm run build` clean, Login.tsx ESLint clean, repo total 785 pre-existing errors byte-identical to HEAD. **No ollama models used — manual implementation per operator directive**
+- One file changed: `desktop/ui/pages/Login.tsx` (no logic changes); carousel + two-column layout untouched per operator decision
+- Ref: `context/fix-plan/login-responsive-keypad.md` · Branch: `feature/admin/login-responsive-keypad` (kept, not deleted) · Commit `<pending>`, merged `--no-ff` as `<pending>`, pushed to `origin/restaurant-build` · Deploy PENDING on the restaurant server (frontend-only SSH flow): `git pull origin restaurant-build` → `npm run build` → `npm run build:web -- --server same-origin` — **NO backend rebuild, NO EraevaBackend restart** (static UI only; installed .exe terminals keep their packaged bundle)
+
+### backend - 2026-10-10 — Permanent Instant Login (parked: spec ready, zero commits)
+
+- Pushed to History to make way for the login-responsive-keypad frontend fix — NOT lost or cancelled: branch `feature/auth/permanent-instant-login` exists with no commits, full plan at `context/fix-plan/permanent-instant-login.md`, restartable as-is
+- Root cause (diagnosed, live-measured): `findUserByPin()` fallback serially bcrypt-scans EVERY active user (~481 ms/user, 6.28 s live) on any fast-path miss — hits the 9 legacy staff with `pinLookup IS NULL` and every wrong-PIN typo
+- Approved design (unimplemented): legacy scan scoped to `pinLookup IS NULL` rows only; pepper-rotation rescue armed by the `pinLookup("")` fingerprint (re-arms on `PIN_PEPPER` change; bcrypt ignores pepper so authentication never breaks); create-time `pinLookup` (`users.ts:137`) already covers new users; no-lockout guarantee (`pin-lookup.ts:19-21`) preserved; no schema/migration change
+- Backfill (`npx tsx scripts/backfill-pin-lookup.ts`): verifies each PIN against its stored bcrypt hash BEFORE writing — mistyped/unknown PINs skipped, self-heal on first login
+- Honest tradeoff accepted: first wrong-PIN attempt after a service restart runs the pepper probe once, cached for the process lifetime
+- Target steady state once implemented: every login attempt (valid or wrong) resolves in ~3 ms; full-table scan at most once per pepper change, never per attempt
 
 ### backend - 2026-10-10 — Order-Shift Attachment Guard + Production Migration History Squash
 
