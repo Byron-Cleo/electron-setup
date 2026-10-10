@@ -882,6 +882,7 @@ interface AssignedLeftoverRow {
   sold: number;
   remaining: number;
   batchCount: number;
+  batchNumbers: number[];
 }
 
 interface AssignedLeftovers {
