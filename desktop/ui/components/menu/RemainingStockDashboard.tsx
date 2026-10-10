@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { PackageOpen, Trash2, Utensils } from "lucide-react"
+import { Clock, PackageOpen, Trash2, Utensils } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -25,9 +25,11 @@ interface Props {
 }
 
 type StockTab = "wasted" | "leftovers" | null
+type LeftoverTab = "current" | "unassigned" | "previous"
 
 export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
   const [tab, setTab] = useState<StockTab>(null)
+  const [leftoverTab, setLeftoverTab] = useState<LeftoverTab>("current")
   const [leftovers, setLeftovers] = useState<AssignedLeftovers | null>(null)
   const [wasted, setWasted] = useState<WastedStockBatch[]>([])
   const [loading, setLoading] = useState(true)
@@ -123,9 +125,11 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
   }
 
   const previousRows = leftovers?.previous ?? []
+  const currentRows = leftovers?.current ?? []
   const assignedRows = [...(leftovers?.current ?? []), ...(leftovers?.previous ?? [])]
   const unassignedBatches = leftovers?.unassigned ?? []
   const assignedPlates = assignedRows.reduce((sum, row) => sum + row.remaining, 0)
+  const currentPlates = currentRows.reduce((sum, row) => sum + row.remaining, 0)
   const previousPlates = previousRows.reduce((sum, row) => sum + row.remaining, 0)
   const unassignedPlates = unassignedBatches.reduce((sum, batch) => sum + batch.unassigned, 0)
   const wastedPlates = wasted.reduce((sum, batch) => sum + batch.wastedQty, 0)
@@ -228,29 +232,51 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
       )}
 
       {tab === "leftovers" && (
-        <div className="space-y-8">
-          <AssignedLeftoversTable
-            variant="current"
-            rows={leftovers?.current ?? []}
-            operationDay={leftovers?.currentOperationDay ?? null}
-            onWasted={() => void loadData()}
-          />
-
-          <div className="space-y-5">
-            <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-              Earlier Operation Dates
-            </div>
-
-            <div>
-              <div className="mb-1 flex items-center gap-2">
-                <Heading as="h4" className="text-sm text-amber-900">Not yet assigned</Heading>
-                {unassignedBatches.length > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                    {unassignedBatches.length} Batch{unassignedBatches.length === 1 ? "" : "es"} ·{" "}
-                    {unassignedPlates} Plates
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-1 border-b border-admin-card-border">
+            {([
+              { key: "current", label: "Current Operation Date", icon: Utensils, count: currentRows.length, plates: currentPlates },
+              { key: "unassigned", label: "Not yet assigned", icon: PackageOpen, count: unassignedBatches.length, plates: unassignedPlates },
+              { key: "previous", label: "Assigned · unsold", icon: Clock, count: previousRows.length, plates: previousPlates },
+            ] as const).map(({ key, label, icon: Icon, count, plates }) => (
+              <button
+                key={key}
+                onClick={() => setLeftoverTab(key)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  leftoverTab === key
+                    ? "border-b-2 border-admin-accent text-admin-accent"
+                    : "text-admin-muted hover:text-admin-header-text"
+                }`}
+              >
+                <Icon size={16} />
+                {label}
+                {count > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-admin-card-border bg-admin-content px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-admin-muted">
+                    {count} · {plates} {plates === 1 ? "plate" : "plates"}
                   </span>
                 )}
-              </div>
+              </button>
+            ))}
+          </div>
+
+          {leftoverTab === "current" && (
+            <div>
+              <p className="mb-2 text-[11px] leading-relaxed text-admin-muted">
+                Dishes and shared pools already assigned but not fully sold. Un-wasted plates carry over
+                automatically as the next shift's opening stock — waste only what you are discarding.
+              </p>
+              <AssignedLeftoversTable
+                variant="current"
+                rows={currentRows}
+                operationDay={leftovers?.currentOperationDay ?? null}
+                onWasted={() => void loadData()}
+                showHeading={false}
+              />
+            </div>
+          )}
+
+          {leftoverTab === "unassigned" && (
+            <div>
               <p className="mb-2 text-[11px] leading-relaxed text-amber-700">
                 Cooked on an earlier operation date but never put on a menu, so it is not sellable and not
                 in stock. Assign it to carry over, or waste it.
@@ -264,16 +290,10 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
                 showHeading={false}
               />
             </div>
+          )}
 
+          {leftoverTab === "previous" && (
             <div>
-              <div className="mb-1 flex items-center gap-2">
-                <Heading as="h4" className="text-sm text-amber-900">Assigned · unsold</Heading>
-                {previousRows.length > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                    {previousRows.length} Item{previousRows.length === 1 ? "" : "s"} · {previousPlates} Plates
-                  </span>
-                )}
-              </div>
               <p className="mb-2 text-[11px] leading-relaxed text-amber-700">
                 Plates already on a menu that did not sell. They carry over automatically — waste only what
                 you are discarding.
@@ -285,7 +305,7 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
                 showHeading={false}
               />
             </div>
-          </div>
+          )}
         </div>
       )}
 
