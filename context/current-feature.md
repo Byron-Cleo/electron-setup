@@ -1,24 +1,24 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Hide the login image carousel on ALL phones (portrait + landscape) — a phone shows only the PIN keypad.
-- Keep the carousel + two-column layout on laptop/desktop sizes.
-
 ## Notes
 
-- One file: `desktop/ui/pages/Login.tsx`. Carousel shown only when viewport is `@media(min-width:640px)_and_(min-height:600px)` (width alone can't exclude a ~844px-wide landscape phone); no `index.css` change.
-- Frontend-only: no backend rebuild/restart, no new installer (desktop visuals unchanged). Phone browser live view refreshed via `build:web -- --server same-origin`.
-- Ref: `context/features/frontend/login-hide-carousel-phone.md` · Branch: `feature/admin/login-hide-carousel-phone`
-
 ## History
+
+### frontend - 2026-10-10 — Login Carousel Hidden on Phone Screens
+
+- **Carousel only on laptop/desktop** — the login two-column layout (image carousel left, PIN keypad right) now collapses to a single full-width keypad column on **all phones**, portrait *and* landscape. Shown only when the viewport is `@media (min-width:640px) and (min-height:600px)`; width alone couldn't exclude a landscape phone (~844px wide), so the height clause does the work (phone landscape heights top out ~448px, laptops are ≥720px). A resized-short desktop window also correctly hides it. One file: `desktop/ui/pages/Login.tsx` (container `grid-cols-1` + compound-variant `grid-cols-2`; left carousel column `hidden` + compound-variant `block`); `ImageCarousel`, the `getMenuImages` polling and the `fade-in` keyframe stay (desktop still uses them); no `index.css` change
+- **Verified** (Playwright on the Vite dev server, `getComputedStyle`): 390×844 portrait and **844×390 landscape** → 1 column, carousel `display:none`, 12 keypad keys visible; 1024×768 / 1366×768 / 1920×1080 → 2 columns, carousel `block`; 1266×522 short desktop → hidden. Production bundle confirmed to emit `@media (width>=640px) and (height>=600px){…}`. `tsc -b` clean, `Login.tsx` ESLint clean
+- **Deploy** — frontend-only: `npm run build:web -- --server same-origin` (phone browser live view refreshes; desktop terminals' visuals unchanged → no backend restart, no new installer). **No ollama models — manual implementation per operator directive**
+- Ref: `context/features/frontend/login-hide-carousel-phone.md` · Branch: `feature/admin/login-hide-carousel-phone` (kept, not deleted) · Commit `04fdc5a`, merged `--no-ff`
 
 ### frontend - 2026-10-10 — Login Keypad Responsive (Any Screen Size, Browser-Aware Exit)
 
