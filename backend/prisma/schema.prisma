@@ -66,6 +66,11 @@ model Menu {
   // Quantity the waiter grid opens at when this dish is first tapped.
   defaultQty                                            Int                 @default(1)
   isAvailable                                           Boolean             @default(true)
+  // Direct-sale items (soda, water, packaging): stock is keyed in by the admin
+  // and consumed per sale — no cooking batch ever exists for them. When false,
+  // Menu.stock is the TRUE ledger (never recomputed from pool math); when true
+  // (default) stock stays the derived mirror of the cooking-batch pool.
+  requiresCooking                                       Boolean             @default(true)
   cookingRecordMenus                                    CookingRecordMenu[]
   MenuAccompaniment_Menu_starchIdToMenuAccompaniment    MenuAccompaniment?  @relation("Menu_starchIdToMenuAccompaniment", fields: [starchId], references: [id])
   MenuAccompaniment_Menu_vegetableIdToMenuAccompaniment MenuAccompaniment?  @relation("Menu_vegetableIdToMenuAccompaniment", fields: [vegetableId], references: [id])
@@ -498,6 +503,9 @@ model ShiftSnapshot {
   driftPlates               Decimal?    @db.Decimal(12, 2) //plates sold between autoCloseTime and manualCloseTime
   driftMinutes              Int? //minutes between autoCloseTime and manualCloseTime
   platesWasted              Decimal     @default(0) @db.Decimal(12, 2)
+  // Direct-sale items keyed in while this shift was running (top-up deltas).
+  // Cooked items keep 0 — their inflow is cooking batches, reported as Cooked.
+  platesReceived            Decimal     @default(0) @db.Decimal(12, 2)
   // Engine this snapshot's stock figures belong to. Reports use it to avoid
   // summing one shared pool across several mirrored dishes (a 10-plate Tilapia
   // tray mirrored onto 4 dishes would otherwise total as 40).

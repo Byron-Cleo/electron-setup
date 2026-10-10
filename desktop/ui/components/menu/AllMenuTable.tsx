@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
-import { getMenus, updateMenuAvailability, menuImageUrl } from "@/lib/api"
+import { getMenus, updateMenu, updateMenuAvailability, menuImageUrl } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { MEAL_PERIODS, type MealPeriodLabel } from "@/lib/mealPeriod"
 import CreateMenuDialog from "./CreateMenuDialog"
@@ -35,6 +35,8 @@ export default function AllMenuTable() {
     item: null,
   })
   const [hiding, setHiding] = useState(false)
+  // Inline stock editor for direct-sale rows: one row at a time.
+  const [stockEdit, setStockEdit] = useState<{ id: string; value: string; saving: boolean } | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -96,6 +98,27 @@ export default function AllMenuTable() {
     }
   }
 
+  async function saveStock(row: MenuItem) {
+    if (!stockEdit || stockEdit.id !== row.id) return
+    const next = Number(stockEdit.value)
+    // Unchanged or invalid input just closes the editor.
+    if (!Number.isFinite(next) || next < 0 || next === row.stock) {
+      setStockEdit(null)
+      return
+    }
+    try {
+      setStockEdit({ ...stockEdit, saving: true })
+      // Stock is keyed: this IS the top-up (or correction) — the server stamps
+      // a running shift's "Received" figure for positive deltas.
+      await updateMenu(row.id, { stock: next })
+      setItems((prev) => prev.map((i) => (i.id === row.id ? { ...i, stock: next } : i)))
+      setStockEdit(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update stock")
+      setStockEdit(null)
+    }
+  }
+
   const columns: Column[] = [
     { label: "Details", key: "details" },
     { label: "Image", key: "image" },
@@ -138,7 +161,50 @@ export default function AllMenuTable() {
       case "price":
         return <span>KSh {row.price}</span>
       case "stock":
-        return <span>{row.stock}</span>
+        // Direct-sale rows: keyed stock, editable inline (top up or correct).
+        if (row.requiresCooking === false) {
+          const editing = stockEdit?.id === row.id
+          if (editing && stockEdit) {
+            return (
+              <div className="flex items-center justify-center gap-1">
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  autoFocus
+                  className="h-8 w-16 text-center"
+                  value={stockEdit.value}
+                  disabled={stockEdit.saving}
+                  onChange={(e) => setStockEdit({ id: row.id, value: e.target.value, saving: false })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void saveStock(row)
+                    if (e.key === "Escape") setStockEdit(null)
+                  }}
+                />
+                <Button
+                  size="sm"
+                  className="h-8 bg-brand-green hover:bg-brand-green/90"
+                  disabled={stockEdit.saving}
+                  onClick={() => void saveStock(row)}
+                >
+                  {stockEdit.saving ? "..." : "Save"}
+                </Button>
+              </div>
+            )
+          }
+          return (
+            <button
+              type="button"
+              title="Tap to key in a new stock amount"
+              onClick={() => setStockEdit({ id: row.id, value: String(row.stock), saving: false })}
+              className="inline-flex items-center gap-1 rounded-md border border-admin-card-border px-2 py-0.5 text-sm tabular-nums hover:bg-green-50 cursor-pointer"
+            >
+              {row.stock}
+              <Pencil size={11} className="text-admin-muted" />
+            </button>
+          )
+        }
+        return <span className="tabular-nums">{row.stock}</span>
       case "actions":
         return (
           <div className="flex items-center justify-end gap-1">

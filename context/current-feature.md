@@ -1,29 +1,37 @@
 
 ## Platform
 
-backend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Eliminate the recurring multi-second login spinner permanently: the 9 legacy staff with `pinLookup IS NULL`, any wrong-PIN typo, and a future `PIN_PEPPER` rotation — with the author's no-lockout guarantee (`pin-lookup.ts:19-21`) preserved.
-- Prove completely new users are instant from their first login (create-time `pinLookup` at `users.ts:137` already covers this — no change required).
-- Backfill script verifies each PIN against its stored bcrypt hash BEFORE writing, so a mistyped/unknown PIN is skipped, never persisted.
-- Steady state: every login attempt (valid or wrong) resolves in ~3 ms; the full-table bcrypt scan fires at most once per pepper change, never per attempt.
+
 
 ## Notes
 
-- Branch: `feature/auth/permanent-instant-login` (created; no commits yet). Ref: `context/fix-plan/permanent-instant-login.md`.
-- Root cause: `findUserByPin()` fallback scans EVERY active user serially (~481 ms/user, measured 6.28 s live) on any fast-path miss — typos included.
-- Fix: legacy scan scoped to `pinLookup IS NULL` rows only (correct: a user with a lookup either matches the index or has a different PIN), plus a pepper-rotation rescue armed by `pinLookup("")` fingerprint (re-arms on pepper change; bcrypt ignores the pepper, so it still authenticates everyone). No schema/migration change.
-- Honest tradeoff: the first wrong-PIN attempt immediately after a service restart (before any successful fast-path hit) runs the pepper probe once; cached for the process lifetime. In practice restarts are rare (deploys) and the first login after restart is valid.
-- Backfill (`npx tsx scripts/backfill-pin-lookup.ts`) needs the operator to type the 9 staff's current PINs; skipped entries self-heal on first login (bounded scan of NULL rows).
-- Deploy: rebuild `backend` → UAC restart (`pos-backend-restart` scheduled task not visible to `User` account → `Start-Process -Verb RunAs` workaround) → `/health`.
-
 ## History
+
+### backend - 2026-10-10 — Menu Direct-Sale Stock (Key In Amount, Sell Without Cooking)
+
+- **`Menu.requiresCooking` (default `true`)** — items flagged `false` are direct-sale: `Menu.stock` becomes the admin-keyed TRUE ledger (never recomputed from batch math), decremented per sale, restored on void. Cooked dishes keep the pool engine byte-identical. `ShiftSnapshot.platesReceived` added for mid-shift top-up accounting
+- **Pool guards (`pools.ts`)** — `recomputeMenuStock()` skips direct items (the critical guard: scheduler heal, void, sibling recompute all funnel through it and would otherwise zero keyed stock); `sellableInfoForMenu()` returns keyed stock for direct items (order gating + waiter caps flow automatically); `consumeForOrderItem()` decrements keyed stock, writes NO `OrderItemAllocation` rows (FK needs a batch); `assertLinesServable` unchanged — works via sellable read
+- **Routes** — `menu.ts` PUT/POST accept `requiresCooking`; stock keyable ONLY for direct items (400 protects the derived mirror; negative/NaN 400; top-up while a shift takes orders stamps that shift's `platesReceived` with the positive delta — reductions are corrections, between-shift top-ups land in the next opening); `resolveCurrentShift()` exported from `orders.ts` for the stamp. Void path restores from `factorForServing × qty` (allocation ledger is empty for direct lines) and pulls snapshot platesSold down; snapshot sellingMode stamped ALLOCATED for direct lines regardless of dormant supply links. `dailyReport.ts`: movement rows carry `platesReceived`/`isDirectSale`; uniform closing = opening + cooked + received − sold; row filter includes received-only; `plates` summary gains `received`
+- **UI** — MenuForm: "Direct sale (no cooking)?" radio + "Stock on hand" box (hides starch/vegetable/portion editors when on; zod rules gated off; payload sends `stock` only for direct items); AllMenuTable: inline stock editor for direct rows (tap pencil, key new amount, Enter/Save — is the top-up); WaiterMenuGrid badge "N left" for direct items (sold-out gray card unchanged); ShiftReport plate movement: Cooked "—" + blue Received column; ShiftCloseDialog compact "Cooked/Rec"; thermal + HTML shift-report prints: `CKD/REC` column carries received for direct rows
+- **Deploy + data** — `db:sync` (client regenerated, both columns pushed to eraevadb); one-time flag: 5 Package items → `requiresCooking=false` (their StockSupply links dormant, kept for store tracking); backend rebuilt + EraevaBackend restarted (orphaned old-build node process squatted on :3001 again — killed via UAC elevation, per the 10-10 runbook pattern); frontend + `build:web --server same-origin` rebuilt
+- **E2E verified live on :3001** (NIGHT shift 02e53b76 recreated for the current window per operator, auto-closes 05:30): 400 gates (cooked-item stock edit, negative, bad type); key 20 → sell 2 (order **#1**, total KSh 40) → stock 18, snapshot opening 20/sold 2; over-order 19 rejected "only 18 left"; mid-shift top-up +5 → `platesReceived` 5; report row **Opening 20 / Cooked — / Received 5 / Sold 2 / Closing 23** (= 20+0+5−2); void → stock 25, sold 0, zero allocations. Test data fully removed; order sequence back to 1; Big Bag stock 0 for the operator to key real amounts
+- Checks: backend `tsc` clean, `npm run build` (tsc -b + vite) clean, ESLint zero new (the 1 AllMenuTable `set-state-in-effect` error is pre-existing at HEAD, byte-identical). Manual implementation per operator directive — no ollama models
+- Ref: `context/fix-plan/menu-direct-sale-stock.md` · Branch: `feature/admin/direct-sale-stock` (kept, not deleted)
+
+
+### backend - 2026-10-10 — Permanent Instant Login (Login Fast-Path Bounding)
+
+- `findUserByPin()` fallback scan bounded to `pinLookup IS NULL` rows only + pepper-rotation rescue (`pinLookup("")` fingerprint) — wrong-PIN typos and pepper rotations can no longer trigger the full-table bcrypt scan; every login attempt resolves in ~3 ms
+- No schema change; backfill script `scripts/backfill-pin-lookup.ts` verifies each PIN against its stored bcrypt hash before writing (mistyped/unknown PINs skipped, self-heal on first login)
+- Merged into `restaurant-build` as `acb5201` (fix `e0a63ac`); backend rebuild + service restart required for deploy
 
 ### backend - 2026-10-10 — Order-Shift Attachment Guard + Production Migration History Squash
 

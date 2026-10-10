@@ -40,7 +40,7 @@ router.get("/shift/:id", async (req, res) => {
       where: { id },
       include: {
         finalClosedBy: { select: { id: true, name: true } },
-        snapshots: { include: { menu: { select: { id: true, name: true, price: true, stock: true } } } },
+        snapshots: { include: { menu: { select: { id: true, name: true, price: true, stock: true, requiresCooking: true } } } },
       },
     });
 
@@ -231,17 +231,23 @@ router.get("/shift/:id", async (req, res) => {
         // same derivation cut at the scheduled close time.
         const soldAtAutoClose = shift.autoClosed ? derived?.soldBeforeAutoClose ?? 0 : null;
         const platesCooked = platesCookedByMenu.get(snapshot.menuId) ?? 0;
-        const closingStock = round2(opening + platesCooked - sold);
+        // Direct-sale inflow keyed in while this shift was running. Cooked
+        // items keep 0 (their inflow is the batches counted as Cooked above),
+        // so one uniform movement formula covers both kinds:
+        // closing = opening + cooked + received − sold.
+        const platesReceived = Number(snapshot.platesReceived ?? 0);
+        const isDirectSale = snapshot.menu.requiresCooking === false;
+        const closingStock = round2(opening + platesCooked + platesReceived - sold);
         const closingStockAtManualClose = isOpenShift
           ? Number(snapshot.menu.stock ?? 0)
           : snapshot.closingStockAtManualClose !== null && snapshot.closingStockAtManualClose !== undefined
             ? Number(snapshot.closingStockAtManualClose)
             : null;
         const driftSold = soldAtAutoClose !== null ? round2(sold - soldAtAutoClose) : null;
-        // Auto closing stock = remaining plates after opening + cooked − sold before auto-close
+        // Auto closing stock = remaining plates after opening + cooked + received − sold before auto-close
         const closingStockAtAutoClose =
           soldAtAutoClose !== null
-            ? round2(opening + platesCooked - soldAtAutoClose)
+            ? round2(opening + platesCooked + platesReceived - soldAtAutoClose)
             : snapshot.closingStockAtAutoClose !== null && snapshot.closingStockAtAutoClose !== undefined
               ? Number(snapshot.closingStockAtAutoClose)
               : null;
@@ -253,6 +259,9 @@ router.get("/shift/:id", async (req, res) => {
           sellingMode: snapshot.sellingMode,
           openingPlates: opening,
           platesCooked,
+          platesReceived,
+          requiresCooking: snapshot.menu.requiresCooking,
+          isDirectSale,
           platesSold: sold,
           platesSoldAtAutoClose: soldAtAutoClose,
           driftSold,
@@ -264,7 +273,7 @@ router.get("/shift/:id", async (req, res) => {
           isLiveCurrent,
         };
       })
-      .filter((row) => row.platesSold > 0 || row.platesCooked > 0);
+      .filter((row) => row.platesSold > 0 || row.platesCooked > 0 || row.platesReceived > 0);
 
     // Menus sold in the window but absent from this shift's snapshots — a
     // dish added mid-shift (created with no opening stock, e.g. Matumbo CFF
@@ -278,7 +287,7 @@ router.get("/shift/:id", async (req, res) => {
     if (missingMenuIds.length > 0) {
       const missingMenus = await prisma.menu.findMany({
         where: { id: { in: missingMenuIds } },
-        select: { id: true, name: true, stock: true },
+        select: { id: true, name: true, stock: true, requiresCooking: true },
       });
       const missingLinks = await prisma.stockSupplyMenu.findMany({
         where: { menuId: { in: missingMenuIds } },
@@ -297,6 +306,11 @@ router.get("/shift/:id", async (req, res) => {
           sellingMode: modeByMenu.get(menu.id) ?? "ALLOCATED",
           openingPlates: opening,
           platesCooked,
+          // No snapshot row exists for these, so no keyed top-up was stamped
+          // mid-shift; any pre-shift top-up folded into opening at auto-open.
+          platesReceived: 0,
+          requiresCooking: menu.requiresCooking,
+          isDirectSale: menu.requiresCooking === false,
           platesSold: sold,
           platesSoldAtAutoClose: soldAtAutoClose,
           driftSold: soldAtAutoClose !== null ? round2(sold - soldAtAutoClose) : null,
@@ -448,6 +462,8 @@ router.get("/shift/:id", async (req, res) => {
       // Summed from non-mirror rows only, so a shared pool counted once.
       plates: {
         cooked: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.platesCooked), 0)),
+        // Direct-sale units keyed in while this shift ran (top-up deltas).
+        received: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.platesReceived), 0)),
         sold: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.platesSold), 0)),
         opening: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.openingPlates), 0)),
         closing: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.closingStock), 0)),

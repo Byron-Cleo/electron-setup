@@ -323,6 +323,19 @@ export async function sellableInfoForMenu(
   tx: Prisma.TransactionClient,
   menuId: string,
 ): Promise<MenuSellableInfo> {
+  // Direct-sale items have no batches by definition — their admin-keyed
+  // Menu.stock IS the sellable amount. Reporting it via the shared-pool
+  // channels keeps every existing consumer (waiter grid caps, order gating,
+  // menu detail) working without further branching.
+  const menuRow = await tx.menu.findUnique({
+    where: { id: menuId },
+    select: { requiresCooking: true, stock: true },
+  });
+  if (menuRow && menuRow.requiresCooking === false) {
+    const plates = round2(Number(menuRow.stock));
+    return { plates, allocated: 0, shared: plates, sellingMode: undefined };
+  }
+
   const splitAgg = await tx.cookingRecordMenu.aggregate({
     where: { menuId },
     _sum: { platesRemaining: true },
@@ -500,6 +513,21 @@ export async function consumeForOrderItem(
   let toDeduct = round2(plates);
   if (toDeduct <= 0) return;
 
+  // Direct-sale items: decrement the keyed ledger. No allocation rows are
+  // written (allocation requires a cookingRecordId FK — direct items have no
+  // batches), and the void path restores from the order line's quantity.
+  const menuRow = await tx.menu.findUnique({
+    where: { id: menuId },
+    select: { requiresCooking: true },
+  });
+  if (menuRow && menuRow.requiresCooking === false) {
+    await tx.menu.update({
+      where: { id: menuId },
+      data: { stock: { decrement: toDeduct } },
+    });
+    return;
+  }
+
   for (const source of await sourcesForMenu(tx, menuId)) {
     if (toDeduct <= 0) break;
     // Only whole servings can be taken, so a 0.5 rate cannot be drained from a
@@ -575,6 +603,19 @@ export async function recomputeMenuStock(
   tx: Prisma.TransactionClient,
   menuId: string,
 ): Promise<number> {
+  // CRITICAL GUARD: a direct-sale item's Menu.stock is the admin-keyed ledger,
+  // not a derived mirror. Recomputing it from batch math would zero it (no
+  // batches exist). The scheduler's shift-open heal, the void path and sibling
+  // recomputes all funnel through here — this is the one place that protects
+  // the keyed number.
+  const menuRow = await tx.menu.findUnique({
+    where: { id: menuId },
+    select: { requiresCooking: true, stock: true },
+  });
+  if (menuRow && menuRow.requiresCooking === false) {
+    return Number(menuRow.stock);
+  }
+
   const total = await sellableForMenu(tx, menuId);
   await tx.menu.update({ where: { id: menuId }, data: { stock: round2(total) } });
   return total;
