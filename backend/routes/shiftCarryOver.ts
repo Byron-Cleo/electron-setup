@@ -465,6 +465,9 @@ export interface AssignedLeftoverRow {
   // Plates still sellable on this row.
   remaining: number;
   batchCount: number;
+  // Batch numbers of the cooking records aggregated into this row (sorted,
+  // unique). Empty when a legacy record has no batch number.
+  batchNumbers: number[];
 }
 
 // Assigned-but-unsold stock (ALLOCATED splits' platesRemaining) plus every
@@ -513,6 +516,7 @@ export async function computeAssignedLeftovers(
     sold: number;
     remaining: number;
     batchCount: number;
+    batchNumbers: Set<number>;
   }
   const groups = new Map<string, Acc>();
 
@@ -528,7 +532,7 @@ export async function computeAssignedLeftovers(
       shiftType: string | null;
       cookedAtMs: number;
     },
-    add: { assigned: number; sold: number; remaining: number },
+    add: { assigned: number; sold: number; remaining: number; batchNumber: number | null },
   ) => {
     let acc = groups.get(key);
     if (!acc) {
@@ -545,6 +549,7 @@ export async function computeAssignedLeftovers(
         sold: 0,
         remaining: 0,
         batchCount: 0,
+        batchNumbers: new Set(),
       };
       groups.set(key, acc);
     }
@@ -556,6 +561,7 @@ export async function computeAssignedLeftovers(
     acc.sold = round2(acc.sold + add.sold);
     acc.remaining = round2(acc.remaining + add.remaining);
     acc.batchCount += 1;
+    if (typeof add.batchNumber === "number") acc.batchNumbers.add(add.batchNumber);
   };
 
   for (const record of records) {
@@ -577,7 +583,7 @@ export async function computeAssignedLeftovers(
           shiftType: attr.shiftType,
           cookedAtMs: record.createdAt.getTime(),
         },
-        { assigned: 0, sold: round2(pool?.sold ?? 0), remaining },
+        { assigned: 0, sold: round2(pool?.sold ?? 0), remaining, batchNumber: record.batchNumber },
       );
       continue;
     }
@@ -598,7 +604,7 @@ export async function computeAssignedLeftovers(
           shiftType: attr.shiftType,
           cookedAtMs: record.createdAt.getTime(),
         },
-        { assigned, sold: round2(assigned - remaining), remaining },
+        { assigned, sold: round2(assigned - remaining), remaining, batchNumber: record.batchNumber },
       );
     }
   }
@@ -621,6 +627,7 @@ export async function computeAssignedLeftovers(
       sold: acc.sold,
       remaining: acc.remaining,
       batchCount: acc.batchCount,
+      batchNumbers: [...acc.batchNumbers].sort((a, b) => a - b),
     });
   }
 

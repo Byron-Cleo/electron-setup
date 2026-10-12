@@ -144,7 +144,7 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
                   : "border-amber-200 bg-amber-100/50 text-amber-800"
               }`}
             >
-              {["Item", "Op Date", "Shift", "Assigned", "Sold", "Remaining", "Cooked At", "Actions"].map(
+              {["Batch No.", "Item", "Op Date", "Shift", "Assigned", "Sold", "Remaining", "Cooked At", "Actions"].map(
                 (header) => (
                   <th key={header} className="whitespace-nowrap px-3 py-2 text-center font-semibold">
                     {header}
@@ -159,6 +159,11 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
                 key={row.key}
                 className={`border-b last:border-b-0 ${isCurrent ? "border-admin-card-border" : "border-amber-200"}`}
               >
+                <td className={`px-3 py-2 text-center whitespace-nowrap tabular-nums ${isCurrent ? "text-admin-muted" : "text-amber-800"}`}>
+                  {row.batchNumbers.length === 0
+                    ? "—"
+                    : row.batchNumbers.map((n) => `#${n}`).join(", ")}
+                </td>
                 <td className={`px-3 py-2 text-center whitespace-nowrap ${isCurrent ? "text-admin-header-text" : "text-amber-900"}`}>
                   <div className="font-medium">
                     {row.menuName ?? `${row.stockSupplyName} (shared pool)`}
@@ -229,7 +234,7 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
           </tbody>
           <tfoot>
             <tr className={isCurrent ? "bg-muted" : "bg-amber-100/60"}>
-              <td className="px-3 py-2 font-semibold" colSpan={5}>
+              <td className="px-3 py-2 font-semibold" colSpan={6}>
                 Total remaining
               </td>
               <td className="px-3 py-2 text-center font-semibold tabular-nums">{totalRemaining}</td>

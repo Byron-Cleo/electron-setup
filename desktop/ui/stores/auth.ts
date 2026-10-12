@@ -1,6 +1,11 @@
 import { create } from "zustand";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001/api";
+import { resolveApiOrigin } from "@/lib/api";
+
+// Follow the same origin resolution as lib/api.ts so the login POST hits the
+// host the UI was opened on (LAN IP / Tailscale / tunnel). Hardcoding
+// localhost:3001 made phones POST to their own device and fail to log in.
+const API_BASE = import.meta.env.VITE_API_BASE ?? `${resolveApiOrigin()}/api`;
 
 interface AuthState {
   user: User | null;

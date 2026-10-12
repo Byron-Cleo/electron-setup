@@ -175,10 +175,14 @@ function Login() {
         </p>
       </div>
 
-      {/* Main Content - Two Column Layout */}
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-[min(4dvh,32px)] px-[min(6dvh,40px)] pb-[min(4dvh,40px)] overflow-hidden">
-        {/* Left Column - Image Carousel */}
-        <div className="min-w-0 h-full">
+      {/* Main Content — single column on phones (carousel hidden), two
+          columns (carousel + keypad) only on laptop/desktop viewports.
+          A width test alone can't exclude landscape phones (they are ~844px
+          wide), so the two-column layout requires BOTH ≥640px wide and
+          ≥600px tall; phone landscape heights top out ~448px. */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 [@media(min-width:640px)_and_(min-height:600px)]:grid-cols-2 gap-[min(4dvh,32px)] px-[min(6dvh,40px)] pb-[min(4dvh,40px)] overflow-hidden">
+        {/* Left Column - Image Carousel (laptop/desktop only) */}
+        <div className="min-w-0 h-full hidden [@media(min-width:640px)_and_(min-height:600px)]:block">
           <ImageCarousel />
         </div>
 
