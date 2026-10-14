@@ -390,7 +390,7 @@ export default function Users() {
             </div>
             <div>
               <Label className="text-sm font-medium text-admin-header-text">Roles *</Label>
-              <div className="mt-1 grid grid-cols-2 gap-2">
+              <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {(Object.entries(ROLE_LABELS) as [AdminUserRole, string][]).map(([value, label]) => (
                   <label
                     key={value}

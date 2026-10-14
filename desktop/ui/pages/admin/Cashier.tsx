@@ -144,7 +144,7 @@ function PartialSplitFields({
         ok ? "border-green-300 bg-green-50/60" : "border-red-300 bg-red-50/60"
       }`}
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-mpesa-amount`} className="flex items-center gap-1.5 text-xs font-medium text-green-700">
             <Smartphone className="h-3.5 w-3.5" />
@@ -1152,7 +1152,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
       )}
 
       <Dialog open={detailOrder !== null} onOpenChange={(open) => { if (!open) setDetailOrder(null) }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Order #{detailOrder?.orderNumber}</DialogTitle>
             <DialogDescription>Order details and items</DialogDescription>
@@ -1160,7 +1160,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
 
           {detailOrder && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
                 <div className="text-admin-muted">Meal</div>
                 <div className="font-medium">{detailOrder.mealType}</div>
                 <div className="text-admin-muted">Waiter</div>
@@ -1554,7 +1554,7 @@ function VoidView({ shiftType, operationDay }: { shiftType?: string; operationDa
       )}
 
       <Dialog open={selectedOrder !== null} onOpenChange={(open) => { if (!open) { setSelectedOrder(null); setVoidReason("") } }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Void Order #{selectedOrder?.orderNumber}</DialogTitle>
             <DialogDescription>
@@ -1564,7 +1564,7 @@ function VoidView({ shiftType, operationDay }: { shiftType?: string; operationDa
 
           {selectedOrder && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
                 <div className="text-admin-muted">Waiter</div>
                 <div className="font-medium">{selectedOrder.User?.name ?? "—"}</div>
                 <div className="text-admin-muted">Total</div>
@@ -2210,7 +2210,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
 
           {payOrder && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-admin-card-border bg-admin-content p-4 text-sm">
                 <div className="text-admin-muted">Meal</div>
                 <div className="font-medium">{payOrder.mealType}</div>
                 <div className="text-admin-muted">Waiter</div>
@@ -2244,7 +2244,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
               </div>
 
               <p className="text-sm font-medium text-admin-header-text mb-2">Select payment method</p>
-              <RadioGroup value={payMethod ?? ""} onValueChange={(v) => setPayMethod(v as PaymentMethodValue)} className="grid grid-cols-3 gap-2">
+              <RadioGroup value={payMethod ?? ""} onValueChange={(v) => setPayMethod(v as PaymentMethodValue)} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Label
                   htmlFor="single-mpesa"
                   className="flex cursor-pointer items-start gap-2 rounded-lg border border-admin-card-border p-2.5 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"
@@ -2327,7 +2327,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
 
       {/* Batch Payment Wizard */}
       <Dialog open={wizardOpen} onOpenChange={(open) => { if (!open) setWizardOpen(false) }}>
-        <DialogContent className="max-w-xl sm:max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-center text-xs font-black uppercase tracking-widest text-blue-600">Batch Payment</DialogTitle>
           </DialogHeader>
@@ -2356,7 +2356,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
           {wizardStep === 1 && (
             <div className="space-y-3 py-2">
               <p className="text-sm font-medium text-admin-header-text mb-2">Select payment method</p>
-              <RadioGroup value={paymentMethod ?? ""} onValueChange={(v) => setPaymentMethod(v as PaymentMethodValue)} className="grid grid-cols-3 gap-2">
+              <RadioGroup value={paymentMethod ?? ""} onValueChange={(v) => setPaymentMethod(v as PaymentMethodValue)} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Label
                   htmlFor="pay-mpesa"
                   className="flex cursor-pointer items-start gap-2 rounded-lg border border-admin-card-border p-2.5 transition-colors has-[button[data-state=checked]]:border-2 has-[button[data-state=checked]]:border-blue-500"

@@ -64,7 +64,7 @@ function VoidOrdersDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-full sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Ban className="h-5 w-5 text-red-600" />

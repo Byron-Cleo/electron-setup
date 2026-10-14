@@ -189,7 +189,7 @@ function Menu() {
         <div className="space-y-4">
           <BackButton onClick={handleBackToDashboard} />
           <Heading as="h2" className="text-admin-header-text text-center">All Restaurant Menu</Heading>
-          <div className="grid grid-cols-2 gap-6 max-w-2xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
             <Card className="p-6 hover:border-admin-accent transition-colors">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">

@@ -54,7 +54,8 @@ function Dashboard() {
         </CardHeader>
         <CardContent className="px-0 pb-0">
 
-        <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="w-4/5 h-auto mx-auto">
+        <div className="overflow-x-auto">
+        <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="w-4/5 min-w-[700px] lg:min-w-0 h-auto mx-auto">
           <defs>
             <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#0087D4" stopOpacity="0.2" />
@@ -86,6 +87,7 @@ function Dashboard() {
             </g>
           ))}
         </svg>
+        </div>
         </CardContent>
       </Card>
     </div>

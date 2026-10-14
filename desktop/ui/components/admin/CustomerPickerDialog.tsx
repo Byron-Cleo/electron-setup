@@ -92,7 +92,7 @@ export default function CustomerPickerDialog({ open, onOpenChange, onSelect, dis
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="p-6 max-w-md">
+      <DialogContent className="p-6 sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base uppercase text-center text-admin-header-text">Select Customer</DialogTitle>
         </DialogHeader>

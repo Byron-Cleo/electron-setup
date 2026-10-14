@@ -41,7 +41,7 @@ function ServerRecovery({ apiBase, onReconnect, onRetry }: Props) {
   }
 
   return (
-    <div className="h-dvh overflow-hidden bg-[#F5EDE0] text-brand-ebony flex flex-col items-center justify-center font-sans p-4 selection:bg-brand-gold/30">
+    <div className="min-h-dvh bg-[#F5EDE0] text-brand-ebony flex flex-col items-center justify-center font-sans p-4 selection:bg-brand-gold/30">
       <div className="flex flex-col items-center mb-6">
         <img
           src="./images/logo/eraeva-logo.png"

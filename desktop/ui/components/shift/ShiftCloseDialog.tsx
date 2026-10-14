@@ -820,7 +820,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                 {report.plateMovement.length === 0 ? (
                   <p className="text-sm text-admin-muted">No snapshots recorded.</p>
                 ) : (
-                  <div className="space-y-1 text-sm">
+                  <div className="space-y-1 text-sm overflow-x-auto">
                     <div className="grid grid-cols-[1fr_42px_42px_42px_54px_50px_48px_52px] gap-x-2 text-xs font-semibold uppercase tracking-wide text-admin-muted">
                       <span>Item</span>
                       <span className="text-right">Open</span>
@@ -879,7 +879,7 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
 
             {/* Preview Dialog */}
             <Dialog open={previewHtml !== null} onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}>
-              <DialogContent className="max-w-md print:max-w-none print:p-0">
+              <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto print:max-w-none print:p-0">
                 <DialogHeader className="print:hidden">
                   <DialogTitle>Shift Report Preview</DialogTitle>
                 </DialogHeader>

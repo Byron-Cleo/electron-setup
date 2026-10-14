@@ -2,12 +2,17 @@ import { useState, useEffect, useMemo, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import BackButton from "@/components/shared/BackButton"
 import ServingPeriodBar from "./ServingPeriodBar"
-import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye, ArrowLeft, Ban } from "lucide-react"
+import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye, ArrowLeft, Ban, ShoppingBag } from "lucide-react"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import {
   Dialog,
   DialogContent,
@@ -316,6 +321,7 @@ export function WaiterMenuGrid({
   const [vegMode, setVegMode] = useState<"free" | "charged">("free")
   const [lastMealPeriod, setLastMealPeriod] = useState<string | null>(null)
   const [noShift, setNoShift] = useState(false)
+  const [orderSheetOpen, setOrderSheetOpen] = useState(false)
 
   // Poll active shift status (proactive no-shift warning)
   useEffect(() => {
@@ -559,8 +565,175 @@ export function WaiterMenuGrid({
     syncSelection(selectedStarch, vegetable)
   }
 
+  // Shared order-summary card — used by the desktop order column (lg and up) and
+  // the mobile slide-up cart sheet. Same element rendered in both places; the
+  // desktop wrapper is `hidden lg:flex` and the sheet only mounts when open.
+  const orderCard = (
+    <Card className="flex-1 flex flex-col min-h-0">
+      <CardHeader className="pb-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <Heading as="h3" className="text-brand-ebony uppercase tracking-wide">Current Order</Heading>
+          {replacementTargetId && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-600 text-white">
+              Void Order
+            </span>
+          )}
+          {orderItems.length > 0 && (
+            <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-maroon text-white">
+              {orderItems.reduce((n, oi) => n + oi.quantity, 0)}
+            </span>
+          )}
+        </div>
+        {replacementTargetId && (() => {
+          const voided = voidedOrders.find((o) => o.id === replacementTargetId)
+          return voided ? (
+            <p className="text-xs text-red-600 font-medium mt-0.5">Replaces Order #{voided.orderNumber}</p>
+          ) : null
+        })()}
+      </CardHeader>
+      <CardContent className="space-y-3 flex-1 overflow-y-auto">
+        {orderItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-brand-ebony/40">
+            <Package size={36} />
+            <p className="mt-2 text-sm">No Food Ordered Yet</p>
+          </div>
+        ) : (
+          orderItems.map((oi) => {
+            const key = lineKey(oi)
+            const isActive =
+              !!selectedItem &&
+              key ===
+              orderLineKey(
+                selectedItem.id,
+                selectedStarch?.id,
+                selectedVegetable?.id,
+                selectedPortion?.id,
+              )
+            return (
+              <div
+                key={key}
+                onClick={() => {
+                  setSelectedItem(oi.menuItem)
+                  setActiveOrderKey(key)
+                  setOrderSheetOpen(false)
+                }}
+                className={cn(
+                  "border-b border-gray-100 pb-3 -mx-4 px-4 rounded-lg cursor-pointer transition-colors",
+                  isActive ? "bg-brand-red/5" : "hover:bg-gray-50",
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-snug">{oi.menuItem.name}</p>
+                    {oi.portion && (
+                      <p className="text-xs text-brand-ebony/60 leading-snug">{oi.portion.name}</p>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 p-0 shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeItem(key)
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+                {(oi.starch || oi.vegetable || (oi.menuItem.hasStarch && !oi.starch) || (oi.menuItem.hasVegetable && !oi.vegetable)) && (
+                  <div className="mt-1.5 space-y-0.5">
+                    {oi.starch && <AccompanyRow label="Starch" accompany={oi.starch} />}
+                    {oi.vegetable && <AccompanyRow label="Vegetable" accompany={oi.vegetable} />}
+                    {oi.menuItem.hasStarch && !oi.starch && <NoAccompanyRow label="Starch" />}
+                    {oi.menuItem.hasVegetable && !oi.vegetable && <NoAccompanyRow label="Vegetable" />}
+                  </div>
+                )}
+                <div className="mt-2 flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        updateQuantity(key, -1)
+                      }}
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <span className="text-sm font-medium w-6 text-center">{oi.quantity}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        updateQuantity(key, 1)
+                      }}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <p className="text-sm font-semibold text-brand-maroon">{formatPrice(linePrice(oi))}</p>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </CardContent>
+      {orderItems.length > 0 && (
+        <CardFooter className="flex-col gap-3 pt-3 shrink-0">
+          <div className="w-full border-t border-gray-200" />
+          <div className="flex items-center justify-between w-full">
+            <span className="font-semibold text-brand-ebony">Total:</span>
+            <span className="font-bold text-brand-maroon text-lg">{formatPrice(totalPrice)}</span>
+          </div>
+          {placeError && (
+            <div className="w-full rounded-md border border-red-200 bg-red-50 p-2">
+              <p className="text-center text-sm font-medium text-red-700">{placeError}</p>
+              {stockShortfalls.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5">
+                  {stockShortfalls.map((s) => (
+                    <li
+                      key={`${s.menuId}-${s.requested}`}
+                      className="text-xs text-red-700/90 flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate">{s.name}</span>
+                      <span className="tabular-nums whitespace-nowrap">
+                        {s.available > 0
+                          ? `only ${s.available} available`
+                          : "sold out"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          <Button className="w-full" onClick={onPlaceOrder} disabled={placing}>
+            {placing ? "Placing Order..." : "Place Order"}
+          </Button>
+          <Button variant="outline" className="w-full" onClick={onPreview} disabled={placing || previewing}>
+            {previewing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Generating Preview...
+              </>
+            ) : (
+              <>
+                <Eye className="h-4 w-4" />
+                Preview Receipt
+              </>
+            )}
+          </Button>
+        </CardFooter>
+      )}
+    </Card>
+  )
+
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col pb-24 lg:pb-0">
       {/* No active shift warning */}
       {noShift && (
         <div className="w-full mb-3 rounded-md bg-red-50 border border-red-300 px-4 py-3 text-sm font-medium text-red-700">
@@ -598,7 +771,7 @@ export function WaiterMenuGrid({
           <BackButton onClick={() => navigate("/waiter")} label="Back to Periods" />
         </div>
       ) : (
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
         {/* Column 1 — Dynamic: full category listing ↔ selected item detail */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -635,7 +808,7 @@ export function WaiterMenuGrid({
                 </div>
               </div>
 
-              <div className="grid grid-cols-[2fr_3fr] gap-4 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-[2fr_3fr] gap-4 pt-4">
                 {/* Left — Image gallery (40%) */}
                 <div className="h-full min-h-0 p-2">
                   <ImageGallery
@@ -836,7 +1009,7 @@ export function WaiterMenuGrid({
               <div className="flex justify-center mt-6">
                 <Button
                   size="lg"
-                  className="w-[28%] h-12 text-base bg-brand-red hover:bg-brand-red/90 text-white"
+                  className="w-full sm:w-[28%] h-12 text-base bg-brand-red hover:bg-brand-red/90 text-white"
                   onClick={() =>
                     // defaultQty lets a dish sell more than one per tap (e.g. a
                     // 2pc portion counting as 2); never below 1.
@@ -880,169 +1053,39 @@ export function WaiterMenuGrid({
           </div>
         </div>
 
-        {/* Column 2 — Order Summary (persists across serving times) */}
-        <div className="w-[400px] shrink-0 flex flex-col">
-          <Card className="flex-1 flex flex-col min-h-0">
-            <CardHeader className="pb-3 shrink-0">
-              <div className="flex items-center gap-2">
-                <Heading as="h3" className="text-brand-ebony uppercase tracking-wide">Current Order</Heading>
-                {replacementTargetId && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-600 text-white">
-                    Void Order
-                  </span>
-                )}
-                {orderItems.length > 0 && (
-                  <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-maroon text-white">
-                    {orderItems.reduce((n, oi) => n + oi.quantity, 0)}
-                  </span>
-                )}
-              </div>
-              {replacementTargetId && (() => {
-                const voided = voidedOrders.find((o) => o.id === replacementTargetId)
-                return voided ? (
-                  <p className="text-xs text-red-600 font-medium mt-0.5">Replaces Order #{voided.orderNumber}</p>
-                ) : null
-              })()}
-            </CardHeader>
-            <CardContent className="space-y-3 flex-1 overflow-y-auto">
-              {orderItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-brand-ebony/40">
-                  <Package size={36} />
-                  <p className="mt-2 text-sm">No Food Ordered Yet</p>
-                </div>
-              ) : (
-                orderItems.map((oi) => {
-                  const key = lineKey(oi)
-                  const isActive =
-                    !!selectedItem &&
-                    key ===
-                    orderLineKey(
-                      selectedItem.id,
-                      selectedStarch?.id,
-                      selectedVegetable?.id,
-                      selectedPortion?.id,
-                    )
-                  return (
-                    <div
-                      key={key}
-                      onClick={() => {
-                        setSelectedItem(oi.menuItem)
-                        setActiveOrderKey(key)
-                      }}
-                      className={cn(
-                        "border-b border-gray-100 pb-3 -mx-4 px-4 rounded-lg cursor-pointer transition-colors",
-                        isActive ? "bg-brand-red/5" : "hover:bg-gray-50",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium leading-snug">{oi.menuItem.name}</p>
-                          {oi.portion && (
-                            <p className="text-xs text-brand-ebony/60 leading-snug">{oi.portion.name}</p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 p-0 shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removeItem(key)
-                          }}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      {(oi.starch || oi.vegetable || (oi.menuItem.hasStarch && !oi.starch) || (oi.menuItem.hasVegetable && !oi.vegetable)) && (
-                        <div className="mt-1.5 space-y-0.5">
-                          {oi.starch && <AccompanyRow label="Starch" accompany={oi.starch} />}
-                          {oi.vegetable && <AccompanyRow label="Vegetable" accompany={oi.vegetable} />}
-                          {oi.menuItem.hasStarch && !oi.starch && <NoAccompanyRow label="Starch" />}
-                          {oi.menuItem.hasVegetable && !oi.vegetable && <NoAccompanyRow label="Vegetable" />}
-                        </div>
-                      )}
-                      <div className="mt-2 flex items-center justify-between">
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              updateQuantity(key, -1)
-                            }}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-sm font-medium w-6 text-center">{oi.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              updateQuantity(key, 1)
-                            }}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <p className="text-sm font-semibold text-brand-maroon">{formatPrice(linePrice(oi))}</p>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </CardContent>
-            {orderItems.length > 0 && (
-              <CardFooter className="flex-col gap-3 pt-3 shrink-0">
-                <div className="w-full border-t border-gray-200" />
-                <div className="flex items-center justify-between w-full">
-                  <span className="font-semibold text-brand-ebony">Total:</span>
-                  <span className="font-bold text-brand-maroon text-lg">{formatPrice(totalPrice)}</span>
-                </div>
-                {placeError && (
-                  <div className="w-full rounded-md border border-red-200 bg-red-50 p-2">
-                    <p className="text-center text-sm font-medium text-red-700">{placeError}</p>
-                    {stockShortfalls.length > 0 && (
-                      <ul className="mt-1.5 space-y-0.5">
-                        {stockShortfalls.map((s) => (
-                          <li
-                            key={`${s.menuId}-${s.requested}`}
-                            className="text-xs text-red-700/90 flex items-center justify-between gap-2"
-                          >
-                            <span className="truncate">{s.name}</span>
-                            <span className="tabular-nums whitespace-nowrap">
-                              {s.available > 0
-                                ? `only ${s.available} available`
-                                : "sold out"}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-                <Button className="w-full" onClick={onPlaceOrder} disabled={placing}>
-                  {placing ? "Placing Order..." : "Place Order"}
-                </Button>
-                <Button variant="outline" className="w-full" onClick={onPreview} disabled={placing || previewing}>
-                  {previewing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Generating Preview...
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="h-4 w-4" />
-                      Preview Receipt
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
+        {/* Column 2 — Order Summary (desktop only; phones use the cart sheet) */}
+        <div className="hidden lg:flex w-[400px] shrink-0 flex-col">
+          {orderCard}
         </div>
+
+        {/* Mobile cart — fixed bar + slide-up sheet (hidden at lg and up) */}
+        <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t bg-background/95 backdrop-blur px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0">
+              <p className="text-xs text-brand-ebony/60">
+                {orderItems.length === 0
+                  ? "No items yet"
+                  : `${orderItems.reduce((n, oi) => n + oi.quantity, 0)} item${orderItems.reduce((n, oi) => n + oi.quantity, 0) === 1 ? "" : "s"}`}
+              </p>
+              <p className="font-bold text-brand-maroon text-lg leading-tight">{formatPrice(totalPrice)}</p>
+            </div>
+            <Button
+              className="ml-auto shrink-0 bg-brand-red hover:bg-brand-red/90 text-white"
+              onClick={() => setOrderSheetOpen(true)}
+              disabled={orderItems.length === 0}
+            >
+              <ShoppingBag className="h-4 w-4" />
+              View Order
+            </Button>
+          </div>
+        </div>
+
+        <Sheet open={orderSheetOpen} onOpenChange={setOrderSheetOpen}>
+          <SheetContent side="bottom" className="flex flex-col">
+            <SheetTitle className="sr-only">Current Order</SheetTitle>
+            {orderCard}
+          </SheetContent>
+        </Sheet>
       </div>
       )}
 
