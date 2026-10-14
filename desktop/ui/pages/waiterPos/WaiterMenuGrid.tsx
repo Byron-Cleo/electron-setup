@@ -733,7 +733,7 @@ export function WaiterMenuGrid({
   )
 
   return (
-    <div className="h-full flex flex-col pb-24 lg:pb-0">
+    <div className="h-full flex flex-col">
       {/* No active shift warning */}
       {noShift && (
         <div className="w-full mb-3 rounded-md bg-red-50 border border-red-300 px-4 py-3 text-sm font-medium text-red-700">
@@ -774,7 +774,7 @@ export function WaiterMenuGrid({
       <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
         {/* Column 1 — Dynamic: full category listing ↔ selected item detail */}
         <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto pb-24 lg:pb-0">
             <div className="mx-auto w-full max-w-[720px]">
           {selectedItem ? (
             <div>
