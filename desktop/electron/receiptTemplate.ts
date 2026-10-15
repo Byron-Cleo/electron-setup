@@ -46,6 +46,8 @@ export interface ReceiptData {
   items: ReceiptItem[];
   totals: ReceiptTotals;
   barcode: string;
+  /** Cashier reprint — stamps ** REPRINT COPY ** (absent on the waiter's original). */
+  isReprint?: boolean;
 }
 
 // Thermal receipt font — swap this stack to test candidates one by one.
@@ -57,6 +59,12 @@ function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`;
 }
 
+// Bare number for the unit-price column — the item TOTAL column carries the
+// KSH tag, so the narrow price column stays clean and fits larger amounts.
+function moneyBare(amount: number): string {
+  return amount.toLocaleString("en-KE");
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -66,7 +74,7 @@ function formatDate(iso: string): string {
   });
 }
 
-function documentHtml(body: string): string {
+function documentHtml(body: string, basePx = 12): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -80,7 +88,7 @@ function documentHtml(body: string): string {
     width: 72mm;
     box-sizing: border-box;
     font-family: ${RECEIPT_FONT};
-    font-size:12px;
+    font-size:${basePx}px;
     line-height:1.35;
     color:#000;
   }
@@ -121,18 +129,20 @@ function accompHtml(accompaniments: ReceiptAccompaniment[]): string {
 }
 
 function itemLinesHtml(data: ReceiptData): string {
-  const header = `<div style="display:flex; gap:4px; font-weight:bold; border-bottom:1px dashed #000; padding-bottom:2px; margin-bottom:3px;">
-    <span style="width:12%;">QTY</span><span style="flex:1;">ITEM</span><span style="width:23%; text-align:right;">PRICE</span><span style="width:23%; text-align:right;">TOTAL</span>
+  // Price columns size themselves from content (never wrap or clip); the item
+  // name yields space first and truncates with an ellipsis on very long names.
+  const header = `<div style="display:flex; gap:4px; font-weight:bold; font-size:17px; border-bottom:1px dashed #000; padding-bottom:2px; margin-bottom:3px;">
+    <span style="flex:0 0 auto;">QTY</span><span style="flex:1 1 auto; min-width:0;">ITEM</span><span style="flex:0 0 auto; margin-left:auto; white-space:nowrap;">PRICE</span><span style="flex:0 0 auto; white-space:nowrap; padding-left:8px;">TOTAL</span>
   </div>`;
   const rows = data.items
     .map((item) => {
       return `
     <div style="margin-bottom:6px;">
       <div style="display:flex; gap:4px;">
-        <span style="width:12%; font-weight:bold;">${item.qty}</span>
-        <span style="flex:1;">${item.name}</span>
-        <span style="width:23%; text-align:right;">${money(item.unitPrice)}</span>
-        <span style="width:23%; text-align:right; font-weight:bold;">${money(item.lineTotal)}</span>
+        <span style="flex:0 0 auto; font-weight:bold; font-size:17px;">${item.qty}</span>
+        <span style="flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</span>
+        <span style="flex:0 0 auto; margin-left:auto; white-space:nowrap; text-align:right;">${moneyBare(item.unitPrice)}</span>
+        <span style="flex:0 0 auto; white-space:nowrap; text-align:right; font-weight:bold; font-size:17px; padding-left:8px;">${money(item.lineTotal)}</span>
       </div>
       ${accompHtml(item.accompaniments)}
     </div>`;
@@ -141,6 +151,10 @@ function itemLinesHtml(data: ReceiptData): string {
   return `${header}${rows}`;
 }
 
+// Customer receipt: the enlarged type is scoped to the money block only — the
+// item/price table and the Sub-Total/Total rows. The brand header, order meta
+// rows, the thank-you/Till lines and the footer keep their original sizing.
+// Kitchen/bar tickets, the shift report and the TEST page are untouched.
 function customerBody(data: ReceiptData): string {
   return `
   ${blockCenter(`<span style="font-size:17px; font-weight:bold;">${data.restaurant.name}</span>`)}
@@ -150,18 +164,19 @@ function customerBody(data: ReceiptData): string {
   ${divider()}
   ${row("Order #", String(data.order.number), "font-weight:bold;", "font-weight:bold;")}
   ${data.order.replacesOrderNumber != null ? blockCenter(`** REPLACES ORDER #${data.order.replacesOrderNumber} **`, "font-weight:bold; margin-top:2px;") : ""}
+  ${data.isReprint ? blockCenter("** CUSTOMER COPY **", "font-weight:bold; font-size:17px; margin-top:2px;") : ""}
   ${row("Waiter", data.waiter.name)}
   ${row("Date", formatDate(data.order.createdAt))}
   ${row("Meal", data.order.mealType)}
   ${divider()}
   ${itemLinesHtml(data)}
   ${divider()}
-  ${row("Sub-Total", money(data.totals.itemsPrice), "font-weight:bold;", "font-weight:bold;")}
+  ${row("Sub-Total", money(data.totals.itemsPrice), "font-weight:bold; font-size:17px;", "font-weight:bold; font-size:17px;")}
   ${row("Shipping", money(data.totals.shippingPrice))}
   ${row("Tax", money(data.totals.taxPrice))}
-  ${row("Total", money(data.totals.totalPrice), "font-weight:bold;", "font-weight:bold; font-size:15px;")}
+  ${row("Total", money(data.totals.totalPrice), "font-weight:bold; font-size:20px;", "font-weight:bold; font-size:20px;")}
   ${divider()}
-  ${blockCenter("Thank you. Welcome Again 😊", "font-weight:bold; margin-top:4px;")}
+  ${blockCenter("Thank you. Welcome Again", "font-weight:bold; margin-top:4px;")}
   ${blockCenter("Buy Goods Till No: 994296", "font-size:13px; font-weight:bold; margin-top:6px;")}
   ${divider()}
   ${blockCenter("POS Designed and Build By:", "font-size:11px; font-weight:bold; margin-top:4px;")}

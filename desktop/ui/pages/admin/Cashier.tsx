@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark, Lock, Smartphone } from "lucide-react"
+import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark, Lock, Smartphone, Printer } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -13,7 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs, getUnpaidOrderCount, markOrderUnpaidWithCustomer, assignOrderCustomer, unassignOrderCustomer, unmarkOrderAsUnpaid } from "@/lib/api"
+import { getOrders, voidOrder, updateOrderPayment, listShifts, getCurrentShift, getShiftConfigs, getUnpaidOrderCount, markOrderUnpaidWithCustomer, assignOrderCustomer, unassignOrderCustomer, unmarkOrderAsUnpaid, printReceipt } from "@/lib/api"
+import { receiptFromOrder } from "@/lib/receipt"
 import { cn, formatElapsed, elapsedSeverity, ELAPSED_SEVERITY_CLASS, unpaidMarkedByLabel } from "@/lib/utils"
 import { PARTIAL_METHOD, isPartialMethod, formatPaymentMethod, validateSplit, allocateBatchSplit, type PaymentMethodValue } from "@/lib/payment"
 import { useAuthStore } from "@/stores/auth"
@@ -289,7 +290,8 @@ const MARKED_UNPAID_COLUMNS: Column[] = [
 
 // Entered from a shift card, every row belongs to that one operation day, so the
 // Date column repeats the same value on each line and is dropped. All Shifts
-// spans every operation day and filters by date, so there it stays.
+// spans every operation day and filters by date, so there it stays. All Shifts
+// also carries the row-level Print button, so its action header reads "Actions".
 function columnsForOrdersTab(tab: OrderTab, scopedToOperationDay: boolean): Column[] {
   const base = (() => {
     switch (tab) {
@@ -306,7 +308,10 @@ function columnsForOrdersTab(tab: OrderTab, scopedToOperationDay: boolean): Colu
         return ORDER_COLUMNS
     }
   })()
-  return scopedToOperationDay ? base.filter((c) => c.key !== "createdAt") : base
+  const filtered = scopedToOperationDay ? base.filter((c) => c.key !== "createdAt") : base
+  return scopedToOperationDay
+    ? filtered
+    : filtered.map((c) => (c.key === "details" ? { ...c, label: "Actions" } : c))
 }
 
 // Multi-role aware "plain cashier" check: a user who holds admin or manager
@@ -738,6 +743,8 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
   const [activeTab, setActiveTab] = useState<OrderTab>("ALL")
   const [pickerOrder, setPickerOrder] = useState<Order | null>(null)
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
+  const [printingOrderId, setPrintingOrderId] = useState<string | null>(null)
+  const [printNotice, setPrintNotice] = useState("")
   const user = useAuthStore((s) => s.user)
   const roleByUserId = useUserRoles()
 
@@ -927,6 +934,32 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
     }
   }
 
+  // All-Shifts only: reissue an existing receipt (paid, unpaid or voided) with
+  // a REPRINT COPY stamp. Best-effort like the waiter flow — a missing or
+  // offline printer reports back instead of blocking, and failures never touch
+  // `error` (a non-empty error hides the whole table).
+  async function handlePrintReceipt(order: Order) {
+    if (printingOrderId) return
+    setPrintingOrderId(order.id)
+    setPrintNotice("")
+    try {
+      const replacesOrderNumber = order.voidedOrderId
+        ? orders.find((o) => o.id === order.voidedOrderId)?.orderNumber
+        : undefined
+      const receipt = receiptFromOrder(order, { isReprint: true, replacesOrderNumber })
+      const result = await printReceipt(receipt)
+      if (result.skipped) {
+        setPrintNotice(`Not printed: ${result.reason ?? "no connected printer"}`)
+      } else if (!result.ok) {
+        setPrintNotice(`Print failed: ${result.error ?? "unknown error"}`)
+      }
+    } catch (err) {
+      setPrintNotice(`Print failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setPrintingOrderId(null)
+    }
+  }
+
   function renderCell(order: Order, column: Column): ReactNode {
     switch (column.key) {
       case "orderNumber":
@@ -1056,14 +1089,40 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
               <Button variant="outline" size="sm" onClick={() => setDetailOrder(order)}>
                 <Eye />
               </Button>
+              {!shiftType && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePrintReceipt(order)}
+                  disabled={printingOrderId !== null}
+                  title="Reprint this receipt (REPRINT COPY)"
+                >
+                  <Printer />
+                  {printingOrderId === order.id ? "..." : "Print"}
+                </Button>
+              )}
             </div>
           )
         }
         return (
-          <Button variant="outline" size="sm" onClick={() => setDetailOrder(order)}>
-            <Eye />
-            Details
-          </Button>
+          <div className="flex items-center justify-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => setDetailOrder(order)}>
+              <Eye />
+              Details
+            </Button>
+            {!shiftType && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePrintReceipt(order)}
+                disabled={printingOrderId !== null}
+                title="Reprint this receipt (REPRINT COPY)"
+              >
+                <Printer />
+                {printingOrderId === order.id ? "..." : "Print"}
+              </Button>
+            )}
+          </div>
         )
       default:
         return null
@@ -1074,6 +1133,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
     <div className="space-y-4">
       {loading && <p className="text-sm text-admin-muted">Loading orders...</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {printNotice && <p className="text-sm text-amber-600">{printNotice}</p>}
 
       {!loading && !error && (
         <div className="flex items-center justify-center gap-2 mb-4">

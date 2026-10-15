@@ -1,15 +1,30 @@
 
 ## Platform
 
-Not Specified
+frontend + electron
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
+- **All Shifts orders table only** (Orders → "All Shifts" card → `OrdersView` with `shiftType === undefined`, all its tabs) gains a **Print** button beside **Details** — any order (paid, unpaid, voided) can be reissued on demand so the customer keeps one copy and the restaurant files the other; **per-shift order tables keep no Print button**
+- Reprints stamped `** REPRINT COPY **`; the original waiter print stays unmarked
+- Customer-receipt fonts raised per the agreed ladder: normal text → 15px (today's Total prominence, not bold), every bold +5px (12→17, 11→16, 13→18, 15→20, 17→22); thermal path expresses the same hierarchy in printer height steps (GS ! n, height-only so 42-col padding holds)
+- Customer receipt only — kitchen/bar tickets, shift report, TEST page byte-identical; no printer settings touched (same printer, transport, margins, page size)
+- Reprint content sourced from the already-loaded `GET /orders` payload — zero backend changes
+
 ## Notes
+
+- Full plan: `context/fix-plan/cashier-receipt-reprint.md`
+- Branch: `feature/cashier/receipt-reprint` (create at start)
+- Shared builder `desktop/ui/lib/receipt.ts` (`receiptFromOrder` + `RESTAURANT_INFO`); WaiterMenu swaps its inline restaurant block for the import only
+- Accepted payload gaps: portion note line (portion already embedded in `item.name`) and "No starch/No vegetables" notes (menu flags not in payload); `replacesOrderNumber` resolved client-side from `voidedOrderId` against the loaded orders list
+- Button placement: All Shifts rows only (`!shiftType` gate) — no per-shift table, Details-dialog, or Payments-tab button; column header `Details` → `Actions` in All Shifts scope only; per-row busy state; failures toast, skipped printers warn (never block)
+- Size changes live in Electron main (`receiptTemplate.ts` / `receipt.ts`) → installed terminals need a rebuilt installer (`build:win`); browser UI gets the Print button via `build:web -- --server same-origin`
+- Verification: `tsc -b` + lint + builds, live preview checks (stamp on reprint only, content parity with Details dialog), physical test print to confirm thermal height steps, then tune once
+- Manual implementation — no ollama models
 
 ## History
 

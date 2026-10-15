@@ -189,7 +189,7 @@ function App() {
         <Route
           path="/waiter"
           element={
-            <ProtectedRoute role="waiter">
+            <ProtectedRoute role={["waiter", "admin", "manager"]}>
               <WaiterLayout />
             </ProtectedRoute>
           }

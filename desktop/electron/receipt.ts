@@ -36,11 +36,25 @@ const GS_CUT = Buffer.from([0x1d, 0x56, 0x42, 0x00]); // GS V B 0 — full cut
 const ESC_BOLD_ON = Buffer.from([0x1b, 0x45, 0x01]); // ESC E 1 — bold on
 const ESC_BOLD_OFF = Buffer.from([0x1b, 0x45, 0x00]); // ESC E 0 — bold off
 
-type Seg = { t: string; b?: boolean };
+// GS ! n — character size. Height lives in bits 2-3, width in bits 4-5, each
+// encoded as (step - 1) for steps 1..4. Only HEIGHT is ever raised for the
+// customer receipt, so the 42-column padding above never shifts.
+const GS_SIZE = Buffer.from([0x1d, 0x21]); // GS !
+function sizeSelect(height: number, width = 1): Buffer {
+  return Buffer.concat([GS_SIZE, Buffer.from([((height - 1) << 2) | ((width - 1) << 4)])]);
+}
+
+type Seg = { t: string; b?: boolean; s?: 1 | 2 | 3 | 4 };
 type Line = Seg[];
 
 function money(amount: number): string {
   return `KSH ${amount.toLocaleString("en-KE")}`;
+}
+
+// Bare number for the unit-price column — the item TOTAL column carries the
+// KSH tag, so the narrow price column stays clean and fits larger amounts.
+function moneyBare(amount: number): string {
+  return amount.toLocaleString("en-KE");
 }
 
 function formatDate(iso: string): string {
@@ -77,12 +91,14 @@ function wrapWords(text: string, width: number): string[] {
   return lines;
 }
 
-// Renders receipt lines as raw ESC/POS with bold segments (ESC E). Mirrors the
-// HTML preview so the printed receipt keeps the same content, emphasis and no
-// truncated words.
+// Renders receipt lines as raw ESC/POS with bold segments (ESC E) and size
+// steps (GS ! n) so the printed receipt keeps the same content, emphasis,
+// hierarchy and no truncated words. Height resets to normal before each line
+// feed so the trailing cut never costs extra paper.
 function renderEscPos(lines: Line[]): Buffer {
   const parts: Buffer[] = [];
   let bold = false;
+  let height = 1;
   for (const line of lines) {
     for (const seg of line) {
       const want = seg.b ?? false;
@@ -90,7 +106,16 @@ function renderEscPos(lines: Line[]): Buffer {
         parts.push(want ? ESC_BOLD_ON : ESC_BOLD_OFF);
         bold = want;
       }
+      const h = seg.s ?? 1;
+      if (h !== height) {
+        parts.push(sizeSelect(h));
+        height = h;
+      }
       parts.push(Buffer.from(seg.t, "latin1"));
+    }
+    if (height !== 1) {
+      parts.push(sizeSelect(1));
+      height = 1;
     }
     parts.push(Buffer.from("\n", "latin1"));
   }
@@ -210,14 +235,22 @@ function plainTextLines(data: ReceiptData): Line[] {
   const r = data.restaurant;
   const width = 42;
   const line = "-".repeat(width);
+  // The enlarged customer type is scoped to the money block only: the item
+  // header/qty/line-total and the Sub-Total/Total rows. Brand header, order
+  // meta, thank-you/Till and footer stay at ×1 (original), exactly like the
+  // HTML preview. Kitchen and bar tickets keep ×1 → byte-identical output.
+  const cust = data.ticket === "customer";
+  const H_ITEM: 1 | 2 | 3 | 4 = cust ? 3 : 1;
+  const H_TOTAL: 1 | 2 | 3 | 4 = cust ? 4 : 1;
   const lines: Line[] = [];
-  const push = (text: string, b = false) => lines.push([{ t: text, b }]);
-  const pushCenter = (text: string, b = false) => {
-    for (const wrapped of wrapWords(text, width)) push(padCenter(wrapped, width), b);
+  const push = (text: string, b = false, s: 1 | 2 | 3 | 4 = 1) =>
+    lines.push([{ t: text, b, s }]);
+  const pushCenter = (text: string, b = false, s: 1 | 2 | 3 | 4 = 1) => {
+    for (const wrapped of wrapWords(text, width)) push(padCenter(wrapped, width), b, s);
   };
-  const pushRow = (left: string, right: string, b = false) => {
+  const pushRow = (left: string, right: string, b = false, s: 1 | 2 | 3 | 4 = 1) => {
     const pad = Math.max(1, width - left.length - right.length);
-    const segs: Seg[] = [{ t: left, b }, { t: " ".repeat(pad) }, { t: right, b }];
+    const segs: Seg[] = [{ t: left, b, s }, { t: " ".repeat(pad), s }, { t: right, b, s }];
     lines.push(segs);
   };
 
@@ -227,31 +260,35 @@ function plainTextLines(data: ReceiptData): Line[] {
   if (r.city) pushCenter(r.city);
   push(line);
   pushRow("Order #", String(data.order.number), true);
+  if (data.isReprint) pushCenter("** CUSTOMER COPY **", true, H_ITEM);
   pushRow("Waiter", data.waiter.name);
   pushRow("Date", formatDate(data.order.createdAt));
   pushRow("Meal", data.order.mealType);
   push(line);
 
   // Four-column item block mirroring the HTML preview (QTY | ITEM | PRICE | TOTAL).
+  // Customer receipts: PRICE holds a bare number (KSH lives on TOTAL), so it
+  // can be narrower and the item name gets the reclaimed columns. Kitchen and
+  // bar tickets keep the original widths and KSH-tagged prices.
   const qtyW = 4;
-  const nameW = 14;
-  const priceW = 12;
+  const nameW = cust ? 18 : 14;
+  const priceW = cust ? 8 : 12;
   const totalW = 12;
   const header =
     "QTY".padEnd(qtyW) + "ITEM".padEnd(nameW) + "PRICE".padStart(priceW) + "TOTAL".padStart(totalW);
-  push(header, true);
+  push(header, true, H_ITEM);
   push(line);
 
   for (const item of data.items) {
     const qty = String(item.qty).padEnd(qtyW);
     const name = item.name;
-    const price = money(item.unitPrice).padStart(priceW);
+    const price = (cust ? moneyBare(item.unitPrice) : money(item.unitPrice)).padStart(priceW);
     const total = money(item.lineTotal).padStart(totalW);
     lines.push([
-      { t: qty, b: true },
-      { t: name.slice(0, nameW).padEnd(nameW) },
-      { t: price },
-      { t: total, b: true },
+      { t: qty, b: true, s: H_ITEM },
+      { t: name.slice(0, nameW).padEnd(nameW), s: 1 },
+      { t: price, s: 1 },
+      { t: total, b: true, s: H_ITEM },
     ]);
     const overflow = name.slice(nameW).trim();
     if (overflow) {
@@ -268,10 +305,10 @@ function plainTextLines(data: ReceiptData): Line[] {
     }
   }
   push(line);
-  pushRow("Sub-Total", money(data.totals.itemsPrice), true);
+  pushRow("Sub-Total", money(data.totals.itemsPrice), true, H_ITEM);
   pushRow("Shipping", money(data.totals.shippingPrice));
   pushRow("Tax", money(data.totals.taxPrice));
-  pushRow("Total", money(data.totals.totalPrice), true);
+  pushRow("Total", money(data.totals.totalPrice), true, H_TOTAL);
   push(line);
   pushCenter("Thank You. Welcome Again", true);
   pushCenter("Buy Goods Till No: 994296", true);
