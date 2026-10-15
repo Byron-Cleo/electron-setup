@@ -22,6 +22,7 @@ import shiftConfigRouter from "./routes/shiftConfig.js";
 import stockRemainingRouter from "./routes/stockRemaining.js";
 import categoriesRouter from "./routes/categories.js";
 import customersRouter from "./routes/customers.js";
+import loginMediaRouter from "./routes/loginMedia.js";
 import { registerEventsRoute } from "./events.js";
 import { uploadsRoot } from "./db/uploads.js";
 
@@ -53,8 +54,9 @@ const uploads = uploadsRoot();
 fs.mkdirSync(path.join(uploads, "stock-supplies"), { recursive: true });
 fs.mkdirSync(path.join(uploads, "menu-items"), { recursive: true });
 fs.mkdirSync(path.join(uploads, "menu-accompaniments"), { recursive: true });
+fs.mkdirSync(path.join(uploads, "login-media"), { recursive: true });
 
-// All uploaded images (stock supplies, menu items + accompaniments) are served from /uploads.
+// Uploaded media (images + login-screen video clips) is served from /uploads.
 app.use("/uploads", express.static(uploads));
 
 app.get("/health", (_req, res) => {
@@ -80,6 +82,7 @@ app.use("/api/shift-config", shiftConfigRouter);
 app.use("/api/stock", stockRemainingRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/customers", customersRouter);
+app.use("/api/login-media", loginMediaRouter);
 
 // Server-Sent Events stream for real-time cross-terminal updates
 // (must be registered before the SPA fallback below).

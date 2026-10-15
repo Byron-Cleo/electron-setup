@@ -1130,6 +1130,46 @@ interface LiveEvent {
   at?: string;
 }
 
+// Login-screen left panel media (admin-curated images + optional video).
+type LoginMediaMode = "IMAGES" | "VIDEO";
+type LoginVideoPlayback = "SINGLE_LOOP" | "PLAYLIST";
+
+interface LoginMediaConfig {
+  mode: LoginMediaMode;
+  videoPlayback: LoginVideoPlayback;
+  singleVideoId: string | null;
+  slideIntervalSec: number;
+}
+
+// Effective display the login screen renders. When VIDEO is requested but no
+// clip is playable the server answers IMAGES, so `mode` here is always safe.
+interface LoginMediaDisplay {
+  mode: LoginMediaMode;
+  slideIntervalSec: number;
+  videoPlayback: LoginVideoPlayback;
+  singleVideo: { id: string; url: string } | null;
+  images: string[];
+  videos: { id: string; url: string }[];
+}
+
+interface LoginMediaLibraryImage {
+  filePath: string;
+  isActive: boolean;
+}
+
+interface LoginMediaVideo {
+  id: string;
+  url: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface LoginMediaLibrary {
+  config: LoginMediaConfig;
+  images: LoginMediaLibraryImage[];
+  videos: LoginMediaVideo[];
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: unknown) => void) => void;
   getStaticData: () => void;
@@ -1228,6 +1268,17 @@ interface ElectronAPI {
     create: (data: { name: string; phone: string; notes?: string }) => Promise<Customer>;
     update: (id: string, data: { name?: string; phone?: string; notes?: string | null }) => Promise<Customer>;
     delete: (id: string) => Promise<{ message: string }>;
+  };
+  loginMedia: {
+    getDisplay: () => Promise<LoginMediaDisplay>;
+    getLibrary: () => Promise<LoginMediaLibrary>;
+    saveConfig: (
+      data: Partial<Omit<LoginMediaConfig, "singleVideoId">> & { singleVideoId?: string | null },
+    ) => Promise<LoginMediaConfig>;
+    saveSelection: (data: { activePaths: string[] }) => Promise<{ selected: number; total: number }>;
+    orderVideos: (data: { ids: string[] }) => Promise<{ ok: boolean }>;
+    toggleVideo: (id: string, data: { isActive: boolean }) => Promise<{ id: string; isActive: boolean }>;
+    deleteVideo: (id: string) => Promise<{ message: string }>;
   };
   order: {
     create: (data: CreateOrderData) => Promise<Order>;

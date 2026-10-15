@@ -315,3 +315,26 @@ export function extendOrderHandlers() {
     apiFetch(`/orders/${orderId}/unassign-customer`, { method: "POST" })
   );
 }
+
+// Login-screen media (left panel): curated images + optional video. The video
+// upload itself is a multipart POST done with a direct fetch from the renderer
+// (same as menu image uploads) — large FormData bodies are not sent over IPC.
+export function registerLoginMediaHandlers() {
+  ipcMain.handle("login-media:get-display", async () => apiFetch("/login-media"));
+  ipcMain.handle("login-media:get-library", async () => apiFetch("/login-media/library"));
+  ipcMain.handle("login-media:save-config", async (_event, data) =>
+    apiFetch("/login-media/config", { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("login-media:save-selection", async (_event, data) =>
+    apiFetch("/login-media/images/selection", { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("login-media:order-videos", async (_event, data) =>
+    apiFetch("/login-media/videos/order", { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("login-media:toggle-video", async (_event, id: string, data) =>
+    apiFetch(`/login-media/videos/${id}`, { method: "PATCH", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("login-media:delete-video", async (_event, id: string) =>
+    apiFetch(`/login-media/videos/${id}`, { method: "DELETE" })
+  );
+}
