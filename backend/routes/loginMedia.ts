@@ -21,7 +21,7 @@ const router = Router();
 const IMAGE_SUBDIRS = ["menu-items", "menu-accompaniments"];
 const IMAGE_EXT_RE = /\.(png|jpe?g|webp)$/i;
 const VIDEO_MIMES = ["video/mp4", "video/webm"];
-const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB — H.264 mp4 for Electron/Chromium
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500 MB — H.264 mp4 for Electron/Chromium
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN_SLIDE_SEC = 1;
 const MAX_SLIDE_SEC = 30;
@@ -295,7 +295,7 @@ const uploadVideo = multer({
 router.post("/videos", uploadVideo.single("video"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: "No video file uploaded (mp4/webm, max 200MB)" });
+      return res.status(400).json({ error: "No video file uploaded (mp4/webm, max 500MB)" });
     }
     const filePath = `/uploads/login-media/${req.file.filename}`;
     const maxRow = await prisma.loginMedia.aggregate({

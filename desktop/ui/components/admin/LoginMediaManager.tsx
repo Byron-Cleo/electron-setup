@@ -320,7 +320,7 @@ export default function LoginMediaManager({ onBack }: Props) {
                 No images found. Upload images under Menu or Accompaniments first.
               </p>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
                 {library.images.map((img) => {
                   const url = menuImageUrl(img.filePath) ?? ""
                   const checked = activePaths.includes(img.filePath)
@@ -336,10 +336,10 @@ export default function LoginMediaManager({ onBack }: Props) {
                         alt={img.filePath}
                         className="absolute inset-0 h-full w-full object-cover"
                       />
-                      <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-2 py-1 text-[10px] text-white">
+                      <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-1.5 py-0.5 text-[9px] text-white">
                         {img.filePath.split("/").pop()}
                       </span>
-                      <span className="absolute left-2 top-2 rounded bg-white/90 p-0.5">
+                      <span className="absolute left-1.5 top-1.5 rounded bg-white/90 p-0.5">
                         <Checkbox
                           checked={checked}
                           onCheckedChange={(v) => toggleImage(img.filePath, v === true)}
@@ -383,7 +383,7 @@ export default function LoginMediaManager({ onBack }: Props) {
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-admin-muted">MP4 or WebM, up to 200 MB. Muted autoplay, looped.</p>
+            <p className="text-xs text-admin-muted">MP4 or WebM, up to 500 MB. Muted autoplay, looped.</p>
 
             {videos.length === 0 ? (
               <p className="text-sm text-admin-muted">No videos uploaded yet.</p>
