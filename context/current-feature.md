@@ -1,32 +1,35 @@
 
 ## Platform
 
-frontend + electron
+Not Specified
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-- **All Shifts orders table only** (Orders → "All Shifts" card → `OrdersView` with `shiftType === undefined`, all its tabs) gains a **Print** button beside **Details** — any order (paid, unpaid, voided) can be reissued on demand so the customer keeps one copy and the restaurant files the other; **per-shift order tables keep no Print button**
-- Reprints stamped `** REPRINT COPY **`; the original waiter print stays unmarked
-- Customer-receipt fonts raised per the agreed ladder: normal text → 15px (today's Total prominence, not bold), every bold +5px (12→17, 11→16, 13→18, 15→20, 17→22); thermal path expresses the same hierarchy in printer height steps (GS ! n, height-only so 42-col padding holds)
-- Customer receipt only — kitchen/bar tickets, shift report, TEST page byte-identical; no printer settings touched (same printer, transport, margins, page size)
-- Reprint content sourced from the already-loaded `GET /orders` payload — zero backend changes
+
 
 ## Notes
 
-- Full plan: `context/fix-plan/cashier-receipt-reprint.md`
-- Branch: `feature/cashier/receipt-reprint` (create at start)
-- Shared builder `desktop/ui/lib/receipt.ts` (`receiptFromOrder` + `RESTAURANT_INFO`); WaiterMenu swaps its inline restaurant block for the import only
-- Accepted payload gaps: portion note line (portion already embedded in `item.name`) and "No starch/No vegetables" notes (menu flags not in payload); `replacesOrderNumber` resolved client-side from `voidedOrderId` against the loaded orders list
-- Button placement: All Shifts rows only (`!shiftType` gate) — no per-shift table, Details-dialog, or Payments-tab button; column header `Details` → `Actions` in All Shifts scope only; per-row busy state; failures toast, skipped printers warn (never block)
-- Size changes live in Electron main (`receiptTemplate.ts` / `receipt.ts`) → installed terminals need a rebuilt installer (`build:win`); browser UI gets the Print button via `build:web -- --server same-origin`
-- Verification: `tsc -b` + lint + builds, live preview checks (stamp on reprint only, content parity with Details dialog), physical test print to confirm thermal height steps, then tune once
-- Manual implementation — no ollama models
+
 
 ## History
+
+### frontend + electron - 2026-10-15 — Cashier Receipt Reprint + Admin/Manager Waiter POS Access
+
+- **Reprint from All Shifts only** — `Cashier.tsx` Orders → All Shifts card (`OrdersView`, `shiftType === undefined`) rows gain a **Print** button beside **Details** (`!shiftType` gate); per-shift tables keep no button and their header stays `Details`, the All Shifts header reads `Actions`; any order (paid, unpaid, voided) reprints on demand
+- **Stamp on reprints only** — the reissued customer receipt carries `** CUSTOMER COPY **`; the waiter's original print stays unmarked (an earlier `** REPRINT COPY **` wording was swapped for `** CUSTOMER COPY **` by operator)
+- **Shared receipt builder** — new `desktop/ui/lib/receipt.ts` (`receiptFromOrder(order, { isReprint, replacesOrderNumber })` + `RESTAURANT_INFO`); `WaiterMenu.tsx` drops its inline restaurant block for the shared constant (no behaviour change); `replacesOrderNumber` resolved client-side from `voidedOrderId` against the loaded orders list
+- **Sizing scoped to the money block** — customer receipt keeps the enlarged item/price table + Sub-Total/Total hierarchy (HTML 17px bold rows, 20px Total; thermal via `GS !` height steps — `H_ITEM`/`H_TOTAL`), while the brand header (Eraeva Catering Services, branch, address, city), order meta rows, thank-you/Till lines and the Apydy `POS Designed and Build By` footer stay at their original sizes; emoji removed; PRICE column shows bare numbers with `KSH` on the TOTAL column + total rows only; item columns are content-sized (`nowrap`, name ellipsis)
+- **Byte-identical elsewhere** — kitchen/bar tickets and the shift report render exactly as before (kitchen `×1` size steps, original column widths)
+- **Admin/manager Waiter POS access** — `App.tsx` `/waiter` guard → `role={["waiter","admin","manager"]}`; `AdminLayout` Waiter POS nav item gains the same roles; admin/manager waiter name lands on the receipt Waiter line (no backend role enforcement on `POST /orders`)
+- **Verified** — `tsc -b` + ESLint clean; 23/23 render checks (stamp only on reprint, no emoji/non-latin1, content-sized PRICE/TOTAL, KSH placement, kitchen + shift report byte-identical to HEAD); `npm run build` + `npm run build:web -- --server same-origin` green; live Playwright E2E (All Shifts Print present, Marked Unpaid rows printable, DAY shift Details-only, Print click no-op with zero console errors, admin sees Waiter POS link and the dish grid loads); physical test print still outstanding
+- **No backend changes** — receipt content sourced from the already-loaded `GET /orders` payload; zero `backend/` files touched
+- **No ollama models** — manual implementation per standing operator directive
+- Ref: `context/fix-plan/cashier-receipt-reprint.md` · Branch `feature/cashier/receipt-reprint` (kept, not deleted) · Commits `8b6706f` (feature), `b87cd74` (emoji + footer), `a3100ba` (sizing scoped to money block), merged `--no-ff` as `68c1a70` into `restaurant-build` · Deploy: frontend + electron — installed terminals need `npm run build:win` (Electron main sizing changes), browser UI rebuilt with `npm run build:web -- --server same-origin`; **NO backend rebuild, NO EraevaBackend restart**
+- **NEXT QUEUED:** `context/fix-plan/menu-category-ordering.md` — menu category display ordering (Settings number → waiter section order), deliberately NOT committed (untracked, reserved for its own branch `feature/admin/menu-category-ordering`)
 
 ### backend + frontend - 2026-10-15 — Admin-Controlled Login Screen Media Panel (+ Customer/User Table & Form Conventions)
 
