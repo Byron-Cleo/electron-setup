@@ -226,13 +226,7 @@ export default function Users() {
         on the server; everyone else can be managed here.
       </p>
 
-      <div className="flex items-center justify-between mb-4">
-        <Input
-          placeholder="Search by name or email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
-        />
+      <div className="flex items-center justify-end mb-4">
         <Button onClick={openCreate} className="px-6 py-6 bg-brand-green hover:bg-brand-green/90">
           <Plus className="h-4 w-4 mr-2" />
           Add User
@@ -345,6 +339,16 @@ export default function Users() {
             canPrev,
             canNext,
           }}
+          header={
+            <div className="flex items-center justify-end">
+              <Input
+                placeholder="Search by name or email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="max-w-sm"
+              />
+            </div>
+          }
         />
       )}
 

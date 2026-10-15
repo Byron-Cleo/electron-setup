@@ -1,24 +1,40 @@
 
 ## Platform
 
-Not Specified
+backend + frontend (backend pass first: schema → routes → IPC; then Login + admin UI)
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
+- Admin-only "Login Screen Display" card under Settings controls the login page's left media panel
+- Image mode: checkbox curation grid over ALL images in the upload folders; only checked ones transition (first-run backfill marks every current image active → deploy-day look identical)
+- Video mode: muted autoplay; two playback options — loop a single selected clip, or play all active clips in order (playlist)
+- Video is strictly opt-in: default IMAGES; uploading alone changes nothing; the Video toggle is disabled until ≥1 active video exists; backend 400s a VIDEO switch with zero playable videos
+- Never-blank fallback chain: VIDEO with no playable clip → images; single-loop clip missing → playlist → images; IMAGES with nothing checked → existing empty state
+- Public effective-mode endpoint: server computes the real mode, so config/file disagreement can never blank the panel
+- Deploy per standing procedure (schema change): `db:sync` → backend rebuild → service restart → `build:web -- --server same-origin`
 
 ## Notes
 
+- Full plan: `context/fix-plan/login-screen-media.md` — follow it file-by-file
+- New Prisma models: `LoginMedia` (kind IMAGE|VIDEO, filePath unique, isActive, sortOrder) + `LoginMediaConfig` singleton (mode IMAGES|VIDEO, videoPlayback SINGLE_LOOP|PLAYLIST, singleVideoId, slideIntervalSec default 2)
+- New `backend/routes/loginMedia.ts` + mount in `app.ts` (also `mkdir uploads/login-media`); public `GET /login-media` is pre-auth like `GET /menu/images`
+- Video upload: direct fetch FormData (no IPC for large files, per `uploadMenuImage` pattern); mp4/webm only; 200 MB cap; H.264 for Electron/Chromium; delete clears a dangling `singleVideoId`
+- Login.tsx: `ImageCarousel` switches to `getLoginMediaDisplay()`, keeps the 30 s poll; `<video autoPlay muted loop={single} playsInline>`, playlist advances `onEnded`, `onError` falls to images; hide-on-phone behavior untouched
+- Admin UI: `Manager.tsx` card (adminOnly, MonitorPlay icon) → new `components/admin/LoginMediaManager.tsx`; checkboxes persist via bulk selection endpoint
+- Electron wiring: `ipc-handlers.ts` + `preload.cts` (`loginMedia.*` read endpoints) + `electron.d.ts` types
+- Branch: `feature/admin/login-screen-media` · Implementation order: backend pass → live endpoint verify → frontend pass → `tsc`/lint → merge `--no-ff` → SSH deploy
+- Recent operator directive on prior features: manual implementation, no ollama models — confirm at implementation start
 
 ## History
 
 ### frontend - 2026-10-14 — Responsive Multiplatform UI (Phone/Tablet Browser)
 
 - **Admin shell** — `AdminLayout.tsx` gains a below-`lg` hamburger + slide-in nav drawer built on a new shadcn `Sheet` primitive (`components/ui/sheet.tsx`, sides top/right/bottom/left, bottom variant `max-h-[92dvh] overflow-y-auto`); `renderNavItems()` shared by the `hidden lg:flex` aside and the drawer, `navOpen` state closes on nav click; username `hidden sm:inline`. `WaiterHeader.tsx` (`flex-wrap`, datetime/username gated below `sm`) and `ServerRecovery.tsx` (`h-dvh overflow-hidden` → `min-h-dvh`) adjusted; `Login.tsx` untouched (already responsive)
-- **Waiter POS** — `WaiterMenuGrid.tsx`: two-pane `flex flex-col lg:flex-row`, detail grid `grid-cols-1 sm:grid-cols-[2fr_3fr]`, add-to-order `w-full sm:w-[28%]`; the `w-[400px]` order panel extracted to a shared `orderCard` rendered twice — as `hidden lg:flex w-[400px] shrink-0` (desktop, unchanged) and inside a `lg:hidden fixed bottom-0` bar (item count + total + "View Order", disabled when empty) opening a `side="bottom"` cart Sheet (`SheetTitle` sr-only); root `pb-24 lg:pb-0`. `ServingPeriodBar.tsx` buttons/image made fluid; `VoidOrdersDialog` dialog width normalized
+- **Waiter POS** — `WaiterMenuGrid.tsx`: two-pane `flex flex-col lg:flex-row`, detail grid `grid-cols-1 sm:grid-cols-[2fr_3fr]`, add-to-order `w-full sm:w-[28%]`; the `w-[400px]` order panel extracted to a shared `orderCard` rendered twice — as `hidden lg:flex w-[400px] shrink-0` (desktop, unchanged) and inside a `lg:hidden fixed bottom-0` bar (item count + total + "View Order", disabled when empty) opening a `side="bottom"` cart Sheet x(`SheetTitle` sr-only); root `pb-24 lg:pb-0`. `ServingPeriodBar.tsx` buttons/image made fluid; `VoidOrdersDialog` dialog width normalized
 - **Responsive grids** — `grid-cols-N` → `grid-cols-1 sm:grid-cols-N` across `MenuForm` (×3 incl. portion row `sm:grid-cols-3`), `StockSupplyEditDialog`, `AccompanimentDialog`, `AssignmentModal`, `Store`, `Menu`, `Reports`, `Cashier` (×6 incl. two RadioGroups), `ShiftManagement`, `StockSupplyForm`, `Users`; left intact `ShiftCloseDialog` ledger (`col-span-2` divider), `Login`, and the waiter grid `grid-cols-2 xl:grid-cols-3`
 - **Dialogs** — every bare `max-w-*` override (which beat the base `max-w-[calc(100%-2rem)] sm:max-w-sm` guard and killed the mobile gutter) normalized to `sm:max-w-*`: `CustomerPickerDialog`, `ShiftReport` / `ShiftCloseDialog` (+`print:max-w-none print:p-0`), `Cashier` ×3, `Customers` ×2, `ShiftManagement` ×2; verified via `rg` no bare override remains
 - **Tables** — `WastedStockCard` and `CustomerDetail` (×3 rows) `overflow-hidden` → `overflow-x-auto`; `Customers` list table wrapper → `overflow-x-auto`; others already scrollable

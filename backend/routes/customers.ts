@@ -133,14 +133,11 @@ router.post("/", async (req, res) => {
   if (!name || String(name).trim().length === 0) {
     return res.status(400).json({ error: "name is required" });
   }
-  if (!strippedPhone || strippedPhone.length === 0) {
-    return res.status(400).json({ error: "phone is required" });
-  }
   try {
     const customer = await prisma.customer.create({
       data: {
         name: String(name).trim(),
-        phone: strippedPhone,
+        phone: strippedPhone || null,
         notes: notes ? String(notes).trim() : undefined,
       },
     });
@@ -163,7 +160,7 @@ router.put("/:id", async (req, res) => {
       where: { id },
       data: {
         ...(name !== undefined && { name: String(name).trim() }),
-        ...(strippedPhone !== undefined && strippedPhone !== "" ? { phone: strippedPhone } : {}),
+        ...(phone !== undefined && { phone: strippedPhone !== "" ? strippedPhone : null }),
         ...(notes !== undefined && { notes: notes ? String(notes).trim() : null }),
       },
     });

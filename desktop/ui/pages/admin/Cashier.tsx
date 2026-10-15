@@ -1186,7 +1186,9 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
                 <div className="text-admin-muted">Customer</div>
                 <div className="font-medium">
                   {detailOrder.Customer
-                    ? `${detailOrder.Customer.name} (${detailOrder.Customer.phone})`
+                    ? detailOrder.Customer.phone
+                      ? `${detailOrder.Customer.name} (${detailOrder.Customer.phone})`
+                      : detailOrder.Customer.name
                     : "—"}
                 </div>
               </div>

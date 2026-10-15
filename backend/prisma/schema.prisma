@@ -336,7 +336,7 @@ model DepartmentStockSupply {
 model Customer {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String
-  phone     String   @unique
+  phone     String?  @unique
   notes     String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -571,4 +571,48 @@ model ShiftConfig {
   anchorIntervalMinutes Int      @default(1440) // operational cycle window in minutes (1440 = 24h)
   createdAt             DateTime @default(now()) @db.Timestamptz(6)
   updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+}
+
+// ─── Login screen media (entry-screen left panel) ──────────────────────────
+// Admin-curated media for the login screen's left panel: which upload-folder
+// images transition there, and whether the panel runs images or muted video.
+// IMAGE filePath points at the existing menu upload folders
+// (/uploads/menu-items/..., /uploads/menu-accompaniments/...); VIDEO files
+// live in /uploads/login-media/. Rows are created lazily by the login-media
+// route (first-run backfill marks every currently scanned image active so the
+// panel keeps looking identical after deploy).
+
+enum LoginMediaKind {
+  IMAGE
+  VIDEO
+}
+
+enum LoginMediaMode {
+  IMAGES
+  VIDEO
+}
+
+enum LoginVideoPlayback {
+  SINGLE_LOOP
+  PLAYLIST
+}
+
+model LoginMedia {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kind      LoginMediaKind
+  filePath  String        @unique // /uploads/menu-items/x.png | /uploads/login-media/y.mp4
+  isActive  Boolean       @default(true)
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(6)
+}
+
+model LoginMediaConfig {
+  id               Int                @id @default(1) // singleton row (exactly one, id = 1)
+  mode             LoginMediaMode     @default(IMAGES) // default = images; video only after explicit admin opt-in
+  videoPlayback    LoginVideoPlayback @default(SINGLE_LOOP)
+  singleVideoId    String?            @db.Uuid // LoginMedia VIDEO id; cleared in-route when that video is disabled/deleted
+  slideIntervalSec Int                @default(2) // image fade cadence on the login pane (seconds)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(6)
 }

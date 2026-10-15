@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Heading } from "@/components/ui/heading"
+import { DataTable } from "@/components/ui/data-table"
 import BackButton from "@/components/shared/BackButton"
 import { useNavigate } from "react-router-dom"
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, type CustomerListRow } from "@/lib/api"
@@ -12,6 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { usePagination } from "@/hooks/usePagination"
 import { Plus, Pencil, Trash2 } from "lucide-react"
 
 export default function Customers() {
@@ -52,6 +55,16 @@ export default function Customers() {
     fetchAll()
   }, [search, fetchAll])
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    prevPage,
+    canNext,
+    canPrev,
+  } = usePagination(customers)
+
   function openCreate() {
     setEditTarget(null)
     setFormName("")
@@ -64,7 +77,7 @@ export default function Customers() {
   function openEdit(c: CustomerListRow) {
     setEditTarget(c)
     setFormName(c.name)
-    setFormPhone(c.phone)
+    setFormPhone(c.phone ?? "")
     setFormNotes(c.notes ?? "")
     setFormError("")
     setShowForm(true)
@@ -75,21 +88,17 @@ export default function Customers() {
       setFormError("Name is required")
       return
     }
-    if (!formPhone.trim()) {
-      setFormError("Phone is required")
-      return
-    }
     setSaving(true)
     setFormError("")
     try {
       if (editTarget) {
         await updateCustomer(editTarget.id, {
           name: formName.trim(),
-          phone: formPhone.trim(),
-          notes: formNotes.trim() || undefined,
+          phone: formPhone.trim() || null,
+          notes: formNotes.trim() || null,
         })
       } else {
-        await createCustomer({ name: formName.trim(), phone: formPhone.trim(), notes: formNotes.trim() || undefined })
+        await createCustomer({ name: formName.trim(), phone: formPhone.trim() || undefined, notes: formNotes.trim() || undefined })
       }
       setShowForm(false)
       await fetchAll()
@@ -128,43 +137,35 @@ export default function Customers() {
 
       <Heading as="h2" className="text-admin-header-text text-center uppercase">Customers</Heading>
 
-      <div className="flex justify-center">
-        <Input
-          placeholder="Search customers by name or phone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-md"
-        />
-      </div>
-
       {loading && <p className="text-center text-muted-foreground">Loading...</p>}
       {error && <p className="text-center text-red-500">Error: {error}</p>}
 
       {!loading && !error && (
-        <div className="border rounded-lg overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold text-admin-header-text">Name</th>
-                <th className="text-left px-4 py-3 font-semibold text-admin-header-text">Phone</th>
-                <th className="text-left px-4 py-3 font-semibold text-admin-header-text">Notes</th>
-                <th className="text-left px-4 py-3 font-semibold text-admin-header-text">Open</th>
-                <th className="text-left px-4 py-3 font-semibold text-admin-header-text">Outstanding</th>
-                <th className="text-right px-4 py-3 font-semibold text-admin-header-text">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-6 text-muted-foreground">No customers found</td></tr>
-              )}
-              {customers.map((c) => (
-                <tr key={c.id} className="border-t hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium text-admin-header-text">{c.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{c.phone}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{c.notes || "—"}</td>
-                  <td className="px-4 py-3">{c.openOrderCount ?? 0}</td>
-                  <td className="px-4 py-3">{Number(c.outstandingTotal ?? 0).toFixed(0)} KSH</td>
-                  <td className="px-4 py-3 text-right">
+        <DataTable
+          columns={[
+            { label: "Name", key: "name" },
+            { label: "Phone", key: "phone" },
+            { label: "Notes", key: "notes" },
+            { label: "Open", key: "open" },
+            { label: "Outstanding", key: "outstanding" },
+            { label: "Actions", key: "actions", isAction: true },
+          ]}
+          data={paginatedItems}
+          renderCell={(c, column) => {
+            switch (column.key) {
+              case "name":
+                return <span className="font-medium text-admin-header-text">{c.name}</span>
+              case "phone":
+                return <span className="text-admin-header-text/60">{c.phone || "—"}</span>
+              case "notes":
+                return <span className="text-admin-header-text/60 text-xs">{c.notes || "—"}</span>
+              case "open":
+                return c.openOrderCount ?? 0
+              case "outstanding":
+                return `${Number(c.outstandingTotal ?? 0).toFixed(0)} KSH`
+              case "actions":
+                return (
+                  <div className="flex items-center justify-end gap-1">
                     <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>
                       <Pencil className="h-3 w-3 mr-1" /> Edit
                     </Button>
@@ -174,12 +175,33 @@ export default function Customers() {
                     <Button variant="outline" size="sm" onClick={() => navigate(`/admin/customers/${c.id}`)}>
                       Ledger
                     </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                )
+              default:
+                return null
+            }
+          }}
+          keyExtractor={(c) => c.id}
+          emptyMessage="No customers found"
+          pagination={{
+            currentPage,
+            totalPages,
+            onPrev: prevPage,
+            onNext: nextPage,
+            canPrev,
+            canNext,
+          }}
+          header={
+            <div className="flex items-center justify-end">
+              <Input
+                placeholder="Search customers by name or phone..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="max-w-sm"
+              />
+            </div>
+          }
+        />
       )}
 
       <Dialog open={showForm} onOpenChange={(open) => !open && setShowForm(false)}>
@@ -190,9 +212,33 @@ export default function Customers() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <Input placeholder="Name" value={formName} onChange={(e) => setFormName(e.target.value)} />
-            <Input placeholder="Phone" value={formPhone} onChange={(e) => setFormPhone(e.target.value.replace(/\s+/g, ""))} />
-            <Input placeholder="Notes (optional)" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} />
+            <div>
+              <Label className="text-sm font-medium text-admin-header-text">Name *</Label>
+              <Input
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="Full name"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-admin-header-text">Phone (optional)</Label>
+              <Input
+                value={formPhone}
+                onChange={(e) => setFormPhone(e.target.value.replace(/\s+/g, ""))}
+                placeholder="07..."
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-admin-header-text">Notes (optional)</Label>
+              <Input
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
+                placeholder="Optional notes"
+                className="mt-1"
+              />
+            </div>
           </div>
           {formError && <p className="text-sm text-red-500 text-center">{formError}</p>}
           <DialogFooter>

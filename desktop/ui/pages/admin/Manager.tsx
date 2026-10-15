@@ -1,12 +1,13 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, Printer, Server, Tag } from "lucide-react"
+import { Building2, ChefHat, MonitorPlay, Printer, Server, Tag } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import CategoryManager from "@/components/admin/CategoryManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
 import PrinterConfig from "@/components/admin/PrinterConfig"
 import ServerConfig from "@/components/admin/ServerConfig"
+import LoginMediaManager from "@/components/admin/LoginMediaManager"
 import { useAuthStore } from "@/stores/auth"
 
 type ActiveView =
@@ -15,6 +16,7 @@ type ActiveView =
   | "kitchen-config"
   | "pos-printer"
   | "server-config"
+  | "login-media"
   | null
 
 const cards: {
@@ -51,6 +53,13 @@ const cards: {
     icon: Printer,
     view: "pos-printer",
     adminOnly: false,
+  },
+  {
+    title: "Login Screen Display",
+    description: "Choose the images or video shown on the login screen",
+    icon: MonitorPlay,
+    view: "login-media",
+    adminOnly: true,
   },
   {
     title: "Server Connection",
@@ -99,6 +108,10 @@ function Manager() {
 
       {resolvedView === "server-config" && (
         <ServerConfig onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "login-media" && (
+        <LoginMediaManager onBack={() => setActiveView(null)} />
       )}
 
       {!resolvedView && (

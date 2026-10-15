@@ -497,6 +497,80 @@ export async function uploadAccompanimentImage(imageFile: File): Promise<{ url: 
   return apiFetch("/accompaniments/upload", { method: "POST", body: formData })
 }
 
+// ─── Login Screen Media ─────────────────────────────────────────────────────
+// The login pane's left panel: admin-curated images and/or muted video. The
+// public display call resolves the server's EFFECTIVE mode (video requested
+// with nothing playable comes back as IMAGES), so the login screen never has
+// to second-guess config-vs-files.
+
+export async function getLoginMediaDisplay(): Promise<LoginMediaDisplay> {
+  await loadApiOrigin()
+  if (window.electron?.loginMedia?.getDisplay) {
+    return window.electron.loginMedia.getDisplay()
+  }
+  return apiFetch("/login-media")
+}
+
+export async function getLoginMediaLibrary(): Promise<LoginMediaLibrary> {
+  if (window.electron?.loginMedia?.getLibrary) {
+    return window.electron.loginMedia.getLibrary()
+  }
+  return apiFetch("/login-media/library")
+}
+
+export async function saveLoginMediaConfig(
+  data: Partial<Omit<LoginMediaConfig, "singleVideoId">> & { singleVideoId?: string | null },
+): Promise<LoginMediaConfig> {
+  if (window.electron?.loginMedia?.saveConfig) {
+    return window.electron.loginMedia.saveConfig(data)
+  }
+  return apiFetch("/login-media/config", { method: "PUT", body: JSON.stringify(data) })
+}
+
+export async function saveLoginMediaSelection(
+  activePaths: string[],
+): Promise<{ selected: number; total: number }> {
+  if (window.electron?.loginMedia?.saveSelection) {
+    return window.electron.loginMedia.saveSelection({ activePaths })
+  }
+  return apiFetch("/login-media/images/selection", {
+    method: "PUT",
+    body: JSON.stringify({ activePaths }),
+  })
+}
+
+// Upload goes straight to fetch with FormData (same as menu images) — large
+// video bodies are not serialized over IPC.
+export async function uploadLoginMediaVideo(file: File): Promise<LoginMediaVideo> {
+  const formData = new FormData()
+  formData.append("video", file)
+  return apiFetch("/login-media/videos", { method: "POST", body: formData })
+}
+
+export async function orderLoginMediaVideos(ids: string[]): Promise<{ ok: boolean }> {
+  if (window.electron?.loginMedia?.orderVideos) {
+    return window.electron.loginMedia.orderVideos({ ids })
+  }
+  return apiFetch("/login-media/videos/order", { method: "PUT", body: JSON.stringify({ ids }) })
+}
+
+export async function toggleLoginMediaVideo(
+  id: string,
+  isActive: boolean,
+): Promise<{ id: string; isActive: boolean }> {
+  if (window.electron?.loginMedia?.toggleVideo) {
+    return window.electron.loginMedia.toggleVideo(id, { isActive })
+  }
+  return apiFetch(`/login-media/videos/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) })
+}
+
+export async function deleteLoginMediaVideo(id: string): Promise<{ message: string }> {
+  if (window.electron?.loginMedia?.deleteVideo) {
+    return window.electron.loginMedia.deleteVideo(id)
+  }
+  return apiFetch(`/login-media/videos/${id}`, { method: "DELETE" })
+}
+
 export async function getAccompanimentImages(): Promise<{ images: string[] }> {
   if (window.electron?.menuExtra?.getAccompanimentImages) {
     return window.electron.menuExtra.getAccompanimentImages()
@@ -1029,14 +1103,14 @@ export async function getCustomerById(id: string): Promise<CustomerDetail> {
   return apiFetch(`/customers/${id}`)
 }
 
-export async function createCustomer(data: { name: string; phone: string; notes?: string }): Promise<Customer> {
+export async function createCustomer(data: { name: string; phone?: string; notes?: string }): Promise<Customer> {
   if (window.electron?.customer?.create) {
     return window.electron.customer.create(data)
   }
   return apiFetch("/customers", { method: "POST", body: JSON.stringify(data) })
 }
 
-export async function updateCustomer(id: string, data: { name?: string; phone?: string; notes?: string | null }): Promise<Customer> {
+export async function updateCustomer(id: string, data: { name?: string; phone?: string | null; notes?: string | null }): Promise<Customer> {
   if (window.electron?.customer?.update) {
     return window.electron.customer.update(id, data)
   }

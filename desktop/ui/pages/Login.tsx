@@ -1,40 +1,45 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Info, Loader2, Power, UtensilsCrossed } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth";
-import { getMenuImages, menuImageUrl } from "@/lib/api";
+import { getLoginMediaDisplay, menuImageUrl } from "@/lib/api";
 
-const fallbackImages = [
-  "beef-fry-rice.png",
-  "chicken-fry-chapati.png",
-  "beef-fry-ugali.png",
-  "chicken-fry-rice.png",
-].map((name) => menuImageUrl(name) ?? "");
-
-function ImageCarousel() {
-  const [images, setImages] = useState<string[]>(fallbackImages);
+function LoginMediaPanel() {
+  const [display, setDisplay] = useState<LoginMediaDisplay | null>(null);
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const [current, setCurrent] = useState(0);
+  const [videoIndex, setVideoIndex] = useState(0);
+  // A corrupt/unsupported clip drops the panel back to images locally — the
+  // server-side effective mode already guards the config-vs-files case, this
+  // covers a file that exists but will not play.
+  const [videoFailed, setVideoFailed] = useState(false);
+  const videoKeyRef = useRef("");
 
   useEffect(() => {
     let active = true;
 
-    async function refreshCarousel() {
+    async function refresh() {
       try {
-        const paths = await getMenuImages();
+        const next = await getLoginMediaDisplay();
         if (!active) return;
-        const urls = paths.map((p) => menuImageUrl(p) ?? "").filter(Boolean);
-        if (urls.length === 0) {
-          setImages([]);
-          return;
+        setDisplay(next);
+        // Clamp the image index in case the curated list shrank.
+        setCurrent((prev) => (prev < next.images.length ? prev : 0));
+        // Retry video playback when the selection changes (not on every poll).
+        const key =
+          next.videoPlayback === "SINGLE_LOOP"
+            ? next.singleVideo?.id ?? ""
+            : next.videos.map((v) => v.id).join(",");
+        if (videoKeyRef.current !== key) {
+          videoKeyRef.current = key;
+          setVideoFailed(false);
         }
-        setImages(urls);
-        // Clamp the current index in case the list shrank between refreshes.
-        setCurrent((prev) => (prev < urls.length ? prev : 0));
-        // Preload every image up-front so the carousel never shows a blank
-        // frame while a large PNG is still downloading.
-        urls.forEach((url) => {
+        // Preload every image up-front so the panel never shows a blank frame
+        // while a large PNG is still downloading.
+        next.images.forEach((path) => {
+          const url = menuImageUrl(path) ?? "";
+          if (!url) return;
           const img = new Image();
           img.onload = () => {
             if (active) setLoaded((prev) => ({ ...prev, [url]: true }));
@@ -45,14 +50,14 @@ function ImageCarousel() {
           img.src = url;
         });
       } catch {
-        /* keep current images */
+        /* keep current display */
       }
     }
 
-    // Load once on mount, then re-poll so images uploaded via the admin Menu /
-    // Accompaniment forms appear on this login screen without a manual reload.
-    refreshCarousel();
-    const timer = setInterval(refreshCarousel, 30000);
+    // Load once on mount, then re-poll so admin changes (image curation, video
+    // upload, mode switch) reach every terminal without a manual reload.
+    refresh();
+    const timer = setInterval(refresh, 30000);
 
     return () => {
       active = false;
@@ -60,8 +65,12 @@ function ImageCarousel() {
     };
   }, []);
 
-  // Every 2s pick a random image and fade it in. No sliding — the next image
-  // simply replaces the current one, guaranteed different from what's showing.
+  const images = display?.images ?? [];
+  const intervalSec = display?.slideIntervalSec ?? 2;
+
+  // Every N seconds pick a random image and fade it in. No sliding — the next
+  // image simply replaces the current one, guaranteed different from what's
+  // showing.
   useEffect(() => {
     if (images.length <= 1) return;
     const timer = setInterval(() => {
@@ -70,17 +79,51 @@ function ImageCarousel() {
         if (next === prev) next = (next + 1) % images.length;
         return next;
       });
-    }, 2000);
+    }, intervalSec * 1000);
     return () => clearInterval(timer);
-  }, [images.length]);
+  }, [images.length, intervalSec]);
 
-  const url = images[current] ?? "";
+  const videos = display?.videos ?? [];
+  const single =
+    display?.videoPlayback === "SINGLE_LOOP" ? display.singleVideo : null;
+
+  const isVideoMode = display?.mode === "VIDEO" && videos.length > 0 && !videoFailed;
+  const currentVideo = single ?? videos[videoIndex % Math.max(videos.length, 1)];
+  const videoUrl = menuImageUrl(currentVideo?.url ?? null) ?? "";
+
+  if (isVideoMode && videoUrl) {
+    return (
+      <div className="relative w-full h-full rounded-2xl overflow-hidden bg-brand-tan">
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-green/50 via-brand-green/30 to-brand-beige/40 z-10 pointer-events-none" />
+        <video
+          key={single ? `single-${single.id}` : `playlist-${currentVideo.id}`}
+          src={videoUrl}
+          autoPlay
+          muted
+          loop={!!single}
+          playsInline
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-contain"
+          onEnded={() => {
+            if (!single) setVideoIndex((i) => (i + 1) % videos.length);
+          }}
+          onError={() => setVideoFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  const url = menuImageUrl(images[current] ?? null) ?? "";
   const isLoaded = !!url && loaded[url];
 
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden bg-brand-tan">
       <div className="absolute inset-0 bg-gradient-to-br from-brand-green/50 via-brand-green/30 to-brand-beige/40 z-10 pointer-events-none" />
-      {url ? (
+      {display === null ? (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-green/60" />
+        </div>
+      ) : url ? (
         isLoaded ? (
           <img
             key={url}
@@ -181,9 +224,9 @@ function Login() {
           wide), so the two-column layout requires BOTH ≥640px wide and
           ≥600px tall; phone landscape heights top out ~448px. */}
       <div className="flex-1 min-h-0 grid grid-cols-1 [@media(min-width:640px)_and_(min-height:600px)]:grid-cols-2 gap-[min(4dvh,32px)] px-[min(6dvh,40px)] pb-[min(4dvh,40px)] overflow-hidden">
-        {/* Left Column - Image Carousel (laptop/desktop only) */}
+        {/* Left Column - Login media panel (laptop/desktop only) */}
         <div className="min-w-0 h-full hidden [@media(min-width:640px)_and_(min-height:600px)]:block">
-          <ImageCarousel />
+          <LoginMediaPanel />
         </div>
 
         {/* Right Column - PIN Keypad */}
