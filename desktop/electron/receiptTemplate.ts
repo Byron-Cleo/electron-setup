@@ -176,8 +176,8 @@ function customerBody(data: ReceiptData): string {
   ${row("Tax", money(data.totals.taxPrice))}
   ${row("Total", money(data.totals.totalPrice), "font-weight:bold; font-size:20px;", "font-weight:bold; font-size:20px;")}
   ${divider()}
-  ${blockCenter("Thank you. Welcome Again 😊", "font-weight:bold; font-size:17px; margin-top:4px;")}
-  ${blockCenter("Buy Goods Till No: 994296", "font-size:18px; font-weight:bold; margin-top:6px;")}
+  ${blockCenter("Thank you. Welcome Again", "font-weight:bold; font-size:17px;")}
+  ${blockCenter("Buy Goods Till No: 994296", "font-size:18px; font-weight:bold; margin-top:2px;")}
   ${divider()}
   ${blockCenter("POS Designed and Build By:", "font-size:16px; font-weight:bold; margin-top:4px;")}
   ${data.restaurant.poweredBy ? blockCenter(`<span style="font-weight:bold;">${data.restaurant.poweredBy}</span>`, "font-size:18px;") : ""}
