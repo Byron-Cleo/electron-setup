@@ -83,7 +83,7 @@ export default function WastedStockCard() {
         </CardContent>
       ) : (
         <CardContent>
-          <div className="overflow-hidden rounded-md border border-admin-card-border">
+          <div className="overflow-x-auto rounded-md border border-admin-card-border">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-admin-card-border bg-muted text-xs text-admin-muted uppercase">

@@ -28,8 +28,8 @@ export function WaiterHeader() {
           : "Admin"
 
   return (
-    <header className="flex items-center justify-between shrink-0 p-4 pb-0">
-      <div className="flex items-center gap-3">
+    <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 shrink-0 p-4 pb-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <div className="h-10 w-10 rounded-lg bg-brand-maroon flex items-center justify-center text-white">
           <Store size={20} />
         </div>
@@ -39,11 +39,13 @@ export function WaiterHeader() {
         </div>
         <div className="h-6 w-px bg-brand-ebony/20 mx-2" />
         <Heading as="h1" className="text-xl text-brand-maroon">Waiter POS</Heading>
-        <div className="h-6 w-px bg-brand-ebony/20 mx-2" />
-        <WaiterDateTime />
+        <div className="hidden sm:block h-6 w-px bg-brand-ebony/20 mx-2" />
+        <div className="hidden sm:block">
+          <WaiterDateTime />
+        </div>
         {mealPeriod && (
           <>
-            <div className="h-6 w-px bg-brand-ebony/20 mx-2" />
+            <div className="hidden sm:block h-6 w-px bg-brand-ebony/20 mx-2" />
             <span className="text-xs font-semibold uppercase tracking-wide text-brand-maroon">
               {mealPeriod} Menu
             </span>
@@ -62,7 +64,7 @@ export function WaiterHeader() {
           <div className="h-8 w-8 rounded-full bg-brand-maroon/10 flex items-center justify-center text-brand-maroon text-sm font-bold">
             {user?.name?.charAt(0)?.toUpperCase() || "W"}
           </div>
-          <span className="text-sm font-medium text-brand-ebony">{user?.name || "Waiter"}</span>
+          <span className="hidden sm:inline text-sm font-medium text-brand-ebony">{user?.name || "Waiter"}</span>
         </div>
         {adminSideRole && (
           <Button variant="outline" size="sm" asChild title={`Switch to your ${adminSideLabel} journey`}>

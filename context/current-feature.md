@@ -1,7 +1,7 @@
 
 ## Platform
 
-Not Specified
+frontend
 
 ## Status
 
@@ -9,9 +9,32 @@ Complete
 
 ## Goals
 
+- Browser-served app fully operable on phones/tablets (360px–1023px) like the desktop terminals — responsive UI only, no printing, no PWA, no backend changes
+- Admin nav below `lg` (1024px): hamburger + slide-in drawer (new shadcn Sheet primitive); fixed `w-60` sidebar unchanged at `lg`
+- Waiter POS below `lg`: single-column menu; `w-[400px]` order panel becomes sticky bottom bar + slide-up cart Sheet; two-pane restored at `lg`
+- All hardcoded multi-col grids get responsive prefixes; all bare `max-w-*` dialog overrides normalized to `sm:max-w-*`; all tables horizontally scrollable
+- Desktop ≥1024px pixel-identical to today (verified via screenshot diff at 1366×768 / 1920×1080)
+- No horizontal page overflow anywhere in the device matrix (360×740, 390×844, 844×390, 768×1024, 1024×768, 1366×768, 1920×1080)
+
 ## Notes
 
+- Breakpoints: Tailwind v4 defaults kept (sm 640 / md 768 / lg 1024 / xl 1280; `2xl` unused); `lg:` is the mobile↔desktop boundary; media-query `rem` resolves against 16px initial font-size, so the 18px `:root` does not shift breakpoint positions
+- Landscape phones (~844×390) handled with min-height guards (Login's `[@media(min-width:…)_(and_min-height:600px)]:` pattern)
+- Full spec: `context/fix-plan/responsive-multiplatform-ui.md` (diagnosis with file:line refs, phases 1–5, verification)
+- Branch `feature/admin/responsive-multiplatform-ui`; frontend-only deploy (`build:web -- --server same-origin`, no EraevaBackend restart)
+
 ## History
+
+### frontend - 2026-10-14 — Responsive Multiplatform UI (Phone/Tablet Browser)
+
+- **Admin shell** — `AdminLayout.tsx` gains a below-`lg` hamburger + slide-in nav drawer built on a new shadcn `Sheet` primitive (`components/ui/sheet.tsx`, sides top/right/bottom/left, bottom variant `max-h-[92dvh] overflow-y-auto`); `renderNavItems()` shared by the `hidden lg:flex` aside and the drawer, `navOpen` state closes on nav click; username `hidden sm:inline`. `WaiterHeader.tsx` (`flex-wrap`, datetime/username gated below `sm`) and `ServerRecovery.tsx` (`h-dvh overflow-hidden` → `min-h-dvh`) adjusted; `Login.tsx` untouched (already responsive)
+- **Waiter POS** — `WaiterMenuGrid.tsx`: two-pane `flex flex-col lg:flex-row`, detail grid `grid-cols-1 sm:grid-cols-[2fr_3fr]`, add-to-order `w-full sm:w-[28%]`; the `w-[400px]` order panel extracted to a shared `orderCard` rendered twice — as `hidden lg:flex w-[400px] shrink-0` (desktop, unchanged) and inside a `lg:hidden fixed bottom-0` bar (item count + total + "View Order", disabled when empty) opening a `side="bottom"` cart Sheet (`SheetTitle` sr-only); root `pb-24 lg:pb-0`. `ServingPeriodBar.tsx` buttons/image made fluid; `VoidOrdersDialog` dialog width normalized
+- **Responsive grids** — `grid-cols-N` → `grid-cols-1 sm:grid-cols-N` across `MenuForm` (×3 incl. portion row `sm:grid-cols-3`), `StockSupplyEditDialog`, `AccompanimentDialog`, `AssignmentModal`, `Store`, `Menu`, `Reports`, `Cashier` (×6 incl. two RadioGroups), `ShiftManagement`, `StockSupplyForm`, `Users`; left intact `ShiftCloseDialog` ledger (`col-span-2` divider), `Login`, and the waiter grid `grid-cols-2 xl:grid-cols-3`
+- **Dialogs** — every bare `max-w-*` override (which beat the base `max-w-[calc(100%-2rem)] sm:max-w-sm` guard and killed the mobile gutter) normalized to `sm:max-w-*`: `CustomerPickerDialog`, `ShiftReport` / `ShiftCloseDialog` (+`print:max-w-none print:p-0`), `Cashier` ×3, `Customers` ×2, `ShiftManagement` ×2; verified via `rg` no bare override remains
+- **Tables** — `WastedStockCard` and `CustomerDetail` (×3 rows) `overflow-hidden` → `overflow-x-auto`; `Customers` list table wrapper → `overflow-x-auto`; others already scrollable
+- **Polish** — `date-picker` `w-[180px] max-w-full`; `Reports` date filters `w-full sm:w-[150px]` in a `flex-wrap` toolbar; `BackButton` `px-4 py-4 sm:px-6 sm:py-6`; `Dashboard` chart SVG wrapped in `overflow-x-auto` (`min-w-[700px] lg:min-w-0`); `ShiftCloseDialog` plate-movement ledger `overflow-x-auto`. `WaiterLayout` verified already-correct (header wraps, `<main>` scrolls internally)
+- **Verified** — live browser (5123→3001): 390×844 no horizontal overflow on all admin routes (`scrollWidth==innerWidth`), hamburger drawer open/close-on-nav, Add-User dialog fits with 16px gutters; 1366×768 desktop parity (sidebar `w-60`, hamburger hidden, username shown). Waiter grid live-tested at 390×844 / 844×390 / 768×1024 / 1366×768 (no overflow; bottom bar ↔ 400px column swap; "View Order" opens the cart Sheet with the order card). Live test caught a bug: the fixed cart bar covered the **Add to Order** button (root `pb-24` didn't clear it because the detail panel scrolls in a nested container) — fixed by moving the clearance onto the inner scroller (`overflow-y-auto pb-24 lg:pb-0`), re-verified (button clear of bar at max scroll). `tsc -b` clean; `npm run lint` zero new (785 pre-existing unchanged); `npm run build` + `npm run build:web -- --server same-origin` clean. Dev DB synced (`npm run db:sync`, adds `requiresCooking`) so the local backend boots. No backend code changes
+- Ref: `context/fix-plan/responsive-multiplatform-ui.md` · Branch `feature/admin/responsive-multiplatform-ui` · merge PENDING (commit-only per operator)
 
 ### backend - 2026-10-10 — Assigned/Unsold Leftovers: Batch Number Column
 

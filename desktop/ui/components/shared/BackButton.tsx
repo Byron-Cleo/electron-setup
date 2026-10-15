@@ -9,7 +9,7 @@ interface Props {
 
 export default function BackButton({ onClick, label = "Back", className = "" }: Props) {
   return (
-    <Button onClick={onClick} className={`px-6 py-6 ${className}`}>
+    <Button onClick={onClick} className={`px-4 py-4 sm:px-6 sm:py-6 ${className}`}>
       <ArrowLeft className="h-4 w-4 mr-2" />
       {label}
     </Button>

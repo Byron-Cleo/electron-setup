@@ -1,8 +1,13 @@
 import { useState, useEffect } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { useAuthStore } from "../../stores/auth"
-import { LayoutDashboard, Users, Contact, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock, ClipboardList } from "lucide-react"
+import { LayoutDashboard, Users, Contact, UtensilsCrossed, ChefHat, Warehouse, Receipt, LogOut, Settings, FileBarChart, Clock, ClipboardList, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { getCurrentShift, getPendingStockRequestCount, getPartialStockRequestCount, getCookedMenus, getLowStockCount, getRunningLowCount, getUnderproducedCookingCount, getUnpaidOrderCount } from "@/lib/api"
 
 const allNavItems: {
@@ -38,6 +43,7 @@ function AdminLayout() {
   const user = useAuthStore((s) => s.user)
   const userRoles = user?.roles?.length ? user.roles : user ? [user.role] : []
   const logout = useAuthStore((s) => s.logout)
+  const [navOpen, setNavOpen] = useState(false)
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null)
   const [shiftType, setShiftType] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
@@ -114,102 +120,136 @@ function AdminLayout() {
     item.roles.some((r) => userRoles.includes(r))
   )
 
+  // Shared nav renderer — used by both the desktop sidebar (lg and up) and the
+  // mobile drawer. `onNavigate` closes the drawer after a tap (desktop is a no-op).
+  function renderNavItems(onNavigate: () => void) {
+    return navItems.map((item) => (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        end={item.end}
+        onClick={onNavigate}
+        className={({ isActive }) =>
+          `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
+            item.accent
+              ? hasOpenShift
+                ? isActive
+                  ? "bg-green-600/15 text-green-400 font-semibold"
+                  : "text-green-500 hover:bg-green-600/10 hover:text-green-400 font-semibold"
+                : isActive
+                  ? "bg-red-600/15 text-red-400 font-semibold"
+                  : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
+              : isActive
+                ? "bg-admin-accent text-admin-accent-text"
+                : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
+          }`
+        }
+      >
+        <item.icon size={18} />
+        {item.label}
+        {item.accent && (
+          hasOpenShift && shiftType ? (
+            <span className={`ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border text-center ${
+              shiftType === "DAY"
+                ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700"
+                : shiftType === "NIGHT"
+                  ? "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
+                  : "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700"
+            }`}>
+              Shift: {shiftType}
+            </span>
+          ) : (
+            <span className="ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600 text-center">
+              No Shift
+            </span>
+          )
+        )}
+        <span className="ml-auto inline-flex items-center gap-0.5">
+          {item.pending && pendingCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-amber-500 text-white text-[9px] font-bold px-1" title={`${pendingCount} pending`}>
+              {pendingCount}
+            </span>
+          )}
+          {item.partial && partialCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-blue-500 text-white text-[9px] font-bold px-1" title={`${partialCount} partial`}>
+              {partialCount}
+            </span>
+          )}
+          {item.ready && readyCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-green-500 text-white text-[9px] font-bold px-1" title={`${readyCount} ready`}>
+              {readyCount}
+            </span>
+          )}
+          {item.runninglow && runningLowCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${runningLowCount} running low`}>
+              {runningLowCount}
+            </span>
+          )}
+          {item.lowstock && lowStockCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${lowStockCount} low stock`}>
+              {lowStockCount}
+            </span>
+          )}
+          {item.underproduced && underproducedCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-600 text-white text-[9px] font-bold px-1" title={`${underproducedCount} underproduced`}>
+              {underproducedCount}
+            </span>
+          )}
+          {item.label === "Cashier" && unpaidBacklogCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${unpaidBacklogCount} marked-unpaid order(s) awaiting reconciliation`}>
+              {unpaidBacklogCount}
+            </span>
+          )}
+        </span>
+      </NavLink>
+    ))
+  }
+
   return (
     <div className="h-screen flex overflow-hidden bg-admin-content">
-      <aside className="w-60 bg-admin-sidebar flex flex-col shrink-0 border-r border-admin-card-border print:hidden">
+      <aside className="hidden lg:flex w-60 bg-admin-sidebar flex-col shrink-0 border-r border-admin-card-border print:hidden">
         <div className="flex flex-col items-center gap-1 pt-4 pb-2 px-4">
           <img src="./images/logo/eraeva-logo.png" alt="Eraeva Logo" className="h-20 w-20 object-contain" />
           <span className="text-xs font-semibold text-admin-header-text text-center leading-tight">Eraeva<br />Catering Services</span>
         </div>
         <nav className="flex flex-col gap-1 p-3 flex-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.end}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
-                  item.accent
-                    ? hasOpenShift
-                      ? isActive
-                        ? "bg-green-600/15 text-green-400 font-semibold"
-                        : "text-green-500 hover:bg-green-600/10 hover:text-green-400 font-semibold"
-                      : isActive
-                        ? "bg-red-600/15 text-red-400 font-semibold"
-                        : "text-red-500 hover:bg-red-600/10 hover:text-red-400 font-semibold"
-                    : isActive
-                      ? "bg-admin-accent text-admin-accent-text"
-                      : "text-admin-sidebar-text hover:bg-admin-sidebar-hover"
-                }`
-              }
-            >
-              <item.icon size={18} />
-              {item.label}
-              {item.accent && (
-                hasOpenShift && shiftType ? (
-                  <span className={`ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border text-center ${
-                    shiftType === "DAY"
-                      ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700"
-                      : shiftType === "NIGHT"
-                        ? "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
-                        : "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700"
-                  }`}>
-                    Shift: {shiftType}
-                  </span>
-                ) : (
-                  <span className="ml-auto text-[11px] font-extrabold px-2 py-1 rounded-full shadow-sm border bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600 text-center">
-                    No Shift
-                  </span>
-                )
-              )}
-              <span className="ml-auto inline-flex items-center gap-0.5">
-                {item.pending && pendingCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-amber-500 text-white text-[9px] font-bold px-1" title={`${pendingCount} pending`}>
-                    {pendingCount}
-                  </span>
-                )}
-                {item.partial && partialCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-blue-500 text-white text-[9px] font-bold px-1" title={`${partialCount} partial`}>
-                    {partialCount}
-                  </span>
-                )}
-                {item.ready && readyCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-green-500 text-white text-[9px] font-bold px-1" title={`${readyCount} ready`}>
-                    {readyCount}
-                  </span>
-                )}
-                {item.runninglow && runningLowCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${runningLowCount} running low`}>
-                    {runningLowCount}
-                  </span>
-                )}
-                {item.lowstock && lowStockCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${lowStockCount} low stock`}>
-                    {lowStockCount}
-                  </span>
-                )}
-                {item.underproduced && underproducedCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-600 text-white text-[9px] font-bold px-1" title={`${underproducedCount} underproduced`}>
-                    {underproducedCount}
-                  </span>
-                )}
-                {item.label === "Cashier" && unpaidBacklogCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 text-white text-[9px] font-bold px-1" title={`${unpaidBacklogCount} marked-unpaid order(s) awaiting reconciliation`}>
-                    {unpaidBacklogCount}
-                  </span>
-                )}
-              </span>
-            </NavLink>
-          ))}
+          {renderNavItems(() => {})}
         </nav>
       </aside>
 
+      {/* Mobile/tablet drawer (below lg) — same nav as the desktop sidebar */}
+      <Sheet open={navOpen} onOpenChange={setNavOpen}>
+        <SheetContent
+          side="left"
+          className="gap-0 border-admin-card-border bg-admin-sidebar p-0"
+        >
+          <SheetTitle className="sr-only">Eraeva navigation</SheetTitle>
+          <div className="flex flex-col items-center gap-1 pt-6 pb-2 px-4">
+            <img src="./images/logo/eraeva-logo.png" alt="Eraeva Logo" className="h-20 w-20 object-contain" />
+            <span className="text-xs font-semibold text-admin-header-text text-center leading-tight">Eraeva<br />Catering Services</span>
+          </div>
+          <nav className="flex flex-col gap-1 p-3 flex-1 overflow-y-auto overscroll-contain">
+            {renderNavItems(() => setNavOpen(false))}
+          </nav>
+        </SheetContent>
+      </Sheet>
+
       <div className="flex flex-col flex-1 min-w-0">
         <header className="h-15 bg-admin-header text-admin-header-text flex items-center justify-end gap-4 px-6 shrink-0 border-b border-admin-card-border print:hidden">
+          <div className="lg:hidden mr-auto flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setNavOpen(true)}
+              aria-label="Open navigation menu"
+            >
+              <Menu size={20} />
+            </Button>
+          </div>
           <div className="h-8 w-8 rounded-full bg-admin-accent/10 flex items-center justify-center text-admin-accent text-sm font-bold">
             {user?.name?.charAt(0)?.toUpperCase() || "U"}
           </div>
-          <span className="text-sm font-medium">{user?.name}</span>
+          <span className="hidden sm:inline text-sm font-medium">{user?.name}</span>
           <Button variant="ghost" size="icon" onClick={logout}>
               <LogOut size={18} />
             </Button>

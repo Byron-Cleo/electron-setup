@@ -141,7 +141,7 @@ export default function Customers() {
       {error && <p className="text-center text-red-500">Error: {error}</p>}
 
       {!loading && !error && (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted">
               <tr>
@@ -183,7 +183,7 @@ export default function Customers() {
       )}
 
       <Dialog open={showForm} onOpenChange={(open) => !open && setShowForm(false)}>
-        <DialogContent className="p-6 max-w-md">
+        <DialogContent className="p-6 sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base uppercase text-center text-admin-header-text">
               {editTarget ? "Edit Customer" : "Add Customer"}
@@ -203,7 +203,7 @@ export default function Customers() {
       </Dialog>
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <DialogContent className="p-6 max-w-md">
+        <DialogContent className="p-6 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base uppercase text-center text-red-500">Delete Customer</DialogTitle>
           </DialogHeader>

@@ -45,7 +45,7 @@ export function DatePicker({ value, onChange, placeholder = "Select date", class
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className={cn("w-[180px] justify-between text-left font-normal", className)}
+          className={cn("w-[180px] max-w-full justify-between text-left font-normal", className)}
           size="sm"
         >
           {selectedDate ? (

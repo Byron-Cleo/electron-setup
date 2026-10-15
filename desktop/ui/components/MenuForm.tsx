@@ -359,7 +359,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="category"
@@ -456,7 +456,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                 render={() => (
                   <FormItem>
                     <FormLabel>Meal Periods <span className="text-red-500 text-base font-bold">*</span></FormLabel>
-                    <div className="grid grid-cols-2 gap-2 border rounded-md p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border rounded-md p-3">
                       {mealTypeOptions
                         .sort((a, b) => a.sortOrder - b.sortOrder)
                         .map((mt) => (
@@ -515,7 +515,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                   />
                 ) : (
                 <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <FormField
                     control={form.control}
@@ -676,7 +676,7 @@ export default function MenuForm({ editId, onSaved, onCancel }: Props) {
                         >
                           {watchedPortions.map((row, index) => (
                             <div key={index} className="flex items-end gap-2 rounded-md border p-3">
-                              <div className="grid flex-1 grid-cols-3 gap-2">
+                              <div className="grid flex-1 grid-cols-1 sm:grid-cols-3 gap-2">
                                 <div className="space-y-1">
                                   <Label className="text-xs text-gray-500" htmlFor={`portion-name-${index}`}>
                                     Name

@@ -191,7 +191,7 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
               {origin && (
                 <div className="text-[11px] text-admin-muted">{origin}</div>
               )}
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div className="flex items-baseline gap-1">
                   <span className="text-xs text-admin-muted">Produced Plates:</span>
                   <span className="font-bold text-lg">{produced} plates</span>

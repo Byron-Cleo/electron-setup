@@ -90,7 +90,7 @@ function Reports() {
       <Heading as="h1" className="mb-4 text-admin-header-text">Reports</Heading>
 
       {!activeView && (
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {cards.map((card) => (
             <Card
               key={card.view}
@@ -411,11 +411,11 @@ function ShiftReportSection() {
             {selectedShiftType} Shift{activeConfig ? ` · ${formatHm(activeConfig.autoOpenTime)}–${formatHm(activeConfig.autoCloseTime)}` : ""}
           </span>
 
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-admin-muted" />
-            <DatePicker value={from} onChange={setFrom} placeholder="From" className="w-[150px]" />
+          <div className="flex flex-wrap items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-admin-muted shrink-0" />
+            <DatePicker value={from} onChange={setFrom} placeholder="From" className="w-full sm:w-[150px]" />
             <span className="text-admin-muted">→</span>
-            <DatePicker value={to} onChange={setTo} placeholder="To" className="w-[150px]" />
+            <DatePicker value={to} onChange={setTo} placeholder="To" className="w-full sm:w-[150px]" />
           </div>
 
           <Button variant="outline" size="sm" onClick={resetToLast7Days}>Last 7 days</Button>

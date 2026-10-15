@@ -48,7 +48,7 @@ export default function CustomerDetail() {
       </div>
 
       <div className="max-w-4xl mx-auto space-y-4">
-        <section className="border rounded-lg overflow-hidden">
+        <section className="border rounded-lg overflow-x-auto">
           <div className="bg-brand-green/10 px-4 py-2">
             <h3 className="font-semibold text-brand-green">Open (Unpaid) — {openOrders.length}</h3>
           </div>
@@ -77,7 +77,7 @@ export default function CustomerDetail() {
           </table>
         </section>
 
-        <section className="border rounded-lg overflow-hidden">
+        <section className="border rounded-lg overflow-x-auto">
           <div className="bg-blue-500/10 px-4 py-2">
             <h3 className="font-semibold text-blue-600">Settled (Paid) — {settledOrders.length}</h3>
           </div>
@@ -102,7 +102,7 @@ export default function CustomerDetail() {
           </table>
         </section>
 
-        <section className="border rounded-lg overflow-hidden bg-muted/20">
+        <section className="border rounded-lg overflow-x-auto bg-muted/20">
           <div className="bg-muted px-4 py-2">
             <h3 className="font-semibold text-muted-foreground">Cancelled (Void) — {cancelledOrders.length}</h3>
           </div>

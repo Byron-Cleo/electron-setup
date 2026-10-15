@@ -34,7 +34,7 @@ export function ServingPeriodBar({ mealPeriod, onSelectPeriod }: Props) {
             disabled={!p.isActive}
             onClick={() => p.isActive && onSelectPeriod(p.period)}
             className={cn(
-              "flex items-center gap-3 rounded-xl px-5 py-3 text-2xl font-semibold transition-colors",
+              "flex items-center gap-1.5 sm:gap-3 rounded-lg sm:rounded-xl px-3 py-2 sm:px-5 sm:py-3 text-sm sm:text-2xl font-semibold transition-colors",
               current
                 ? "bg-green-600 text-white shadow-sm"
                 : p.isActive
@@ -42,7 +42,7 @@ export function ServingPeriodBar({ mealPeriod, onSelectPeriod }: Props) {
                   : "bg-red-50 text-red-500 border border-red-200 opacity-60 cursor-not-allowed",
             )}
           >
-            <Icon size={28} />
+            <Icon className="size-4 sm:size-7" />
             {p.period}
           </button>
         )

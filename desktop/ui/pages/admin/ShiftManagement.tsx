@@ -539,7 +539,7 @@ function ShiftManagement() {
 
       {/* Config Dialog */}
       <Dialog open={configOpen} onOpenChange={(open) => { if (!open) { setConfigOpen(false); setIsEditing(false); setEditConfigId(null) } else setConfigOpen(true) }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit Shift" : "Add Shift"}</DialogTitle>
             <DialogDescription>Define shift schedule for automatic creation</DialogDescription>
@@ -549,7 +549,7 @@ function ShiftManagement() {
               <Label htmlFor="shift-type">Shift Type</Label>
               <Input id="shift-type" value={configType} onChange={(e) => setConfigType(e.target.value)} placeholder="e.g. DAY, NIGHT, MORNING" className="w-full" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="open-time">Auto Open</Label>
                 <Input id="open-time" type="time" value={configOpenTime} onChange={(e) => setConfigOpenTime(e.target.value)} className="w-full" />
@@ -621,7 +621,7 @@ function ShiftManagement() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteOpen} onOpenChange={(open) => { if (!open) { setDeleteOpen(false); setDeleteConfigId(null) } else setDeleteOpen(true) }}>
-        <DialogContent className="max-w-md border-red-200 bg-red-50/10">
+        <DialogContent className="sm:max-w-md border-red-200 bg-red-50/10">
           <DialogHeader>
             <DialogTitle className="text-red-700 flex items-center gap-2">
               <Trash2 className="h-5 w-5 text-red-600" />

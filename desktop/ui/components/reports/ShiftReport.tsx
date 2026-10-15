@@ -590,7 +590,7 @@ function ShiftReportView({ report }: Props) {
 
       {/* Preview Dialog */}
       <Dialog open={previewHtml !== null} onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}>
-        <DialogContent className="max-w-md print:max-w-none print:p-0">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto print:max-w-none print:p-0">
           <DialogHeader className="print:hidden">
             <DialogTitle>Shift Report Preview</DialogTitle>
           </DialogHeader>

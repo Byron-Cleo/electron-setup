@@ -466,7 +466,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label className="text-xs">Name <span className="text-red-500 text-base font-bold">*</span></Label>
                 <Input
@@ -493,7 +493,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label className="text-xs">Stock Item Count <span className="text-red-500 text-base font-bold">*</span></Label>
                 <Input
