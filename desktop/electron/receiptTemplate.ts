@@ -119,10 +119,10 @@ function accompHtml(accompaniments: ReceiptAccompaniment[]): string {
   const lines = accompaniments
     .map((a) => {
       if (a.note) {
-        return `<div style="padding-left:10px; font-style:italic;">&bull; ${a.name}</div>`;
+        return `<div style="padding-left:10px; font-size:11px; font-style:italic;">&bull; ${a.name}</div>`;
       }
       const tag = a.charged ? `+${money(a.price)}` : "FREE";
-      return `<div style="padding-left:10px;">&bull; ${a.name} (${tag})</div>`;
+      return `<div style="padding-left:10px; font-size:11px;">&bull; ${a.name} (${tag})</div>`;
     })
     .join("");
   return `<div style="margin-top:1px;">${lines}</div>`;
@@ -151,19 +151,19 @@ function itemLinesHtml(data: ReceiptData): string {
   return `${header}${rows}`;
 }
 
-// Customer receipt size ladder: normal text = the prominence today's Total had
-// (15px, never bold); every bold run grows +5px from its old size; the Total and
-// restaurant name stay proportionally larger. Kitchen/bar tickets, the shift
-// report and the TEST page keep their original sizes.
+// Customer receipt: the enlarged type is scoped to the money block only — the
+// item/price table and the Sub-Total/Total rows. The brand header, order meta
+// rows, the thank-you/Till lines and the footer keep their original sizing.
+// Kitchen/bar tickets, the shift report and the TEST page are untouched.
 function customerBody(data: ReceiptData): string {
   return `
-  ${blockCenter(`<span style="font-size:22px; font-weight:bold;">${data.restaurant.name}</span>`)}
-  ${data.restaurant.branch ? blockCenter(`Branch: ${data.restaurant.branch}`, "font-size:16px; font-weight:bold;") : ""}
-  ${data.restaurant.address ? blockCenter(data.restaurant.address, "font-size:15px;") : ""}
-  ${data.restaurant.city ? blockCenter(data.restaurant.city, "font-size:15px;") : ""}
+  ${blockCenter(`<span style="font-size:17px; font-weight:bold;">${data.restaurant.name}</span>`)}
+  ${data.restaurant.branch ? blockCenter(`Branch: ${data.restaurant.branch}`, "font-size:11px; font-weight:bold;") : ""}
+  ${data.restaurant.address ? blockCenter(data.restaurant.address, "font-size:11px;") : ""}
+  ${data.restaurant.city ? blockCenter(data.restaurant.city, "font-size:11px;") : ""}
   ${divider()}
-  ${row("Order #", String(data.order.number), "font-weight:bold; font-size:17px;", "font-weight:bold; font-size:17px;")}
-  ${data.order.replacesOrderNumber != null ? blockCenter(`** REPLACES ORDER #${data.order.replacesOrderNumber} **`, "font-weight:bold; font-size:17px; margin-top:2px;") : ""}
+  ${row("Order #", String(data.order.number), "font-weight:bold;", "font-weight:bold;")}
+  ${data.order.replacesOrderNumber != null ? blockCenter(`** REPLACES ORDER #${data.order.replacesOrderNumber} **`, "font-weight:bold; margin-top:2px;") : ""}
   ${data.isReprint ? blockCenter("** CUSTOMER COPY **", "font-weight:bold; font-size:17px; margin-top:2px;") : ""}
   ${row("Waiter", data.waiter.name)}
   ${row("Date", formatDate(data.order.createdAt))}
@@ -176,13 +176,13 @@ function customerBody(data: ReceiptData): string {
   ${row("Tax", money(data.totals.taxPrice))}
   ${row("Total", money(data.totals.totalPrice), "font-weight:bold; font-size:20px;", "font-weight:bold; font-size:20px;")}
   ${divider()}
-  ${blockCenter("Thank you. Welcome Again", "font-weight:bold; font-size:17px;")}
-  ${blockCenter("Buy Goods Till No: 994296", "font-size:18px; font-weight:bold; margin-top:2px;")}
+  ${blockCenter("Thank you. Welcome Again", "font-weight:bold; margin-top:4px;")}
+  ${blockCenter("Buy Goods Till No: 994296", "font-size:13px; font-weight:bold; margin-top:6px;")}
   ${divider()}
-  ${blockCenter("POS Designed and Build By:", "font-size:16px; font-weight:bold; margin-top:4px;")}
-  ${data.restaurant.poweredBy ? blockCenter(`<span style="font-weight:bold;">${data.restaurant.poweredBy}</span>`, "font-size:18px;") : ""}
-  ${data.restaurant.tel ? blockCenter(`Tel: ${data.restaurant.tel}`, "font-size:15px;") : ""}
-  ${data.restaurant.services ? blockCenter(data.restaurant.services, "font-size:15px;") : ""}`;
+  ${blockCenter("POS Designed and Build By:", "font-size:11px; font-weight:bold; margin-top:4px;")}
+  ${data.restaurant.poweredBy ? blockCenter(`<span style="font-weight:bold;">${data.restaurant.poweredBy}</span>`, "font-size:13px;") : ""}
+  ${data.restaurant.tel ? blockCenter(`Tel: ${data.restaurant.tel}`, "font-size:11px;") : ""}
+  ${data.restaurant.services ? blockCenter(data.restaurant.services, "font-size:11px;") : ""}`;
 }
 
 function stationBody(data: ReceiptData, label: string): string {
@@ -209,7 +209,7 @@ function stationBody(data: ReceiptData, label: string): string {
 }
 
 export function customerReceiptHtml(data: ReceiptData): string {
-  return documentHtml(customerBody(data), 15);
+  return documentHtml(customerBody(data));
 }
 
 export function kitchenReceiptHtml(data: ReceiptData): string {

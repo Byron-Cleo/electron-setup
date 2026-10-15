@@ -235,32 +235,32 @@ function plainTextLines(data: ReceiptData): Line[] {
   const r = data.restaurant;
   const width = 42;
   const line = "-".repeat(width);
-  // Customer receipt size ladder in printer height steps (width untouched, so
-  // the 42-column layout above holds): normal ×2, bold ×3, Total/name/stamps ×4.
-  // Kitchen and bar tickets keep ×1 → byte-identical output to before.
+  // The enlarged customer type is scoped to the money block only: the item
+  // header/qty/line-total and the Sub-Total/Total rows. Brand header, order
+  // meta, thank-you/Till and footer stay at ×1 (original), exactly like the
+  // HTML preview. Kitchen and bar tickets keep ×1 → byte-identical output.
   const cust = data.ticket === "customer";
-  const H_NORM: 1 | 2 | 3 | 4 = cust ? 2 : 1;
-  const H_BOLD: 1 | 2 | 3 | 4 = cust ? 3 : 1;
-  const H_BIG: 1 | 2 | 3 | 4 = cust ? 4 : 1;
+  const H_ITEM: 1 | 2 | 3 | 4 = cust ? 3 : 1;
+  const H_TOTAL: 1 | 2 | 3 | 4 = cust ? 4 : 1;
   const lines: Line[] = [];
-  const push = (text: string, b = false, s: 1 | 2 | 3 | 4 = b ? H_BOLD : H_NORM) =>
+  const push = (text: string, b = false, s: 1 | 2 | 3 | 4 = 1) =>
     lines.push([{ t: text, b, s }]);
-  const pushCenter = (text: string, b = false, s: 1 | 2 | 3 | 4 = b ? H_BOLD : H_NORM) => {
+  const pushCenter = (text: string, b = false, s: 1 | 2 | 3 | 4 = 1) => {
     for (const wrapped of wrapWords(text, width)) push(padCenter(wrapped, width), b, s);
   };
-  const pushRow = (left: string, right: string, b = false, s: 1 | 2 | 3 | 4 = b ? H_BOLD : H_NORM) => {
+  const pushRow = (left: string, right: string, b = false, s: 1 | 2 | 3 | 4 = 1) => {
     const pad = Math.max(1, width - left.length - right.length);
     const segs: Seg[] = [{ t: left, b, s }, { t: " ".repeat(pad), s }, { t: right, b, s }];
     lines.push(segs);
   };
 
-  pushCenter(r.name, true, H_BIG);
+  pushCenter(r.name, true);
   if (r.branch) pushCenter(`Branch: ${r.branch}`, true);
   if (r.address) pushCenter(r.address);
   if (r.city) pushCenter(r.city);
   push(line);
   pushRow("Order #", String(data.order.number), true);
-  if (data.isReprint) pushCenter("** CUSTOMER COPY **", true, H_BIG);
+  if (data.isReprint) pushCenter("** CUSTOMER COPY **", true, H_ITEM);
   pushRow("Waiter", data.waiter.name);
   pushRow("Date", formatDate(data.order.createdAt));
   pushRow("Meal", data.order.mealType);
@@ -276,7 +276,7 @@ function plainTextLines(data: ReceiptData): Line[] {
   const totalW = 12;
   const header =
     "QTY".padEnd(qtyW) + "ITEM".padEnd(nameW) + "PRICE".padStart(priceW) + "TOTAL".padStart(totalW);
-  push(header, true);
+  push(header, true, H_ITEM);
   push(line);
 
   for (const item of data.items) {
@@ -285,10 +285,10 @@ function plainTextLines(data: ReceiptData): Line[] {
     const price = (cust ? moneyBare(item.unitPrice) : money(item.unitPrice)).padStart(priceW);
     const total = money(item.lineTotal).padStart(totalW);
     lines.push([
-      { t: qty, b: true, s: H_BOLD },
-      { t: name.slice(0, nameW).padEnd(nameW), s: H_NORM },
-      { t: price, s: H_NORM },
-      { t: total, b: true, s: H_BOLD },
+      { t: qty, b: true, s: H_ITEM },
+      { t: name.slice(0, nameW).padEnd(nameW), s: 1 },
+      { t: price, s: 1 },
+      { t: total, b: true, s: H_ITEM },
     ]);
     const overflow = name.slice(nameW).trim();
     if (overflow) {
@@ -305,10 +305,10 @@ function plainTextLines(data: ReceiptData): Line[] {
     }
   }
   push(line);
-  pushRow("Sub-Total", money(data.totals.itemsPrice), true);
+  pushRow("Sub-Total", money(data.totals.itemsPrice), true, H_ITEM);
   pushRow("Shipping", money(data.totals.shippingPrice));
   pushRow("Tax", money(data.totals.taxPrice));
-  pushRow("Total", money(data.totals.totalPrice), true, H_BIG);
+  pushRow("Total", money(data.totals.totalPrice), true, H_TOTAL);
   push(line);
   pushCenter("Thank You. Welcome Again", true);
   pushCenter("Buy Goods Till No: 994296", true);
