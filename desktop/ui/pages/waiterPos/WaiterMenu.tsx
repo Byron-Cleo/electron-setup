@@ -12,6 +12,7 @@ import {
   isStockShortfall,
 } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
+import { RESTAURANT_INFO } from "@/lib/receipt"
 import { useWaiterOrder } from "./WaiterOrderContext"
 import WaiterMenuGrid from "./WaiterMenuGrid"
 
@@ -76,16 +77,7 @@ function buildReceipt(
       paymentMethod: order.paymentMethod,
       ...(replacesOrderNumber != null ? { replacesOrderNumber } : {}),
     },
-    restaurant: {
-      name: "ERAEVA CATERING SERVICES",
-      branch: "Airport",
-      address: "P.O BOX 75531-00200",
-      city: "Nairobi",
-      phone: "0712345678",
-      tel: "0701315250",
-      poweredBy: "Apydy Technologies",
-      services: "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
-    },
+    restaurant: { ...RESTAURANT_INFO },
     waiter: { name: waiterName },
     items,
     totals: {
@@ -118,16 +110,7 @@ function buildPreviewReceipt(
       paymentMethod: "Cash",
       ...(replacesOrderNumber != null ? { replacesOrderNumber } : {}),
     },
-    restaurant: {
-      name: "ERAEVA CATERING SERVICES",
-      branch: "Airport",
-      address: "P.O BOX 75531-00200",
-      city: "Nairobi",
-      phone: "0712345678",
-      tel: "0701315250",
-      poweredBy: "Apydy Technologies",
-      services: "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
-    },
+    restaurant: { ...RESTAURANT_INFO },
     waiter: { name: waiterName },
     items,
     totals: {

@@ -271,6 +271,8 @@ interface ReceiptData {
   items: ReceiptItem[];
   totals: ReceiptTotals;
   barcode: string;
+  /** Cashier reprint — stamps ** REPRINT COPY ** (absent on the waiter's original). */
+  isReprint?: boolean;
 }
 
 interface PrintResult {

@@ -31,8 +31,9 @@ const allNavItems: {
   { label: "Menu/Dispatch", path: "/admin/menu", icon: UtensilsCrossed, roles: ["admin", "manager"], ready: true, runninglow: true },
   { label: "Cashier", path: "/admin/cashier", icon: Receipt, roles: ["admin", "manager", "cashier"] },
   // Cross-journey link: a user who also holds the waiter role (e.g. a
-  // cashier+waiter) jumps straight to the waiter POS to place orders.
-  { label: "Waiter POS", path: "/waiter", icon: ClipboardList, roles: ["waiter"] },
+  // cashier+waiter) jumps straight to the waiter POS to place orders. Admin
+  // and manager can use it too, so they can test the full order→print flow.
+  { label: "Waiter POS", path: "/waiter", icon: ClipboardList, roles: ["waiter", "admin", "manager"] },
   { label: "Reports", path: "/admin/reports", icon: FileBarChart, roles: ["admin", "manager"] },
   { label: "Users", path: "/admin/users", icon: Users, roles: ["admin", "manager"] },
   { label: "Customers", path: "/admin/customers", icon: Contact, roles: ["admin", "manager", "cashier"] },
