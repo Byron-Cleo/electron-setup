@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Search, Eye, Pencil, EyeOff, Sunrise, Sun, Moon, CakeSlice, CupSoda } from "lucide-react"
+import { Search, Eye, Pencil, EyeOff, Sunrise, Sun, Moon, Package, CupSoda } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,7 @@ const PERIOD_ICONS: Record<MealPeriodLabel, typeof Sunrise> = {
   BREAKFAST: Sunrise,
   LUNCH: Sun,
   DINNER: Moon,
-  DESSERT: CakeSlice,
+  PACKAGE: Package,
   BEVERAGE: CupSoda,
 }
 

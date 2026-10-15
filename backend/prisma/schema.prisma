@@ -523,7 +523,7 @@ enum ServiceTime {
   BREAKFAST
   LUNCH
   DINNER
-  DESSERT
+  PACKAGE
   BEVERAGE
 }
 

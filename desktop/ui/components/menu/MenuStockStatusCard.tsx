@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Flame, TrendingUp, PackageX, AlertTriangle, Sunrise, Sun, Moon, CakeSlice, CupSoda } from "lucide-react"
+import { Flame, TrendingUp, PackageX, AlertTriangle, Sunrise, Sun, Moon, Package, CupSoda } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
@@ -11,7 +11,7 @@ const PERIOD_ICONS: Record<MealPeriodLabel, typeof Sunrise> = {
   BREAKFAST: Sunrise,
   LUNCH: Sun,
   DINNER: Moon,
-  DESSERT: CakeSlice,
+  PACKAGE: Package,
   BEVERAGE: CupSoda,
 }
 

@@ -102,3 +102,12 @@ fullstack
 - Auto-append (`max + 1`) means legacy/blank rows never block a new category being added.
 - Deleting a category removes its ordering row; linked `Menu.category` strings are untouched (pre-existing behavior).
 - Backfill must run **before** the point where `GET` sorts by `displayOrder`, otherwise every row ties at `0` and order collapses to name-asc.
+
+## Serving Period: DESSERT → PACKAGE
+
+- **Goal:** Replace the Dessert serving-period tab with Package (no desserts served). Items with PACKAGE ticked in their serving periods appear under the Package tab. PACKAGE is **always available** (no time gate).
+- **Findings:** Period = Prisma `ServiceTime` enum, used by `MenuMealType`, `Order.mealType`, `GET /api/meal-types`. Zero DESSERT rows in dev DB; **production must be checked before push** (remap any DESSERT rows first). MenuForm checkboxes come dynamically from `/api/meal-types` → no change there. No "Package" menu category exists or is needed — assignment is via serving-period ticks.
+- **Backend:** `schema.prisma` enum `DESSERT` → `PACKAGE` + `db:sync`; `routes/mealTypes.ts` order map `PACKAGE: 4`; check `seed-extracted.ts` / `sample-data.ts` for DESSERT rows.
+- **Frontend:** `lib/mealPeriod.ts` (MEAL_PERIODS + always-available case); `ServingPeriodBar.tsx` (Package icon); `WaiterPOS.tsx` (tab entry + description "Packaged goods"); `AllMenuTable.tsx` + `MenuStockStatusCard.tsx` (icon maps). No change: MenuForm, ShiftReport pills (default case), receipts, Electron/IPC.
+- **Verify:** Tick PACKAGE on an item → shows under Package tab; DESSERT gone; other periods untouched; tsc/lint/builds green. Separate commit in the same branch.
+- **Deploy:** Rides with Phase 7 (db:sync → rebuild → restart), prod DESSERT check first.
