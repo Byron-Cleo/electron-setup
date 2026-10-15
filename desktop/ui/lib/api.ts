@@ -1103,14 +1103,14 @@ export async function getCustomerById(id: string): Promise<CustomerDetail> {
   return apiFetch(`/customers/${id}`)
 }
 
-export async function createCustomer(data: { name: string; phone: string; notes?: string }): Promise<Customer> {
+export async function createCustomer(data: { name: string; phone?: string; notes?: string }): Promise<Customer> {
   if (window.electron?.customer?.create) {
     return window.electron.customer.create(data)
   }
   return apiFetch("/customers", { method: "POST", body: JSON.stringify(data) })
 }
 
-export async function updateCustomer(id: string, data: { name?: string; phone?: string; notes?: string | null }): Promise<Customer> {
+export async function updateCustomer(id: string, data: { name?: string; phone?: string | null; notes?: string | null }): Promise<Customer> {
   if (window.electron?.customer?.update) {
     return window.electron.customer.update(id, data)
   }

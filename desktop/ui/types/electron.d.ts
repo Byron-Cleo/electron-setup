@@ -185,7 +185,7 @@ interface Order {
   customerId: string | null;
   customerAssignedById: string | null;
   customerAssignedAt: string | null;
-  Customer?: { id: string; name: string; phone: string } | null;
+  Customer?: { id: string; name: string; phone: string | null } | null;
   OrderItem: OrderItem[];
   User?: { name: string } | null;
 }
@@ -469,7 +469,7 @@ type UpdateDepartmentData = Partial<CreateDepartmentData>;
 interface Customer {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1265,8 +1265,8 @@ interface ElectronAPI {
   customer: {
     getAll: (q?: string) => Promise<CustomerRowData[]>;
     getById: (id: string) => Promise<CustomerDetailData>;
-    create: (data: { name: string; phone: string; notes?: string }) => Promise<Customer>;
-    update: (id: string, data: { name?: string; phone?: string; notes?: string | null }) => Promise<Customer>;
+    create: (data: { name: string; phone?: string; notes?: string }) => Promise<Customer>;
+    update: (id: string, data: { name?: string; phone?: string | null; notes?: string | null }) => Promise<Customer>;
     delete: (id: string) => Promise<{ message: string }>;
   };
   loginMedia: {

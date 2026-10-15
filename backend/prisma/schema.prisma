@@ -336,7 +336,7 @@ model DepartmentStockSupply {
 model Customer {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String
-  phone     String   @unique
+  phone     String?  @unique
   notes     String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
