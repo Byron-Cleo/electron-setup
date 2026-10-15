@@ -28,6 +28,7 @@ export default function CategoryManager({ onBack }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState<Category | null>(null)
   const [formName, setFormName] = useState("")
+  const [formDisplayOrder, setFormDisplayOrder] = useState("")
   const [formError, setFormError] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -40,21 +41,25 @@ export default function CategoryManager({ onBack }: Props) {
     setError("")
     try {
       const data = await getCategories()
-      setCategories(data)
-    } catch (e: any) {
-      setError(e.message)
+      setCategories(data as Category[])
+    } catch (e: unknown) {
+      setError((e as Error).message)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchAll()
+    async function load() {
+      await fetchAll()
+    }
+    void load()
   }, [])
 
   function openCreate() {
     setEditTarget(null)
     setFormName("")
+    setFormDisplayOrder("")
     setFormError("")
     setShowForm(true)
   }
@@ -62,6 +67,7 @@ export default function CategoryManager({ onBack }: Props) {
   function openEdit(cat: Category) {
     setEditTarget(cat)
     setFormName(cat.name)
+    setFormDisplayOrder(String(cat.displayOrder))
     setFormError("")
     setShowForm(true)
   }
@@ -75,14 +81,20 @@ export default function CategoryManager({ onBack }: Props) {
     setFormError("")
     try {
       if (editTarget) {
-        await updateCategory(editTarget.id, { name: formName.trim() })
+        await updateCategory(editTarget.id, {
+          name: formName.trim(),
+          ...(formDisplayOrder.trim() !== "" && { displayOrder: Number(formDisplayOrder.trim()) }),
+        })
       } else {
-        await createCategory({ name: formName.trim() })
+        await createCategory({
+          name: formName.trim(),
+          ...(formDisplayOrder.trim() !== "" && { displayOrder: Number(formDisplayOrder.trim()) }),
+        })
       }
       setShowForm(false)
       await fetchAll()
-    } catch (e: any) {
-      setFormError(e.message)
+    } catch (e: unknown) {
+      setFormError((e as Error).message)
     } finally {
       setSaving(false)
     }
@@ -96,8 +108,8 @@ export default function CategoryManager({ onBack }: Props) {
       await deleteCategory(deleteTarget.id)
       setDeleteTarget(null)
       await fetchAll()
-    } catch (e: any) {
-      setDeleteError(e.message)
+    } catch (e: unknown) {
+      setDeleteError((e as Error).message)
     } finally {
       setDeleting(false)
     }
@@ -135,12 +147,15 @@ export default function CategoryManager({ onBack }: Props) {
         {!loading && !error && (
           <DataTable
             columns={[
+              { label: "No.", key: "displayOrder" },
               { label: "Name", key: "name" },
               { label: "Actions", key: "actions", isAction: true },
             ]}
             data={paginatedItems}
             renderCell={(cat, column) => {
               switch (column.key) {
+                case "displayOrder":
+                  return <span className="text-admin-header-text">{cat.displayOrder === 0 ? "" : cat.displayOrder}</span>
                 case "name":
                   return <span className="font-medium text-admin-header-text">{cat.name}</span>
                 case "actions":
@@ -193,17 +208,28 @@ export default function CategoryManager({ onBack }: Props) {
               {editTarget ? "Edit Category" : "Add Category"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-admin-header-text">Name *</label>
-              <Input
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="Category name"
-                className="mt-1"
-              />
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-admin-header-text">Name *</label>
+                <Input
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="Category name"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-admin-header-text">Display order (optional)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={formDisplayOrder}
+                  onChange={(e) => setFormDisplayOrder(e.target.value)}
+                  placeholder="Auto — appends last"
+                  className="mt-1"
+                />
+              </div>
             </div>
-          </div>
           {formError && <p className="text-sm text-red-500 text-center mt-2">{formError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
