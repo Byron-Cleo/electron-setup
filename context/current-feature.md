@@ -1,35 +1,29 @@
 
 ## Platform
 
-backend + frontend (backend pass first: schema → routes → IPC; then Login + admin UI)
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Admin-only "Login Screen Display" card under Settings controls the login page's left media panel
-- Image mode: checkbox curation grid over ALL images in the upload folders; only checked ones transition (first-run backfill marks every current image active → deploy-day look identical)
-- Video mode: muted autoplay; two playback options — loop a single selected clip, or play all active clips in order (playlist)
-- Video is strictly opt-in: default IMAGES; uploading alone changes nothing; the Video toggle is disabled until ≥1 active video exists; backend 400s a VIDEO switch with zero playable videos
-- Never-blank fallback chain: VIDEO with no playable clip → images; single-loop clip missing → playlist → images; IMAGES with nothing checked → existing empty state
-- Public effective-mode endpoint: server computes the real mode, so config/file disagreement can never blank the panel
-- Deploy per standing procedure (schema change): `db:sync` → backend rebuild → service restart → `build:web -- --server same-origin`
-
 ## Notes
 
-- Full plan: `context/fix-plan/login-screen-media.md` — follow it file-by-file
-- New Prisma models: `LoginMedia` (kind IMAGE|VIDEO, filePath unique, isActive, sortOrder) + `LoginMediaConfig` singleton (mode IMAGES|VIDEO, videoPlayback SINGLE_LOOP|PLAYLIST, singleVideoId, slideIntervalSec default 2)
-- New `backend/routes/loginMedia.ts` + mount in `app.ts` (also `mkdir uploads/login-media`); public `GET /login-media` is pre-auth like `GET /menu/images`
-- Video upload: direct fetch FormData (no IPC for large files, per `uploadMenuImage` pattern); mp4/webm only; 200 MB cap; H.264 for Electron/Chromium; delete clears a dangling `singleVideoId`
-- Login.tsx: `ImageCarousel` switches to `getLoginMediaDisplay()`, keeps the 30 s poll; `<video autoPlay muted loop={single} playsInline>`, playlist advances `onEnded`, `onError` falls to images; hide-on-phone behavior untouched
-- Admin UI: `Manager.tsx` card (adminOnly, MonitorPlay icon) → new `components/admin/LoginMediaManager.tsx`; checkboxes persist via bulk selection endpoint
-- Electron wiring: `ipc-handlers.ts` + `preload.cts` (`loginMedia.*` read endpoints) + `electron.d.ts` types
-- Branch: `feature/admin/login-screen-media` · Implementation order: backend pass → live endpoint verify → frontend pass → `tsc`/lint → merge `--no-ff` → SSH deploy
-- Recent operator directive on prior features: manual implementation, no ollama models — confirm at implementation start
-
 ## History
+
+### backend + frontend - 2026-10-15 — Admin-Controlled Login Screen Media Panel (+ Customer/User Table & Form Conventions)
+
+- **New Prisma models** — `LoginMedia` (kind IMAGE|VIDEO, filePath unique, isActive, sortOrder) + `LoginMediaConfig` singleton (mode IMAGES|VIDEO, videoPlayback SINGLE_LOOP|PLAYLIST, singleVideoId, slideIntervalSec default 2); `db:sync` applied locally (post-squash convention: push-only, no `_prisma_migrations` locally)
+- **Backend** — `backend/routes/loginMedia.ts` mounted in `app.ts` (public `GET /login-media` computes the effective mode server-side so config/file disagreement can never blank the panel; library/config/image-selection endpoints; video upload mp4/webm with 500 MB cap via multer; reorder/toggle/delete; SINGLE_LOOP guard binds `singleVideoId` only when mode === VIDEO); `uploads/login-media/` created. Video strictly opt-in: default IMAGES, upload alone changes nothing, toggle disabled until ≥1 active video, backend 400s a VIDEO switch with zero playable videos. Never-blank fallback chain: VIDEO with no playable clip → images; single-loop clip missing → playlist → images; IMAGES with nothing checked → existing empty state. Dev-time validation fixes: `fs/promises` import, `Prisma.PrismaPromise`, video unlink strips the `uploads/` URL prefix
+- **Electron** — `ipc-handlers.ts` `registerLoginMediaHandlers()` (read/config/image handlers via IPC; video upload uses direct FormData fetch per the `uploadMenuImage` pattern — no IPC for large files); `main.ts` registration; `preload.cts` `loginMedia.*`; `electron.d.ts` types (`LoginMediaMode`, `LoginVideoPlayback`, `LoginMediaConfig`, `LoginMediaDisplay`, `LoginMediaLibrary`, `LoginMediaLibraryImage`, `LoginMediaVideo`)
+- **Login UI** — `Login.tsx`: `ImageCarousel` → `LoginMediaPanel` driven by `getLoginMediaDisplay()`, keeps the 30 s poll; muted autoplay `<video autoPlay muted loop={single} playsInline>`, playlist advances `onEnded`, `onError` falls to images; phone hide-on-small-screen behavior untouched
+- **Admin UI** — `Manager.tsx` admin-only "Login Screen Display" card (MonitorPlay icon) → `components/admin/LoginMediaManager.tsx`: mode + playback radio groups, slide-interval input, image checkbox curation grid over the `menu-items` and `menu-accompaniments` upload folders (bulk selection endpoint; first-run backfill marks every current image active → deploy-day look identical), video upload with progress/inline error, active toggle, manual reorder, delete; grid `grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2`
+- **Same-branch consistency pass (operator-directed)** — Customers list → `DataTable` + `usePagination` (right-aligned search in card header, columns Name/Phone/Notes/Open/Outstanding/Actions with Edit/Delete/Ledger); Users search moved out of the top row into the DataTable `header` (right-aligned; top row keeps only Add User); customer Add/Edit dialog labels above inputs (`Name *`, `Phone (optional)`, `Notes (optional)`); `Customer.phone` optional end-to-end: schema `phone String? @unique`, POST no longer 400s on missing phone (`phone: strippedPhone || null`), PUT can clear it, `electron.d.ts`/`lib/api.ts` types nullable/optional, Cashier order-details null-guard
+- **Verified** — `tsc -b`, backend `tsc`/`npm run build --prefix backend`, `npm run build` + `npm run build:web -- --server same-origin` all clean; ESLint zero new on every changed file (5 pre-existing `any`/unused in `customers.ts` unchanged). Live Playwright E2E: image mode, video single-loop (muted, loop=true), playlist (loop=false), corrupt-clip server fallback, admin upload/toggle/select/save round-trip; Customers create-without-phone via UI (phone "—") then deleted; Users/Customers header search right-aligned (p-4 gap to card edge); API smoke `POST /api/customers` without phone → `200 phone:null`. Test data fully cleaned; dev DB reset to pristine defaults; dev upload dir emptied (config `mode: IMAGES` persisted so Login stays stable)
+- **No ollama models** — manual implementation per standing operator directive
+- Ref: `context/fix-plan/login-screen-media.md` · Branch `feature/admin/login-screen-media` (kept, not deleted) · Commits `9b2ea0d` (feature), `aaab680` (500 MB cap + grid polish), `6ea49b0` (customer/user conventions + optional phone), merged `--no-ff` as `cdf993f` into `restaurant-build`, pushed to `origin/restaurant-build` · Deploy PENDING on the restaurant server (backend + schema changed — SSH flow): `git pull origin restaurant-build` → `npm run db:sync` (adds LoginMedia/LoginMediaConfig, relaxes Customer.phone) → `npm run build --prefix backend` → `schtasks /run /tn pos-backend-restart` → verify `sc query EraevaBackend` + `curl http://localhost:3001/health`; after any plain `npm run build` / `build:win` re-run `npm run build:web -- --server same-origin`
 
 ### frontend - 2026-10-14 — Responsive Multiplatform UI (Phone/Tablet Browser)
 
