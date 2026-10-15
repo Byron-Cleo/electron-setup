@@ -1,7 +1,7 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
@@ -9,19 +9,9 @@ Complete
 
 ## Goals
 
-- Browser-served app fully operable on phones/tablets (360px–1023px) like the desktop terminals — responsive UI only, no printing, no PWA, no backend changes
-- Admin nav below `lg` (1024px): hamburger + slide-in drawer (new shadcn Sheet primitive); fixed `w-60` sidebar unchanged at `lg`
-- Waiter POS below `lg`: single-column menu; `w-[400px]` order panel becomes sticky bottom bar + slide-up cart Sheet; two-pane restored at `lg`
-- All hardcoded multi-col grids get responsive prefixes; all bare `max-w-*` dialog overrides normalized to `sm:max-w-*`; all tables horizontally scrollable
-- Desktop ≥1024px pixel-identical to today (verified via screenshot diff at 1366×768 / 1920×1080)
-- No horizontal page overflow anywhere in the device matrix (360×740, 390×844, 844×390, 768×1024, 1024×768, 1366×768, 1920×1080)
 
 ## Notes
 
-- Breakpoints: Tailwind v4 defaults kept (sm 640 / md 768 / lg 1024 / xl 1280; `2xl` unused); `lg:` is the mobile↔desktop boundary; media-query `rem` resolves against 16px initial font-size, so the 18px `:root` does not shift breakpoint positions
-- Landscape phones (~844×390) handled with min-height guards (Login's `[@media(min-width:…)_(and_min-height:600px)]:` pattern)
-- Full spec: `context/fix-plan/responsive-multiplatform-ui.md` (diagnosis with file:line refs, phases 1–5, verification)
-- Branch `feature/admin/responsive-multiplatform-ui`; frontend-only deploy (`build:web -- --server same-origin`, no EraevaBackend restart)
 
 ## History
 
@@ -34,7 +24,7 @@ Complete
 - **Tables** — `WastedStockCard` and `CustomerDetail` (×3 rows) `overflow-hidden` → `overflow-x-auto`; `Customers` list table wrapper → `overflow-x-auto`; others already scrollable
 - **Polish** — `date-picker` `w-[180px] max-w-full`; `Reports` date filters `w-full sm:w-[150px]` in a `flex-wrap` toolbar; `BackButton` `px-4 py-4 sm:px-6 sm:py-6`; `Dashboard` chart SVG wrapped in `overflow-x-auto` (`min-w-[700px] lg:min-w-0`); `ShiftCloseDialog` plate-movement ledger `overflow-x-auto`. `WaiterLayout` verified already-correct (header wraps, `<main>` scrolls internally)
 - **Verified** — live browser (5123→3001): 390×844 no horizontal overflow on all admin routes (`scrollWidth==innerWidth`), hamburger drawer open/close-on-nav, Add-User dialog fits with 16px gutters; 1366×768 desktop parity (sidebar `w-60`, hamburger hidden, username shown). Waiter grid live-tested at 390×844 / 844×390 / 768×1024 / 1366×768 (no overflow; bottom bar ↔ 400px column swap; "View Order" opens the cart Sheet with the order card). Live test caught a bug: the fixed cart bar covered the **Add to Order** button (root `pb-24` didn't clear it because the detail panel scrolls in a nested container) — fixed by moving the clearance onto the inner scroller (`overflow-y-auto pb-24 lg:pb-0`), re-verified (button clear of bar at max scroll). `tsc -b` clean; `npm run lint` zero new (785 pre-existing unchanged); `npm run build` + `npm run build:web -- --server same-origin` clean. Dev DB synced (`npm run db:sync`, adds `requiresCooking`) so the local backend boots. No backend code changes
-- Ref: `context/fix-plan/responsive-multiplatform-ui.md` · Branch `feature/admin/responsive-multiplatform-ui` · merge PENDING (commit-only per operator)
+- Ref: `context/fix-plan/responsive-multiplatform-ui.md` · Branch `feature/admin/responsive-multiplatform-ui` · Commits `fab339b` + `d0582cb`, merged `--no-ff` as `7afdd3c` into `restaurant-build`, pushed to `origin/restaurant-build` · Deploy PENDING on the restaurant server (frontend-only SSH flow): `git pull origin restaurant-build` → `npm run build` → `npm run build:web -- --server same-origin` — **NO backend rebuild, NO EraevaBackend restart** (static UI only; installed .exe terminals keep their packaged bundle)
 
 ### backend - 2026-10-10 — Assigned/Unsold Leftovers: Batch Number Column
 
