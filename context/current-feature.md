@@ -13,6 +13,16 @@ Complete
 
 ## History
 
+### backend + frontend - 2026-10-16 — Keyed Egg Supply Mode + Menu Stock Manager
+
+- **KEYED selling mode** — new `SellingMode` value (`ALLOCATED | SHARED | KEYED`) on `StockSupply`; `StockSupply.keyedStock` is the hand-keyed plate pool shared by linked dishes; `Menu.stock` stays a derived mirror for KEYED supplies. Sales decrement `keyedStock` with no `OrderItemAllocation` rows; voids restore from `factorForServing × qty`. No floor below 0; decreases allowed and recorded.
+- **Selling engine declared on stock** — engine selector moved back to Settings (Stock-Kitchen Configuration); stock supply forms no longer pick the engine. KEYED pool adjustment happens in Menu/Dispatch.
+- **Menu Stock Manager** — new central card in Menu/Dispatch with 4 tabs: Keyed (editable pool + reason), Direct Sale (editable stock count), Shared Pool (read-only), Allocated (read-only). Replaces the old KeyedStockPool card.
+- **Leftover dashboard search** — right-aligned search inputs on Current/Unassigned/Previous/Wasted tables.
+- **Verified** — `tsc -b`, backend `tsc`, `npm run build` + `build:web -- --server same-origin` all green; ESLint no new issues; backend rebuilt + `EraevaBackend` restarted; `/health` OK; pushed to `origin/restaurant-build`.
+- No ollama models — manual implementation per operator directive
+- Ref: `context/fix-plan/keyed-egg-supply.md` · Branch `feature/store/keyed-egg-supply` (kept, not deleted) · Commit `8885b79`, merged `--no-ff` as `3fdad72` into `restaurant-build`, pushed to `origin/restaurant-build`
+
 ### backend + frontend - 2026-10-16 — Mid-Shift Go-Live: Pre-System Sales
 
 - **Schema** — `platesPreSystemSold` (`Decimal(12,2) @default(0)`) on `CookingRecord` (SHARED, batch-level) + `CookingRecordMenu` (ALLOCATED, per-dish; table `CookingRecordAssignment`); new `SystemSettings` singleton `{ id 1, showGoLiveInput Boolean @default(true) }`. `db push` applied to local `eraevadb` and `eraevadb_test`
