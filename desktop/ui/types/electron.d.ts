@@ -1174,6 +1174,28 @@ interface LoginMediaLibrary {
   videos: LoginMediaVideo[];
 }
 
+interface DashboardShift {
+  id: string;
+  type: string;
+  operationDay: string;
+  autoOpenTime: string;
+  autoCloseTime: string;
+}
+
+interface DashboardDayPoint {
+  date: string;
+  label: string;
+  value: number;
+}
+
+interface DashboardSummary {
+  currentShift: DashboardShift | null;
+  ordersSoFar: number;
+  revenueSoFar: number;
+  unpaidOutstanding: { count: number; total: number };
+  last7Days: DashboardDayPoint[];
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: unknown) => void) => void;
   getStaticData: () => void;
@@ -1283,6 +1305,9 @@ interface ElectronAPI {
     orderVideos: (data: { ids: string[] }) => Promise<{ ok: boolean }>;
     toggleVideo: (id: string, data: { isActive: boolean }) => Promise<{ id: string; isActive: boolean }>;
     deleteVideo: (id: string) => Promise<{ message: string }>;
+  };
+  dashboard: {
+    getSummary: () => Promise<DashboardSummary>;
   };
   order: {
     create: (data: CreateOrderData) => Promise<Order>;

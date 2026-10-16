@@ -747,6 +747,13 @@ export async function getOrders(orderNumber?: number): Promise<Order[]> {
   return apiFetch(`/orders${query}`)
 }
 
+export async function getDashboardSummary(): Promise<DashboardSummary> {
+  if (window.electron?.dashboard?.getSummary) {
+    return window.electron.dashboard.getSummary()
+  }
+  return apiFetch("/dashboard/summary")
+}
+
 export async function voidOrder(orderId: string, voidedById: string, reason?: string): Promise<Order> {
   if (window.electron?.order?.void) {
     return window.electron.order.void(orderId, { voidedById, reason })

@@ -17,6 +17,16 @@ Complete
 
 ## History
 
+### backend + frontend - 2026-10-16 — Functional Admin Dashboard
+
+- **Four live cards** — Orders (current shift, non-void so far), Revenue (current shift, paid non-void total so far), Outstanding Unpaid (walkout backlog count + KSh owed subtitle), Current Running Shift (shift type + scheduled window). The fake **Tables Served** and **Avg. Prep Time** cards were removed (no backing model / not tracked)
+- **7-day chart** — real paid revenue per local calendar day (oldest → today), reusing the existing SVG chart; zero-fills missing days
+- **One aggregate call** — `GET /api/dashboard/summary` (`backend/routes/dashboard.ts`, mounted in `app.ts`) feeds the whole page; Electron IPC + preload parity + `lib/api.ts` `getDashboardSummary()`; loading / error (Retry) / empty states; refresh on mount + every 60 s
+- **Shift-window parity** — current-shift orders/revenue MUST match the shift report: reuse `shiftActualEndTime` (`dailyReport.ts:16`) + the effective-window logic; running-shift effectiveEnd = `now`; unpaid predicate matches `/orders/unpaid-count` (`unpaidAcknowledged && !isPaid && !isVoid`)
+- **Verified + deployed** — `tsc -b`, backend `tsc`, Electron transpile, lint zero new, live API smoke, Playwright; no schema change → **no `db:sync`** (backend rebuild + `EraevaBackend` restart required for the new route)
+- **No ollama models** — manual implementation per operator directive
+- Ref: `context/fix-plan/functional-dashboard.md` · Branch `feature/admin/functional-dashboard`
+
 ### backend + frontend - 2026-10-16 — Menu Category Display Ordering + DESSERT→PACKAGE Serving Period
 
 - **Category display order** — `Category.displayOrder` (`Int @default(0)`, schema comment documents the no-zero rule); `GET /api/categories` returns `orderBy: [{ displayOrder: "asc" }, { name: "asc" }]`; POST/PUT validate the number (explicit value kept, blank on create auto-appends `max+1`, duplicate → `409 "Display order already in use"`, non-positive/invalid → 400); rename performs no cascade (menu items untouched)

@@ -23,6 +23,7 @@ import stockRemainingRouter from "./routes/stockRemaining.js";
 import categoriesRouter from "./routes/categories.js";
 import customersRouter from "./routes/customers.js";
 import loginMediaRouter from "./routes/loginMedia.js";
+import dashboardRouter from "./routes/dashboard.js";
 import { registerEventsRoute } from "./events.js";
 import { uploadsRoot } from "./db/uploads.js";
 
@@ -83,6 +84,7 @@ app.use("/api/stock", stockRemainingRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/customers", customersRouter);
 app.use("/api/login-media", loginMediaRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 // Server-Sent Events stream for real-time cross-terminal updates
 // (must be registered before the SPA fallback below).
