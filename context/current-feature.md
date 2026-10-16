@@ -13,6 +13,15 @@ Complete
 
 ## History
 
+### frontend - 2026-10-16 — Accompaniment Linked-Dish Status: Not Available vs Sold Out
+
+- **Linked Dish column status states** — `AccompanimentsTable.tsx` `linked` cell now shows gray **Not Available** when no dish is linked (top line `—`) or when a link exists but plates are unreadable (`availablePlates` null); red **Sold Out** unchanged for `≤ 0`; muted `N left` unchanged when stocked. Display-only; `platesRead`/`soldOut`/`notAvailable` derived inline
+- **No backend/type/waiter changes** — `availablePlates` was already `number | null`; unlinked sides keep always-selectable behavior
+- **Verified** — `tsc -b` clean; ESLint only the pre-existing `set-state-in-effect` error (AccompanimentsTable L39); `npm run build` + `npm run build:web -- --server same-origin` green
+- **Deploy** — frontend-only: SSH `git pull origin restaurant-build` → `npm run build` → `npm run build:web -- --server same-origin` — **NO backend rebuild, NO EraevaBackend restart**
+- No ollama models — manual implementation per operator directive
+- Branch `feature/admin/accompaniment-link-status-labels` (**kept, not deleted**) · Commit `8249ecb`, merged `--no-ff` into `restaurant-build`
+
 ### backend + frontend - 2026-10-16 — Linked Accompaniments Draw From Dish Stock Pools
 
 - **Link model** — nullable `MenuAccompaniment.linkedMenuId → Menu.id` (+ reverse `Menu.accompanimentLinks`, `onDelete: SetNull`); `db:sync` applied to local `eraevadb` and `eraevadb_test`
