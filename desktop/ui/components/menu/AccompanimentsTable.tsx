@@ -110,21 +110,18 @@ export default function AccompanimentsTable() {
       case "price":
         return <span>{row.price ? `KSh ${row.price}` : "—"}</span>
       case "linked": {
-        if (!row.linkedMenuId) {
-          return <span className="text-admin-muted text-xs">—</span>
-        }
-        const linkedName = menuNames.get(row.linkedMenuId) ?? "Linked dish"
+        const linkedName = row.linkedMenuId
+          ? menuNames.get(row.linkedMenuId) ?? "Linked dish"
+          : "—"
         const available = row.availablePlates
-        const soldOut = available !== null && available !== undefined && available <= 0
+        const platesRead = available !== null && available !== undefined
+        const soldOut = platesRead && available <= 0
+        const notAvailable = !row.linkedMenuId || !platesRead
         return (
           <div className="flex flex-col">
             <span className="text-sm font-medium">{linkedName}</span>
             <span className={cn("text-xs", soldOut ? "text-red-600 font-semibold" : "text-admin-muted")}>
-              {soldOut
-                ? "Sold Out"
-                : available !== null && available !== undefined
-                  ? `${available} left`
-                  : "—"}
+              {soldOut ? "Sold Out" : notAvailable ? "Not Available" : `${available} left`}
             </span>
           </div>
         )
