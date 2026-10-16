@@ -7,7 +7,7 @@ const MEAL_TYPE_ORDER: Record<string, number> = {
   BREAKFAST: 1,
   LUNCH: 2,
   DINNER: 3,
-  DESSERT: 4,
+  PACKAGE: 4,
   BEVERAGE: 5,
 };
 

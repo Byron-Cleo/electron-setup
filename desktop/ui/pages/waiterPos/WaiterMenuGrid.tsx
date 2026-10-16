@@ -22,7 +22,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { getAccompaniments, menuImageUrl, getCurrentShift } from "@/lib/api"
+import { getAccompaniments, menuImageUrl, getCurrentShift, getCategories } from "@/lib/api"
 import {
   useWaiterOrder,
   orderLineKey,
@@ -47,7 +47,7 @@ interface Props {
   onClosePreview: () => void
 }
 
-const CATEGORY_ORDER = ["Beverages", "Snacks"]
+
 
 // Sentinel radio value for "no accompaniment" (serve the dish without it)
 const NO_ACCOMPANIMENT = "none"
@@ -387,16 +387,39 @@ export function WaiterMenuGrid({
     [selectedItem, selectedPortion],
   )
 
+  const [categoryOrderMap, setCategoryOrderMap] = useState<Map<string, number>>(new Map())
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const cats = await getCategories()
+        if (!mounted) return
+        const m = new Map<string, number>()
+        for (const c of cats) m.set(c.name, c.displayOrder)
+        setCategoryOrderMap(m)
+      } catch {
+        setCategoryOrderMap(new Map())
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const categories = useMemo(() => {
     const cats = [...new Set(items.map((i) => i.category))]
-    if (mealPeriod !== "BREAKFAST") return cats
     return cats.sort((a, b) => {
-      const pa = CATEGORY_ORDER.indexOf(a)
-      const pb = CATEGORY_ORDER.indexOf(b)
-      if (pa !== -1 || pb !== -1) return (pa === -1 ? CATEGORY_ORDER.length : pa) - (pb === -1 ? CATEGORY_ORDER.length : pb)
-      return 0
+      const da = categoryOrderMap.get(a) ?? 0
+      const db = categoryOrderMap.get(b) ?? 0
+      const daAssigned = da > 0
+      const dbAssigned = db > 0
+      if (daAssigned && !dbAssigned) return -1
+      if (!daAssigned && dbAssigned) return 1
+      if (daAssigned && dbAssigned && da !== db) return da - db
+      return a.localeCompare(b)
     })
-  }, [items, mealPeriod])
+  }, [items, categoryOrderMap])
 
   const itemsByCategory = useMemo(() => {
     const grouped: Record<string, MenuItem[]> = {}

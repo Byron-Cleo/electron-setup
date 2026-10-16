@@ -499,12 +499,14 @@ type CustomerDetailData = Omit<Customer, "openOrderCount" | "outstandingTotal"> 
 interface Category {
   id: string;
   name: string;
+  displayOrder: number;
   createdAt: string;
   updatedAt: string;
 }
 
 interface CreateCategoryData {
   name: string;
+  displayOrder?: number;
 }
 
 type UpdateCategoryData = Partial<CreateCategoryData>;

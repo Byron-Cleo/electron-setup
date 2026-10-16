@@ -1,4 +1,4 @@
-export const MEAL_PERIODS = ["BREAKFAST", "LUNCH", "DINNER", "DESSERT", "BEVERAGE"] as const
+export const MEAL_PERIODS = ["BREAKFAST", "LUNCH", "DINNER", "PACKAGE", "BEVERAGE"] as const
 
 export type MealPeriodLabel = typeof MEAL_PERIODS[number]
 
@@ -27,7 +27,7 @@ export function getActiveMealPeriods(hour: number): ActiveMealPeriod[] {
         const active = TIME_FILTER_ENABLED ? hour >= 17 && new Date().getMinutes() >= 30 || hour >= 18 || hour < 5 || (hour === 5 && new Date().getMinutes() < 30) : true
         return { period, isActive: active, servingHours: "5:30 PM - 5:29 AM", badgeLabel: active ? "Now Serving" : "Closed" }
       }
-      case "DESSERT":
+      case "PACKAGE":
         return { period, isActive: true, servingHours: "Always Available", badgeLabel: "Always Available" }
       case "BEVERAGE":
         return { period, isActive: true, servingHours: "Always Available", badgeLabel: "Always Available" }

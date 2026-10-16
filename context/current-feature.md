@@ -1,18 +1,29 @@
 
 ## Platform
 
-Not Specified
+backend + frontend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-
+- Let admin/manager assign a **display order number** to each menu category from Settings → Menu Categories
+- Category table gains a `No.` column (order number) shown before `Name`
+- Waiter POS groups menu items by category and renders the category sections in the defined number order (1 → last) for **every** meal period
+- Replace the hardcoded breakfast `CATEGORY_ORDER = ["Beverages", "Snacks"]` special-case with the DB-driven order
+- Categories with no number / unmatched names fall to the end, alphabetically
 
 ## Notes
 
+- Full plan: `context/fix-plan/menu-category-ordering.md`
+- Branch: `feature/admin/menu-category-ordering`
+- Locked decisions: duplicate numbers → **reject** (`409 "Display order already in use"`); blank number on create → **auto-append last** (`max + 1`); rename → **no cascade** (renamed category sorts last until re-matched, menu items untouched)
+- `Menu.category` stays a free-text `String` (no FK) — ordering is keyed by category **name**; waiter section lookup is a name match
+- Sort change in `GET /api/categories` also benefits the MenuForm category dropdown
+- No Electron changes — IPC passes category bodies straight through
+- Manual implementation — no ollama models (standing operator directive)
 
 
 ## History

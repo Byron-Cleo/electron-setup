@@ -316,10 +316,13 @@ model Department {
 }
 
 model Category {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name      String   @unique
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String   @unique
+  // Admin-defined display order for waiter POS sections (1 = first). 0 means
+  // "not set" and sorts after every numbered category, then by name.
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
 }
 
 model DepartmentStockSupply {
@@ -520,7 +523,7 @@ enum ServiceTime {
   BREAKFAST
   LUNCH
   DINNER
-  DESSERT
+  PACKAGE
   BEVERAGE
 }
 
