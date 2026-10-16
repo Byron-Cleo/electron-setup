@@ -175,6 +175,17 @@ export function registerKitchenConfigHandlers() {
   ipcMain.handle("kitchen-config:save", async (_event, id: string, data) =>
     apiFetch(`/kitchen-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
   );
+  ipcMain.handle(
+    "kitchen-config:key",
+    async (_event, id: string, amount: number, reason?: string, userId?: string) =>
+      apiFetch(`/kitchen-config/${id}/key`, {
+        method: "POST",
+        body: JSON.stringify({ amount, reason, userId }),
+      })
+  );
+  ipcMain.handle("kitchen-config:adjustments", async (_event, id: string) =>
+    apiFetch(`/kitchen-config/${id}/adjustments`)
+  );
 }
 
 export function registerOrderHandlers() {

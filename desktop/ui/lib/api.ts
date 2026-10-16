@@ -714,6 +714,32 @@ export async function saveKitchenConfig(id: string, data: KitchenConfigData): Pr
   return apiFetch(`/kitchen-config/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
 
+/**
+ * Set a KEYED supply's hand-keyed pool value. `amount` is the value *now* (not
+ * a cumulative top-up); the signed difference is recorded in the audit trail.
+ */
+export async function keyStockSupply(
+  id: string,
+  amount: number,
+  reason?: string,
+  userId?: string,
+): Promise<StockAdjustment> {
+  if (window.electron?.kitchen?.keyConfig) {
+    return window.electron.kitchen.keyConfig(id, amount, reason, userId)
+  }
+  return apiFetch(`/kitchen-config/${id}/key`, {
+    method: "POST",
+    body: JSON.stringify({ amount, reason, userId }),
+  })
+}
+
+export async function getStockAdjustments(id: string): Promise<StockAdjustment[]> {
+  if (window.electron?.kitchen?.getAdjustments) {
+    return window.electron.kitchen.getAdjustments(id)
+  }
+  return apiFetch(`/kitchen-config/${id}/adjustments`)
+}
+
 // ─── Orders ──────────────────────────────────────────────────────────────────
 
 export async function createOrder(data: CreateOrderData): Promise<Order> {

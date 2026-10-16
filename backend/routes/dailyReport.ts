@@ -273,7 +273,7 @@ router.get("/shift/:id", async (req, res) => {
           isLiveCurrent,
         };
       })
-      .filter((row) => row.platesSold > 0 || row.platesCooked > 0 || row.platesReceived > 0);
+      .filter((row) => row.platesSold > 0 || row.platesCooked > 0 || row.platesReceived !== 0);
 
     // Menus sold in the window but absent from this shift's snapshots — a
     // dish added mid-shift (created with no opening stock, e.g. Matumbo CFF
@@ -331,7 +331,9 @@ router.get("/shift/:id", async (req, res) => {
     // A SHARED pool is one set of plates mirrored onto every dish it feeds, so
     // summing its figures per dish would report 4x the food that was actually
     // cooked. Count each shared pool once (on its first dish) and mark the
-    // other dishes as mirrors, which the UI shows but the totals skip.
+    // other dishes as mirrors, which the UI shows but the totals skip. A KEYED
+    // supply is the same shape of shared pool (one hand-keyed amount feeding
+    // every dish), so it is deduped identically.
     const sharedSupplyByMenu = new Map<string, string>();
     const supplyLinks = await prisma.stockSupplyMenu.findMany({
       where: { menuId: { in: plateMovementAll.map((r) => r.menuId) } },
@@ -342,7 +344,9 @@ router.get("/shift/:id", async (req, res) => {
     }
     const countedSharedPools = new Set<string>();
     const plateMovementDeduped = plateMovementAll.map((row) => {
-      if (row.sellingMode !== "SHARED") return { ...row, isSharedMirror: false };
+      if (row.sellingMode !== "SHARED" && row.sellingMode !== "KEYED") {
+        return { ...row, isSharedMirror: false };
+      }
       const supplyId = sharedSupplyByMenu.get(row.menuId) ?? row.menuId;
       const first = !countedSharedPools.has(supplyId);
       countedSharedPools.add(supplyId);

@@ -92,6 +92,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
     getConfig: () => electron.ipcRenderer.invoke("kitchen-config:get"),
     saveConfig: (id: string, data: any) =>
       electron.ipcRenderer.invoke("kitchen-config:save", id, data),
+    keyConfig: (id: string, amount: number, reason?: string, userId?: string) =>
+      electron.ipcRenderer.invoke("kitchen-config:key", id, amount, reason, userId),
+    getAdjustments: (id: string) =>
+      electron.ipcRenderer.invoke("kitchen-config:adjustments", id),
     getInventoryList: () => electron.ipcRenderer.invoke("kitchen:get-inventory-list"),
     getUnderproducedCount: () => electron.ipcRenderer.invoke("cooking-record:get-underproduced-count"),
   },

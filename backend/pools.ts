@@ -307,6 +307,8 @@ export type MenuSellableInfo = {
   allocated: number;
   /** Plates coming from SHARED pools (common to every dish on the supply). */
   shared: number;
+  /** Plates coming from KEYED supplies (hand-keyed, shared, no batches). */
+  keyed: number;
   /** Engine of the live batches, or undefined when nothing is left. */
   sellingMode: SellingMode | "MIXED" | undefined;
 };
@@ -333,7 +335,7 @@ export async function sellableInfoForMenu(
   });
   if (menuRow && menuRow.requiresCooking === false) {
     const plates = round2(Number(menuRow.stock));
-    return { plates, allocated: 0, shared: plates, sellingMode: undefined };
+    return { plates, allocated: 0, shared: plates, keyed: 0, sellingMode: undefined };
   }
 
   const splitAgg = await tx.cookingRecordMenu.aggregate({
@@ -353,21 +355,52 @@ export async function sellableInfoForMenu(
 
   let shared = 0;
   let sharedLive = false;
+  let keyed = 0;
+  let keyedLive = false;
   if (supplyIds.length > 0) {
-    const pools = await batchPools(tx, { sellingMode: SellingMode.SHARED, stockSupplyId: { in: supplyIds } });
-    for (const pool of pools.values()) {
-      shared = round2(shared + pool.poolRemaining);
-      if (pool.poolRemaining > 0) sharedLive = true;
+    // A supply currently KEYED has no live batches: its leftover SHARED batches
+    // are stale and must not ALSO credit this dish (that would double-count the
+    // pool). Split the linked supplies by their current engine.
+    const supplies = await tx.stockSupply.findMany({
+      where: { id: { in: supplyIds } },
+      select: { id: true, sellingMode: true, keyedStock: true },
+    });
+    const sharedSupplyIds = supplies
+      .filter((s) => s.sellingMode !== SellingMode.KEYED)
+      .map((s) => s.id);
+    if (sharedSupplyIds.length > 0) {
+      const pools = await batchPools(tx, {
+        sellingMode: SellingMode.SHARED,
+        stockSupplyId: { in: sharedSupplyIds },
+      });
+      for (const pool of pools.values()) {
+        shared = round2(shared + pool.poolRemaining);
+        if (pool.poolRemaining > 0) sharedLive = true;
+      }
+    }
+
+    // KEYED supplies have no batches at all: their sellable pool is the
+    // hand-keyed `keyedStock`, credited to every linked dish exactly like a
+    // shared pool (a held-back link still withholds it — supplyIds excludes
+    // those). It re-derives into Menu.stock with no special guard.
+    for (const s of supplies) {
+      if (s.sellingMode !== SellingMode.KEYED) continue;
+      const amount = round2(Number(s.keyedStock));
+      if (amount <= 0) continue;
+      keyed = round2(keyed + amount);
+      keyedLive = true;
     }
   }
 
   const allocatedLive = allocated > 0;
   let sellingMode: MenuSellableInfo["sellingMode"];
-  if (allocatedLive && sharedLive) sellingMode = "MIXED";
+  const liveEngines = [allocatedLive, sharedLive, keyedLive].filter(Boolean).length;
+  if (liveEngines > 1) sellingMode = "MIXED";
   else if (allocatedLive) sellingMode = SellingMode.ALLOCATED;
   else if (sharedLive) sellingMode = SellingMode.SHARED;
+  else if (keyedLive) sellingMode = SellingMode.KEYED;
 
-  return { plates: round2(allocated + shared), allocated, shared, sellingMode };
+  return { plates: round2(allocated + shared + keyed), allocated, shared, keyed, sellingMode };
 }
 
 /** The plates of one dish that can currently be ordered. */
@@ -394,11 +427,23 @@ export async function sourcesForMenu(
     where: { menuId },
     select: { stockSupplyId: true, excludedFromSharedPool: true },
   });
-  const supplyIds = links.filter((l) => !l.excludedFromSharedPool).map((l) => l.stockSupplyId);
+  const linkedSupplyIds = links.filter((l) => !l.excludedFromSharedPool).map((l) => l.stockSupplyId);
+
+  // A supply currently KEYED has no live batches, so its stale SHARED batches
+  // must neither credit nor be drained by this dish.
+  const sharedSupplyIds =
+    linkedSupplyIds.length > 0
+      ? (
+          await tx.stockSupply.findMany({
+            where: { id: { in: linkedSupplyIds }, sellingMode: { not: SellingMode.KEYED } },
+            select: { id: true },
+          })
+        ).map((s) => s.id)
+      : [];
 
   const sharedWhere: Prisma.CookingRecordWhereInput =
-    supplyIds.length > 0
-      ? { sellingMode: SellingMode.SHARED, stockSupplyId: { in: supplyIds } }
+    sharedSupplyIds.length > 0
+      ? { sellingMode: SellingMode.SHARED, stockSupplyId: { in: sharedSupplyIds } }
       : { sellingMode: SellingMode.SHARED, stockSupplyId: "__none__" };
 
   const [pools, splits] = await Promise.all([
@@ -527,6 +572,34 @@ export async function consumeForOrderItem(
     });
     return;
   }
+
+  // KEYED supplies: the pool is the hand-keyed `keyedStock`, shared by every
+  // linked dish, with NO allocation rows (allocation needs a cookingRecordId
+  // FK and keyed supplies never cook). Drain it before the batch engines; the
+  // void path restores from the order line's own weighted quantity.
+  const keyedLinks = await tx.stockSupplyMenu.findMany({
+    where: {
+      menuId,
+      excludedFromSharedPool: false,
+      stockSupply: { sellingMode: SellingMode.KEYED },
+    },
+    select: {
+      stockSupplyId: true,
+      stockSupply: { select: { keyedStock: true } },
+    },
+  });
+  for (const link of keyedLinks) {
+    if (toDeduct <= 0) break;
+    const available = round2(Number(link.stockSupply.keyedStock));
+    if (available <= 0) continue;
+    const take = round2(Math.min(available, toDeduct));
+    await tx.stockSupply.update({
+      where: { id: link.stockSupplyId },
+      data: { keyedStock: { decrement: take } },
+    });
+    toDeduct = round2(toDeduct - take);
+  }
+  if (toDeduct <= 0) return;
 
   for (const source of await sourcesForMenu(tx, menuId)) {
     if (toDeduct <= 0) break;

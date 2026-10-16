@@ -347,6 +347,10 @@ interface StockSupply {
   isMenuStock: boolean;
   platesPerUnit: number | null;
   isActive: boolean;
+  /** How this supply becomes sellable. Declared at stock entry; see SellingMode. */
+  sellingMode?: SellingMode;
+  /** KEYED only: the hand-keyed pool value (plates). */
+  keyedStock?: number;
   createdAt: string;
   updatedAt: string;
   menus?: { id: string; name: string }[];
@@ -363,6 +367,7 @@ interface StockSupplyCreateData {
   isMenuStock?: boolean;
   menuIds?: string[];
   departmentIds?: string[];
+  sellingMode?: SellingMode;
 }
 
 interface StockSupplyUpdateData {
@@ -376,6 +381,7 @@ interface StockSupplyUpdateData {
   isMenuStock?: boolean;
   menuIds?: string[];
   departmentIds?: string[];
+  sellingMode?: SellingMode;
 }
 
 type StockRequestStatus = "PENDING" | "PARTIAL" | "COMPLETED";
@@ -686,8 +692,10 @@ interface KitchenInventory {
  * reconfiguring a supply later cannot reinterpret an existing tray.
  *  - ALLOCATED: a manager splits the pool per dish; only allocated stock sells.
  *  - SHARED: the whole pool sells through every dish on the supply, unallocated.
+ *  - KEYED: no cooking at all; the admin-keyed `keyedStock` is the pool, shared
+ *    by every linked dish, adjusted by hand with an append-only audit trail.
  */
-type SellingMode = "ALLOCATED" | "SHARED";
+type SellingMode = "ALLOCATED" | "SHARED" | "KEYED";
 
 /** The engine of live batches feeding a dish: a mode, both, or none. */
 type MenuSellingEngine = SellingMode | "MIXED";
@@ -704,13 +712,15 @@ interface MenuPortionOption {
 interface KitchenConfigItem {
   id: string;
   name: string;
-  unit: string;
+  unit: ItemUnit;
   image: string | null;
   currentStock: number;
   reorderLevel: number | null;
   isMenuStock: boolean;
   platesPerUnit: number | null;
   sellingMode: SellingMode;
+  /** KEYED supplies only: the hand-keyed sellable pool (plates). */
+  keyedStock: number;
   menus: {
     id: string;
     name: string;
@@ -732,6 +742,23 @@ interface KitchenConfigData {
    * while leaving the engine shared for the rest.
    */
   menuFactors?: { menuId: string; platesPerServing: number; excludedFromSharedPool?: boolean }[];
+}
+
+/**
+ * One append-only entry in a KEYED supply's audit trail. `amount` is the pool
+ * value *after* the change; `delta` is signed (positive = top-up / Received,
+ * negative = reduction / Adjustment).
+ */
+interface StockAdjustment {
+  id: string;
+  action: "KEY" | "ADJUST";
+  delta: number;
+  amountBefore: number;
+  amountAfter: number;
+  reason: string | null;
+  createdAt: string;
+  userId: string | null;
+  userName: string | null;
 }
 
 type PosPrinterTransport = "usb" | "lan";
@@ -928,9 +955,11 @@ interface ShiftReportMeta {
 interface ShiftPlateMovementRow {
   menuId: string;
   menuName: string;
+  sellingMode?: SellingMode | "MIXED";
   openingPlates: number;
   platesCooked: number;
-  /** Direct-sale units keyed in while the shift ran (0 for cooked rows). */
+  /** Units keyed in while the shift ran: direct-sale top-ups, or a keyed
+   * supply's net movement (a reduction shows as a negative figure). */
   platesReceived: number;
   requiresCooking: boolean;
   isDirectSale: boolean;
@@ -1271,6 +1300,8 @@ interface ElectronAPI {
   kitchen: {
     getConfig: () => Promise<KitchenConfigItem[]>;
     saveConfig: (id: string, data: KitchenConfigData) => Promise<KitchenConfigItem>;
+    keyConfig: (id: string, amount: number, reason?: string, userId?: string) => Promise<StockAdjustment>;
+    getAdjustments: (id: string) => Promise<StockAdjustment[]>;
     getInventoryList: () => Promise<KitchenStockItem[]>;
     getUnderproducedCount: () => Promise<{ count: number }>;
   };

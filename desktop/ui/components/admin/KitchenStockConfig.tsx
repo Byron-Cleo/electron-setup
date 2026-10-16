@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Pencil } from "lucide-react"
-import { getKitchenConfig, saveKitchenConfig } from "@/lib/api"
+import { getKitchenConfig, saveKitchenConfig, keyStockSupply, getStockAdjustments } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import { cn } from "@/lib/utils"
 
@@ -43,6 +43,11 @@ export default function KitchenStockConfig({ onBack }: Props) {
   const [formError, setFormError] = useState("")
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState("")
+
+  const [keyedAmount, setKeyedAmount] = useState("")
+  const [keyReason, setKeyReason] = useState("")
+  const [adjustments, setAdjustments] = useState<StockAdjustment[]>([])
+  const [keying, setKeying] = useState(false)
 
   async function fetchAll() {
     setLoading(true)
@@ -70,14 +75,23 @@ export default function KitchenStockConfig({ onBack }: Props) {
     setExcluded(
       Object.fromEntries(item.menus.map((m) => [m.id, m.excludedFromSharedPool === true])),
     )
+    setKeyedAmount(String(item.keyedStock ?? 0))
+    setKeyReason("")
+    setAdjustments([])
     setFormError("")
+    if (item.sellingMode === "KEYED") {
+      getStockAdjustments(item.id)
+        .then(setAdjustments)
+        .catch(() => setAdjustments([]))
+    }
     setShowForm(true)
   }
 
   async function handleSave() {
     if (!editItem) return
     const plates = parseFloat(platesPerUnit)
-    if (!plates || plates <= 0) {
+    // Keyed supplies never cook, so plates-per-unit is irrelevant to them.
+    if (sellingMode !== "KEYED" && (!plates || plates <= 0)) {
       setFormError("Plates per unit must be greater than 0")
       return
     }
@@ -86,7 +100,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
     setFormError("")
     try {
       await saveKitchenConfig(editItem.id, {
-        platesPerUnit: plates,
+        ...(plates > 0 && { platesPerUnit: plates }),
         sellingMode,
         menuFactors: editItem.menus.map((m) => ({
           menuId: m.id,
@@ -100,6 +114,27 @@ export default function KitchenStockConfig({ onBack }: Props) {
       setFormError(e.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleKey() {
+    if (!editItem) return
+    const amount = parseFloat(keyedAmount)
+    if (Number.isNaN(amount) || amount < 0) {
+      setFormError("Keyed amount must be 0 or more")
+      return
+    }
+    setKeying(true)
+    setFormError("")
+    try {
+      await keyStockSupply(editItem.id, amount, keyReason.trim() || undefined)
+      setAdjustments(await getStockAdjustments(editItem.id))
+      setKeyReason("")
+      await fetchAll()
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setKeying(false)
     }
   }
 
@@ -160,11 +195,21 @@ export default function KitchenStockConfig({ onBack }: Props) {
               case "platesPerUnit":
                 return <span className="text-admin-header-text">{item.platesPerUnit ?? "—"}</span>
               case "engine":
-                return item.sellingMode === "SHARED" ? (
-                  <span className="text-xs px-2 py-0.5 rounded bg-sky-500/10 text-sky-600 border border-sky-500/30">
-                    Shared pool
-                  </span>
-                ) : (
+                if (item.sellingMode === "SHARED") {
+                  return (
+                    <span className="text-xs px-2 py-0.5 rounded bg-sky-500/10 text-sky-600 border border-sky-500/30">
+                      Shared pool
+                    </span>
+                  )
+                }
+                if (item.sellingMode === "KEYED") {
+                  return (
+                    <span className="text-xs px-2 py-0.5 rounded bg-violet-500/10 text-violet-600 border border-violet-500/30">
+                      Keyed · {item.keyedStock}
+                    </span>
+                  )
+                }
+                return (
                   <span className="text-xs px-2 py-0.5 rounded bg-admin-content text-admin-header-text/70 border border-admin-card-border">
                     Allocated
                   </span>
@@ -239,13 +284,15 @@ export default function KitchenStockConfig({ onBack }: Props) {
 
       {/* Edit Dialog */}
       <Dialog open={showForm} onOpenChange={(open) => !open && setShowForm(false)}>
-        <DialogContent className="min-h-[280px] p-8">
+        <DialogContent className="max-h-[90vh] overflow-y-auto p-8 sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-base uppercase text-center text-admin-header-text">
               Edit Configuration
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_1.5fr]">
+            {/* Left column — identity, output rate, engine (read-only) */}
+            <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-admin-header-text">Stock Item</label>
               <p className="mt-1 text-sm text-admin-header-text/70">
@@ -270,24 +317,28 @@ export default function KitchenStockConfig({ onBack }: Props) {
 
             {/* Engine */}
             <div>
-              <label className="text-sm font-medium text-admin-header-text">Selling Engine *</label>
+              <label className="text-sm font-medium text-admin-header-text">Selling Engine <span className="text-red-500 text-base font-bold">*</span></label>
               <div className="mt-2 space-y-2">
-                {(
-                  [
-                    {
-                      value: "ALLOCATED",
-                      title: "Allocated",
-                      blurb:
-                        "A manager splits each tray between dishes. Only the allocated amounts can be ordered; anything left over carries over untouched.",
-                    },
-{
-  value: "SHARED",
-  title: "Shared pool",
-  blurb:
-    "The whole tray is sellable through every dish on this item, with no allocation step. Any consumption rate works; use a dish's Exclude toggle to hold it back from the pool.",
-},
-                  ] as const
-                ).map((option) => (
+                {[
+                  {
+                    value: "ALLOCATED" as SellingMode,
+                    title: "Allocated",
+                    blurb:
+                      "A manager splits each cooked tray between dishes. Only the allocated amounts can be ordered; anything left over carries over untouched.",
+                  },
+                  {
+                    value: "SHARED" as SellingMode,
+                    title: "Shared pool",
+                    blurb:
+                      "The whole tray is sellable through every dish on this item, with no allocation step. Any consumption rate works; use a dish's Exclude toggle to hold it back from the pool.",
+                  },
+                  {
+                    value: "KEYED" as SellingMode,
+                    title: "Keyed (no cooking)",
+                    blurb:
+                      "No cooking or batches. You key the amount in by hand and adjust it up or down; every linked dish shares that pool with its own portion rate. Each change is logged.",
+                  },
+                ].map((option) => (
                   <button
                     key={option.value}
                     type="button"
@@ -313,7 +364,10 @@ export default function KitchenStockConfig({ onBack }: Props) {
                 ))}
               </div>
             </div>
+            </div>
 
+            {/* Right column — per-dish rates and the keyed pool controls */}
+            <div className="space-y-4">
             {/* Per-dish consumption rates */}
             {editItem && editItem.menus.length > 0 && (
               <div>
@@ -333,7 +387,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
                           {p.name} ×{p.platesPerServing}
                         </span>
                       ))}
-                      {sellingMode === "SHARED" && (
+                      {sellingMode === "SHARED" || sellingMode === "KEYED" ? (
                         <label
                           className={cn(
                             "flex items-center gap-1.5 text-xs cursor-pointer select-none",
@@ -348,7 +402,7 @@ export default function KitchenStockConfig({ onBack }: Props) {
                           />
                           Exclude from pool
                         </label>
-                      )}
+                      ) : null}
                       <Input
                         type="number"
                         min="0.01"
@@ -364,6 +418,105 @@ export default function KitchenStockConfig({ onBack }: Props) {
                 </div>
               </div>
             )}
+
+            {/* Keyed amount + audit trail (only meaningful once saved as KEYED) */}
+            {sellingMode === "KEYED" && (
+              <div className="rounded-md border border-admin-card-border p-3">
+                <label className="text-sm font-medium text-admin-header-text">
+                  Keyed amount (plates)
+                </label>
+                {editItem?.sellingMode === "KEYED" ? (
+                  <>
+                    <p className="text-xs text-admin-header-text/50 mt-1">
+                      Set the pool value as it stands now — this is not a top-up. A higher figure
+                      is logged as Received; a lower one as an Adjustment.
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={keyedAmount}
+                        onChange={(e) => setKeyedAmount(e.target.value)}
+                        className="w-28"
+                      />
+                      <Input
+                        placeholder="Reason (optional)"
+                        value={keyReason}
+                        onChange={(e) => setKeyReason(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleKey}
+                        disabled={keying}
+                        className="bg-brand-green hover:bg-brand-green/90"
+                      >
+                        {keying ? "..." : "Set"}
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-admin-header-text/60">
+                      Current: <span className="font-medium">{editItem.keyedStock}</span> · Serves{" "}
+                      {editItem.menus.length} dish{editItem.menus.length === 1 ? "" : "es"}
+                    </p>
+
+                    <div className="mt-3">
+                      <label className="text-xs font-medium text-admin-header-text">
+                        Adjustment history
+                      </label>
+                      {adjustments.length === 0 ? (
+                        <p className="mt-1 text-xs text-admin-header-text/50">No adjustments yet.</p>
+                      ) : (
+                        <div className="mt-1 max-h-44 overflow-auto rounded border border-admin-card-border">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-admin-content text-admin-header-text/60">
+                              <tr>
+                                <th className="px-2 py-1 text-left font-medium">When</th>
+                                <th className="px-2 py-1 text-left font-medium">By</th>
+                                <th className="px-2 py-1 text-right font-medium">Change</th>
+                                <th className="px-2 py-1 text-right font-medium">After</th>
+                                <th className="px-2 py-1 text-left font-medium">Reason</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {adjustments.map((a) => (
+                                <tr key={a.id} className="border-t border-admin-card-border">
+                                  <td className="px-2 py-1 text-admin-header-text/70 whitespace-nowrap">
+                                    {new Date(a.createdAt).toLocaleString()}
+                                  </td>
+                                  <td className="px-2 py-1 text-admin-header-text/70">
+                                    {a.userName ?? "—"}
+                                  </td>
+                                  <td
+                                    className={cn(
+                                      "px-2 py-1 text-right font-medium tabular-nums",
+                                      a.delta >= 0 ? "text-brand-green" : "text-red-500",
+                                    )}
+                                  >
+                                    {a.delta >= 0 ? `+${a.delta}` : a.delta}
+                                  </td>
+                                  <td className="px-2 py-1 text-right tabular-nums text-admin-header-text">
+                                    {a.amountAfter}
+                                  </td>
+                                  <td className="px-2 py-1 text-admin-header-text/60">
+                                    {a.reason ?? "—"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-1 text-xs text-amber-600">
+                    Save this configuration as Keyed first, then reopen it to set the amount.
+                  </p>
+                )}
+              </div>
+            )}
+            </div>
           </div>
           {formError && <p className="text-sm text-red-500 text-center mt-2">{formError}</p>}
           <DialogFooter>

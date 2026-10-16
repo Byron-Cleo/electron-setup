@@ -331,6 +331,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
         },
       });
     });
+
     emitLiveEvent({ type: "stock.updated", at: new Date().toISOString() });
     res.json(serializeStockSupply(item));
   } catch (e: any) {

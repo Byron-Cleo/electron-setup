@@ -1,19 +1,28 @@
 
 ## Platform
 
-Not Specified
+backend + frontend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-
+- Make a stock supply **keyed**: a manager keys an available amount directly (no cooking batch), adjusts it up/down at will, and every linked dish shares that one pool with its portion rates preserved.
+- Every key/adjust writes an append-only **StockAdjustment** trail (who / when / before → after / delta / reason) that is easy to read as a whole.
+- The shift report reconciles keyed movement: top-ups show as **Received**, reductions as **Adjustment**; closing = opening + received − sold (Cooked "—").
+- Generic engine — any supply can opt into `KEYED`; used to bring `Eggs` (and the orphan egg dishes) fully sellable again.
+- Verified (`tsc -b`, backend `tsc`, Electron transpile, lint zero new) and deployed to production via the SSH flow (`db:sync` + backend rebuild + `EraevaBackend` restart + `build:web --server same-origin`).
 
 ## Notes
 
-
+- Ref: `context/fix-plan/keyed-egg-supply.md` · Branch `feature/store/keyed-egg-supply`.
+- New third `SellingMode`: `ALLOCATED | SHARED | KEYED`. `StockSupply.keyedStock` (plates) is the ledger; `Menu.stock` stays a derived mirror (unlike direct-sale, whose `Menu.stock` IS the ledger).
+- Sales decrement `keyedStock`; **no** `OrderItemAllocation` rows (no batch FK). Voids restore from `factorForServing × qty`.
+- No floor below 0; decreases allowed and recorded; no cross-pool transfer (Pancake Eggs stays cooked).
+- Operator: manual implementation, no ollama models.
+- Data setup pending: flip `Eggs` → `KEYED`, seed `keyedStock = 2`, dispose stale batch, link the 4 orphan egg dishes at `platesPerServing` 1 (operator adjusts).
 
 ## History
 
