@@ -541,7 +541,14 @@ function ShiftReportView({ report }: Props) {
                               ? row.platesReceived
                               : "—"}
                         </td>
-                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-red-100 text-red-900">{row.platesSoldAtAutoClose ?? "—"}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-red-100 text-red-900">
+                          {row.platesSoldAtAutoClose ?? "—"}
+                          {row.soldPreSystem > 0 && (
+                            <span className="block text-[9px] font-medium text-red-600">
+                              ({row.soldPreSystem} pre-system)
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-green-100">{row.closingStockAtAutoClose ?? "—"}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-orange-100">{formatDriftMinutes(row.driftMinutes)}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-red-100 text-red-900">{row.driftSold ?? "—"}</td>

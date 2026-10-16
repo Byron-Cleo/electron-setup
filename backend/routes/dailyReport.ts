@@ -166,7 +166,7 @@ router.get("/shift/:id", async (req, res) => {
       },
       include: {
         stockSupply: { select: { costPrice: true } },
-        cookingRecordMenus: { select: { menuId: true, platesAllocated: true } },
+        cookingRecordMenus: { select: { menuId: true, platesAllocated: true, platesPreSystemSold: true } },
       },
     });
 
@@ -178,10 +178,29 @@ router.get("/shift/:id", async (req, res) => {
 
     // Aggregate plates cooked per menu item from splits
     const platesCookedByMenu = new Map<string, number>();
+    // Go-live pre-system sales: ALLOCATED batches carry a per-dish figure on
+    // each split; SHARED batches carry one batch-level figure per pool, which
+    // must be counted once per supply (not once per mirrored dish) — so it is
+    // tracked by supply and folded onto the pool's first (non-mirror) row.
+    const preSoldByMenu = new Map<string, number>();
+    const preSoldBySupply = new Map<string, number>();
     for (const record of cookingRecords) {
       for (const crm of record.cookingRecordMenus) {
         const plates = Number(crm.platesAllocated);
         platesCookedByMenu.set(crm.menuId, (platesCookedByMenu.get(crm.menuId) ?? 0) + plates);
+        const pre = Number(crm.platesPreSystemSold ?? 0);
+        if (pre > 0) {
+          preSoldByMenu.set(crm.menuId, round2((preSoldByMenu.get(crm.menuId) ?? 0) + pre));
+        }
+      }
+      if (record.sellingMode === "SHARED") {
+        const pre = Number(record.platesPreSystemSold ?? 0);
+        if (pre > 0) {
+          preSoldBySupply.set(
+            record.stockSupplyId,
+            round2((preSoldBySupply.get(record.stockSupplyId) ?? 0) + pre),
+          );
+        }
       }
     }
 
@@ -226,10 +245,17 @@ router.get("/shift/:id", async (req, res) => {
         // below stays exact.
         const opening = Number(snapshot.openingPlates);
         const derived = salesByMenu.get(snapshot.menuId);
-        const sold = derived?.sold ?? 0;
+        // Go-live pre-system sales (ALLOCATED only here; SHARED folds onto the
+        // pool's first row in the dedup step below). They reduce closing stock
+        // and show as their own figure, but never add revenue.
+        const soldPreSystem = round2(preSoldByMenu.get(snapshot.menuId) ?? 0);
+        const sold = round2((derived?.sold ?? 0) + soldPreSystem);
         // Pre-drift sales only exist once the shift was auto-captured — the
-        // same derivation cut at the scheduled close time.
-        const soldAtAutoClose = shift.autoClosed ? derived?.soldBeforeAutoClose ?? 0 : null;
+        // same derivation cut at the scheduled close time. Pre-system plates
+        // are a fixed go-live deduction, counted on both sides of the tick.
+        const soldAtAutoClose = shift.autoClosed
+          ? round2((derived?.soldBeforeAutoClose ?? 0) + soldPreSystem)
+          : null;
         const platesCooked = platesCookedByMenu.get(snapshot.menuId) ?? 0;
         // Direct-sale inflow keyed in while this shift was running. Cooked
         // items keep 0 (their inflow is the batches counted as Cooked above),
@@ -263,6 +289,7 @@ router.get("/shift/:id", async (req, res) => {
           requiresCooking: snapshot.menu.requiresCooking,
           isDirectSale,
           platesSold: sold,
+          soldPreSystem,
           platesSoldAtAutoClose: soldAtAutoClose,
           driftSold,
           closingStock,
@@ -296,8 +323,11 @@ router.get("/shift/:id", async (req, res) => {
       const modeByMenu = new Map(missingLinks.map((l) => [l.menuId, l.stockSupply.sellingMode]));
       const appendedRows = missingMenus.map((menu) => {
         const derived = salesByMenu.get(menu.id);
-        const sold = derived?.sold ?? 0;
-        const soldAtAutoClose = shift.autoClosed ? derived?.soldBeforeAutoClose ?? 0 : null;
+        const soldPreSystem = round2(preSoldByMenu.get(menu.id) ?? 0);
+        const sold = round2((derived?.sold ?? 0) + soldPreSystem);
+        const soldAtAutoClose = shift.autoClosed
+          ? round2((derived?.soldBeforeAutoClose ?? 0) + soldPreSystem)
+          : null;
         const platesCooked = platesCookedByMenu.get(menu.id) ?? 0;
         const opening = 0;
         return {
@@ -312,6 +342,7 @@ router.get("/shift/:id", async (req, res) => {
           requiresCooking: menu.requiresCooking,
           isDirectSale: menu.requiresCooking === false,
           platesSold: sold,
+          soldPreSystem,
           platesSoldAtAutoClose: soldAtAutoClose,
           driftSold: soldAtAutoClose !== null ? round2(sold - soldAtAutoClose) : null,
           closingStock: round2(opening + platesCooked - sold),
@@ -350,6 +381,30 @@ router.get("/shift/:id", async (req, res) => {
       const supplyId = sharedSupplyByMenu.get(row.menuId) ?? row.menuId;
       const first = !countedSharedPools.has(supplyId);
       countedSharedPools.add(supplyId);
+      if (first) {
+        // A shared batch's go-live pre-system plates are a pool-level figure:
+        // fold them onto the pool's first (non-mirror) row so they are counted
+        // exactly once, and keep closing = opening + cooked + received − sold.
+        const extra = round2(preSoldBySupply.get(supplyId) ?? 0);
+        if (extra > 0) {
+          const sold = round2(row.platesSold + extra);
+          return {
+            ...row,
+            soldPreSystem: round2(row.soldPreSystem + extra),
+            platesSold: sold,
+            platesSoldAtAutoClose:
+              row.platesSoldAtAutoClose !== null
+                ? round2(row.platesSoldAtAutoClose + extra)
+                : null,
+            closingStock: round2(row.closingStock - extra),
+            closingStockAtAutoClose:
+              row.closingStockAtAutoClose !== null
+                ? round2(row.closingStockAtAutoClose - extra)
+                : null,
+            isSharedMirror: false,
+          };
+        }
+      }
       return { ...row, isSharedMirror: !first };
     });
 
@@ -469,6 +524,8 @@ router.get("/shift/:id", async (req, res) => {
         // Direct-sale units keyed in while this shift ran (top-up deltas).
         received: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.platesReceived), 0)),
         sold: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.platesSold), 0)),
+        // Go-live pre-system portion of `sold` (off-system paper sales, no revenue).
+        soldPreSystem: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : (r.soldPreSystem ?? 0)), 0)),
         opening: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.openingPlates), 0)),
         closing: round2(plateMovementDeduped.reduce((s, r) => s + (r.isSharedMirror ? 0 : r.closingStock), 0)),
       },

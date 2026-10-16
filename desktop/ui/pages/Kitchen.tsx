@@ -31,6 +31,7 @@ import {
   updateCookingRecord,
   getUnderproducedCookingCount,
   returnToStore,
+  getSystemSettings,
 } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
 import StockSupplyDetailDialog from "@/components/admin/StockSupplyDetailDialog"
@@ -615,6 +616,8 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   const [cookQty, setCookQty] = useState(1)
   const [cookPlatesActual, setCookPlatesActual] = useState<number | "">("")
   const [cookNotes, setCookNotes] = useState("")
+  const [cookPreSystemSold, setCookPreSystemSold] = useState<number | "">("")
+  const [showGoLiveInput, setShowGoLiveInput] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [search, setSearch] = useState("")
@@ -626,6 +629,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
   const [editRecord, setEditRecord] = useState<CookingRecord | null>(null)
   const [editQty, setEditQty] = useState(0)
   const [editPlatesActual, setEditPlatesActual] = useState<number | "">("")
+  const [editPreSystemSold, setEditPreSystemSold] = useState<number | "">("")
   const [editNotes, setEditNotes] = useState("")
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [editSuccess, setEditSuccess] = useState(false)
@@ -654,6 +658,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
       setEditRecord(latest)
       setEditQty(latest?.quantityCooked ?? 0)
       setEditPlatesActual(latest?.platesActual ?? "")
+      setEditPreSystemSold(latest?.platesPreSystemSold ? Number(latest.platesPreSystemSold) : "")
       setEditNotes(latest?.notes ?? "")
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to load cooking record")
@@ -667,10 +672,14 @@ function KitchenInventoryView({ userId }: { userId: string }) {
     try {
       setEditSubmitting(true)
       setEditError("")
+      // Only send preSystemSold for SHARED batches (the server rejects it for
+      // ALLOCATED, whose pre-system plates live per-dish on the split).
+      const isShared = editRecord.sellingMode === "SHARED"
       await updateCookingRecord(editRecord.id, {
         quantityCooked: editQty > 0 ? editQty : undefined,
         platesActual: editPlatesActual !== "" ? Number(editPlatesActual) : undefined,
         notes: editNotes || undefined,
+        preSystemSold: isShared ? Number(editPreSystemSold || 0) : undefined,
       })
       setEditSuccess(true)
       setTimeout(() => {
@@ -701,11 +710,26 @@ function KitchenInventoryView({ userId }: { userId: string }) {
     loadInventory()
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    getSystemSettings()
+      .then((settings) => {
+        if (!cancelled) setShowGoLiveInput(settings.showGoLiveInput)
+      })
+      .catch(() => {
+        if (!cancelled) setShowGoLiveInput(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   function openCookDialog(item: KitchenStockItem) {
     setCookDialog({ open: true, item })
     setCookQty(1)
     setCookPlatesActual("")
     setCookNotes("")
+    setCookPreSystemSold("")
     setSubmitSuccess(false)
   }
 
@@ -721,6 +745,16 @@ function KitchenInventoryView({ userId }: { userId: string }) {
       return
     }
 
+    // Go-live batch-level pre-system sold is SHARED-only (ALLOCATED keys it
+    // per-dish on the assignment step). Validated against produced plates.
+    const isShared = cookDialog.item.sellingMode === "SHARED"
+    const preSystemSold = isShared && cookPreSystemSold !== "" ? Number(cookPreSystemSold) : 0
+    const producedPlates = cookPlatesActual !== "" ? Number(cookPlatesActual) : expectedPlates
+    if (preSystemSold > producedPlates) {
+      setError(`Pre-system sold (${preSystemSold}) cannot exceed produced plates (${producedPlates})`)
+      return
+    }
+
     try {
       setSubmitting(true)
       setError("")
@@ -730,6 +764,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
         platesActual: cookPlatesActual !== "" ? Number(cookPlatesActual) : undefined,
         cookedById: userId,
         notes: cookNotes || undefined,
+        preSystemSold: preSystemSold > 0 ? preSystemSold : undefined,
       })
       setSubmitSuccess(true)
       setTimeout(() => {
@@ -1016,6 +1051,29 @@ function KitchenInventoryView({ userId }: { userId: string }) {
                   rows={2}
                 />
               </div>
+
+              {showGoLiveInput && cookDialog.item?.sellingMode === "SHARED" && (
+                <Card className="border-red-300 bg-red-50 p-3 space-y-2">
+                  <div className="text-xs font-bold text-red-700 uppercase tracking-wide">
+                    Go-Live Only — Already sold before keying in
+                  </div>
+                  <p className="text-[11px] text-red-700">
+                    Paper sales with no system order, for this whole tray. Deducts now and
+                    shows as pre-system in reports. Leave 0 on normal days.
+                  </p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="0"
+                    value={cookPreSystemSold}
+                    onChange={(e) =>
+                      setCookPreSystemSold(e.target.value === "" ? "" : parseInt(e.target.value) || 0)
+                    }
+                    className="border-red-300 bg-white"
+                  />
+                </Card>
+              )}
             </div>
           )}
 
@@ -1189,6 +1247,29 @@ function KitchenInventoryView({ userId }: { userId: string }) {
                   rows={2}
                 />
               </div>
+
+              {showGoLiveInput && editRecord.sellingMode === "SHARED" && (
+                <Card className="border-red-300 bg-red-50 p-3 space-y-2">
+                  <div className="text-xs font-bold text-red-700 uppercase tracking-wide">
+                    Go-Live Only — Already sold before keying in
+                  </div>
+                  <p className="text-[11px] text-red-700">
+                    Paper sales with no system order, for this whole tray. Deducts now and
+                    shows as pre-system in reports. Leave 0 on normal days.
+                  </p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="0"
+                    value={editPreSystemSold}
+                    onChange={(e) =>
+                      setEditPreSystemSold(e.target.value === "" ? "" : parseInt(e.target.value) || 0)
+                    }
+                    className="border-red-300 bg-white"
+                  />
+                </Card>
+              )}
 
               {editError && (
                 <p className="text-sm text-red-500">{editError}</p>

@@ -1,30 +1,30 @@
 
 ## Platform
 
-backend + frontend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Make a stock supply **keyed**: a manager keys an available amount directly (no cooking batch), adjusts it up/down at will, and every linked dish shares that one pool with its portion rates preserved.
-- Every key/adjust writes an append-only **StockAdjustment** trail (who / when / before → after / delta / reason) that is easy to read as a whole.
-- The shift report reconciles keyed movement: top-ups show as **Received**, reductions as **Adjustment**; closing = opening + received − sold (Cooked "—").
-- Generic engine — any supply can opt into `KEYED`; used to bring `Eggs` (and the orphan egg dishes) fully sellable again.
-- Verified (`tsc -b`, backend `tsc`, Electron transpile, lint zero new) and deployed to production via the SSH flow (`db:sync` + backend rebuild + `EraevaBackend` restart + `build:web --server same-origin`).
-
 ## Notes
 
-- Ref: `context/fix-plan/keyed-egg-supply.md` · Branch `feature/store/keyed-egg-supply`.
-- New third `SellingMode`: `ALLOCATED | SHARED | KEYED`. `StockSupply.keyedStock` (plates) is the ledger; `Menu.stock` stays a derived mirror (unlike direct-sale, whose `Menu.stock` IS the ledger).
-- Sales decrement `keyedStock`; **no** `OrderItemAllocation` rows (no batch FK). Voids restore from `factorForServing × qty`.
-- No floor below 0; decreases allowed and recorded; no cross-pool transfer (Pancake Eggs stays cooked).
-- Operator: manual implementation, no ollama models.
-- Data setup pending: flip `Eggs` → `KEYED`, seed `keyedStock = 2`, dispose stale batch, link the 4 orphan egg dishes at `platesPerServing` 1 (operator adjusts).
-
 ## History
+
+### backend + frontend - 2026-10-16 — Mid-Shift Go-Live: Pre-System Sales
+
+- **Schema** — `platesPreSystemSold` (`Decimal(12,2) @default(0)`) on `CookingRecord` (SHARED, batch-level) + `CookingRecordMenu` (ALLOCATED, per-dish; table `CookingRecordAssignment`); new `SystemSettings` singleton `{ id 1, showGoLiveInput Boolean @default(true) }`. `db push` applied to local `eraevadb` and `eraevadb_test`
+- **Pool maths (the critical fix)** — `pools.ts` `batchPools` subtracts **batch + split** pre: `poolRemaining = produced − sold − wasted − preSystemSold`. Split-level is essential — without it an ALLOCATED dish's pre-system plates resurfaced as `unassigned` remainder; the two levels are mutually exclusive by construction (SHARED has no splits, ALLOCATED rejects batch-level) so the sum never double-counts
+- **Routes** — new `systemSettings.ts` (GET ensure/upsert id=1, PUT validates boolean → `400 "showGoLiveInput must be a boolean"`) mounted `/api/system-settings`; `cookingRecords.ts` create/allocate/PUT accept pre with guards (`BELOW_SOLD` when `plates < sold + pre`, ALLOCATED batch-level → `PRE_SYSTEM_REQUIRES_ALLOCATION`, pre ≤ produced, same-day edit lock) and the legacy `batchSoldByMenu`/`soldForMenu` derivation now subtracts pre so it never double-counts; `dailyReport.ts` rows gain `soldPreSystem`, `sold = orderSold + pre`, plates totals include it, SHARED batch pre folded once onto its first non-mirror row (adjusting closing too)
+- **UI** — red go-live cards gated on `showGoLiveInput`: batch-level in Kitchen **cook + edit** dialogs (SHARED only), per-dish in `AssignmentModal` (left = assigned − sold − pre, red input clamped, `Pre-system` badge); admin `GoLiveModeSettings.tsx` card in `Manager.tsx` (Checkbox — no shadcn `Switch` exists) toggling the flag; `ShiftReport` Sold cell shows `(N pre-system)`, `ShiftCloseDialog` ledger Sold gets a red `*` + tooltip
+- **Electron/API** — `registerSystemSettingsHandlers` (GET/PUT) + `preload.cts` `systemSettings.*` + `electron.d.ts` (`SystemSettings`, `SystemSettingsUpdate`, cooking-record pre fields, `KitchenStockItem.sellingMode`); `lib/api.ts` `getSystemSettings()` (resolves origin) / `updateSystemSettings()`
+- **Tests** — 4 `pool-engine.test.ts` cases (SHARED batch pre deducted · counted against later orders · cannot sell past the deduction · ALLOCATED split pre absent from both pool and unassigned), all green. Suite is broadly broken at HEAD on this branch: baseline 29 failed / 13 passed → 27 failed / 19 passed / 46 total after (no regressions; 2 pre-existing `consumptionFactorsForSupply is not a function` failures — the function does not exist in `pools.ts` at HEAD); also removed a pre-existing unused `batch`
+- **Verified** — `tsc -b`, backend `tsc` + `npm run build --prefix backend`, `npm run build` + `npm run build:web -- --server same-origin` all green; ESLint clean on every changed file; live smoke on :3111 (settings GET/PUT + boolean validation, allocate 14/pre 6 → remaining 8, `batchSoldByMenu` 0, `BELOW_SOLD` fires; test batch deleted, menu stock restored to 16). Frontend-only reporting surfaces: `soldPreSystem` is display-only — revenue untouched
+- **Merge conflicts** — resolving against the concurrently merged `feature/admin/functional-dashboard` required keeping BOTH sides' registration lines in `backend/app.ts`, `desktop/electron/ipc-handlers.ts`, `desktop/electron/main.ts`, `desktop/electron/preload.cts`, `desktop/ui/types/electron.d.ts` (each feature adds a route/handler/object/type block); merged tree re-verified with `tsc -b` + both builds
+- **Deploy PENDING on the restaurant server (SSH flow)** — ⚠️ schema changed: `npm run db:sync` FIRST (adds `platesPreSystemSold` ×2 + `SystemSettings`), then `npm run build --prefix backend` → `schtasks /run /tn pos-backend-restart` → verify `sc query EraevaBackend` + `curl http://localhost:3001/health`; after any plain `npm run build` / `build:win` re-run `npm run build:web -- --server same-origin`
+- Ref: `context/fix-plan/mid-shift-golive-presystem-sales.md` · Branch `feature/kitchen/mid-shift-golive-presystem-sales` (**kept, not deleted**) · Commit `ebafd6b`, merged `--no-ff` as `e1aa087` into `restaurant-build`, pushed to `origin/restaurant-build`
 
 ### backend + frontend - 2026-10-16 — Functional Admin Dashboard
 

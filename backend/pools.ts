@@ -14,11 +14,13 @@ import { type Prisma, SellingMode } from "./db/generated/prisma/client.js";
  *
  * The pool itself is *derived*, never stored:
  *
- *   poolRemaining = produced - sold - wasted
+ *   poolRemaining = produced - sold - wasted - preSystemSold
  *
- * where `sold` is the sum of `OrderItemAllocation.plates` for the batch. That
- * makes the ledger self-healing: every plate is accounted for by exactly one
- * order line or one disposal record, so the two can never disagree.
+ * where `sold` is the sum of `OrderItemAllocation.plates` for the batch and
+ * `preSystemSold` covers go-live off-system plates (batch-level for SHARED,
+ * per-split for ALLOCATED). That makes the ledger self-healing: every plate is
+ * accounted for by exactly one order line, one disposal record, or one
+ * pre-system entry, so the three can never disagree.
  *
  * Consumption is *weighted*. One serving of a dish costs
  * `platesPerServing` plates of the pool, resolved per (supply, dish) pair so a
@@ -58,7 +60,9 @@ export type BatchPool = {
   produced: number;
   sold: number;
   wasted: number;
-  /** produced - sold - wasted. The physical plates still in the tray. */
+  /** Go-live only: plates sold off-system before keying in (batch + split level). */
+  preSystemSold: number;
+  /** produced - sold - wasted - preSystemSold. The physical plates still in the tray. */
   poolRemaining: number;
   /** Sum of platesAllocated across splits (ALLOCATED only). */
   allocatedTotal: number;
@@ -109,7 +113,12 @@ type BatchRow = {
   platesExpected: unknown;
   platesActual: unknown;
   wastedPlates: unknown;
-  cookingRecordMenus: { platesAllocated: unknown; platesRemaining: unknown }[];
+  platesPreSystemSold: unknown;
+  cookingRecordMenus: {
+    platesAllocated: unknown;
+    platesRemaining: unknown;
+    platesPreSystemSold: unknown;
+  }[];
 };
 
 /**
@@ -132,7 +141,10 @@ export async function batchPools(
       platesExpected: true,
       platesActual: true,
       wastedPlates: true,
-      cookingRecordMenus: { select: { platesAllocated: true, platesRemaining: true } },
+      platesPreSystemSold: true,
+      cookingRecordMenus: {
+        select: { platesAllocated: true, platesRemaining: true, platesPreSystemSold: true },
+      },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -155,7 +167,15 @@ export async function batchPools(
     const produced = Number(b.platesActual ?? b.platesExpected ?? 0);
     const sold = soldByBatch.get(b.id) ?? 0;
     const wasted = Number(b.wastedPlates ?? 0);
-    const poolRemaining = round2(produced - sold - wasted);
+    // Pre-system plates live at batch level for SHARED pools (no splits) and
+    // per-split for ALLOCATED batches. The two are mutually exclusive by
+    // construction, so summing is exact and never double-counts.
+    const batchPreSystemSold = round2(Number(b.platesPreSystemSold ?? 0));
+    const splitPreSystemSold = round2(
+      b.cookingRecordMenus.reduce((s, m) => s + Number(m.platesPreSystemSold ?? 0), 0),
+    );
+    const preSystemSold = round2(batchPreSystemSold + splitPreSystemSold);
+    const poolRemaining = round2(produced - sold - wasted - preSystemSold);
     const allocatedTotal = round2(
       b.cookingRecordMenus.reduce((s, m) => s + Number(m.platesAllocated), 0),
     );
@@ -170,6 +190,7 @@ export async function batchPools(
       produced: round2(produced),
       sold: round2(sold),
       wasted: round2(wasted),
+      preSystemSold,
       poolRemaining,
       allocatedTotal,
       splitRemainingTotal,

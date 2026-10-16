@@ -541,6 +541,8 @@ interface CookingRecordMenu {
   menuId: string;
   platesAllocated: number;
   platesRemaining: number;
+  /** Go-live only: plates sold off-system before keying in. */
+  platesPreSystemSold: number;
   createdAt: string;
   menu: { id: string; name: string; slug: string; images: string[] };
 }
@@ -551,6 +553,10 @@ interface CookingRecord {
   quantityCooked: number;
   platesExpected: number;
   platesActual: number | null;
+  /** Go-live only: batch-level off-system plates sold before keying (SHARED). */
+  platesPreSystemSold: number;
+  /** Engine frozen onto this batch at cook time. */
+  sellingMode: SellingMode;
   cookedDate: string;
   cookedById: string;
   notes: string | null;
@@ -592,16 +598,20 @@ interface CreateCookingRecordData {
   platesActual?: number;
   cookedById: string;
   notes?: string;
+  /** Go-live only: off-system plates sold before keying (SHARED batches only). */
+  preSystemSold?: number;
 }
 
 interface UpdateCookingRecordData {
   quantityCooked?: number;
   platesActual?: number;
   notes?: string;
+  /** Go-live only: off-system plates sold before keying (SHARED batches only). */
+  preSystemSold?: number;
 }
 
 interface AllocateCookingRecordData {
-  allocations: { menuId: string; plates: number }[];
+  allocations: { menuId: string; plates: number; preSystemSold?: number }[];
 }
 
 interface CookedMenuItem {
@@ -665,6 +675,8 @@ interface KitchenStockItem {
   unit: string;
   isMenuStock: boolean;
   platesPerUnit: number | null;
+  /** Engine that will be frozen onto a new batch: ALLOCATED or SHARED. */
+  sellingMode?: SellingMode;
   image: string | null;
   menus: { id: string; name: string; slug: string; images: string[] }[];
   totalOrdered: number;
@@ -965,6 +977,8 @@ interface ShiftPlateMovementRow {
   isDirectSale: boolean;
   platesSold: number;
   platesSoldAtAutoClose: number | null;
+  /** Go-live off-system plates folded into platesSold (no revenue). */
+  soldPreSystem: number;
   driftSold: number | null;
   closingStock: number;
   platesWasted: number;
@@ -1225,6 +1239,16 @@ interface DashboardSummary {
   last7Days: DashboardDayPoint[];
 }
 
+// Global app settings singleton (id = 1).
+interface SystemSettings {
+  id: number;
+  showGoLiveInput: boolean;
+}
+
+interface SystemSettingsUpdate {
+  showGoLiveInput?: boolean;
+}
+
 interface ElectronAPI {
   subscribeStatistics: (callback: (statistics: unknown) => void) => void;
   getStaticData: () => void;
@@ -1339,6 +1363,10 @@ interface ElectronAPI {
   };
   dashboard: {
     getSummary: () => Promise<DashboardSummary>;
+  };
+  systemSettings: {
+    get: () => Promise<SystemSettings>;
+    update: (data: SystemSettingsUpdate) => Promise<SystemSettings>;
   };
   order: {
     create: (data: CreateOrderData) => Promise<Order>;
