@@ -1,32 +1,33 @@
 
 ## Platform
 
-backend + frontend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Let admin/manager assign a **display order number** to each menu category from Settings → Menu Categories
-- Category table gains a `No.` column (order number) shown before `Name`
-- Waiter POS groups menu items by category and renders the category sections in the defined number order (1 → last) for **every** meal period
-- Replace the hardcoded breakfast `CATEGORY_ORDER = ["Beverages", "Snacks"]` special-case with the DB-driven order
-- Categories with no number / unmatched names fall to the end, alphabetically
+
 
 ## Notes
 
-- Full plan: `context/fix-plan/menu-category-ordering.md`
-- Branch: `feature/admin/menu-category-ordering`
-- Locked decisions: duplicate numbers → **reject** (`409 "Display order already in use"`); blank number on create → **auto-append last** (`max + 1`); rename → **no cascade** (renamed category sorts last until re-matched, menu items untouched)
-- `Menu.category` stays a free-text `String` (no FK) — ordering is keyed by category **name**; waiter section lookup is a name match
-- Sort change in `GET /api/categories` also benefits the MenuForm category dropdown
-- No Electron changes — IPC passes category bodies straight through
-- Manual implementation — no ollama models (standing operator directive)
 
 
 ## History
+
+### backend + frontend - 2026-10-16 — Menu Category Display Ordering + DESSERT→PACKAGE Serving Period
+
+- **Category display order** — `Category.displayOrder` (`Int @default(0)`, schema comment documents the no-zero rule); `GET /api/categories` returns `orderBy: [{ displayOrder: "asc" }, { name: "asc" }]`; POST/PUT validate the number (explicit value kept, blank on create auto-appends `max+1`, duplicate → `409 "Display order already in use"`, non-positive/invalid → 400); rename performs no cascade (menu items untouched)
+- **Admin UI** — `CategoryManager.tsx` gains a `No.` column (blank when unassigned) + optional "Display order" input in the create/edit dialog (placeholder "Auto — appends last"; edit pre-fills; sent only when non-empty)
+- **Waiter POS ordering** — `WaiterMenuGrid.tsx` loads categories via `getCategories()` into a name→displayOrder map and sorts sections for every meal period: **assigned-first ascending**, unassigned below alphabetically; removed the hardcoded breakfast `CATEGORY_ORDER = ["Beverages", "Snacks"]`; unmatched/renamed category names sort last (never `0`)
+- **Serving period rename DESSERT → PACKAGE** — Prisma `ServiceTime` enum value renamed (still 5 periods, same 4th slot); `MEAL_PERIODS` + switch (`PACKAGE` **always available**, no time gate) in `lib/mealPeriod.ts`; `routes/mealTypes.ts` order map `PACKAGE: 4`; icon maps in `ServingPeriodBar.tsx`, `WaiterPOS.tsx` ("Packaged goods"), `AllMenuTable.tsx`, `MenuStockStatusCard.tsx` — final icon **ShoppingBasket** (box `Package` swapped per operator); no "Package" menu category needed — assignment is via the serving-period tick
+- **DB** — local `eraevadb`: all `Category.displayOrder` reset to 0 (operator assigns manually); enum changed with `ALTER TYPE "ServiceTime" RENAME VALUE 'DESSERT' TO 'PACKAGE'` (safe rename, preserves data) + `prisma db push` reports in sync; zero DESSERT rows existed in dev
+- **Verified** — `tsc -b`, backend `tsc`/`npm run build --prefix backend`, `npm run build` + `npm run build:web -- --server same-origin` all green; ESLint only the 2 pre-existing `set-state-in-effect` errors (AllMenuTable L55, MenuStockStatusCard L92); live `GET /api/meal-types` returns `PACKAGE` at sortOrder 4; all changed modules transform 200 in Vite
+- **No ollama models** — manual implementation per standing operator directive
+- **Deploy PENDING on the restaurant server (SSH flow)** — ⚠️ enum change: BEFORE `db:sync`, run `ALTER TYPE "ServiceTime" RENAME VALUE 'DESSERT' TO 'PACKAGE';` on prod `eraevadb` (check for DESSERT rows first; a plain `prisma db push` would drop DESSERT/add PACKAGE = data loss if any exist), then `npm run build --prefix backend` → `schtasks /run /tn pos-backend-restart` → verify `sc query EraevaBackend` + `curl :3001/health`; after any plain build re-run `npm run build:web -- --server same-origin`
+- Ref: `context/fix-plan/menu-category-ordering.md` · Branch `feature/admin/menu-category-ordering` (**kept, not deleted**) · Commits `f558001` (category display order), `8e89970` (DESSERT→PACKAGE), `613636c` (basket icon); merged `--no-ff` as `6f3741b` into `restaurant-build`, pushed to `origin/restaurant-build`
 
 ### frontend + electron - 2026-10-15 — Cashier Receipt Reprint + Admin/Manager Waiter POS Access
 
