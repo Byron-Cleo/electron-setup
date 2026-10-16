@@ -659,6 +659,29 @@ router.post("/:id/void", async (req, res) => {
           continue;
         }
 
+        // KEYED lines also write NO allocation rows (their consumption went
+        // straight into the supply's keyedStock ledger — see
+        // consumeForOrderItem). Restore the same weighted amount the line
+        // charged back onto its keyed supply so the pool and the snapshot
+        // (decremented below by keyedPlates) both reconcile.
+        const keyedLinks = await tx.stockSupplyMenu.findMany({
+          where: {
+            menuId: item.menuId,
+            excludedFromSharedPool: false,
+            stockSupply: { sellingMode: "KEYED" },
+          },
+          select: { stockSupplyId: true },
+        });
+        let keyedPlates = 0;
+        if (keyedLinks.length > 0) {
+          const keyedFactor = await factorForServing(tx, item.menuId, item.portionId);
+          keyedPlates = round2(keyedFactor * item.qty);
+          await tx.stockSupply.update({
+            where: { id: keyedLinks[0].stockSupplyId },
+            data: { keyedStock: { increment: keyedPlates } },
+          });
+        }
+
         // Restore from the allocation ledger rather than nudging Menu.stock:
         // split plates go back to the exact splits they came from, and a shared
         // pool recovers by the allocation row simply being removed. `Menu.stock`
@@ -679,9 +702,10 @@ router.post("/:id/void", async (req, res) => {
             where: { shiftId_menuId: { shiftId: order.shiftId, menuId: item.menuId } },
           });
           if (snapshot) {
+            const restored = round2(platesConsumed + keyedPlates);
             await tx.shiftSnapshot.update({
               where: { id: snapshot.id },
-              data: { platesSold: Math.max(0, Number(snapshot.platesSold) - platesConsumed) },
+              data: { platesSold: Math.max(0, Number(snapshot.platesSold) - restored) },
             });
           }
         }

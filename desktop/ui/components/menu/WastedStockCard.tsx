@@ -28,7 +28,7 @@ function formatShiftLabel(type: string | null): string {
   return type === "DAY" ? "Day" : "Night"
 }
 
-export default function WastedStockCard() {
+export default function WastedStockCard({ search = "" }: { search?: string }) {
   const [batches, setBatches] = useState<WastedStockBatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -54,6 +54,12 @@ export default function WastedStockCard() {
   }, [])
 
   const totalWasted = batches.reduce((sum, b) => sum + b.wastedQty, 0)
+
+  const filteredBatches = batches.filter((batch) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return batch.stockSupplyName.toLowerCase().includes(q)
+  })
 
   return (
     <Card>
@@ -98,7 +104,7 @@ export default function WastedStockCard() {
                 </tr>
               </thead>
               <tbody>
-                {batches.map((batch) => (
+                {filteredBatches.map((batch) => (
                   <tr
                     key={batch.cookingRecordId}
                     className="border-b border-admin-card-border last:border-b-0"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Clock, PackageOpen, Trash2, Utensils } from "lucide-react"
+import { Clock, PackageOpen, Search, Trash2, Utensils } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import {
 import BackButton from "@/components/shared/BackButton"
 import { getWastedStock, getAssignedLeftovers, disposeCookingRecord } from "@/lib/api"
 import { useLiveRefresh } from "@/hooks/useLiveRefresh"
+import { Input } from "@/components/ui/input"
 import AssignmentModal from "./AssignmentModal"
 import RemainingStockTable from "./RemainingStockTable"
 import AssignedLeftoversTable from "./AssignedLeftoversTable"
@@ -34,6 +35,10 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
   const [wasted, setWasted] = useState<WastedStockBatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [currentSearch, setCurrentSearch] = useState("")
+  const [unassignedSearch, setUnassignedSearch] = useState("")
+  const [previousSearch, setPreviousSearch] = useState("")
+  const [wastedSearch, setWastedSearch] = useState("")
   const [assigning, setAssigning] = useState<{
     open: boolean
     batchId: string | null
@@ -135,6 +140,28 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
   const wastedPlates = wasted.reduce((sum, batch) => sum + batch.wastedQty, 0)
   const dishCount = assignedRows.length + unassignedBatches.length
   const plateCount = assignedPlates + unassignedPlates
+
+  const filteredCurrent = currentRows.filter((row) => {
+    const q = currentSearch.trim().toLowerCase()
+    if (!q) return true
+    const name = (row.menuName ?? row.stockSupplyName ?? "").toLowerCase()
+    const supply = row.stockSupplyName?.toLowerCase() ?? ""
+    return name.includes(q) || supply.includes(q)
+  })
+
+  const filteredUnassigned = unassignedBatches.filter((batch) => {
+    const q = unassignedSearch.trim().toLowerCase()
+    if (!q) return true
+    return batch.stockSupplyName.toLowerCase().includes(q)
+  })
+
+  const filteredPrevious = previousRows.filter((row) => {
+    const q = previousSearch.trim().toLowerCase()
+    if (!q) return true
+    const name = (row.menuName ?? row.stockSupplyName ?? "").toLowerCase()
+    const supply = row.stockSupplyName?.toLowerCase() ?? ""
+    return name.includes(q) || supply.includes(q)
+  })
 
   return (
     <div className="space-y-4">
@@ -260,14 +287,25 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
           </div>
 
           {leftoverTab === "current" && (
-            <div>
+            <div className="space-y-2">
+              <div className="flex items-center mb-2">
+                <div className="ml-auto flex items-center gap-2">
+                  <Search size={14} className="text-admin-muted" />
+                  <Input
+                    placeholder="Search dishes, pools..."
+                    value={currentSearch}
+                    onChange={(e) => setCurrentSearch(e.target.value)}
+                    className="w-64 text-sm"
+                  />
+                </div>
+              </div>
               <p className="mb-2 text-[11px] leading-relaxed text-admin-muted">
                 Dishes and shared pools already assigned but not fully sold. Un-wasted plates carry over
                 automatically as the next shift's opening stock — waste only what you are discarding.
               </p>
               <AssignedLeftoversTable
                 variant="current"
-                rows={currentRows}
+                rows={filteredCurrent}
                 operationDay={leftovers?.currentOperationDay ?? null}
                 onWasted={() => void loadData()}
                 showHeading={false}
@@ -277,13 +315,24 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
 
           {leftoverTab === "unassigned" && (
             <div>
+              <div className="flex items-center mb-2">
+                <div className="ml-auto flex items-center gap-2">
+                  <Search size={14} className="text-admin-muted" />
+                  <Input
+                    placeholder="Search stock item..."
+                    value={unassignedSearch}
+                    onChange={(e) => setUnassignedSearch(e.target.value)}
+                    className="w-64 text-sm"
+                  />
+                </div>
+              </div>
               <p className="mb-2 text-[11px] leading-relaxed text-amber-700">
                 Cooked on an earlier operation date but never put on a menu, so it is not sellable and not
                 in stock. Assign it to carry over, or waste it.
               </p>
               <RemainingStockTable
                 variant="previous"
-                batches={unassignedBatches}
+                batches={filteredUnassigned}
                 disposingId={disposingId}
                 onCarryOver={openAssign}
                 onWaste={openWaste}
@@ -294,13 +343,24 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
 
           {leftoverTab === "previous" && (
             <div>
+              <div className="flex items-center mb-2">
+                <div className="ml-auto flex items-center gap-2">
+                  <Search size={14} className="text-admin-muted" />
+                  <Input
+                    placeholder="Search dishes, pools..."
+                    value={previousSearch}
+                    onChange={(e) => setPreviousSearch(e.target.value)}
+                    className="w-64 text-sm"
+                  />
+                </div>
+              </div>
               <p className="mb-2 text-[11px] leading-relaxed text-amber-700">
                 Plates already on a menu that did not sell. They carry over automatically — waste only what
                 you are discarding.
               </p>
               <AssignedLeftoversTable
                 variant="previous"
-                rows={previousRows}
+                rows={filteredPrevious}
                 onWasted={() => void loadData()}
                 showHeading={false}
               />
@@ -309,7 +369,22 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
         </div>
       )}
 
-      {tab === "wasted" && <WastedStockCard />}
+      {tab === "wasted" && (
+        <div className="space-y-4">
+          <div className="flex items-center mb-2">
+            <div className="ml-auto flex items-center gap-2">
+              <Search size={14} className="text-admin-muted" />
+              <Input
+                placeholder="Search stock item..."
+                value={wastedSearch}
+                onChange={(e) => setWastedSearch(e.target.value)}
+                className="w-64 text-sm"
+              />
+            </div>
+          </div>
+          <WastedStockCard search={wastedSearch} />
+        </div>
+      )}
 
       <AssignmentModal
         open={assigning.open}

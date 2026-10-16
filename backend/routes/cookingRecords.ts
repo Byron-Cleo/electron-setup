@@ -253,6 +253,16 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "This stock item is not configured for menu use" });
   }
 
+  // A KEYED supply is never cooked — its sellable pool is the hand-keyed
+  // keyedStock, adjusted from the admin kitchen-stock screen. Allowing a batch
+  // here would create plates that no keyed consumer reads, silently lost.
+  if (stockSupply.sellingMode === "KEYED") {
+    return res.status(400).json({
+      error: "This supply is keyed (no cooking). Set its amount instead of cooking a batch.",
+      code: "KEYED_HAS_NO_COOKING",
+    });
+  }
+
   // Verify cook exists
   const cook = await prisma.user.findUnique({ where: { id: cookedById } });
   if (!cook) return res.status(400).json({ error: "Cook not found" });
@@ -355,6 +365,15 @@ router.post("/:id/allocate", async (req, res) => {
       error:
         "This batch is a shared pool, so it is sellable by every dish already and has no allocation step.",
       code: "SHARED_HAS_NO_ALLOCATION",
+    });
+  }
+
+  // A KEYED supply never has batches at all (cooking is rejected), so this is
+  // belt-and-braces for any legacy row: there is nothing to split.
+  if (record.sellingMode === "KEYED") {
+    return res.status(400).json({
+      error: "This supply is keyed (no cooking) — there is no batch to allocate.",
+      code: "KEYED_HAS_NO_ALLOCATION",
     });
   }
 

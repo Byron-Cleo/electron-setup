@@ -181,7 +181,7 @@ export default function StockSupplyForm() {
         </p>
       )}
 
-      <Card className="bg-admin-card border-admin-card-border mx-auto max-w-lg">
+      <Card className="bg-admin-card border-admin-card-border mx-auto w-full max-w-3xl">
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -191,6 +191,9 @@ export default function StockSupplyForm() {
                 </p>
               )}
 
+              <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-6">
+              {/* Left column — identity, counts, menu linkage, selling engine */}
+              <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -312,6 +315,10 @@ export default function StockSupplyForm() {
                 />
               )}
 
+              </div>
+
+              {/* Right column — image, departments, description */}
+              <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-admin-header-text">Image</label>
                 <p className="text-xs text-admin-header-text/50 mb-2">JPEG, PNG, or WebP. Max 5MB.</p>
@@ -419,6 +426,8 @@ export default function StockSupplyForm() {
                   </FormItem>
                 )}
               />
+              </div>
+              </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button

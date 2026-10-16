@@ -504,8 +504,8 @@ function ShiftReportView({ report }: Props) {
                     <tr className="border-b border-admin-card-border text-admin-muted">
                       <th className="px-3 py-2 text-center font-medium">Item</th>
                       <th className="px-3 py-2 text-center font-medium bg-yellow-100 text-yellow-900">Opening</th>
-                      <th className="px-3 py-2 text-center font-medium" title="Plates from cooking batches — direct-sale items never cook">Cooked</th>
-                        <th className="px-3 py-2 text-center font-medium bg-blue-100 text-blue-900" title="Direct-sale units keyed in while this shift ran">Received</th>
+                      <th className="px-3 py-2 text-center font-medium" title="Plates from cooking batches — direct-sale and keyed items never cook">Cooked</th>
+                        <th className="px-3 py-2 text-center font-medium bg-blue-100 text-blue-900" title="Keyed in while this shift ran: direct-sale top-ups, or a keyed supply's net movement (a reduction is negative)">Received</th>
                         <th className="px-3 py-2 text-center font-medium bg-red-100 text-red-900" title="Plates sold before the auto-close tick">Sold</th>
                         <th className="px-3 py-2 text-center font-medium bg-green-100 text-green-900" title="opening + cooked + received − sold before auto-close">Closing Stock</th>
                       <th className="px-3 py-2 text-center font-medium bg-orange-100 text-orange-900">Drift Minutes</th>
@@ -520,12 +520,27 @@ function ShiftReportView({ report }: Props) {
                         key={row.menuId}
                         className="border-b border-admin-card-border last:border-0"
                       >
-                        <td className="px-3 py-2 text-center text-sm font-bold text-admin-header-text">{row.menuName}</td>
+                        <td className="px-3 py-2 text-center text-sm font-bold text-admin-header-text">
+                          {row.menuName}
+                          {row.sellingMode === "KEYED" && (
+                            <span className="ml-1 align-middle text-[10px] font-medium text-violet-600">keyed</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-yellow-100">{row.openingPlates}</td>
-                        {/* Direct-sale items never cook — "—" (not 0) says "not applicable". */}
-                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums">{row.isDirectSale ? "—" : row.platesCooked}</td>
-                        {/* Received = direct-sale top-ups keyed in mid-shift; cooked rows never receive. */}
-                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-blue-100 text-blue-900">{row.isDirectSale ? row.platesReceived : "—"}</td>
+                        {/* Direct-sale and keyed items never cook — "—" (not 0) says "not applicable". */}
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums">{row.isDirectSale || row.sellingMode === "KEYED" ? "—" : row.platesCooked}</td>
+                        {/* Received = direct-sale top-ups or a keyed supply's net movement. */}
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-blue-100 text-blue-900">
+                          {row.sellingMode === "KEYED"
+                            ? row.platesReceived === 0
+                              ? "—"
+                              : row.platesReceived > 0
+                                ? `+${row.platesReceived}`
+                                : row.platesReceived
+                            : row.isDirectSale
+                              ? row.platesReceived
+                              : "—"}
+                        </td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-red-100 text-red-900">{row.platesSoldAtAutoClose ?? "—"}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-green-100">{row.closingStockAtAutoClose ?? "—"}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-orange-100">{formatDriftMinutes(row.driftMinutes)}</td>

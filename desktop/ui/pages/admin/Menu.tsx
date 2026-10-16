@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { UtensilsCrossed, List, Plus, Beef, Archive, PackageOpen, type LucideIcon } from "lucide-react"
+import { UtensilsCrossed, List, Plus, Beef, Archive, PackageOpen, Scale, type LucideIcon } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -12,9 +12,10 @@ import AccompanimentsTable from "@/components/menu/AccompanimentsTable"
 import CreateMenuDialog from "@/components/menu/CreateMenuDialog"
 import MenuStockStatusCard from "@/components/menu/MenuStockStatusCard"
 import RemainingStockDashboard from "@/components/menu/RemainingStockDashboard"
+import MenuStockManager from "@/components/admin/MenuStockManager"
 import { getCookedMenus, getAssignedLeftovers } from "@/lib/api"
 
-type MenuView = "dashboard" | "cooked-food" | "remaining-stock" | "all-menu"
+type MenuView = "dashboard" | "cooked-food" | "remaining-stock" | "all-menu" | "menu-stock-manager"
 type MenuSubView = "list" | "discontinued" | "accompaniments" | null
 type MenuTableTab = "all" | "discontinued"
 
@@ -93,7 +94,7 @@ function Menu() {
       <Heading as="h1" className="text-admin-header-text">Menu/Dispatch</Heading>
 
       {view === "dashboard" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card
             className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
             onClick={() => setView("cooked-food")}
@@ -152,6 +153,24 @@ function Menu() {
 
           <Card
             className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+            onClick={() => setView("menu-stock-manager")}
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <Scale size={24} className="text-violet-600" />
+              </div>
+              <div>
+                <Heading as="h3" className="text-lg text-admin-header-text">Menu Stock Manager</Heading>
+                <p className="text-sm text-admin-muted">Adjust menu dish stock</p>
+                <p className="text-xs text-admin-muted mt-1">
+                  Central place to set keyed pool and direct-sale stock counts
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card
+            className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
             onClick={() => { setView("all-menu"); setSubView(null) }}
           >
             <div className="flex items-center gap-4">
@@ -171,6 +190,12 @@ function Menu() {
       )}
 
       {view === "dashboard" && <MenuStockStatusCard />}
+
+      {view === "menu-stock-manager" && (
+        <div className="space-y-4">
+          <MenuStockManager onBack={handleBackToDashboard} />
+        </div>
+      )}
 
       {view === "cooked-food" && (
         <div className="space-y-4">
