@@ -76,6 +76,7 @@ router.get("/", async (req, res) => {
         name: item.name,
         slug: item.slug,
         unit: item.unit,
+        sellingMode: item.sellingMode,
         // The actual moment production was recorded — `cookedDate` is a
         // date-only bucket (midnight), which rendered as a bogus 03:00.
         lastCookedDate: latestRecord?.createdAt.toISOString() ?? null,

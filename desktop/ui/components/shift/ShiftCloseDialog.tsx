@@ -840,7 +840,13 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
                         <span className="text-right tabular-nums">{row.openingPlates}</span>
                         {/* Direct-sale rows: keyed-in units received (they never cook). */}
                         <span className="text-right tabular-nums">{row.isDirectSale ? row.platesReceived : row.platesCooked}</span>
-                        <span className="text-right tabular-nums">{row.platesSold}</span>
+                        <span
+                          className="text-right tabular-nums"
+                          title={row.soldPreSystem > 0 ? `${row.soldPreSystem} sold pre-system (no revenue)` : undefined}
+                        >
+                          {row.platesSold}
+                          {row.soldPreSystem > 0 && <span className="text-red-600">*</span>}
+                        </span>
                         <span className="text-right tabular-nums">{row.platesSoldAtAutoClose ?? "—"}</span>
                         <span className="text-right tabular-nums">{row.driftSold ?? "—"}</span>
                         <span className="text-right tabular-nums">{row.closingStockAtAutoClose ?? "—"}</span>

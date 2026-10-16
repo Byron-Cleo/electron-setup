@@ -344,3 +344,11 @@ export function registerLoginMediaHandlers() {
 export function registerDashboardHandlers() {
   ipcMain.handle("dashboard:get-summary", async () => apiFetch("/dashboard/summary"));
 }
+
+// Global app settings singleton — the go-live "show pre-system input" flag.
+export function registerSystemSettingsHandlers() {
+  ipcMain.handle("system-settings:get", async () => apiFetch("/system-settings"));
+  ipcMain.handle("system-settings:update", async (_event, data) =>
+    apiFetch("/system-settings", { method: "PUT", body: JSON.stringify(data) })
+  );
+}

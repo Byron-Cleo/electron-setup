@@ -1,13 +1,14 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, MonitorPlay, Printer, Server, Tag } from "lucide-react"
+import { Building2, ChefHat, MonitorPlay, Printer, Rocket, Server, Tag } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import CategoryManager from "@/components/admin/CategoryManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
 import PrinterConfig from "@/components/admin/PrinterConfig"
 import ServerConfig from "@/components/admin/ServerConfig"
 import LoginMediaManager from "@/components/admin/LoginMediaManager"
+import GoLiveModeSettings from "@/components/admin/GoLiveModeSettings"
 import { useAuthStore } from "@/stores/auth"
 
 type ActiveView =
@@ -17,6 +18,7 @@ type ActiveView =
   | "pos-printer"
   | "server-config"
   | "login-media"
+  | "go-live"
   | null
 
 const cards: {
@@ -59,6 +61,13 @@ const cards: {
     description: "Choose the images or video shown on the login screen",
     icon: MonitorPlay,
     view: "login-media",
+    adminOnly: true,
+  },
+  {
+    title: "Go-Live Mode",
+    description: "Show or hide the one-time pre-system sales catch-up inputs",
+    icon: Rocket,
+    view: "go-live",
     adminOnly: true,
   },
   {
@@ -112,6 +121,10 @@ function Manager() {
 
       {resolvedView === "login-media" && (
         <LoginMediaManager onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "go-live" && (
+        <GoLiveModeSettings onBack={() => setActiveView(null)} />
       )}
 
       {!resolvedView && (
