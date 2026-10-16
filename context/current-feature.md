@@ -1,15 +1,33 @@
 
 ## Platform
 
-Not Specified
+backend + frontend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
+- Admin can link a menu accompaniment (STARCH/VEGETABLE) to a main dish (`MenuAccompaniment.linkedMenuId`).
+- Selling a linked accompaniment deducts the SAME plates from the linked dish's pool (both free and charged sides; both starch and vegetable).
+- 1 accompaniment selection = 1 plate (constant `ACCOMPANIMENT_PLATES_PER_SERVING = 1`).
+- Linked-side plates count on the linked dish's row in stock movement / daily reports (single central movement line).
+- A sold-out linked side is unselectable in the waiter dialog: gray background + "Sold Out" watermark; live-updates like dish cards.
+- Unlinked accompaniments keep today's always-available behavior.
+
 ## Notes
+
+- Design: nullable `MenuAccompaniment.linkedMenuId → Menu.id` (+ reverse relation). Reuses the whole pool engine (SHARED/ALLOCATED/KEYED, `excludedFromSharedPool`, weighted `platesPerServing`, direct-sale keyed stock, void restore, sibling recompute). Allocations keyed to `orderItemId`, so `restoreForOrderItem` covers linked cooked pools automatically.
+- Decisions confirmed by operator: (1) report counting = linked dish's row; (2) stale cart sold-out = block whole order with "only N left" (existing 409 `INSUFFICIENT_STOCK`); (3) sold-out side = gray + Sold Out watermark, live.
+- `dailyReport.ts` derives `sold` from `OrderItem` only (`factorForServing × qty`) — MUST fold linked-side plates into the linked dish's `salesByMenu` entry or the report disagrees with the snapshot.
+- `pools.ts` gate/deduct: new `consumedPoolsForOrderItem`; extend `assertLinesServable` to aggregate demand per underlying pool (main + linked dishes).
+- `orders.ts` create consumes main then each side; void restores main + sides and decrements snapshots per consumed menu.
+- `accompaniments.ts` accepts `linkedMenuId` on POST/PUT (validate real Menu); GET exposes `availablePlates` via `sellableForMenu(linkedMenuId)` (unlinked → null/unlimited).
+- Waiter UI resolves a side's live availability from the polled menu `items` by `linkedMenuId` (fallback to server `availablePlates`).
+- No ollama models — manual implementation per operator directive.
+- After ANY `backend/` change: `npm run build --prefix backend` + production restart per AGENTS.md. Schema changed → `npm run db:sync` first.
+- Ref: `context/fix-plan/accompaniment-dish-stock-link.md`
 
 ## History
 

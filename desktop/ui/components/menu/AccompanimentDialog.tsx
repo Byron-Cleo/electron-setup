@@ -31,7 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { createAccompaniment, updateAccompaniment, uploadAccompanimentImage, menuImageUrl } from "@/lib/api"
+import SearchableSelect from "@/components/shared/SearchableSelect"
+import { createAccompaniment, updateAccompaniment, uploadAccompanimentImage, menuImageUrl, getMenus } from "@/lib/api"
 
 const CATEGORIES = ["STARCH", "VEGETABLE"] as const
 
@@ -52,6 +53,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   isDefault: z.boolean(),
   image: z.string().optional(),
+  linkedMenuId: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -123,6 +125,8 @@ function AccompanimentImageField({
 }
 
 export default function AccompanimentDialog({ open, onClose, editItem, onSaved }: Props) {
+  const [menus, setMenus] = useState<MenuItem[]>([])
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as unknown as Resolver<FormValues>,
     defaultValues: {
@@ -132,8 +136,16 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
       description: "",
       isDefault: false,
       image: "",
+      linkedMenuId: "",
     },
   })
+
+  useEffect(() => {
+    if (!open) return
+    getMenus()
+      .then(setMenus)
+      .catch(() => setMenus([]))
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -145,6 +157,7 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
         description: editItem.description ?? "",
         isDefault: editItem.isDefault,
         image: editItem.image ?? "",
+        linkedMenuId: editItem.linkedMenuId ?? "",
       })
     } else {
       form.reset({
@@ -154,6 +167,7 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
         description: "",
         isDefault: false,
         image: "",
+        linkedMenuId: "",
       })
     }
   }, [open, editItem, form])
@@ -167,6 +181,8 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
         ...(data.description !== undefined && data.description !== "" && { description: data.description }),
         ...(data.image !== undefined && { image: data.image }),
         isDefault: data.isDefault,
+        linkedMenuId:
+          data.linkedMenuId && data.linkedMenuId !== "" ? data.linkedMenuId : null,
       }
       if (editItem) {
         await updateAccompaniment(editItem.id, payload)
@@ -256,6 +272,33 @@ export default function AccompanimentDialog({ open, onClose, editItem, onSaved }
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="linkedMenuId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Linked dish</FormLabel>
+                  <FormControl>
+                    <SearchableSelect
+                      options={[
+                        { value: "", label: "Not linked (always available)" },
+                        ...menus.map((menu) => ({ value: menu.id, label: menu.name })),
+                      ]}
+                      value={field.value ? field.value : null}
+                      onChange={(v) => field.onChange(v ?? "")}
+                      placeholder="Not linked"
+                      searchPlaceholder="Search dishes..."
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    Link this side to a dish so selling it draws from that dish&apos;s
+                    stock pool (1 plate per serving).
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

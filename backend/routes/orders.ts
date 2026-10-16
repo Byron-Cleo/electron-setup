@@ -6,10 +6,9 @@ import {
   InsufficientPoolError,
   assertLinesServable,
   consumeForOrderItem,
-  factorForServing,
+  consumedPoolsForOrderItem,
   recomputeMenuStockWithSiblings,
   restoreForOrderItem,
-  round2,
   sellableForMenu,
 } from "../pools.js";
 
@@ -250,6 +249,8 @@ const lineKey = (item: {
           name: item.name,
           qty: item.qty,
           portionId: resolvedAccompaniments[i]?.portionId ?? null,
+          starchId: resolvedAccompaniments[i]?.starchId ?? null,
+          vegetableId: resolvedAccompaniments[i]?.vegetableId ?? null,
         })),
       );
 
@@ -285,53 +286,60 @@ const lineKey = (item: {
           },
         });
 
-        // Opening balance for the shift snapshot, taken before this sale.
-        const sellableBefore = await sellableForMenu(tx, item.menuId);
-        // Charge the weighted cost of this serving (1 plate, or 0.5 for a half,
-        // or 2 for a two-piece portion) and drain FIFO across both engines.
-        const factor = await factorForServing(
-          tx,
-          item.menuId,
-          resolvedAccompaniments[i]?.portionId ?? null,
-        );
-        await consumeForOrderItem(tx, orderItem.id, item.menuId, factor * item.qty);
+        // Every pool this line draws from: its own dish plus any linked
+        // accompaniment it carries (1 plate per selected side). Aggregated per
+        // menu so a side sharing its dish's pool is charged to one entry.
+        const consumedPools = await consumedPoolsForOrderItem(tx, {
+          menuId: item.menuId,
+          qty: item.qty,
+          portionId: resolvedAccompaniments[i]?.portionId ?? null,
+          starchId: resolvedAccompaniments[i]?.starchId ?? null,
+          vegetableId: resolvedAccompaniments[i]?.vegetableId ?? null,
+        });
 
-        // Track plates sold on the shift snapshot (openingPlates falls back to
-        // pre-sale stock when the item has no snapshot — e.g. added mid-shift).
-        if (currentShift) {
-          // Freeze the engine alongside the figures so reports can tell a
-          // shared pool from a split without re-deriving it later. Direct-sale
-          // items are their own ledger — never a shared mirror — so they are
-          // stamped ALLOCATED regardless of any dormant supply link.
-          const [supply, directRow] = await Promise.all([
-            tx.stockSupplyMenu.findFirst({
-              where: { menuId: item.menuId },
-              select: { stockSupply: { select: { sellingMode: true } } },
-            }),
-            tx.menu.findUnique({
-              where: { id: item.menuId },
-              select: { requiresCooking: true },
-            }),
-          ]);
-          const sellingMode =
-            directRow?.requiresCooking === false
-              ? ("ALLOCATED" as const)
-              : (supply?.stockSupply.sellingMode ?? "ALLOCATED");
-          const plates = round2(factor * item.qty);
-          await tx.shiftSnapshot.upsert({
-            where: { shiftId_menuId: { shiftId: currentShift.id, menuId: item.menuId } },
-            create: {
-              shiftId: currentShift.id,
-              menuId: item.menuId,
-              openingPlates: sellableBefore,
-              platesSold: plates,
-              sellingMode,
-            },
-            update: { platesSold: { increment: plates } },
-          });
+        for (const pool of consumedPools) {
+          // Opening balance for the shift snapshot, taken before this sale.
+          const sellableBefore = await sellableForMenu(tx, pool.menuId);
+          // Charge the weighted cost and drain FIFO across both engines. A linked
+          // accompaniment is always one plate off the linked dish's pool.
+          await consumeForOrderItem(tx, orderItem.id, pool.menuId, pool.plates);
+
+          // Track plates sold on the shift snapshot (openingPlates falls back to
+          // pre-sale stock when the item has no snapshot — e.g. added mid-shift).
+          if (currentShift) {
+            // Freeze the engine alongside the figures so reports can tell a
+            // shared pool from a split without re-deriving it later. Direct-sale
+            // items are their own ledger — never a shared mirror — so they are
+            // stamped ALLOCATED regardless of any dormant supply link.
+            const [supply, directRow] = await Promise.all([
+              tx.stockSupplyMenu.findFirst({
+                where: { menuId: pool.menuId },
+                select: { stockSupply: { select: { sellingMode: true } } },
+              }),
+              tx.menu.findUnique({
+                where: { id: pool.menuId },
+                select: { requiresCooking: true },
+              }),
+            ]);
+            const sellingMode =
+              directRow?.requiresCooking === false
+                ? ("ALLOCATED" as const)
+                : (supply?.stockSupply.sellingMode ?? "ALLOCATED");
+            await tx.shiftSnapshot.upsert({
+              where: { shiftId_menuId: { shiftId: currentShift.id, menuId: pool.menuId } },
+              create: {
+                shiftId: currentShift.id,
+                menuId: pool.menuId,
+                openingPlates: sellableBefore,
+                platesSold: pool.plates,
+                sellingMode,
+              },
+              update: { platesSold: { increment: pool.plates } },
+            });
+          }
+          // Align Menu.stock with pool truth after order creation
+          await recomputeMenuStockWithSiblings(tx, pool.menuId);
         }
-        // Align Menu.stock with pool truth after order creation
-        await recomputeMenuStockWithSiblings(tx, item.menuId);
       }
 
       return tx.order.findUnique({
@@ -627,86 +635,81 @@ router.post("/:id/void", async (req, res) => {
     // Void order and restore plates
     const voidedOrder = await prisma.$transaction(async (tx) => {
       for (const item of order.OrderItem) {
-        const menu = await tx.menu.findUnique({ where: { id: item.menuId } });
-        if (!menu) {
-          console.warn(`Menu item ${item.menuId} not found during void; stock restoration skipped for this item`);
-        }
+        // Every pool this line drew from at placement: its own dish plus any
+        // linked accompaniment it carried. Restore must mirror that exactly.
+        const consumedPools = await consumedPoolsForOrderItem(tx, {
+          menuId: item.menuId,
+          qty: item.qty,
+          portionId: item.portionId,
+          starchId: item.starchId,
+          vegetableId: item.vegetableId,
+        });
 
-        // Direct-sale lines have NO allocation rows (their consumption went
-        // straight into the keyed Menu.stock ledger), so the ledger read below
-        // would report 0 and restore nothing. Restore from the line's own
-        // plates — the exact inverse of what consumeForOrderItem charged — and
-        // pull the shift snapshot down by the same amount.
-        if (menu && menu.requiresCooking === false) {
-          const directFactor = await factorForServing(tx, item.menuId, item.portionId);
-          const directPlates = round2(directFactor * item.qty);
-          await tx.menu.update({
-            where: { id: item.menuId },
-            data: { stock: { increment: directPlates } },
+        // Undo the cooked allocation ledger once (split remainders + shared
+        // rows). This covers the main dish and every cooked linked side.
+        await restoreForOrderItem(tx, item.id);
+
+        for (const pool of consumedPools) {
+          const menu = await tx.menu.findUnique({
+            where: { id: pool.menuId },
+            select: { requiresCooking: true },
           });
+          if (!menu) {
+            console.warn(
+              `Menu item ${pool.menuId} not found during void; stock restoration skipped for this item`,
+            );
+            continue;
+          }
 
-          if (order.shiftId) {
-            const directSnapshot = await tx.shiftSnapshot.findUnique({
-              where: { shiftId_menuId: { shiftId: order.shiftId, menuId: item.menuId } },
+          // Direct-sale lines have NO allocation rows (their consumption went
+          // straight into the keyed Menu.stock ledger), so the ledger read above
+          // would report 0 and restore nothing. Restore from the line's own
+          // plates — the exact inverse of what consumeForOrderItem charged.
+          if (menu.requiresCooking === false) {
+            await tx.menu.update({
+              where: { id: pool.menuId },
+              data: { stock: { increment: pool.plates } },
             });
-            if (directSnapshot) {
-              await tx.shiftSnapshot.update({
-                where: { id: directSnapshot.id },
-                data: { platesSold: Math.max(0, Number(directSnapshot.platesSold) - directPlates) },
+          } else {
+            // KEYED lines also write NO allocation rows (their consumption went
+            // straight into the supply's keyedStock ledger). Restore the same
+            // weighted amount the line charged back onto its keyed supply.
+            const keyedLinks = await tx.stockSupplyMenu.findMany({
+              where: {
+                menuId: pool.menuId,
+                excludedFromSharedPool: false,
+                stockSupply: { sellingMode: "KEYED" },
+              },
+              select: { stockSupplyId: true },
+            });
+            if (keyedLinks.length > 0) {
+              await tx.stockSupply.update({
+                where: { id: keyedLinks[0].stockSupplyId },
+                data: { keyedStock: { increment: pool.plates } },
               });
             }
           }
-          continue;
-        }
 
-        // KEYED lines also write NO allocation rows (their consumption went
-        // straight into the supply's keyedStock ledger — see
-        // consumeForOrderItem). Restore the same weighted amount the line
-        // charged back onto its keyed supply so the pool and the snapshot
-        // (decremented below by keyedPlates) both reconcile.
-        const keyedLinks = await tx.stockSupplyMenu.findMany({
-          where: {
-            menuId: item.menuId,
-            excludedFromSharedPool: false,
-            stockSupply: { sellingMode: "KEYED" },
-          },
-          select: { stockSupplyId: true },
-        });
-        let keyedPlates = 0;
-        if (keyedLinks.length > 0) {
-          const keyedFactor = await factorForServing(tx, item.menuId, item.portionId);
-          keyedPlates = round2(keyedFactor * item.qty);
-          await tx.stockSupply.update({
-            where: { id: keyedLinks[0].stockSupplyId },
-            data: { keyedStock: { increment: keyedPlates } },
-          });
-        }
+          // Restore from the allocation ledger rather than nudging Menu.stock:
+          // split plates go back to the exact splits they came from, and a shared
+          // pool recovers by the allocation row simply being removed. `Menu.stock`
+          // is then re-derived, so it can never drift from the pool.
+          await recomputeMenuStockWithSiblings(tx, pool.menuId);
 
-        // Restore from the allocation ledger rather than nudging Menu.stock:
-        // split plates go back to the exact splits they came from, and a shared
-        // pool recovers by the allocation row simply being removed. `Menu.stock`
-        // is then re-derived, so it can never drift from the pool.
-        // Read the ledger first: it is the only record of how many *plates* this
-        // line cost, which is not `item.qty` for a weighted or portioned sale.
-        const consumed = await tx.orderItemAllocation.aggregate({
-          where: { orderItemId: item.id },
-          _sum: { plates: true },
-        });
-        const platesConsumed = Number(consumed._sum?.plates ?? 0);
-        await restoreForOrderItem(tx, item.id);
-        await recomputeMenuStockWithSiblings(tx, item.menuId);
-
-        // Update shift snapshot if exists
-        if (order.shiftId) {
-          const snapshot = await tx.shiftSnapshot.findUnique({
-            where: { shiftId_menuId: { shiftId: order.shiftId, menuId: item.menuId } },
-          });
-          if (snapshot) {
-            const restored = round2(platesConsumed + keyedPlates);
-            await tx.shiftSnapshot.update({
-              where: { id: snapshot.id },
-              data: { platesSold: Math.max(0, Number(snapshot.platesSold) - restored) },
+          // Update shift snapshot if exists — pull the same plates this line
+          // contributed to that pool back off the running sold total.
+          if (order.shiftId) {
+            const snapshot = await tx.shiftSnapshot.findUnique({
+              where: { shiftId_menuId: { shiftId: order.shiftId, menuId: pool.menuId } },
             });
+            if (snapshot) {
+              await tx.shiftSnapshot.update({
+                where: { id: snapshot.id },
+                data: {
+                  platesSold: Math.max(0, Number(snapshot.platesSold) - pool.plates),
+                },
+              });
+            }
           }
         }
       }

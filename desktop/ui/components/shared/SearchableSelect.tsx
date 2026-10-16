@@ -81,24 +81,30 @@ export default function SearchableSelect({
         onClick={handleToggle}
         disabled={disabled}
         className={cn(
-          "flex h-8 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none md:text-sm",
+          "flex min-h-8 w-full items-center justify-between gap-1 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none md:text-sm",
           "hover:bg-admin-content/50",
           disabled && "cursor-not-allowed opacity-50",
           open && "border-ring ring-3 ring-ring/50"
         )}
       >
-        <span className={cn("truncate text-left", !selectedLabel && "text-muted-foreground")}>
-          {selectedLabel ?? placeholder}
-        </span>
-        <span className="flex items-center gap-1 shrink-0 ml-1">
-          {selectedLabel && !disabled && (
-            <span
-              onClick={handleClear}
-              className="rounded-sm p-0.5 hover:bg-admin-content/50 cursor-pointer"
-            >
-              <X size={14} className="text-admin-muted" />
+        <div className="flex flex-1 flex-wrap items-center gap-1 truncate">
+          {selectedLabel ? (
+            <span className="flex items-center gap-1 rounded-md bg-admin-accent/10 px-1.5 py-0.5 text-xs font-medium text-admin-accent">
+              <span className="truncate max-w-[220px]">{selectedLabel}</span>
+              {!disabled && (
+                <span
+                  onClick={handleClear}
+                  className="rounded-sm p-0.5 hover:bg-admin-accent/20 cursor-pointer"
+                >
+                  <X size={10} />
+                </span>
+              )}
             </span>
+          ) : (
+            <span className="text-muted-foreground">{placeholder}</span>
           )}
+        </div>
+        <span className="flex items-center gap-1 shrink-0 ml-1">
           <ChevronDown size={14} className={cn("text-admin-muted transition-transform", open && "rotate-180")} />
         </span>
       </button>
@@ -122,20 +128,43 @@ export default function SearchableSelect({
             ) : filteredOptions.length === 0 ? (
               <p className="px-2.5 py-2 text-sm text-admin-muted">No results found</p>
             ) : (
-              filteredOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => handleSelect(opt)}
-                  className={cn(
-                    "flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-base transition-colors md:text-sm",
-                    "hover:bg-admin-content/50",
-                    value === opt.value && "bg-admin-accent/10 text-admin-accent font-medium"
-                  )}
-                >
-                  <span className="truncate">{opt.label}</span>
-                </button>
-              ))
+              filteredOptions.map((opt) => {
+                const isSelected = (value ?? "") === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleSelect(opt)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-base transition-colors md:text-sm",
+                      "hover:bg-admin-content/50",
+                      isSelected && "bg-admin-accent/10 text-admin-accent font-medium"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                        isSelected
+                          ? "border-admin-accent bg-admin-accent text-white"
+                          : "border-muted-foreground/50"
+                      )}
+                    >
+                      {isSelected && (
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path
+                            d="M8.5 2.5L3.5 7.5L1.5 5.5"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="truncate">{opt.label}</span>
+                  </button>
+                )
+              })
             )}
           </div>
         </div>

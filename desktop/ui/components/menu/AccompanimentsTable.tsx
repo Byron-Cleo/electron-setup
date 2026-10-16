@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
-import { getAccompaniments, menuImageUrl } from "@/lib/api"
+import { getAccompaniments, getMenus, menuImageUrl } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import AccompanimentDialog from "./AccompanimentDialog"
 import AccompanimentDetailDialog from "./AccompanimentDetailDialog"
@@ -20,6 +20,7 @@ export default function AccompanimentsTable() {
   const [editItem, setEditItem] = useState<Accompaniment | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailItem, setDetailItem] = useState<Accompaniment | null>(null)
+  const [menuNames, setMenuNames] = useState<Map<string, string>>(new Map())
 
   const loadData = useCallback(async () => {
     try {
@@ -37,6 +38,12 @@ export default function AccompanimentsTable() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    getMenus()
+      .then((menus) => setMenuNames(new Map(menus.map((m) => [m.id, m.name]))))
+      .catch(() => setMenuNames(new Map()))
+  }, [])
 
   const filteredItems = useMemo(() => {
     let result = items
@@ -72,8 +79,8 @@ export default function AccompanimentsTable() {
     { label: "Name", key: "name" },
     { label: "Category", key: "category" },
     { label: "Price", key: "price" },
+    { label: "Linked Dish", key: "linked" },
     { label: "Default", key: "isDefault" },
-    { label: "Description", key: "description" },
     { label: "Actions", key: "actions", isAction: true },
   ]
 
@@ -102,6 +109,26 @@ export default function AccompanimentsTable() {
         )
       case "price":
         return <span>{row.price ? `KSh ${row.price}` : "—"}</span>
+      case "linked": {
+        if (!row.linkedMenuId) {
+          return <span className="text-admin-muted text-xs">—</span>
+        }
+        const linkedName = menuNames.get(row.linkedMenuId) ?? "Linked dish"
+        const available = row.availablePlates
+        const soldOut = available !== null && available !== undefined && available <= 0
+        return (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">{linkedName}</span>
+            <span className={cn("text-xs", soldOut ? "text-red-600 font-semibold" : "text-admin-muted")}>
+              {soldOut
+                ? "Sold Out"
+                : available !== null && available !== undefined
+                  ? `${available} left`
+                  : "—"}
+            </span>
+          </div>
+        )
+      }
       case "isDefault":
         return row.isDefault ? (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
@@ -110,8 +137,6 @@ export default function AccompanimentsTable() {
         ) : (
           <span className="text-admin-muted text-xs">—</span>
         )
-      case "description":
-        return <span className="text-sm text-admin-muted max-w-xs truncate block">{row.description ?? "—"}</span>
       case "details":
         return (
           <div className="flex justify-start">

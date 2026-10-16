@@ -104,6 +104,26 @@ function platesBadgeClass(plates: number) {
   return "bg-red-100 text-red-600"
 }
 
+/**
+ * Stock of a linked accompaniment, read live from the polled menu list so a
+ * side greys out the moment its dish sells out. An accompaniment always costs
+ * exactly one plate per serving, so the dish's sellable plates ARE how many
+ * sides are orderable. Unlinked sides report `plates: null` (always available).
+ */
+function accompanimentStock(
+  acc: Accompaniment,
+  items: MenuItem[],
+): { linked: boolean; plates: number | null; soldOut: boolean } {
+  if (!acc.linkedMenuId) return { linked: false, plates: null, soldOut: false }
+  const dish = items.find((i) => i.id === acc.linkedMenuId)
+  const plates = dish
+    ? Number(dish.availablePlates ?? dish.stock ?? 0)
+    : acc.availablePlates != null
+      ? Number(acc.availablePlates)
+      : null
+  return { linked: true, plates, soldOut: plates != null && plates <= 0 }
+}
+
 function AccompanyRow({ label, accompany }: { label: string; accompany: OrderAccompaniment }) {
   return (
     <p className="text-xs text-brand-ebony/60">
@@ -127,26 +147,38 @@ function AccompanyRadioCard({
   name,
   image,
   badge,
+  disabled = false,
 }: {
   value: string
   name: string
   image: string
   badge?: ReactNode
+  disabled?: boolean
 }) {
   const src = menuImageUrl(image)
   return (
     <Label
-      className="flex w-fit max-w-[130px] flex-col items-center gap-1 rounded-lg border p-1.5 cursor-pointer transition-colors has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5"
+      className={cn(
+        "relative flex w-fit max-w-[130px] flex-col items-center gap-1 rounded-lg border p-1.5 transition-colors",
+        disabled
+          ? "cursor-not-allowed border-gray-200 bg-gray-100 opacity-70"
+          : "cursor-pointer has-data-[state=checked]:border-brand-red has-data-[state=checked]:bg-brand-red/5",
+      )}
     >
+      {disabled && (
+        <span className="pointer-events-none absolute inset-0 z-10 flex -rotate-12 items-center justify-center text-center text-sm font-extrabold uppercase tracking-wider text-gray-500/80">
+          Sold Out
+        </span>
+      )}
       <div className="flex items-center gap-1.5">
-        <RadioGroupItem value={value} className="size-3.5" />
+        <RadioGroupItem value={value} className="size-3.5" disabled={disabled} />
         {src ? (
           <img src={src} alt={name} className="h-8 w-8 rounded-md object-cover" />
         ) : (
           <div className="h-8 w-8 rounded-md bg-gray-100" />
         )}
       </div>
-      <span className="max-w-full text-center text-xs font-medium leading-tight text-brand-ebony/80">{name}</span>
+      <span className={cn("max-w-full text-center text-xs font-medium leading-tight", disabled ? "text-gray-400" : "text-brand-ebony/80")}>{name}</span>
       {badge}
     </Label>
   )
@@ -363,10 +395,12 @@ export function WaiterMenuGrid({
       .then((data) => {
         setAccompaniments(data)
         const starches = data.filter((a) => a.category === "STARCH")
-        if (starches.length > 0) setSelectedStarch(starches[0])
+        if (starches.length > 0 && !accompanimentStock(starches[0], []).soldOut) {
+          setSelectedStarch(starches[0])
+        }
         const vegs = data.filter((a) => a.category === "VEGETABLE")
         const freeVeg = vegs.find((v) => v.isDefault)
-        if (freeVeg) setSelectedVegetable(freeVeg)
+        if (freeVeg && !accompanimentStock(freeVeg, []).soldOut) setSelectedVegetable(freeVeg)
       })
       .catch(() => {})
   }, [])
@@ -505,6 +539,29 @@ export function WaiterMenuGrid({
     [starches],
   )
 
+  // A linked side shows its dish's live stock instead of its Free/Extra tag, so
+  // the waiter sees `N left` / `Sold Out` and the card greys out when empty.
+  const stockBadgeFor = (acc: Accompaniment, fallback: ReactNode): ReactNode => {
+    if (!acc.linkedMenuId) return fallback
+    const { plates, soldOut } = accompanimentStock(acc, items)
+    if (soldOut) {
+      return (
+        <span className="rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-600">
+          Sold Out
+        </span>
+      )
+    }
+    if (plates == null) return fallback
+    return (
+      <span className={cn("rounded-full px-1.5 text-[10px] font-semibold", platesBadgeClass(plates))}>
+        {plates} left
+      </span>
+    )
+  }
+
+  const isStockSoldOut = (acc: Accompaniment): boolean =>
+    accompanimentStock(acc, items).soldOut
+
   const galleryLinks = useMemo(() => {
     if (!selectedItem) return []
     return selectedItem.images.map((url) => ({
@@ -537,6 +594,9 @@ export function WaiterMenuGrid({
         nextStarch = first?.starch ?? null
         nextVegetable = first?.vegetable ?? null
       }
+      // Never preselect a default side that is already sold out.
+      if (nextStarch && isStockSoldOut(nextStarch)) nextStarch = null
+      if (nextVegetable && isStockSoldOut(nextVegetable)) nextVegetable = null
     }
     setSelectedStarch(nextStarch)
     setSelectedVegetable(nextVegetable)
@@ -561,14 +621,18 @@ export function WaiterMenuGrid({
   const handleImageSelect = (url: string) => {
     const link = galleryLinks.find((l) => l.url === url)
     if (!link) return
-    const nextStarch = link.starch ?? selectedStarch
-    const nextVegetable = link.vegetable ?? selectedVegetable
-    if (link.starch) setSelectedStarch(link.starch)
-    if (link.vegetable) setSelectedVegetable(link.vegetable)
+    // A sold-out side cannot be picked from a gallery chip either.
+    const pickedStarch = link.starch && !isStockSoldOut(link.starch) ? link.starch : null
+    const pickedVegetable = link.vegetable && !isStockSoldOut(link.vegetable) ? link.vegetable : null
+    const nextStarch = pickedStarch ?? selectedStarch
+    const nextVegetable = pickedVegetable ?? selectedVegetable
+    if (pickedStarch) setSelectedStarch(pickedStarch)
+    if (pickedVegetable) setSelectedVegetable(pickedVegetable)
     syncSelection(nextStarch, nextVegetable)
   }
 
   const selectStarch = (starch: Accompaniment | null) => {
+    if (starch && isStockSoldOut(starch)) return
     setSelectedStarch(starch)
     if (starch) {
       setStarchMode(isFreeAccompaniment(starch) ? "free" : "charged")
@@ -579,6 +643,7 @@ export function WaiterMenuGrid({
   }
 
   const selectVegetable = (vegetable: Accompaniment | null) => {
+    if (vegetable && isStockSoldOut(vegetable)) return
     setSelectedVegetable(vegetable)
     if (vegetable) {
       setVegMode(isFreeAccompaniment(vegetable) ? "free" : "charged")
@@ -919,11 +984,13 @@ export function WaiterMenuGrid({
                                 value={starch.id}
                                 name={starch.name}
                                 image={starch.image}
-                                badge={
+                                disabled={isStockSoldOut(starch)}
+                                badge={stockBadgeFor(
+                                  starch,
                                   <span className="rounded-full bg-green-100 px-1.5 text-[10px] font-semibold text-green-700">
                                     Free
-                                  </span>
-                                }
+                                  </span>,
+                                )}
                               />
                             ))}
                             <NoneAccompanyCard value={NO_ACCOMPANIMENT} hint="No starch" />
@@ -944,11 +1011,13 @@ export function WaiterMenuGrid({
                                 value={starch.id}
                                 name={starch.name}
                                 image={starch.image}
-                                badge={
+                                disabled={isStockSoldOut(starch)}
+                                badge={stockBadgeFor(
+                                  starch,
                                   <span className="text-[10px] font-semibold text-brand-maroon">
                                     Extra +{formatPrice(starch.price ?? 0)}
-                                  </span>
-                                }
+                                  </span>,
+                                )}
                               />
                             ))}
                           </div>
@@ -987,11 +1056,13 @@ export function WaiterMenuGrid({
                                 value={veg.id}
                                 name={veg.name}
                                 image={veg.image}
-                                badge={
+                                disabled={isStockSoldOut(veg)}
+                                badge={stockBadgeFor(
+                                  veg,
                                   <span className="rounded-full bg-green-100 px-1.5 text-[10px] font-semibold text-green-700">
                                     Free
-                                  </span>
-                                }
+                                  </span>,
+                                )}
                               />
                             ))}
                             <NoneAccompanyCard value={NO_ACCOMPANIMENT} hint="No vegetables" />
@@ -1012,11 +1083,13 @@ export function WaiterMenuGrid({
                                 value={veg.id}
                                 name={veg.name}
                                 image={veg.image}
-                                badge={
+                                disabled={isStockSoldOut(veg)}
+                                badge={stockBadgeFor(
+                                  veg,
                                   <span className="text-[10px] font-semibold text-brand-maroon">
                                     Extra +{formatPrice(veg.price ?? 0)}
-                                  </span>
-                                }
+                                  </span>,
+                                )}
                               />
                             ))}
                           </div>

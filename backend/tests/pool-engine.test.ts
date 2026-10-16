@@ -3,6 +3,7 @@ import { prisma } from "./setup.js";
 import {
   batchPools,
   consumeForOrderItem,
+  consumedPoolsForOrderItem,
   restoreForOrderItem,
   sellableForMenu,
   recomputeMenuStock,
@@ -387,6 +388,141 @@ async function lineFor(menuId: string) {
       expect(pool.preSystemSold).toBe(6);
       expect(pool.poolRemaining).toBe(8);
       expect(pool.unassigned).toBe(0);
+    });
+  });
+
+  describe("linked accompaniment stock", () => {
+    // A side linked to a dish shares that dish's pool: 1 plate per serving.
+    let linkedSupplyId: string;
+    let linkedDishId: string;
+    let starchAccId: string;
+
+    async function cookLinked(produced: number, mode: "ALLOCATED" | "SHARED" = "SHARED") {
+      const user = await createTestUser();
+      return prisma.cookingRecord.create({
+        data: {
+          stockSupplyId: linkedSupplyId,
+          cookedById: user.id,
+          quantityCooked: produced,
+          platesExpected: produced,
+          sellingMode: mode,
+          platesPreSystemSold: 0,
+        },
+      });
+    }
+
+    beforeEach(async () => {
+      const linkedSupply = await prisma.stockSupply.create({
+        data: { name: `linked-${Date.now()}`, slug: `linked-${Date.now()}`, unit: "PCS" },
+      });
+      linkedSupplyId = linkedSupply.id;
+      const linkedDish = await prisma.menu.create({
+        data: { name: "Kunde Slice", slug: `ks-${Date.now()}`, images: [], category: "main", stock: 0 },
+      });
+      linkedDishId = linkedDish.id;
+      await prisma.stockSupplyMenu.create({
+        data: { stockSupplyId: linkedSupplyId, menuId: linkedDishId, platesPerServing: 1 },
+      });
+      const acc = await prisma.menuAccompaniment.create({
+        data: { name: "Kunde", image: "", category: "STARCH", linkedMenuId: linkedDishId },
+      });
+      starchAccId = acc.id;
+    });
+
+    it("returns both the dish pool and each linked side's pool", async () => {
+      await cook({ produced: 10, splits: [{ menuId, allocated: 10, remaining: 10 }] });
+      await cookLinked(4);
+
+      const pools = await consumedPoolsForOrderItem(prisma, {
+        menuId,
+        qty: 2,
+        portionId: null,
+        starchId: starchAccId,
+        vegetableId: null,
+      });
+      const byMenu = new Map(pools.map((p) => [p.menuId, p]));
+      // Main dish: factor 1 x qty 2. Linked side: 1 plate x qty 2.
+      expect(byMenu.get(menuId)!.plates).toBe(2);
+      expect(byMenu.get(linkedDishId)!.plates).toBe(2);
+    });
+
+    it("ignores an unlinked side", async () => {
+      const unlinked = await prisma.menuAccompaniment.create({
+        data: { name: "Plain", image: "", category: "STARCH" },
+      });
+
+      const pools = await consumedPoolsForOrderItem(prisma, {
+        menuId,
+        qty: 1,
+        starchId: unlinked.id,
+      });
+
+      expect(pools).toHaveLength(1);
+      expect(pools[0].menuId).toBe(menuId);
+    });
+
+    it("blocks the order when the linked dish is out, even if the main dish fits", async () => {
+      await cook({ produced: 10, splits: [{ menuId, allocated: 10, remaining: 10 }] });
+      await cookLinked(1);
+
+      let caught: InsufficientPoolError | null = null;
+      try {
+        await assertLinesServable(prisma, [
+          { menuId, name: "Fried Fish", qty: 3, starchId: starchAccId },
+        ]);
+      } catch (e) {
+        caught = e as InsufficientPoolError;
+      }
+
+      expect(caught).toBeInstanceOf(InsufficientPoolError);
+      const shortfall = caught!.shortfalls.find((s) => s.menuId === linkedDishId);
+      expect(shortfall).toBeDefined();
+      expect(shortfall!.name).toBe("Kunde Slice");
+      expect(shortfall!.available).toBe(1);
+      expect(shortfall!.requested).toBe(3);
+    });
+
+    it("passes when both the dish and its linked side have enough plates", async () => {
+      await cook({ produced: 10, splits: [{ menuId, allocated: 10, remaining: 10 }] });
+      await cookLinked(3);
+
+      await expect(
+        assertLinesServable(prisma, [
+          { menuId, name: "Fried Fish", qty: 3, starchId: starchAccId },
+        ]),
+      ).resolves.toBeUndefined();
+    });
+
+    it("sums a linked side's demand across every line that carries it", async () => {
+      await cook({ produced: 10, splits: [{ menuId, allocated: 10, remaining: 10 }] });
+      await cookLinked(2);
+
+      // Two lines each carrying Kunde: 2 + 2 = 4 plates against a 2 plate pool.
+      await expect(
+        assertLinesServable(prisma, [
+          { menuId, name: "Fried Fish", qty: 2, starchId: starchAccId },
+          { menuId, name: "Fried Fish", qty: 2, starchId: starchAccId },
+        ]),
+      ).rejects.toBeInstanceOf(InsufficientPoolError);
+    });
+
+    it("drains the linked dish's pool when the side is sold", async () => {
+      await cook({ produced: 10, splits: [{ menuId, allocated: 10, remaining: 10 }] });
+      await cookLinked(5);
+
+      const pools = await consumedPoolsForOrderItem(prisma, {
+        menuId,
+        qty: 1,
+        starchId: starchAccId,
+      });
+      const line = await lineFor(menuId);
+      // Exactly what orders.ts create does: charge every pool the line draws from.
+      for (const p of pools) {
+        await consumeForOrderItem(prisma, line.id, p.menuId, p.plates);
+      }
+
+      expect(await sellableForMenu(prisma, menuId)).toBe(9);
+      expect(await sellableForMenu(prisma, linkedDishId)).toBe(4);
     });
   });
 

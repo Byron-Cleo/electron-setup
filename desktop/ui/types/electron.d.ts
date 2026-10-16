@@ -7,6 +7,10 @@ interface Accompaniment {
   image: string
   isDefault: boolean
   createdAt: string
+  /** Dish this side draws stock from. Null = unlinked, always available. */
+  linkedMenuId?: string | null
+  /** Plates still sellable from the linked dish; null when unlinked. */
+  availablePlates?: number | null
 }
 
 interface AccompanimentCreateData {
@@ -16,6 +20,8 @@ interface AccompanimentCreateData {
   price?: number
   image?: string
   isDefault?: boolean
+  /** Link this side to a dish so selling it consumes that dish's stock. */
+  linkedMenuId?: string | null
 }
 
 type AccompanimentUpdateData = Partial<AccompanimentCreateData>;
@@ -114,6 +120,8 @@ interface OrderAccompaniment {
   category: string;
   price: number | null;
   isDefault: boolean;
+  /** Dish this side draws stock from (set when linked). */
+  linkedMenuId?: string | null;
 }
 
 interface OrderLineItem {
