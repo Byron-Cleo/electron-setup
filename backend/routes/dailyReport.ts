@@ -1,7 +1,7 @@
 import { Router } from "express";
 import prisma from "../db/db.js";
 import { computeShiftUnassignedBatches } from "./shiftCarryOver.js";
-import { round2, factorForServing } from "../pools.js";
+import { round2, factorForServing, ACCOMPANIMENT_PLATES_PER_SERVING } from "../pools.js";
 
 const router = Router();
 
@@ -211,6 +211,23 @@ router.get("/shift/:id", async (req, res) => {
     // OrderItem, non-void only (voids restore plates).
     const salesByMenu = new Map<string, { sold: number; soldBeforeAutoClose: number }>();
     const factorCache = new Map<string, number>();
+    // A linked accompaniment shares its dish's pool, so its plates must count on
+    // the LINKED DISH's row — the same central movement line orders.ts consumes.
+    const linkedByAccompaniment = new Map<string, string>();
+    for (const acc of await prisma.menuAccompaniment.findMany({
+      where: { linkedMenuId: { not: null } },
+      select: { id: true, linkedMenuId: true },
+    })) {
+      if (acc.linkedMenuId) linkedByAccompaniment.set(acc.id, acc.linkedMenuId);
+    }
+    const addSale = (menuId: string, plates: number, beforeAutoClose: boolean) => {
+      const entry = salesByMenu.get(menuId) ?? { sold: 0, soldBeforeAutoClose: 0 };
+      entry.sold = round2(entry.sold + plates);
+      if (beforeAutoClose) {
+        entry.soldBeforeAutoClose = round2(entry.soldBeforeAutoClose + plates);
+      }
+      salesByMenu.set(menuId, entry);
+    };
     for (const order of dayOrders) {
       if (order.isVoid) continue;
       const beforeAutoClose = order.createdAt.getTime() < shift.autoCloseTime.getTime();
@@ -221,13 +238,15 @@ router.get("/shift/:id", async (req, res) => {
           factor = await factorForServing(prisma, item.menuId, item.portionId);
           factorCache.set(factorKey, factor);
         }
-        const plates = round2(factor * item.qty);
-        const entry = salesByMenu.get(item.menuId) ?? { sold: 0, soldBeforeAutoClose: 0 };
-        entry.sold = round2(entry.sold + plates);
-        if (beforeAutoClose) {
-          entry.soldBeforeAutoClose = round2(entry.soldBeforeAutoClose + plates);
+        addSale(item.menuId, round2(factor * item.qty), beforeAutoClose);
+
+        // Fold each linked side's plates (1 per serving) onto its dish's row.
+        const sideIds = [item.starchId, item.vegetableId].filter((v): v is string => !!v);
+        for (const sideId of sideIds) {
+          const linkedMenuId = linkedByAccompaniment.get(sideId);
+          if (!linkedMenuId) continue;
+          addSale(linkedMenuId, round2(ACCOMPANIMENT_PLATES_PER_SERVING * item.qty), beforeAutoClose);
         }
-        salesByMenu.set(item.menuId, entry);
       }
     }
 

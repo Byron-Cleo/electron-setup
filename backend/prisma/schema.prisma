@@ -82,6 +82,9 @@ model Menu {
   Review                                                Review[]
   stockSupplyMenus                                      StockSupplyMenu[]
   snapshots                                             ShiftSnapshot[]
+  // STARCH/VEGETABLE accompaniments linked to this dish: selling such a side
+  // consumes 1 plate of this dish's pool (see MenuAccompaniment.linkedMenuId).
+  accompanimentLinks                                    MenuAccompaniment[] @relation("Menu_linkedAccompaniment")
 }
 
 model MenuAccompaniment {
@@ -102,6 +105,11 @@ model MenuAccompaniment {
   // STARCH/VEGETABLE rows stay global and leave this null.
   menuId                                    String?           @db.Uuid
   menu                                      Menu?             @relation("Menu_portionOptions", fields: [menuId], references: [id], onDelete: Cascade)
+  // STARCH/VEGETABLE only: the main dish whose pool this accompaniment draws
+  // from. When set, selling this side consumes 1 plate of that dish's pool
+  // (ACCOMPANIMENT_PLATES_PER_SERVING). Unlinked sides stay always-available.
+  linkedMenuId                              String?           @db.Uuid
+  linkedMenu                                Menu?             @relation("Menu_linkedAccompaniment", fields: [linkedMenuId], references: [id], onDelete: SetNull)
   Menu_Menu_starchIdToMenuAccompaniment    Menu[]            @relation("Menu_starchIdToMenuAccompaniment")
   Menu_Menu_vegetableIdToMenuAccompaniment Menu[]            @relation("Menu_vegetableIdToMenuAccompaniment")
   Menu_Menu_portionIdToMenuAccompaniment   Menu[]            @relation("Menu_portionIdToMenuAccompaniment")

@@ -32,6 +32,13 @@ import { type Prisma, SellingMode } from "./db/generated/prisma/client.js";
 /** A dish is sellable up to this factor only if the supply is uniform. */
 export const DEFAULT_PLATES_PER_SERVING = 1;
 
+/**
+ * Plates one selected accompaniment (starch/vegetable linked to a dish) consumes
+ * from that dish's pool. Always 1: a side is one serving of one plate — a slice
+ * is a plate, one andazi is one piece, beans are a full plate.
+ */
+export const ACCOMPANIMENT_PLATES_PER_SERVING = 1;
+
 export type PoolSource =
   | {
       kind: "split";
@@ -522,27 +529,96 @@ export async function sourcesForMenu(
 }
 
 /**
+ * Every plate pool one order line draws from: the dish's own pool (weighted by
+ * its serving factor) plus the pool of each linked accompaniment it carries
+ * (1 plate per selected side). Aggregated per underlying menu so a side linked
+ * to the same dish as the main line reports one combined demand.
+ *
+ * This is the single source of truth for BOTH placement and void — the two can
+ * never disagree about how many plates a line cost.
+ */
+export type ConsumedPool = { menuId: string; plates: number; factor: number };
+
+export async function consumedPoolsForOrderItem(
+  tx: Prisma.TransactionClient,
+  item: {
+    menuId: string;
+    qty: number;
+    portionId?: string | null;
+    starchId?: string | null;
+    vegetableId?: string | null;
+  },
+): Promise<ConsumedPool[]> {
+  const factor = await factorForServing(tx, item.menuId, item.portionId);
+  const byMenu = new Map<string, ConsumedPool>();
+  byMenu.set(item.menuId, {
+    menuId: item.menuId,
+    plates: round2(factor * item.qty),
+    factor,
+  });
+
+  const sideIds = [item.starchId, item.vegetableId].filter((v): v is string => !!v);
+  if (sideIds.length > 0) {
+    const sides = await tx.menuAccompaniment.findMany({
+      where: { id: { in: sideIds }, linkedMenuId: { not: null } },
+      select: { linkedMenuId: true },
+    });
+    for (const side of sides) {
+      if (!side.linkedMenuId) continue;
+      const plates = round2(ACCOMPANIMENT_PLATES_PER_SERVING * item.qty);
+      const existing = byMenu.get(side.linkedMenuId);
+      byMenu.set(side.linkedMenuId, {
+        menuId: side.linkedMenuId,
+        plates: round2((existing?.plates ?? 0) + plates),
+        factor: existing ? Math.max(existing.factor, ACCOMPANIMENT_PLATES_PER_SERVING) : ACCOMPANIMENT_PLATES_PER_SERVING,
+      });
+    }
+  }
+
+  return [...byMenu.values()];
+}
+
+/**
  * Check every line against the pool *before* anything is written, so the
  * waiter is told about all shortfalls at once and a rejection has no side
  * effects to undo.
  */
 export async function assertLinesServable(
   tx: Prisma.TransactionClient,
-  lines: { menuId: string; name: string; qty: number; portionId?: string | null }[],
+  lines: {
+    menuId: string;
+    name: string;
+    qty: number;
+    portionId?: string | null;
+    starchId?: string | null;
+    vegetableId?: string | null;
+  }[],
 ): Promise<void> {
-  // Two lines of one dish (different portions) share one pool, so they must be
-  // checked against their combined demand, not one at a time.
+  // Demand is keyed by the UNDERLYING pool, not the line: a line contributes to
+  // its own dish plus the pool of any linked accompaniment it carries, so a side
+  // sharing its dish's pool is checked against their combined demand.
   const demandByMenu = new Map<string, { name: string; plates: number; factor: number }>();
+  const nameCache = new Map<string, string>();
   for (const line of lines) {
-    const factor = await factorForServing(tx, line.menuId, line.portionId);
-    const entry = demandByMenu.get(line.menuId) ?? {
-      name: line.name,
-      plates: 0,
-      factor,
-    };
-    entry.plates = round2(entry.plates + factor * line.qty);
-    entry.factor = Math.max(entry.factor, factor);
-    demandByMenu.set(line.menuId, entry);
+    const consumed = await consumedPoolsForOrderItem(tx, line);
+    for (const c of consumed) {
+      let entry = demandByMenu.get(c.menuId);
+      if (!entry) {
+        let name = c.menuId === line.menuId ? line.name : nameCache.get(c.menuId);
+        if (name === undefined) {
+          const row = await tx.menu.findUnique({
+            where: { id: c.menuId },
+            select: { name: true },
+          });
+          name = row?.name ?? line.name;
+          nameCache.set(c.menuId, name);
+        }
+        entry = { name, plates: 0, factor: c.factor };
+        demandByMenu.set(c.menuId, entry);
+      }
+      entry.plates = round2(entry.plates + c.plates);
+      entry.factor = Math.max(entry.factor, c.factor);
+    }
   }
 
   const shortfalls: MenuShortfall[] = [];
