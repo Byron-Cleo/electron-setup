@@ -406,6 +406,10 @@ model CookingRecord {
   // Plates deliberately thrown away. Completeness of the derived pool
   // (produced - sold - wasted) depends on this being recorded on dispose.
   wastedPlates       Decimal               @default(0) @db.Decimal(12, 2)
+  // Go-live only: plates sold off-system (paper) before this batch was keyed
+  // in. Deducts from the pool like a sale but carries no revenue. Batch-level
+  // for SHARED pools (no per-dish split); 0 on normal days.
+  platesPreSystemSold Decimal              @default(0) @db.Decimal(12, 2)
   cookedBy           User                  @relation(fields: [cookedById], references: [id])
   stockSupply        StockSupply           @relation(fields: [stockSupplyId], references: [id])
   shift              Shift?                @relation(fields: [shiftId], references: [id])
@@ -421,6 +425,10 @@ model CookingRecordMenu {
   menuId          String        @db.Uuid
   platesAllocated Decimal       @map("quantityPlates") @db.Decimal(12, 2)
   platesRemaining Decimal       @default(0) @db.Decimal(12, 2)
+  // Go-live only: plates of this dish's split sold off-system (paper) before
+  // keying. Deducts from the split like a sale but carries no revenue; 0 on
+  // normal days. Per-dish for ALLOCATED batches.
+  platesPreSystemSold Decimal   @default(0) @db.Decimal(12, 2)
   createdAt       DateTime      @default(now()) @db.Timestamptz(3)
   cookingRecord   CookingRecord @relation(fields: [cookingRecordId], references: [id], onDelete: Cascade)
   menu            Menu          @relation(fields: [menuId], references: [id], onDelete: Cascade)
@@ -618,4 +626,15 @@ model LoginMediaConfig {
   slideIntervalSec Int                @default(2) // image fade cadence on the login pane (seconds)
   createdAt        DateTime           @default(now()) @db.Timestamptz(6)
   updatedAt        DateTime           @updatedAt @db.Timestamptz(6)
+}
+
+// Global app settings singleton (exactly one row, id = 1).
+model SystemSettings {
+  id              Int      @id @default(1)
+  // Go-live kill-switch: shows the red "already sold before keying in" inputs
+  // on the Kitchen screens. Turn off once go-live catch-up is done; existing
+  // figures stay in history/reports either way.
+  showGoLiveInput Boolean  @default(true)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
 }

@@ -33,7 +33,8 @@ describe("Production pool engine", () => {
     opts: {
       produced: number;
       mode?: "ALLOCATED" | "SHARED";
-      splits?: { menuId: string; allocated: number; remaining: number }[];
+      splits?: { menuId: string; allocated: number; remaining: number; preSystemSold?: number }[];
+      preSystemSold?: number;
       createdAt?: Date;
     },
   ) {
@@ -45,6 +46,7 @@ describe("Production pool engine", () => {
         quantityCooked: opts.produced,
         platesExpected: opts.produced,
         sellingMode: opts.mode ?? "ALLOCATED",
+        platesPreSystemSold: opts.preSystemSold ?? 0,
         createdAt: opts.createdAt,
         ...(opts.splits?.length
           ? {
@@ -53,6 +55,7 @@ describe("Production pool engine", () => {
                   menuId: s.menuId,
                   platesAllocated: s.allocated,
                   platesRemaining: s.remaining,
+                  platesPreSystemSold: s.preSystemSold ?? 0,
                 })),
               },
             }
@@ -125,7 +128,7 @@ async function lineFor(menuId: string) {
     });
 
     it("drains the split and records the allocation", async () => {
-      const batch = await cook({ produced: 20, splits: [{ menuId, allocated: 8, remaining: 8 }] });
+      await cook({ produced: 20, splits: [{ menuId, allocated: 8, remaining: 8 }] });
       const line = await lineFor(menuId);
 
       await consumeForOrderItem(prisma, line.id, menuId, 3);
@@ -332,6 +335,58 @@ async function lineFor(menuId: string) {
       await expect(
         assertLinesServable(prisma, [{ menuId, name: "Fried Fish", qty: 4 }]),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("pre-system sold (go-live)", () => {
+    it("deducts a batch-level pre-system count from a SHARED pool", async () => {
+      // Beef-style cutover: 20 keyed in, 6 already sold on paper, 14 sellable.
+      const batch = await cook({ produced: 20, mode: "SHARED", preSystemSold: 6 });
+
+      expect(await sellableForMenu(prisma, menuId)).toBe(14);
+
+      const pool = (await batchPools(prisma, { id: batch.id })).get(batch.id)!;
+      expect(pool.preSystemSold).toBe(6);
+      expect(pool.poolRemaining).toBe(14);
+      // Pre-system is not a system sale.
+      expect(pool.sold).toBe(0);
+    });
+
+    it("counts a SHARED pre-system batch against later orders", async () => {
+      await cook({ produced: 20, mode: "SHARED", preSystemSold: 6 });
+      const line = await lineFor(menuId);
+
+      await consumeForOrderItem(prisma, line.id, menuId, 4);
+
+      expect(await sellableForMenu(prisma, menuId)).toBe(10);
+    });
+
+    it("refuses to sell past the pre-system deduction", async () => {
+      // 10 in the tray, 8 gone on paper: only 2 remain.
+      await cook({ produced: 10, mode: "SHARED", preSystemSold: 8 });
+
+      await expect(
+        assertLinesServable(prisma, [{ menuId, name: "Fried Fish", qty: 3 }]),
+      ).rejects.toBeInstanceOf(InsufficientPoolError);
+      await expect(
+        assertLinesServable(prisma, [{ menuId, name: "Fried Fish", qty: 2 }]),
+      ).resolves.toBeUndefined();
+    });
+
+    it("keeps an ALLOCATED split's pre-system plates out of both pool and sellable", async () => {
+      // 14 keyed in, all 14 handed to the dish, 6 already sold on paper:
+      // split remaining 8, and the 6 must not resurface as unassigned stock.
+      const batch = await cook({
+        produced: 14,
+        splits: [{ menuId, allocated: 14, remaining: 8, preSystemSold: 6 }],
+      });
+
+      expect(await sellableForMenu(prisma, menuId)).toBe(8);
+
+      const pool = (await batchPools(prisma, { id: batch.id })).get(batch.id)!;
+      expect(pool.preSystemSold).toBe(6);
+      expect(pool.poolRemaining).toBe(8);
+      expect(pool.unassigned).toBe(0);
     });
   });
 

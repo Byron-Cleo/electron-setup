@@ -526,7 +526,14 @@ function ShiftReportView({ report }: Props) {
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums">{row.isDirectSale ? "—" : row.platesCooked}</td>
                         {/* Received = direct-sale top-ups keyed in mid-shift; cooked rows never receive. */}
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-blue-100 text-blue-900">{row.isDirectSale ? row.platesReceived : "—"}</td>
-                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-red-100 text-red-900">{row.platesSoldAtAutoClose ?? "—"}</td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-red-100 text-red-900">
+                          {row.platesSoldAtAutoClose ?? "—"}
+                          {row.soldPreSystem > 0 && (
+                            <span className="block text-[9px] font-medium text-red-600">
+                              ({row.soldPreSystem} pre-system)
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-green-100">{row.closingStockAtAutoClose ?? "—"}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-orange-100">{formatDriftMinutes(row.driftMinutes)}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold tabular-nums bg-red-100 text-red-900">{row.driftSold ?? "—"}</td>

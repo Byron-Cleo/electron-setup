@@ -571,6 +571,27 @@ export async function deleteLoginMediaVideo(id: string): Promise<{ message: stri
   return apiFetch(`/login-media/videos/${id}`, { method: "DELETE" })
 }
 
+// ─── System Settings ────────────────────────────────────────────────────────
+// Global app settings singleton. `showGoLiveInput` gates the go-live "already
+// sold before keying in" inputs on the Kitchen screens.
+
+export async function getSystemSettings(): Promise<SystemSettings> {
+  await loadApiOrigin()
+  if (window.electron?.systemSettings?.get) {
+    return window.electron.systemSettings.get()
+  }
+  return apiFetch("/system-settings")
+}
+
+export async function updateSystemSettings(
+  data: SystemSettingsUpdate,
+): Promise<SystemSettings> {
+  if (window.electron?.systemSettings?.update) {
+    return window.electron.systemSettings.update(data)
+  }
+  return apiFetch("/system-settings", { method: "PUT", body: JSON.stringify(data) })
+}
+
 export async function getAccompanimentImages(): Promise<{ images: string[] }> {
   if (window.electron?.menuExtra?.getAccompanimentImages) {
     return window.electron.menuExtra.getAccompanimentImages()

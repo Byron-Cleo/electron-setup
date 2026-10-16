@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { getCookingRecord, allocateCookingRecord } from "@/lib/api"
+import { Card } from "@/components/ui/card"
+import { getCookingRecord, allocateCookingRecord, getSystemSettings } from "@/lib/api"
 
 interface Props {
   open: boolean
@@ -28,6 +29,8 @@ interface MenuSplit {
   assigned: number
   /** Plates of THIS batch already sold through the dish. */
   sold: number
+  /** Go-live only: plates of this batch sold off-system before keying in. */
+  preSystemSold: number
 }
 
 export default function AssignmentModal({ open, onClose, batchId, title, onRefresh, expired = false }: Props) {
@@ -39,6 +42,24 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
   const [isCarryOver, setIsCarryOver] = useState(false)
   const [origin, setOrigin] = useState("")
   const [carryFrom, setCarryFrom] = useState("")
+  const [showGoLiveInput, setShowGoLiveInput] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    // The go-live inputs are a kill-switchable global setting; fetch it here so
+    // every entry point into this modal honours it without prop-drilling.
+    getSystemSettings()
+      .then((settings) => {
+        if (!cancelled) setShowGoLiveInput(settings.showGoLiveInput)
+      })
+      .catch(() => {
+        if (!cancelled) setShowGoLiveInput(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open || !batchId) return
@@ -58,6 +79,7 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
             name: sm.menu.name,
             assigned: split ? Number(split.platesAllocated) : 0,
             sold: record.batchSoldByMenu?.[sm.menu.id] ?? 0,
+            preSystemSold: split?.platesPreSystemSold ? Number(split.platesPreSystemSold) : 0,
           }
         })
         setLoading(false)
@@ -108,13 +130,15 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
   if (!open) return null
 
   // Batch-scoped arithmetic — everything is about THIS batch alone:
-  //   produced  = plates cooked in the batch
-  //   assigned  = plates handed to dishes (allocated)
-  //   sold      = plates of the batch already sold (never un-assignable)
-  //   remaining = produced − assigned  (still to hand out to dishes)
-  // A dish's own leftover = assigned − sold.
+  //   produced   = plates cooked in the batch
+  //   assigned   = plates handed to dishes (allocated)
+  //   sold       = plates of the batch already sold (never un-assignable)
+  //   preSystem  = go-live off-system plates already gone (never un-assignable)
+  //   remaining  = produced − assigned  (still to hand out to dishes)
+  // A dish's own leftover = assigned − sold − preSystem.
   const totalAssigned = menus.reduce((sum, m) => sum + m.assigned, 0)
   const totalSold = menus.reduce((sum, m) => sum + m.sold, 0)
+  const totalPreSystem = menus.reduce((sum, m) => sum + m.preSystemSold, 0)
   const remaining = produced - totalAssigned
   const overCap = totalAssigned > produced
   const canSave = menus.length > 0 && !overCap
@@ -124,9 +148,9 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
       const pool = produced - prev.reduce((s, m) => s + m.assigned, 0)
       return prev.map((m) => {
         if (m.id !== menuId) return m
-        // Never below what the dish already sold from this batch; never draw
-        // more than the batch's unassigned pool.
-        const min = m.sold
+        // Never below what the dish already sold AND already lost off-system
+        // from this batch; never draw more than the batch's unassigned pool.
+        const min = m.sold + m.preSystemSold
         const max = m.assigned + pool
         const clamped = Math.max(min, Math.min(value, max))
         return { ...m, assigned: clamped }
@@ -134,12 +158,26 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
     })
   }
 
+  // Go-live: off-system plates already gone from a dish. Bounded by what is
+  // still assigned to the dish beyond its system sales — it can never exceed
+  // the dish's own assignment.
+  const setPreSystemSold = (menuId: string, value: number) => {
+    setMenus((prev) =>
+      prev.map((m) => {
+        if (m.id !== menuId) return m
+        const max = Math.max(0, m.assigned - m.sold)
+        const clamped = Math.max(0, Math.min(value, max))
+        return { ...m, preSystemSold: clamped }
+      }),
+    )
+  }
+
   const increment = (m: MenuSplit) => {
     if (remaining >= 1) setAssigned(m.id, m.assigned + 1)
   }
 
   const decrement = (m: MenuSplit) => {
-    if (m.assigned - m.sold >= 1) setAssigned(m.id, m.assigned - 1)
+    if (m.assigned - m.sold - m.preSystemSold >= 1) setAssigned(m.id, m.assigned - 1)
   }
 
   const handleSave = async () => {
@@ -148,12 +186,12 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
     setSubmitting(true)
     try {
       // `plates` is the new ASSIGNED amount per dish. The server preserves the
-      // batch's sold plates (remaining = assigned − sold) so a reallocation can
-      // never resurrect stock an order already consumed. Omitting zero-assigned
-      // dishes clears their split.
+      // batch's sold plates (remaining = assigned − sold − preSystemSold) so a
+      // reallocation can never resurrect stock an order already consumed.
+      // Omitting zero-assigned dishes clears their split.
       const payload = menus
         .filter((m) => m.assigned > 0)
-        .map((m) => ({ menuId: m.id, plates: m.assigned }))
+        .map((m) => ({ menuId: m.id, plates: m.assigned, preSystemSold: m.preSystemSold }))
       await allocateCookingRecord(batchId, payload)
 
       // Menu.stock is deliberately NOT written from here. The server derives it
@@ -204,6 +242,12 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
                   <span className="text-xs text-orange-600">Sold Plates:</span>
                   <span className="font-bold text-lg text-orange-600">{totalSold} plates</span>
                 </div>
+                {totalPreSystem > 0 && (
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-xs text-red-600">Pre-system Plates:</span>
+                    <span className="font-bold text-lg text-red-600">{totalPreSystem} plates</span>
+                  </div>
+                )}
                 <div className="flex items-baseline gap-1">
                   <span className="text-xs text-blue-600">Remaining Plates:</span>
                   <span className={`font-bold text-lg ${overCap ? "text-red-600" : "text-blue-600"}`}>
@@ -237,7 +281,7 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
                 </p>
               ) : (
                 menus.map((menu) => {
-                  const left = menu.assigned - menu.sold
+                  const left = menu.assigned - menu.sold - menu.preSystemSold
                   return (
                     <div key={menu.id} className="flex items-center justify-between gap-3">
                       <div className="flex flex-col min-w-0 flex-1">
@@ -245,6 +289,9 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
                         <div className="flex items-center gap-3 text-[11px] text-admin-muted">
                           <span className="text-green-600">Assigned: <span className="font-medium">{menu.assigned}</span></span>
                           <span className="text-orange-600">Sold: <span className="font-medium">{menu.sold}</span></span>
+                          {menu.preSystemSold > 0 && (
+                            <span className="text-red-600">Pre-system: <span className="font-medium">{menu.preSystemSold}</span></span>
+                          )}
                           <span className="text-blue-600">Left: <span className="font-medium">{left}</span></span>
                         </div>
                       </div>
@@ -285,6 +332,40 @@ export default function AssignmentModal({ open, onClose, batchId, title, onRefre
                 })
               )}
             </div>
+
+            {showGoLiveInput && menus.length > 0 && (
+              <Card className="border-red-300 bg-red-50 p-3 space-y-2">
+                <div className="text-xs font-bold text-red-700 uppercase tracking-wide">
+                  Go-Live Only — Already sold before keying in
+                </div>
+                <p className="text-[11px] text-red-700">
+                  Paper sales with no system order. Deducts from the dish now and shows as
+                  pre-system in reports. Leave 0 on normal days.
+                </p>
+                <div className="space-y-2">
+                  {menus.map((menu) => {
+                    const maxPre = Math.max(0, menu.assigned - menu.sold)
+                    return (
+                      <div key={menu.id} className="flex items-center justify-between gap-3">
+                        <Label className="text-xs font-medium text-red-700 truncate min-w-0 flex-1">
+                          {menu.name}
+                        </Label>
+                        <Input
+                          type="number"
+                          step={1}
+                          min={0}
+                          max={maxPre}
+                          value={menu.preSystemSold}
+                          onChange={(e) => setPreSystemSold(menu.id, parseInt(e.target.value) || 0)}
+                          disabled={maxPre <= 0}
+                          className="w-20 text-center border-red-300 bg-white"
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              </Card>
+            )}
 
             {error && <p className="text-xs text-red-500">{error}</p>}
           </div>

@@ -1,19 +1,26 @@
 
 ## Platform
 
-Not Specified
+backend + frontend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-
+- Add pre-system sales (`platesPreSystemSold`) to batches and per-dish splits to absorb off-system sales at late keying (go-live/catch-up only).
+- Enforce sellable maths: remaining = allocated − systemOrders − preSystemSold, poolRemaining = produced − sold − wasted − preSystemSold.
+- Report shows total sold = system + pre-system with breakdown, revenue stays system-only.
+- Add SystemSettings singleton with `showGoLiveInput` (default true) + admin-only Settings toggle to hide red go-live cards after cutover.
+- UI: red, clearly separated go-live inputs (per-dish in AssignmentModal for ALLOCATED; batch-level in Kitchen cook dialog for SHARED). Hideable via Settings.
+- Backward compatible: normal days (0/hidden) behave identically.
 
 ## Notes
 
-
+- Go-live only: leave 0 on normal days; toggle defaults to true for day-one visibility.
+- SHARED vs ALLOCATED placement differs by design (no allocation step for SHARED).
+- History and revenue remain correct (pre-system never counted as paid orders).
 
 ## History
 

@@ -189,7 +189,11 @@ router.get("/:id", async (req, res) => {
   const splitByMenu = new Map(
     record.cookingRecordMenus.map((s) => [
       s.menuId,
-      { allocated: Number(s.platesAllocated), remaining: Number(s.platesRemaining) },
+      {
+        allocated: Number(s.platesAllocated),
+        remaining: Number(s.platesRemaining),
+        preSystemSold: Number(s.platesPreSystemSold),
+      },
     ]),
   );
   const batchSoldByMenu: Record<string, number> = {};
@@ -197,7 +201,11 @@ router.get("/:id", async (req, res) => {
     const menuId = sm.menu.id;
     const ledger = round2(soldForBatch?.get(menuId)?.sold ?? 0);
     const split = splitByMenu.get(menuId);
-    const legacy = split ? Math.max(0, round2(split.allocated - split.remaining)) : 0;
+    // Legacy (pre-ledger) consumption is allocated − remaining, but that delta
+    // now also carries go-live pre-system plates, which are NOT system sales.
+    const legacy = split
+      ? Math.max(0, round2(split.allocated - split.remaining - split.preSystemSold))
+      : 0;
     batchSoldByMenu[menuId] = round2(Math.max(ledger, legacy));
   }
 
@@ -228,7 +236,7 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/cooking-records - Create a cooking BATCH (feeds zero+ menu items via splits)
 router.post("/", async (req, res) => {
-  const { stockSupplyId, quantityCooked, platesActual, cookedById, notes } = req.body;
+  const { stockSupplyId, quantityCooked, platesActual, cookedById, notes, preSystemSold } = req.body;
 
   if (!stockSupplyId || !quantityCooked || !cookedById) {
     return res.status(400).json({ error: "stockSupplyId, quantityCooked, and cookedById are required" });
@@ -241,6 +249,15 @@ router.post("/", async (req, res) => {
   if (platesActual !== undefined && platesActual !== null && Number(platesActual) <= 0) {
     return res.status(400).json({ error: "platesActual must be greater than 0" });
   }
+
+  // Go-live only: batch-level pre-system sold. Validated against produced once
+  // the actual/expected figure is known below. ALLOCATED batches are rejected
+  // here — their pre-system plates belong per-dish on the allocate step.
+  const preSystemSoldRaw = preSystemSold === undefined || preSystemSold === null ? 0 : Number(preSystemSold);
+  if (!Number.isFinite(preSystemSoldRaw) || preSystemSoldRaw < 0) {
+    return res.status(400).json({ error: "preSystemSold must be >= 0" });
+  }
+  const preSystemSoldValue = round2(preSystemSoldRaw);
 
   // Verify stock supply exists and has isMenuStock = true
   const stockSupply = await prisma.stockSupply.findUnique({
@@ -285,6 +302,24 @@ router.post("/", async (req, res) => {
     ? Number(platesActual)
     : platesExpected;
 
+  // Go-live guard: batch-level pre-system sold is a SHARED-pool concept (no
+  // per-dish split exists for a shared tray). ALLOCATED batches key it per-dish
+  // on the allocate step instead — reject here so it can never be silently lost.
+  if (preSystemSoldValue > 0) {
+    if (stockSupply.sellingMode === "ALLOCATED") {
+      return res.status(400).json({
+        error:
+          "Pre-system sold plates on an ALLOCATED supply must be entered per dish on the assignment step, not the batch.",
+        code: "PRE_SYSTEM_REQUIRES_ALLOCATION",
+      });
+    }
+    if (preSystemSoldValue > finalPlatesActual) {
+      return res.status(400).json({
+        error: `Pre-system sold (${preSystemSoldValue}) cannot exceed produced plates (${finalPlatesActual})`,
+      });
+    }
+  }
+
   const shiftId = await findShiftIdForTime(new Date());
 
   if (!shiftId) {
@@ -307,6 +342,7 @@ router.post("/", async (req, res) => {
       quantityCooked: qtyToCook,
       platesExpected,
       platesActual: finalPlatesActual,
+      platesPreSystemSold: preSystemSoldValue,
       cookedById,
       notes,
       shiftId,
@@ -402,35 +438,50 @@ router.post("/:id/allocate", async (req, res) => {
   const splitByMenu = new Map(
     record.cookingRecordMenus.map((s) => [
       s.menuId,
-      { allocated: Number(s.platesAllocated), remaining: Number(s.platesRemaining) },
+      {
+        allocated: Number(s.platesAllocated),
+        remaining: Number(s.platesRemaining),
+        preSystemSold: Number(s.platesPreSystemSold),
+      },
     ]),
   );
   const soldForMenu = (menuId: string) => {
     const ledger = round2(soldForBatch?.get(menuId)?.sold ?? 0);
     const split = splitByMenu.get(menuId);
-    const legacy = split ? Math.max(0, round2(split.allocated - split.remaining)) : 0;
+    // Legacy consumption is allocated − remaining, minus any go-live
+    // pre-system plates (those are not system sales and are tracked apart).
+    const legacy = split
+      ? Math.max(0, round2(split.allocated - split.remaining - split.preSystemSold))
+      : 0;
     return round2(Math.max(ledger, legacy));
   };
 
   let totalAllocated = 0;
-  const parsed: { menuId: string; plates: number; sold: number }[] = [];
+  const parsed: { menuId: string; plates: number; sold: number; preSystemSold: number }[] = [];
   for (const a of allocations) {
     const menuId = String(a.menuId ?? "");
     const plates = Number(a.plates ?? 0);
+    const preSystemSold = a.preSystemSold === undefined || a.preSystemSold === null ? 0 : Number(a.preSystemSold);
     if (!validMenus.has(menuId)) {
       return res.status(400).json({ error: `Menu "${menuId}" is not produced by this stock item` });
     }
     if (!Number.isFinite(plates) || plates < 0) {
       return res.status(400).json({ error: "Allocated plates must be >= 0" });
     }
+    if (!Number.isFinite(preSystemSold) || preSystemSold < 0) {
+      return res.status(400).json({ error: "Pre-system sold plates must be >= 0" });
+    }
     const sold = soldForMenu(menuId);
-    if (plates < sold) {
+    // Already-gone plates include system sales AND go-live pre-system sales the
+    // dish's allocation can never drop below (that would resurrect them).
+    const gone = round2(sold + round2(preSystemSold));
+    if (plates < gone) {
       return res.status(400).json({
-        error: `${validMenuNames.get(menuId) ?? menuId} already sold ${sold} plate(s) from this batch; its allocation cannot go below that.`,
+        error: `${validMenuNames.get(menuId) ?? menuId} already has ${gone} plate(s) gone from this batch (sold + pre-system); its allocation cannot go below that.`,
         code: "BELOW_SOLD",
       });
     }
-    parsed.push({ menuId, plates, sold });
+    parsed.push({ menuId, plates, sold, preSystemSold: round2(preSystemSold) });
     totalAllocated += plates;
   }
 
@@ -442,9 +493,12 @@ router.post("/:id/allocate", async (req, res) => {
 
   const keepMenuIds = new Set(parsed.map((p) => p.menuId));
   for (const split of record.cookingRecordMenus) {
-    if (!keepMenuIds.has(split.menuId) && soldForMenu(split.menuId) > 0) {
+    if (
+      !keepMenuIds.has(split.menuId) &&
+      (soldForMenu(split.menuId) > 0 || Number(split.platesPreSystemSold) > 0)
+    ) {
       return res.status(400).json({
-        error: `${validMenuNames.get(split.menuId) ?? split.menuId} already sold from this batch; it cannot be removed from the allocation.`,
+        error: `${validMenuNames.get(split.menuId) ?? split.menuId} has sold or pre-system plates from this batch; it cannot be removed from the allocation.`,
         code: "BELOW_SOLD",
       });
     }
@@ -467,14 +521,24 @@ router.post("/:id/allocate", async (req, res) => {
     }
 
     // Upsert each allocation. `plates` is the new ASSIGNED amount; remaining
-    // keeps already-sold plates baked in, so reallocation never resurrects
-    // stock that orders have consumed.
+    // keeps already-sold AND pre-system plates baked in, so reallocation never
+    // resurrects stock that orders (or off-system paper sales) have consumed.
     for (const p of parsed) {
-      const remaining = round2(p.plates - p.sold);
+      const remaining = round2(p.plates - p.sold - p.preSystemSold);
       await tx.cookingRecordMenu.upsert({
         where: { cookingRecordId_menuId: { cookingRecordId: id, menuId: p.menuId } },
-        create: { cookingRecordId: id, menuId: p.menuId, platesAllocated: p.plates, platesRemaining: remaining },
-        update: { platesAllocated: p.plates, platesRemaining: remaining },
+        create: {
+          cookingRecordId: id,
+          menuId: p.menuId,
+          platesAllocated: p.plates,
+          platesRemaining: remaining,
+          platesPreSystemSold: p.preSystemSold,
+        },
+        update: {
+          platesAllocated: p.plates,
+          platesRemaining: remaining,
+          platesPreSystemSold: p.preSystemSold,
+        },
       });
     }
     return parsed;
@@ -569,7 +633,7 @@ router.post("/:id/menu/:menuId/top-up", async (req, res) => {
 // PUT /api/cooking-records/:id - Update cooking record (batch-level only)
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { quantityCooked, platesActual, notes } = req.body;
+  const { quantityCooked, platesActual, notes, preSystemSold } = req.body;
 
   const existing = await prisma.cookingRecord.findUnique({
     where: { id },
@@ -604,6 +668,31 @@ router.put("/:id", async (req, res) => {
   const newQuantityCooked = quantityCooked !== undefined ? Number(quantityCooked) : Number(existing.quantityCooked);
   const platesExpected = newQuantityCooked * Number(existing.stockSupply.platesPerUnit ?? 0);
 
+  // Go-live pre-system sold edits: batch-level, SHARED-only, same-day (the date
+  // lock above already guarantees "today"), and bounded by produced plates.
+  let preSystemSoldValue = Number(existing.platesPreSystemSold ?? 0);
+  if (preSystemSold !== undefined) {
+    const parsed = Number(preSystemSold);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return res.status(400).json({ error: "preSystemSold must be >= 0" });
+    }
+    if (existing.sellingMode === "ALLOCATED") {
+      return res.status(400).json({
+        error: "Pre-system sold plates on an ALLOCATED supply must be edited per dish on the assignment step.",
+        code: "PRE_SYSTEM_REQUIRES_ALLOCATION",
+      });
+    }
+    const produced = platesActual !== undefined && platesActual !== null
+      ? Number(platesActual)
+      : platesExpected;
+    if (parsed > produced) {
+      return res.status(400).json({
+        error: `Pre-system sold (${parsed}) cannot exceed produced plates (${produced})`,
+      });
+    }
+    preSystemSoldValue = round2(parsed);
+  }
+
   const record = await prisma.cookingRecord.update({
     where: { id },
     data: {
@@ -614,6 +703,7 @@ router.put("/:id", async (req, res) => {
       platesActual: platesActual !== undefined && platesActual !== null
         ? Number(platesActual)
         : platesExpected,
+      platesPreSystemSold: preSystemSoldValue,
       notes: notes !== undefined ? notes : existing.notes,
     },
     include: RECORD_INCLUDE,

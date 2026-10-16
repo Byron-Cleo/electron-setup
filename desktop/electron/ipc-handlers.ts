@@ -338,3 +338,11 @@ export function registerLoginMediaHandlers() {
     apiFetch(`/login-media/videos/${id}`, { method: "DELETE" })
   );
 }
+
+// Global app settings singleton — the go-live "show pre-system input" flag.
+export function registerSystemSettingsHandlers() {
+  ipcMain.handle("system-settings:get", async () => apiFetch("/system-settings"));
+  ipcMain.handle("system-settings:update", async (_event, data) =>
+    apiFetch("/system-settings", { method: "PUT", body: JSON.stringify(data) })
+  );
+}
