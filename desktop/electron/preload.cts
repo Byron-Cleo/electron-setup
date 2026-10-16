@@ -129,6 +129,9 @@ electron.contextBridge.exposeInMainWorld("electron", {
       electron.ipcRenderer.invoke("login-media:toggle-video", id, data),
     deleteVideo: (id: string) => electron.ipcRenderer.invoke("login-media:delete-video", id),
   },
+  dashboard: {
+    getSummary: () => electron.ipcRenderer.invoke("dashboard:get-summary"),
+  },
   order: {
     create: (data: any) => electron.ipcRenderer.invoke("order:create", data),
     getAll: (orderNumber?: number) => electron.ipcRenderer.invoke("order:get-all", orderNumber),

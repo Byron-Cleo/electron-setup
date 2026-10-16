@@ -338,3 +338,9 @@ export function registerLoginMediaHandlers() {
     apiFetch(`/login-media/videos/${id}`, { method: "DELETE" })
   );
 }
+
+// Dashboard "at a glance" summary (current shift orders/revenue, unpaid
+// backlog, 7-day paid-revenue series) — one aggregate call.
+export function registerDashboardHandlers() {
+  ipcMain.handle("dashboard:get-summary", async () => apiFetch("/dashboard/summary"));
+}
