@@ -1,35 +1,30 @@
 
 ## Platform
 
-backend + frontend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Admin can link a menu accompaniment (STARCH/VEGETABLE) to a main dish (`MenuAccompaniment.linkedMenuId`).
-- Selling a linked accompaniment deducts the SAME plates from the linked dish's pool (both free and charged sides; both starch and vegetable).
-- 1 accompaniment selection = 1 plate (constant `ACCOMPANIMENT_PLATES_PER_SERVING = 1`).
-- Linked-side plates count on the linked dish's row in stock movement / daily reports (single central movement line).
-- A sold-out linked side is unselectable in the waiter dialog: gray background + "Sold Out" watermark; live-updates like dish cards.
-- Unlinked accompaniments keep today's always-available behavior.
-
 ## Notes
 
-- Design: nullable `MenuAccompaniment.linkedMenuId → Menu.id` (+ reverse relation). Reuses the whole pool engine (SHARED/ALLOCATED/KEYED, `excludedFromSharedPool`, weighted `platesPerServing`, direct-sale keyed stock, void restore, sibling recompute). Allocations keyed to `orderItemId`, so `restoreForOrderItem` covers linked cooked pools automatically.
-- Decisions confirmed by operator: (1) report counting = linked dish's row; (2) stale cart sold-out = block whole order with "only N left" (existing 409 `INSUFFICIENT_STOCK`); (3) sold-out side = gray + Sold Out watermark, live.
-- `dailyReport.ts` derives `sold` from `OrderItem` only (`factorForServing × qty`) — MUST fold linked-side plates into the linked dish's `salesByMenu` entry or the report disagrees with the snapshot.
-- `pools.ts` gate/deduct: new `consumedPoolsForOrderItem`; extend `assertLinesServable` to aggregate demand per underlying pool (main + linked dishes).
-- `orders.ts` create consumes main then each side; void restores main + sides and decrements snapshots per consumed menu.
-- `accompaniments.ts` accepts `linkedMenuId` on POST/PUT (validate real Menu); GET exposes `availablePlates` via `sellableForMenu(linkedMenuId)` (unlinked → null/unlimited).
-- Waiter UI resolves a side's live availability from the polled menu `items` by `linkedMenuId` (fallback to server `availablePlates`).
-- No ollama models — manual implementation per operator directive.
-- After ANY `backend/` change: `npm run build --prefix backend` + production restart per AGENTS.md. Schema changed → `npm run db:sync` first.
-- Ref: `context/fix-plan/accompaniment-dish-stock-link.md`
-
 ## History
+
+### backend + frontend - 2026-10-16 — Linked Accompaniments Draw From Dish Stock Pools
+
+- **Link model** — nullable `MenuAccompaniment.linkedMenuId → Menu.id` (+ reverse `Menu.accompanimentLinks`, `onDelete: SetNull`); `db:sync` applied to local `eraevadb` and `eraevadb_test`
+- **Pool maths** — `pools.ts` `ACCOMPANIMENT_PLATES_PER_SERVING = 1`; new `consumedPoolsForOrderItem()` returns the line's own dish plus every linked side (1 plate each, aggregated per menu); `assertLinesServable()` rewritten to aggregate demand per underlying pool so a linked side's shortfall blocks the whole order carrying the linked dish's name
+- **Routes** — `orders.ts` create consumes each pool, void restores each (allocation ledger for cooked lines, keyed stock for KEYED, direct increment for direct-sale) and pulls snapshots down per pool; `accompaniments.ts` accepts/validates `linkedMenuId` on POST/PUT and returns `availablePlates` on GET; `dailyReport.ts` folds linked-side plates onto the linked dish's `salesByMenu`/`soldBeforeAutoClose`
+- **UI** — `AccompanimentsTable` new "Linked Dish" column (name + `N left`/`Sold Out`); `AccompanimentDialog` linked-dish picker uses the shared `SearchableSelect` single-select (enhanced in place with chip + option checkmark, keeping its `string | null` API); `WaiterMenuGrid` sold-out linked sides render gray with a "Sold Out" watermark and are unselectable (live from polled menu stock)
+- **Unlinked sides** keep always-available behavior (`availablePlates` null)
+- **Tests** — 6 `pool-engine.test.ts` cases (main+side consumption, unlinked ignored, blocks when linked dish out, passes when both fit, sums demand across lines, drains the pool); baseline parity confirmed (HEAD 9 failed/24 passed vs 9 failed/30 passed — the 9 are pre-existing; the 4 extra local test files are gitignored)
+- **Verified** — backend `tsc`/`npm run build --prefix backend`, `tsc -b`, `npm run build` + `npm run build:web -- --server same-origin` all green; ESLint only the 2 pre-existing errors; live end-to-end on `eraevadb` (link mirrors dish 13→13; order Liver + linked side drops both 13→11, total 370 = 320+50; void restores to 13; unlink → null; 409 "only 1 left, you asked for 4" naming the dish); test order deleted, state restored
+- **Deploy PENDING on the restaurant server (SSH flow)** — ⚠️ schema changed: `npm run db:sync` FIRST (adds `linkedMenuId` + reverse relation), then `npm run build --prefix backend` → `schtasks /run /tn pos-backend-restart` → verify `sc query EraevaBackend` + `curl http://localhost:3001/health`; after any plain `npm run build` / `build:win` re-run `npm run build:web -- --server same-origin`
+- No ollama models — manual implementation per operator directive
+- Ref: `context/fix-plan/accompaniment-dish-stock-link.md` · Branch `feature/waiter/accompaniment-stock-link` · Commit `a174b24`, merged `--no-ff` as `edbfe97` into `restaurant-build`
 
 ### backend + frontend - 2026-10-16 — Keyed Egg Supply Mode + Menu Stock Manager
 
