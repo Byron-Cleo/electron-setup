@@ -1,4 +1,4 @@
-import { Sunrise, Sun, Moon, Package, CupSoda } from "lucide-react"
+import { Sunrise, Sun, Moon, ShoppingBasket, CupSoda } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   getActiveMealPeriods,
@@ -10,7 +10,7 @@ const PERIOD_ICONS: Record<MealPeriodLabel, typeof Sunrise> = {
   BREAKFAST: Sunrise,
   LUNCH: Sun,
   DINNER: Moon,
-  PACKAGE: Package,
+  PACKAGE: ShoppingBasket,
   BEVERAGE: CupSoda,
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Sunrise, Sun, Moon, Package, CupSoda, Ban, TriangleAlert, Lock } from "lucide-react"
+import { Sunrise, Sun, Moon, ShoppingBasket, CupSoda, Ban, TriangleAlert, Lock } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
 import { cn } from "@/lib/utils"
@@ -13,7 +13,7 @@ const PERIOD_META: Record<MealPeriodLabel, { icon: typeof Sunrise; description: 
   BREAKFAST: { icon: Sunrise, description: "Morning meals" },
   LUNCH: { icon: Sun, description: "Midday meals" },
   DINNER: { icon: Moon, description: "Evening meals" },
-  PACKAGE: { icon: Package, description: "Packaged goods" },
+  PACKAGE: { icon: ShoppingBasket, description: "Packaged goods" },
   BEVERAGE: { icon: CupSoda, description: "Drinks" },
 }
 
