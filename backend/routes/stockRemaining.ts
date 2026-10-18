@@ -6,6 +6,7 @@ import {
   computeWastedBatches,
   computeAssignedLeftovers,
   computeAdjustableStock,
+  openingSource,
 } from "./shiftCarryOver.js";
 import {
   recomputeMenuStockWithSiblings,
@@ -13,7 +14,10 @@ import {
   wasteSupplyPool,
   adjustMenuPlates,
   adjustSupplyPool,
+  adjustDirectSaleStock,
+  round2,
 } from "../pools.js";
+import { resolveCurrentShift } from "./orders.js";
 import { SellingMode } from "../db/generated/prisma/client.js";
 import { emitLiveEvent } from "../events.js";
 
@@ -208,18 +212,15 @@ router.post("/wasted/:cookingRecordId/unwaste", async (req, res) => {
   }
 });
 
-// GET /api/stock/adjustable-stock - The "adjust to actual" universe: every
-// dish (ALLOCATED) and shared pool (SHARED) with a live batch this operation
-// date, INCLUDING those drained to 0 (e.g. Andazi showing 0 but 14 physically
-// present). Dishes never cooked are excluded — the feature corrects an existing
-// batch's count, it cannot mint stock from nothing.
+// GET /api/stock/adjustable-stock - The "adjust to actual" universe, split into
+// Carry Forward (opening > 0) and Cooked-this-shift rows, with the source
+// operation date the carry-over came from.
 router.get("/adjustable-stock", async (_req, res) => {
   try {
-    const cycle = await computeCurrentCycle();
-    const { rows } = await computeAdjustableStock();
+    const data = await computeAdjustableStock();
     res.json({
-      currentOperationDay: cycle ? cycle.operationDay.toISOString().slice(0, 10) : null,
-      rows,
+      ...data,
+      currentOperationDay: data.currentShift?.operationDay ?? null,
     });
   } catch (e) {
     console.error("Error fetching adjustable stock:", e);
@@ -227,14 +228,17 @@ router.get("/adjustable-stock", async (_req, res) => {
   }
 });
 
-// POST /api/stock/assigned-leftovers/adjust - Set a dish's or shared pool's
-// live remainder to the true physical count (`actual`). A stock CORRECTION, not
-// a waste: wastedPlates and sales are untouched, and the delta is audited in
-// StockAdjustment (action LEFTOVER_ADJUST). Body:
+// POST /api/stock/assigned-leftovers/adjust - Set a dish's/shared pool's stock
+// to the true physical count (`actual`). A stock CORRECTION, not a waste:
+// wastedPlates and sales are untouched.
+//
+// When the target carried over into the current shift (its opening snapshot is
+// > 0) this is an OPENING adjustment: the current shift's `openingPlates` is set
+// to `actual` AS WELL AS the live ledger, so the corrected figure is what the
+// shift reports as its opening stock. Otherwise it corrects the live count only.
+//
+// Body:
 //   { menuId?: string, stockSupplyId?: string, actual: number, userId?: string, reason?: string }
-// Only targets with a live batch are adjustable (adjustMenuPlates /
-// adjustSupplyPool throw otherwise), so this can never create stock from a
-// dish that was never cooked.
 router.post("/assigned-leftovers/adjust", async (req, res) => {
   const body = (req.body ?? {}) as {
     menuId?: string;
@@ -243,7 +247,7 @@ router.post("/assigned-leftovers/adjust", async (req, res) => {
     userId?: string;
     reason?: string;
   };
-  const actual = Number(body.actual);
+  const actual = round2(Number(body.actual));
   if (!Number.isFinite(actual) || actual < 0) {
     return res.status(400).json({ error: "actual must be a non-negative number" });
   }
@@ -253,23 +257,55 @@ router.post("/assigned-leftovers/adjust", async (req, res) => {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      const shift = await resolveCurrentShift();
+      const source = shift ? openingSource(shift) : null;
+
       let before: number;
       let after: number;
-      let auditSupplyId: string;
+      let openingBefore: number | null = null;
+      let openingAfter: number | null = null;
+      let auditSupplyId: string | null;
       let auditMenuId: string | null = null;
 
-      if (body.menuId) {
-        const r = await adjustMenuPlates(tx, body.menuId, actual);
-        before = r.before;
-        after = r.after;
-        auditMenuId = body.menuId;
-        await recomputeMenuStockWithSiblings(tx, body.menuId);
-        const link = await tx.cookingRecordMenu.findFirst({
-          where: { menuId: body.menuId, cookingRecord: { disposed: false } },
-          select: { cookingRecord: { select: { stockSupplyId: true } } },
+      const setOpening = async (menuId: string) => {
+        if (!shift) return;
+        const snap = await tx.shiftSnapshot.findUnique({
+          where: { shiftId_menuId: { shiftId: shift.id, menuId } },
+          select: { openingPlates: true },
         });
-        auditSupplyId = link?.cookingRecord.stockSupplyId ?? "";
-        if (!auditSupplyId) throw new Error("No live batch for this dish");
+        if (!snap || Number(snap.openingPlates) <= 0) return;
+        if (openingBefore === null) openingBefore = round2(Number(snap.openingPlates));
+        await tx.shiftSnapshot.update({
+          where: { shiftId_menuId: { shiftId: shift.id, menuId } },
+          data: { openingPlates: actual },
+        });
+        openingAfter = actual;
+      };
+
+      if (body.menuId) {
+        const menu = await tx.menu.findUnique({
+          where: { id: body.menuId },
+          select: { requiresCooking: true },
+        });
+        if (!menu) throw new Error("Dish not found");
+
+        if (menu.requiresCooking === false) {
+          const r = await adjustDirectSaleStock(tx, body.menuId, actual);
+          before = r.before;
+          after = r.after;
+        } else {
+          const r = await adjustMenuPlates(tx, body.menuId, actual);
+          before = r.before;
+          after = r.after;
+          await recomputeMenuStockWithSiblings(tx, body.menuId);
+        }
+        auditMenuId = body.menuId;
+        const link = await tx.stockSupplyMenu.findFirst({
+          where: { menuId: body.menuId },
+          select: { stockSupplyId: true },
+        });
+        auditSupplyId = link?.stockSupplyId ?? null;
+        await setOpening(body.menuId);
       } else {
         const supplyId = body.stockSupplyId as string;
         const r = await adjustSupplyPool(tx, supplyId, actual);
@@ -282,23 +318,38 @@ router.post("/assigned-leftovers/adjust", async (req, res) => {
         });
         for (const link of links) {
           await recomputeMenuStockWithSiblings(tx, link.menuId);
+          await setOpening(link.menuId);
         }
       }
+
+      const isOpening = openingBefore !== null;
+      const reason =
+        body.reason?.trim() ||
+        (isOpening
+          ? `Opening stock corrected to physical count — carried over from ${source?.sourceDate ?? "the previous"} ${source?.sourceShiftType ?? ""} shift`.trim()
+          : "Stock corrected to physical count");
 
       await tx.stockAdjustment.create({
         data: {
           stockSupplyId: auditSupplyId,
           menuId: auditMenuId,
           userId: body.userId && UUID_RE.test(body.userId) ? body.userId : null,
-          action: "LEFTOVER_ADJUST",
+          action: isOpening ? "OPENING_ADJUST" : "LEFTOVER_ADJUST",
           delta: after - before,
           amountBefore: before,
           amountAfter: after,
-          reason: body.reason?.trim() || null,
+          reason,
         },
       });
 
-      return { before, after, delta: after - before };
+      return {
+        before,
+        after,
+        delta: round2(after - before),
+        openingBefore,
+        openingAfter,
+        action: isOpening ? "OPENING_ADJUST" : "LEFTOVER_ADJUST",
+      };
     });
 
     emitLiveEvent({ type: "pool.updated", at: new Date().toISOString() });

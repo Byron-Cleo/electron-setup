@@ -297,21 +297,22 @@ model StockSupply {
 // later adjustment). One row per event so the whole trail is always readable;
 // the running value lives on StockSupply.keyedStock.
 model StockAdjustment {
-  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  stockSupplyId String      @db.Uuid
-  userId        String?     @db.Uuid
-  action        String // "KEY" | "ADJUST" | "LEFTOVER_ADJUST" (leftover correction to actual)
-  delta         Decimal     @db.Decimal(12, 2)
-  amountBefore  Decimal     @db.Decimal(12, 2)
-  amountAfter   Decimal     @db.Decimal(12, 2)
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Null for a direct-sale (keyed) dish correction that has no linked supply.
+  stockSupplyId String?      @db.Uuid
+  userId        String?      @db.Uuid
+  action        String // "KEY" | "ADJUST" | "LEFTOVER_ADJUST" | "OPENING_ADJUST" (carry-over correction to actual)
+  delta         Decimal      @db.Decimal(12, 2)
+  amountBefore  Decimal      @db.Decimal(12, 2)
+  amountAfter   Decimal      @db.Decimal(12, 2)
   reason        String?
-  // Leftover adjust on an ALLOCATED dish records which dish was corrected;
-  // null for keyed-supply and shared-pool adjustments.
-  menuId        String?     @db.Uuid
-  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
-  stockSupply   StockSupply @relation(fields: [stockSupplyId], references: [id], onDelete: Cascade)
-  user          User?       @relation(fields: [userId], references: [id])
-  menu          Menu?       @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  // Leftover/opening adjust on an ALLOCATED or keyed dish records which dish
+  // was corrected; null for shared-pool adjustments.
+  menuId        String?      @db.Uuid
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  stockSupply   StockSupply? @relation(fields: [stockSupplyId], references: [id], onDelete: Cascade)
+  user          User?        @relation(fields: [userId], references: [id])
+  menu          Menu?        @relation(fields: [menuId], references: [id], onDelete: SetNull)
 
   @@index([stockSupplyId])
   @@map("StockAdjustment")

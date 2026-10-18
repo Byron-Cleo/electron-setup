@@ -75,7 +75,11 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
       const entry = list.rows.find((r) =>
         row.menuId ? r.menuId === row.menuId : r.stockSupplyId === row.stockSupplyId,
       )
-      const system = entry?.current ?? row.remaining
+      const system = entry
+        ? entry.kind === "carry"
+          ? entry.openingStock
+          : entry.liveStock
+        : row.remaining
       setAdjustSystem(system)
       setAdjustAmount(String(system))
     } catch {

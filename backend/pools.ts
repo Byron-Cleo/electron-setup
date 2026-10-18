@@ -1027,6 +1027,35 @@ export async function adjustMenuPlates(
 }
 
 /**
+ * Set a direct-sale (keyed) dish's `Menu.stock` to `actual`. A direct-sale item
+ * has no cooking batches — its admin-keyed `Menu.stock` IS the ledger — so the
+ * correction is a straight write. Guard: the dish must actually be direct-sale
+ * (`requiresCooking === false`); a cooked dish is corrected through its pool
+ * instead (adjustMenuPlates / adjustSupplyPool).
+ */
+export async function adjustDirectSaleStock(
+  tx: Prisma.TransactionClient,
+  menuId: string,
+  actual: number,
+): Promise<{ before: number; after: number }> {
+  const target = round2(actual);
+  if (!Number.isFinite(target) || target < 0) {
+    throw new Error("actual must be a non-negative number");
+  }
+  const menu = await tx.menu.findUnique({
+    where: { id: menuId },
+    select: { requiresCooking: true, stock: true },
+  });
+  if (!menu) throw new Error("Menu not found");
+  if (menu.requiresCooking !== false) {
+    throw new Error("This dish is cooked — adjust its pool instead.");
+  }
+  const before = round2(Number(menu.stock));
+  await tx.menu.update({ where: { id: menuId }, data: { stock: target } });
+  return { before, after: target };
+}
+
+/**
  * Set one supply's live SHARED pool to `actual` (stock correction). The lever is
  * each live SHARED batch's `platesActual` (produced), the only value that moves
  * a derived pool without touching sales or waste:

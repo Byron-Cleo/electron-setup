@@ -938,15 +938,20 @@ interface AssignedLeftoverRow {
 
 interface AdjustableStockRow {
   engine: SellingMode;
+  kind: "carry" | "cooked";
   menuId: string | null;
   menuName: string | null;
   linkedMenuNames: string[];
   stockSupplyId: string;
   stockSupplyName: string;
-  current: number;
+  openingStock: number;
+  liveStock: number;
 }
 
 interface AdjustableStock {
+  currentShift: { id: string; type: string; operationDay: string } | null;
+  sourceDate: string | null;
+  sourceShiftType: "DAY" | "NIGHT" | null;
   currentOperationDay: string | null;
   rows: AdjustableStockRow[];
 }

@@ -38,7 +38,11 @@ function dateOnly(d: Date): Date {
 // the newest open shift of the current operation day.
 // Exported for menu.ts: direct-sale stock top-ups stamp the shift currently
 // taking orders, so "Received" in the report matches the shift that sells them.
-export async function resolveCurrentShift(): Promise<{ id: string } | null> {
+export async function resolveCurrentShift(): Promise<{
+  id: string;
+  type: string;
+  operationDay: Date;
+} | null> {
   const now = new Date();
   const operationDay = dateOnly(now);
 
@@ -51,7 +55,7 @@ export async function resolveCurrentShift(): Promise<{ id: string } | null> {
       operationDay,
     },
     orderBy: { autoOpenTime: "asc" },
-    select: { id: true, type: true, autoCloseTime: true },
+    select: { id: true, type: true, operationDay: true, autoCloseTime: true },
   });
 
   if (drifting.length > 0) {
@@ -76,12 +80,12 @@ export async function resolveCurrentShift(): Promise<{ id: string } | null> {
     (await prisma.shift.findFirst({
       where: { isOpen: true, operationDay },
       orderBy: { createdAt: "desc" },
-      select: { id: true },
+      select: { id: true, type: true, operationDay: true },
     })) ??
     (await prisma.shift.findFirst({
       where: { isOpen: true },
       orderBy: { createdAt: "desc" },
-      select: { id: true },
+      select: { id: true, type: true, operationDay: true },
     }))
   );
 }

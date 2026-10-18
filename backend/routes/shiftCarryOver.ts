@@ -1,6 +1,7 @@
 import prisma from "../db/db.js";
 import { SellingMode } from "../db/generated/prisma/client.js";
 import { batchPools, round2 } from "../pools.js";
+import { resolveCurrentShift } from "./orders.js";
 
 export interface UnassignedBatch {
   cookingRecordId: string;
@@ -653,21 +654,86 @@ export async function computeAssignedLeftovers(
 
 export interface AdjustableStockRow {
   engine: SellingMode;
+  // "carry" = the dish/pool opened this shift with stock carried over from the
+  // previous shift (opening > 0) — the target of an OPENING correction.
+  // "cooked" = it only exists because it was cooked/received during this shift.
+  kind: "carry" | "cooked";
   menuId: string | null;
   menuName: string | null;
   linkedMenuNames: string[];
   stockSupplyId: string;
   stockSupplyName: string;
-  current: number;
+  // Stock carried into this shift (ShiftSnapshot.openingPlates), the figure the
+  // opening correction writes.
+  openingStock: number;
+  // Live sellable stock right now (live split / shared pool / keyed Menu.stock).
+  liveStock: number;
 }
 
-// Every dish/supply whose stock was interacted with this cycle (has a live,
-// non-disposed cooking batch), INCLUDING those drained to 0 remaining. This is
-// the "adjust to actual" universe: a dish sold down to 0 (e.g. Andazi showing 0
-// but 14 physically present) must be adjustable upward, while a dish that was
-// never cooked has no live batch and is deliberately excluded — the feature can
-// only correct an existing batch's count, never mint stock from nothing.
-export async function computeAdjustableStock(): Promise<{ rows: AdjustableStockRow[] }> {
+export interface AdjustableStock {
+  currentShift: { id: string; type: string; operationDay: string } | null;
+  // The operation date the current shift's opening stock carried over FROM.
+  sourceDate: string | null;
+  sourceShiftType: "DAY" | "NIGHT" | null;
+  rows: AdjustableStockRow[];
+}
+
+function addDays(d: Date, days: number): Date {
+  return new Date(d.getTime() + days * 86_400_000);
+}
+
+function dayStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// The operation date the current shift's opening stock carried over FROM: a DAY
+// shift carries the previous operation date's NIGHT leftovers; a NIGHT shift
+// carries the same operation date's DAY leftovers.
+export function openingSource(shift: { type: string; operationDay: Date }): {
+  sourceDate: string;
+  sourceShiftType: "DAY" | "NIGHT";
+} {
+  if (shift.type === "DAY") {
+    return { sourceDate: dayStr(addDays(shift.operationDay, -1)), sourceShiftType: "NIGHT" };
+  }
+  return { sourceDate: dayStr(shift.operationDay), sourceShiftType: "DAY" };
+}
+
+// The "adjust to actual" universe, split into the two tabs the manager works
+// with:
+//   - Carry Forward: dishes/pools that opened this shift with carried-over
+//     stock (opening > 0) — the opening figure to correct.
+//   - Cooked this shift: everything else with live stock (cooked/received now).
+// A dish that carried over is listed only under Carry Forward, never under
+// Cooked, even if it was also cooked again this shift.
+//
+// Live rows are built from every non-disposed batch (INCLUDING those drained to
+// 0 — e.g. Andazi showing 0 but 14 physically present) plus every direct-sale
+// (keyed) dish with stock movement this shift, so a count can always be brought
+// to reality. A dish never cooked and never keyed has no ledger and is excluded.
+export async function computeAdjustableStock(): Promise<AdjustableStock> {
+  const shift = await resolveCurrentShift();
+  const currentShift = shift
+    ? { id: shift.id, type: shift.type, operationDay: dayStr(shift.operationDay) }
+    : null;
+  const source = shift
+    ? openingSource(shift)
+    : { sourceDate: null as string | null, sourceShiftType: null as "DAY" | "NIGHT" | null };
+
+  // Opening (carry-over) and received figures for the current shift, per dish.
+  const openingByMenu = new Map<string, number>();
+  const receivedByMenu = new Map<string, number>();
+  if (shift) {
+    const snaps = await prisma.shiftSnapshot.findMany({
+      where: { shiftId: shift.id },
+      select: { menuId: true, openingPlates: true, platesReceived: true },
+    });
+    for (const s of snaps) {
+      openingByMenu.set(s.menuId, round2(Number(s.openingPlates)));
+      receivedByMenu.set(s.menuId, round2(Number(s.platesReceived)));
+    }
+  }
+
   const records = await prisma.cookingRecord.findMany({
     where: { disposed: false },
     include: {
@@ -675,17 +741,12 @@ export async function computeAdjustableStock(): Promise<{ rows: AdjustableStockR
         select: {
           id: true,
           name: true,
-          menus: { select: { menu: { select: { name: true } } } },
+          menus: { select: { menuId: true, menu: { select: { name: true } } } },
         },
       },
       cookingRecordMenus: {
-        select: {
-          menuId: true,
-          platesRemaining: true,
-          menu: { select: { name: true } },
-        },
+        select: { menuId: true, platesRemaining: true, menu: { select: { name: true } } },
       },
-      shift: { select: { id: true, type: true, operationDay: true, autoOpenTime: true, autoCloseTime: true } },
     },
   });
 
@@ -693,48 +754,91 @@ export async function computeAdjustableStock(): Promise<{ rows: AdjustableStockR
   const sharedPools =
     sharedIds.length > 0 ? await batchPools(prisma, { id: { in: sharedIds } }) : new Map();
 
-  // Every live batch is adjustable regardless of operation day: the physical
-  // count a manager sees at shift transition includes carryover from earlier
-  // days, so all live stock must be correctable to reality.
   const rows: AdjustableStockRow[] = [];
+  const seenMenu = new Set<string>();
 
   for (const record of records) {
     if (record.sellingMode === SellingMode.SHARED) {
       const pool = sharedPools.get(record.id);
-      const current = round2(pool?.poolRemaining ?? 0);
+      const linkedMenuIds = record.stockSupply.menus.map((m) => m.menuId);
+      const openingStock = linkedMenuIds.reduce((m, id) => Math.max(m, openingByMenu.get(id) ?? 0), 0);
       rows.push({
         engine: SellingMode.SHARED,
+        kind: openingStock > 0 ? "carry" : "cooked",
         menuId: null,
         menuName: null,
         linkedMenuNames: record.stockSupply.menus.map((m) => m.menu.name),
         stockSupplyId: record.stockSupplyId,
         stockSupplyName: record.stockSupply.name,
-        current,
+        openingStock,
+        liveStock: round2(pool?.poolRemaining ?? 0),
       });
+      for (const id of linkedMenuIds) seenMenu.add(id);
       continue;
     }
 
     for (const crm of record.cookingRecordMenus) {
+      const openingStock = openingByMenu.get(crm.menuId) ?? 0;
       rows.push({
         engine: SellingMode.ALLOCATED,
+        kind: openingStock > 0 ? "carry" : "cooked",
         menuId: crm.menuId,
         menuName: crm.menu.name,
         linkedMenuNames: [],
         stockSupplyId: record.stockSupplyId,
         stockSupplyName: record.stockSupply.name,
-        current: round2(Number(crm.platesRemaining)),
+        openingStock,
+        liveStock: round2(Number(crm.platesRemaining)),
       });
+      seenMenu.add(crm.menuId);
     }
   }
 
+  // Direct-sale (keyed) dishes have no batches — their `Menu.stock` is the
+  // ledger. Include any with a carry-over opening, live stock, or a top-up
+  // received this shift, so a keyed dish that carried over can be corrected too.
+  const directMenus = await prisma.menu.findMany({
+    where: { requiresCooking: false, isAvailable: true },
+    select: {
+      id: true,
+      name: true,
+      stock: true,
+      stockSupplyMenus: {
+        select: { stockSupplyId: true, stockSupply: { select: { name: true } } },
+      },
+    },
+  });
+  for (const m of directMenus) {
+    if (seenMenu.has(m.id)) continue;
+    const openingStock = openingByMenu.get(m.id) ?? 0;
+    const liveStock = round2(Number(m.stock));
+    const received = receivedByMenu.get(m.id) ?? 0;
+    if (openingStock <= 0 && liveStock <= 0 && received <= 0) continue;
+    const link = m.stockSupplyMenus[0];
+    rows.push({
+      engine: SellingMode.KEYED,
+      kind: openingStock > 0 ? "carry" : "cooked",
+      menuId: m.id,
+      menuName: m.name,
+      linkedMenuNames: [],
+      stockSupplyId: link?.stockSupplyId ?? "",
+      stockSupplyName: link?.stockSupply.name ?? "",
+      openingStock,
+      liveStock,
+    });
+    seenMenu.add(m.id);
+  }
+
   // Aggregate duplicates (same dish/supply across batches) into one row per
-  // dish (ALLOCATED) or per supply (SHARED) so the search shows one entry each.
+  // dish (ALLOCATED/KEYED) or per supply (SHARED) so the search shows one entry.
   const agg = new Map<string, AdjustableStockRow>();
   for (const row of rows) {
     const key = row.menuId ? `menu:${row.menuId}` : `shared:${row.stockSupplyId}`;
     const existing = agg.get(key);
     if (existing) {
-      existing.current = round2(existing.current + row.current);
+      existing.liveStock = round2(existing.liveStock + row.liveStock);
+      existing.openingStock = round2(Math.max(existing.openingStock, row.openingStock));
+      if (row.kind === "carry") existing.kind = "carry";
       for (const name of row.linkedMenuNames) {
         if (!existing.linkedMenuNames.includes(name)) existing.linkedMenuNames.push(name);
       }
@@ -749,7 +853,12 @@ export async function computeAdjustableStock(): Promise<{ rows: AdjustableStockR
     return an.localeCompare(bn);
   });
 
-  return { rows: out };
+  return {
+    currentShift,
+    sourceDate: source.sourceDate,
+    sourceShiftType: source.sourceShiftType,
+    rows: out,
+  };
 }
 
 // Compute the unassigned production from a shift's cooking records.

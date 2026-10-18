@@ -970,7 +970,14 @@ export async function adjustAssignedStock(input: {
   actual: number
   userId?: string
   reason?: string
-}): Promise<{ before: number; after: number; delta: number }> {
+}): Promise<{
+  before: number
+  after: number
+  delta: number
+  openingBefore: number | null
+  openingAfter: number | null
+  action: "OPENING_ADJUST" | "LEFTOVER_ADJUST"
+}> {
   return apiFetch("/stock/assigned-leftovers/adjust", {
     method: "POST",
     body: JSON.stringify(input),
@@ -979,14 +986,19 @@ export async function adjustAssignedStock(input: {
 
 export async function getAdjustableStock(): Promise<{
   currentOperationDay: string | null
+  currentShift: { id: string; type: string; operationDay: string } | null
+  sourceDate: string | null
+  sourceShiftType: "DAY" | "NIGHT" | null
   rows: Array<{
-    engine: "ALLOCATED" | "SHARED"
+    engine: "ALLOCATED" | "SHARED" | "KEYED"
+    kind: "carry" | "cooked"
     menuId: string | null
     menuName: string | null
     linkedMenuNames: string[]
     stockSupplyId: string
     stockSupplyName: string
-    current: number
+    openingStock: number
+    liveStock: number
   }>
 }> {
   return apiFetch("/stock/adjustable-stock")
