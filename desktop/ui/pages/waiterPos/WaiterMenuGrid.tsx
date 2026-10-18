@@ -494,7 +494,8 @@ export function WaiterMenuGrid({
             "border-green-400 bg-green-100/70 hover:border-green-500 hover:bg-green-100",
           runningLow &&
             "border-red-500 bg-red-200/70 hover:border-red-600 hover:bg-red-200",
-          soldOut && "opacity-50 cursor-not-allowed hover:shadow-none hover:translate-y-0",
+          soldOut &&
+            "bg-white border-gray-300 cursor-not-allowed hover:shadow-none hover:translate-y-0",
         )}
       >
         <CardContent className="p-3 space-y-1.5">

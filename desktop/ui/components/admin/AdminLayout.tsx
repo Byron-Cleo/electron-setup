@@ -213,7 +213,7 @@ function AdminLayout() {
           <img src="./images/logo/eraeva-logo.png" alt="Eraeva Logo" className="h-20 w-20 object-contain" />
           <span className="text-xs font-semibold text-admin-header-text text-center leading-tight">Eraeva<br />Catering Services</span>
         </div>
-        <nav className="flex flex-col gap-1 p-3 flex-1">
+        <nav className="flex flex-col gap-1 p-3 flex-1 overflow-y-auto overscroll-contain">
           {renderNavItems(() => {})}
         </nav>
       </aside>

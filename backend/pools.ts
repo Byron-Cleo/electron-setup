@@ -565,12 +565,28 @@ export async function consumedPoolsForOrderItem(
     });
     for (const side of sides) {
       if (!side.linkedMenuId) continue;
-      const plates = round2(ACCOMPANIMENT_PLATES_PER_SERVING * item.qty);
+      // Skip self-referencing accompaniment: main dish already deducts from its own pool
+      if (side.linkedMenuId === item.menuId) {
+        continue;
+      }
+      // Use the linked menu's factor for the accompaniment deduction.
+      // Each accompaniment selection deducts 1 serving = linked menu's factor in plates.
+      // E.g., Kunde Slice (factor 0.5) → 0.5 plates per accompaniment (1 serving).
+      // Chapati (factor 1) → 1 plate per accompaniment (1 serving).
+      const linkedFactor = await factorForSupplyMenu(
+        tx,
+        (await tx.stockSupplyMenu.findFirst({
+          where: { menuId: side.linkedMenuId },
+          select: { stockSupplyId: true },
+        }))?.stockSupplyId || "",
+        side.linkedMenuId,
+      );
+      const plates = round2(linkedFactor * 1 * item.qty); // 1 serving per main dish plate
       const existing = byMenu.get(side.linkedMenuId);
       byMenu.set(side.linkedMenuId, {
         menuId: side.linkedMenuId,
         plates: round2((existing?.plates ?? 0) + plates),
-        factor: existing ? Math.max(existing.factor, ACCOMPANIMENT_PLATES_PER_SERVING) : ACCOMPANIMENT_PLATES_PER_SERVING,
+        factor: existing ? Math.max(existing.factor, linkedFactor) : linkedFactor,
       });
     }
   }
