@@ -651,6 +651,107 @@ export async function computeAssignedLeftovers(
   return { rows };
 }
 
+export interface AdjustableStockRow {
+  engine: SellingMode;
+  menuId: string | null;
+  menuName: string | null;
+  linkedMenuNames: string[];
+  stockSupplyId: string;
+  stockSupplyName: string;
+  current: number;
+}
+
+// Every dish/supply whose stock was interacted with this cycle (has a live,
+// non-disposed cooking batch), INCLUDING those drained to 0 remaining. This is
+// the "adjust to actual" universe: a dish sold down to 0 (e.g. Andazi showing 0
+// but 14 physically present) must be adjustable upward, while a dish that was
+// never cooked has no live batch and is deliberately excluded — the feature can
+// only correct an existing batch's count, never mint stock from nothing.
+export async function computeAdjustableStock(): Promise<{ rows: AdjustableStockRow[] }> {
+  const records = await prisma.cookingRecord.findMany({
+    where: { disposed: false },
+    include: {
+      stockSupply: {
+        select: {
+          id: true,
+          name: true,
+          menus: { select: { menu: { select: { name: true } } } },
+        },
+      },
+      cookingRecordMenus: {
+        select: {
+          menuId: true,
+          platesRemaining: true,
+          menu: { select: { name: true } },
+        },
+      },
+      shift: { select: { id: true, type: true, operationDay: true, autoOpenTime: true, autoCloseTime: true } },
+    },
+  });
+
+  const sharedIds = records.filter((r) => r.sellingMode === "SHARED").map((r) => r.id);
+  const sharedPools =
+    sharedIds.length > 0 ? await batchPools(prisma, { id: { in: sharedIds } }) : new Map();
+
+  // Every live batch is adjustable regardless of operation day: the physical
+  // count a manager sees at shift transition includes carryover from earlier
+  // days, so all live stock must be correctable to reality.
+  const rows: AdjustableStockRow[] = [];
+
+  for (const record of records) {
+    if (record.sellingMode === SellingMode.SHARED) {
+      const pool = sharedPools.get(record.id);
+      const current = round2(pool?.poolRemaining ?? 0);
+      rows.push({
+        engine: SellingMode.SHARED,
+        menuId: null,
+        menuName: null,
+        linkedMenuNames: record.stockSupply.menus.map((m) => m.menu.name),
+        stockSupplyId: record.stockSupplyId,
+        stockSupplyName: record.stockSupply.name,
+        current,
+      });
+      continue;
+    }
+
+    for (const crm of record.cookingRecordMenus) {
+      rows.push({
+        engine: SellingMode.ALLOCATED,
+        menuId: crm.menuId,
+        menuName: crm.menu.name,
+        linkedMenuNames: [],
+        stockSupplyId: record.stockSupplyId,
+        stockSupplyName: record.stockSupply.name,
+        current: round2(Number(crm.platesRemaining)),
+      });
+    }
+  }
+
+  // Aggregate duplicates (same dish/supply across batches) into one row per
+  // dish (ALLOCATED) or per supply (SHARED) so the search shows one entry each.
+  const agg = new Map<string, AdjustableStockRow>();
+  for (const row of rows) {
+    const key = row.menuId ? `menu:${row.menuId}` : `shared:${row.stockSupplyId}`;
+    const existing = agg.get(key);
+    if (existing) {
+      existing.current = round2(existing.current + row.current);
+      for (const name of row.linkedMenuNames) {
+        if (!existing.linkedMenuNames.includes(name)) existing.linkedMenuNames.push(name);
+      }
+    } else {
+      agg.set(key, { ...row, linkedMenuNames: [...row.linkedMenuNames] });
+    }
+  }
+
+  const out = [...agg.values()].sort((a, b) => {
+    const an = (a.menuName ?? a.stockSupplyName).toLowerCase();
+    const bn = (b.menuName ?? b.stockSupplyName).toLowerCase();
+    return an.localeCompare(bn);
+  });
+
+  return { rows: out };
+}
+
 // Compute the unassigned production from a shift's cooking records.
 // A batch is "unassigned" when its produced plates (actual/expected) exceed
 // the plates allocated via its CookingRecordMenu splits.

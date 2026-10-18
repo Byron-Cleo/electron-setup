@@ -964,6 +964,34 @@ export async function wasteAssignedPlates(input: {
   })
 }
 
+export async function adjustAssignedStock(input: {
+  menuId?: string
+  stockSupplyId?: string
+  actual: number
+  userId?: string
+  reason?: string
+}): Promise<{ before: number; after: number; delta: number }> {
+  return apiFetch("/stock/assigned-leftovers/adjust", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function getAdjustableStock(): Promise<{
+  currentOperationDay: string | null
+  rows: Array<{
+    engine: "ALLOCATED" | "SHARED"
+    menuId: string | null
+    menuName: string | null
+    linkedMenuNames: string[]
+    stockSupplyId: string
+    stockSupplyName: string
+    current: number
+  }>
+}> {
+  return apiFetch("/stock/adjustable-stock")
+}
+
 export async function unwasteWastedBatch(
   cookingRecordId: string,
   plates?: number

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Clock, PackageOpen, Search, Trash2, Utensils } from "lucide-react"
+import { Clock, PackageOpen, Scale, Search, Trash2, Utensils } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,18 +14,20 @@ import {
 import BackButton from "@/components/shared/BackButton"
 import { getWastedStock, getAssignedLeftovers, disposeCookingRecord } from "@/lib/api"
 import { useLiveRefresh } from "@/hooks/useLiveRefresh"
+import { useAuthStore } from "@/stores/auth"
 import { Input } from "@/components/ui/input"
 import AssignmentModal from "./AssignmentModal"
 import RemainingStockTable from "./RemainingStockTable"
 import AssignedLeftoversTable from "./AssignedLeftoversTable"
 import WastedStockCard from "./WastedStockCard"
+import AdjustStockPanel from "./AdjustStockPanel"
 
 interface Props {
   onAssigned?: () => void
   onBack: () => void
 }
 
-type StockTab = "wasted" | "leftovers" | null
+type StockTab = "wasted" | "leftovers" | "adjust" | null
 type LeftoverTab = "current" | "unassigned" | "previous"
 
 export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
@@ -39,6 +41,8 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
   const [unassignedSearch, setUnassignedSearch] = useState("")
   const [previousSearch, setPreviousSearch] = useState("")
   const [wastedSearch, setWastedSearch] = useState("")
+  const user = useAuthStore((s) => s.user)
+  const canAdjust = user?.role === "admin" || user?.role === "manager"
   const [assigning, setAssigning] = useState<{
     open: boolean
     batchId: string | null
@@ -193,7 +197,7 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
 
       {!loading && !error && tab === null && (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Card
               className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
               onClick={() => setTab("leftovers")}
@@ -218,6 +222,27 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
                 </div>
               </div>
             </Card>
+
+            {canAdjust && (
+              <Card
+                className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
+                onClick={() => setTab("adjust")}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <Scale size={24} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <Heading as="h3" className="text-lg text-admin-header-text">Adjust Stock to Actual</Heading>
+                    <p className="mt-1 text-sm text-admin-muted">Correct a count to the physical reality</p>
+                    <p className="mt-1 text-xs text-admin-muted">
+                      Set a dish's or shared pool's stock to the true physical count (manager/admin). A
+                      correction, not a waste — the wasted-stock report stays clean.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             <Card
               className="p-6 cursor-pointer hover:border-admin-accent transition-colors"
@@ -366,6 +391,12 @@ export default function RemainingStockDashboard({ onAssigned, onBack }: Props) {
               />
             </div>
           )}
+        </div>
+      )}
+
+      {tab === "adjust" && canAdjust && (
+        <div className="space-y-4">
+          <AdjustStockPanel onAdjusted={() => void loadData()} />
         </div>
       )}
 

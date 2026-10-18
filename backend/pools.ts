@@ -937,3 +937,149 @@ export async function wasteSupplyPool(
   const left = await wasteSharedPools(tx, [stockSupplyId], original);
   return round2(original - left);
 }
+
+/**
+ * Set one ALLOCATED dish's live remainder to `actual` (stock correction to the
+ * true physical count). Unlike waste, a correction NEVER touches `wastedPlates`
+ * or sales — it is a pure ledger fix for a count that differed from the kitchen
+ * reality. The lever is the split remainders plus each batch's `platesActual`,
+ * so the derived pool stays self-consistent:
+ *
+ *  - Increase: the freshest live split gains `delta` from BOTH
+ *    `platesAllocated` and `platesRemaining` (sold = allocated − remaining is
+ *    unchanged), and its batch gains `delta` from `platesActual` (we under-
+ *    produced on paper). The new plates ride on the newest batch.
+ *  - Decrease: live splits drain FIFO, each losing `take` from BOTH
+ *    `platesAllocated` and `platesRemaining` (sold unchanged), and each batch
+ *    loses `take` from `platesActual`. It never eats into sold plates and never
+ *    drives a split or pool negative (capped by the live remainder).
+ *
+ * Guards: `actual >= 0`; no live ALLOCATED split → throws (nothing to correct —
+ * cook or un-waste first, so this can never mint stock from nothing).
+ */
+export async function adjustMenuPlates(
+  tx: Prisma.TransactionClient,
+  menuId: string,
+  actual: number,
+): Promise<{ before: number; after: number }> {
+  const target = round2(actual);
+  if (!Number.isFinite(target) || target < 0) {
+    throw new Error("actual must be a non-negative number");
+  }
+
+  const splits = await tx.cookingRecordMenu.findMany({
+    where: { menuId, cookingRecord: { disposed: false, sellingMode: SellingMode.ALLOCATED } },
+    include: {
+      cookingRecord: {
+        select: { id: true, createdAt: true, platesActual: true, platesExpected: true },
+      },
+    },
+    orderBy: { cookingRecord: { createdAt: "asc" } },
+  });
+
+  const before = round2(splits.reduce((s, x) => s + Number(x.platesRemaining), 0));
+  const delta = round2(target - before);
+  if (delta === 0) return { before, after: before };
+
+  if (delta > 0) {
+    const freshest = [...splits].sort(
+      (a, b) => b.cookingRecord.createdAt.getTime() - a.cookingRecord.createdAt.getTime(),
+    )[0];
+    if (!freshest) {
+      throw new Error("No live batch for this dish — cook it or un-waste it before adjusting.");
+    }
+    await tx.cookingRecordMenu.update({
+      where: { id: freshest.id },
+      data: { platesAllocated: { increment: delta }, platesRemaining: { increment: delta } },
+    });
+    const produced = round2(
+      Number(freshest.cookingRecord.platesActual ?? freshest.cookingRecord.platesExpected ?? 0),
+    );
+    await tx.cookingRecord.update({
+      where: { id: freshest.cookingRecord.id },
+      data: { platesActual: round2(produced + delta) },
+    });
+  } else {
+    let left = round2(-delta);
+    const pools = await batchPools(tx, { id: { in: splits.map((s) => s.cookingRecord.id) } });
+    for (const split of splits) {
+      if (left <= 0) break;
+      const poolRemaining = pools.get(split.cookingRecord.id)?.poolRemaining ?? 0;
+      const have = round2(Number(split.platesRemaining));
+      const take = round2(Math.min(have, left, Math.max(0, poolRemaining)));
+      if (take <= 0) continue;
+      await tx.cookingRecordMenu.update({
+        where: { id: split.id },
+        data: { platesAllocated: { decrement: take }, platesRemaining: { decrement: take } },
+      });
+      const produced = round2(
+        Number(split.cookingRecord.platesActual ?? split.cookingRecord.platesExpected ?? 0),
+      );
+      await tx.cookingRecord.update({
+        where: { id: split.cookingRecord.id },
+        data: { platesActual: round2(produced - take) },
+      });
+      left = round2(left - take);
+    }
+  }
+
+  return { before, after: round2(before + delta) };
+}
+
+/**
+ * Set one supply's live SHARED pool to `actual` (stock correction). The lever is
+ * each live SHARED batch's `platesActual` (produced), the only value that moves
+ * a derived pool without touching sales or waste:
+ *
+ *  - Increase: the freshest live batch gains `delta` from `platesActual`.
+ *  - Decrease: live batches drain FIFO, each losing `take` bounded by its own
+ *    `poolRemaining` so a pool can never go negative.
+ *
+ * Every dish linked to the supply re-derives its `Menu.stock`. Guards:
+ * `actual >= 0`; no live batch → throws (cannot mint stock from nothing).
+ */
+export async function adjustSupplyPool(
+  tx: Prisma.TransactionClient,
+  stockSupplyId: string,
+  actual: number,
+): Promise<{ before: number; after: number }> {
+  const target = round2(actual);
+  if (!Number.isFinite(target) || target < 0) {
+    throw new Error("actual must be a non-negative number");
+  }
+
+  const pools = await batchPools(tx, {
+    sellingMode: SellingMode.SHARED,
+    stockSupplyId: { in: [stockSupplyId] },
+  });
+  const list = [...pools.values()];
+  const before = round2(list.reduce((s, p) => s + p.poolRemaining, 0));
+  const delta = round2(target - before);
+  if (delta === 0) return { before, after: before };
+
+  if (delta > 0) {
+    const freshest = [...list].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+    if (!freshest) {
+      throw new Error("No live batch for this supply — cook it or un-waste it before adjusting.");
+    }
+    await tx.cookingRecord.update({
+      where: { id: freshest.id },
+      data: { platesActual: round2(freshest.produced + delta) },
+    });
+  } else {
+    let left = round2(-delta);
+    const oldestFirst = [...list].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    for (const pool of oldestFirst) {
+      if (left <= 0) break;
+      const take = round2(Math.min(Math.max(0, pool.poolRemaining), left));
+      if (take <= 0) continue;
+      await tx.cookingRecord.update({
+        where: { id: pool.id },
+        data: { platesActual: round2(pool.produced - take) },
+      });
+      left = round2(left - take);
+    }
+  }
+
+  return { before, after: round2(before + delta) };
+}

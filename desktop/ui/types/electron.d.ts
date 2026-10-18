@@ -936,6 +936,21 @@ interface AssignedLeftoverRow {
   batchNumbers: number[];
 }
 
+interface AdjustableStockRow {
+  engine: SellingMode;
+  menuId: string | null;
+  menuName: string | null;
+  linkedMenuNames: string[];
+  stockSupplyId: string;
+  stockSupplyName: string;
+  current: number;
+}
+
+interface AdjustableStock {
+  currentOperationDay: string | null;
+  rows: AdjustableStockRow[];
+}
+
 interface AssignedLeftovers {
   cycle: StockRemainingCycle | null;
   currentOperationDay: string | null;

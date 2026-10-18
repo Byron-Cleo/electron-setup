@@ -5,12 +5,21 @@ import {
   computeExpiredUnassignedBatches,
   computeWastedBatches,
   computeAssignedLeftovers,
+  computeAdjustableStock,
 } from "./shiftCarryOver.js";
-import { recomputeMenuStockWithSiblings, wasteMenuPlates, wasteSupplyPool } from "../pools.js";
+import {
+  recomputeMenuStockWithSiblings,
+  wasteMenuPlates,
+  wasteSupplyPool,
+  adjustMenuPlates,
+  adjustSupplyPool,
+} from "../pools.js";
 import { SellingMode } from "../db/generated/prisma/client.js";
 import { emitLiveEvent } from "../events.js";
 
 const router = Router();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // GET /api/stock/wasted - All batches marked as wasted via the Waste action.
 // Wasted batches are attributed to the operation date they were PRODUCED on, so
@@ -195,6 +204,108 @@ router.post("/wasted/:cookingRecordId/unwaste", async (req, res) => {
   } catch (e) {
     console.error("Error unwasting stock:", e);
     const msg = e instanceof Error ? e.message : "Failed to unwaste stock";
+    res.status(500).json({ error: msg });
+  }
+});
+
+// GET /api/stock/adjustable-stock - The "adjust to actual" universe: every
+// dish (ALLOCATED) and shared pool (SHARED) with a live batch this operation
+// date, INCLUDING those drained to 0 (e.g. Andazi showing 0 but 14 physically
+// present). Dishes never cooked are excluded — the feature corrects an existing
+// batch's count, it cannot mint stock from nothing.
+router.get("/adjustable-stock", async (_req, res) => {
+  try {
+    const cycle = await computeCurrentCycle();
+    const { rows } = await computeAdjustableStock();
+    res.json({
+      currentOperationDay: cycle ? cycle.operationDay.toISOString().slice(0, 10) : null,
+      rows,
+    });
+  } catch (e) {
+    console.error("Error fetching adjustable stock:", e);
+    res.status(500).json({ error: "Failed to fetch adjustable stock" });
+  }
+});
+
+// POST /api/stock/assigned-leftovers/adjust - Set a dish's or shared pool's
+// live remainder to the true physical count (`actual`). A stock CORRECTION, not
+// a waste: wastedPlates and sales are untouched, and the delta is audited in
+// StockAdjustment (action LEFTOVER_ADJUST). Body:
+//   { menuId?: string, stockSupplyId?: string, actual: number, userId?: string, reason?: string }
+// Only targets with a live batch are adjustable (adjustMenuPlates /
+// adjustSupplyPool throw otherwise), so this can never create stock from a
+// dish that was never cooked.
+router.post("/assigned-leftovers/adjust", async (req, res) => {
+  const body = (req.body ?? {}) as {
+    menuId?: string;
+    stockSupplyId?: string;
+    actual?: number;
+    userId?: string;
+    reason?: string;
+  };
+  const actual = Number(body.actual);
+  if (!Number.isFinite(actual) || actual < 0) {
+    return res.status(400).json({ error: "actual must be a non-negative number" });
+  }
+  if (!body.menuId && !body.stockSupplyId) {
+    return res.status(400).json({ error: "menuId or stockSupplyId is required" });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      let before: number;
+      let after: number;
+      let auditSupplyId: string;
+      let auditMenuId: string | null = null;
+
+      if (body.menuId) {
+        const r = await adjustMenuPlates(tx, body.menuId, actual);
+        before = r.before;
+        after = r.after;
+        auditMenuId = body.menuId;
+        await recomputeMenuStockWithSiblings(tx, body.menuId);
+        const link = await tx.cookingRecordMenu.findFirst({
+          where: { menuId: body.menuId, cookingRecord: { disposed: false } },
+          select: { cookingRecord: { select: { stockSupplyId: true } } },
+        });
+        auditSupplyId = link?.cookingRecord.stockSupplyId ?? "";
+        if (!auditSupplyId) throw new Error("No live batch for this dish");
+      } else {
+        const supplyId = body.stockSupplyId as string;
+        const r = await adjustSupplyPool(tx, supplyId, actual);
+        before = r.before;
+        after = r.after;
+        auditSupplyId = supplyId;
+        const links = await tx.stockSupplyMenu.findMany({
+          where: { stockSupplyId: supplyId },
+          select: { menuId: true },
+        });
+        for (const link of links) {
+          await recomputeMenuStockWithSiblings(tx, link.menuId);
+        }
+      }
+
+      await tx.stockAdjustment.create({
+        data: {
+          stockSupplyId: auditSupplyId,
+          menuId: auditMenuId,
+          userId: body.userId && UUID_RE.test(body.userId) ? body.userId : null,
+          action: "LEFTOVER_ADJUST",
+          delta: after - before,
+          amountBefore: before,
+          amountAfter: after,
+          reason: body.reason?.trim() || null,
+        },
+      });
+
+      return { before, after, delta: after - before };
+    });
+
+    emitLiveEvent({ type: "pool.updated", at: new Date().toISOString() });
+    res.json(result);
+  } catch (e) {
+    console.error("Error adjusting stock to actual:", e);
+    const msg = e instanceof Error ? e.message : "Failed to adjust stock";
     res.status(500).json({ error: msg });
   }
 });

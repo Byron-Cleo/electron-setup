@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Clock, Loader2, Trash2 } from "lucide-react"
+import { Clock, Loader2, Scale, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { wasteAssignedPlates } from "@/lib/api"
+import { adjustAssignedStock, getAdjustableStock, wasteAssignedPlates } from "@/lib/api"
 
 export interface Props {
   variant: "current" | "previous"
@@ -47,6 +47,12 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [adjustTarget, setAdjustTarget] = useState<AssignedLeftoverRow | null>(null)
+  const [adjustSystem, setAdjustSystem] = useState<number | null>(null)
+  const [adjustAmount, setAdjustAmount] = useState("")
+  const [adjustSubmitting, setAdjustSubmitting] = useState(false)
+  const [adjustError, setAdjustError] = useState<string | null>(null)
+
   function openWaste(row: AssignedLeftoverRow) {
     setError(null)
     setTarget(row)
@@ -57,6 +63,57 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
     setTarget(null)
     setAmount("")
     setError(null)
+  }
+
+  async function openAdjust(row: AssignedLeftoverRow) {
+    setAdjustError(null)
+    setAdjustTarget(row)
+    setAdjustSystem(null)
+    setAdjustAmount("")
+    try {
+      const list = await getAdjustableStock()
+      const entry = list.rows.find((r) =>
+        row.menuId ? r.menuId === row.menuId : r.stockSupplyId === row.stockSupplyId,
+      )
+      const system = entry?.current ?? row.remaining
+      setAdjustSystem(system)
+      setAdjustAmount(String(system))
+    } catch {
+      setAdjustSystem(row.remaining)
+      setAdjustAmount(String(row.remaining))
+    }
+  }
+
+  function closeAdjust() {
+    setAdjustTarget(null)
+    setAdjustSystem(null)
+    setAdjustAmount("")
+    setAdjustError(null)
+  }
+
+  async function handleAdjust() {
+    if (!adjustTarget) return
+    const actual = Number(adjustAmount)
+    if (!Number.isFinite(actual) || actual < 0) {
+      setAdjustError("Enter a valid count (zero or more).")
+      return
+    }
+    setAdjustSubmitting(true)
+    setAdjustError(null)
+    try {
+      await adjustAssignedStock({
+        menuId: adjustTarget.menuId ?? undefined,
+        stockSupplyId: adjustTarget.menuId ? undefined : adjustTarget.stockSupplyId,
+        actual,
+        reason: "Leftover stock corrected to physical count",
+      })
+      closeAdjust()
+      onWasted?.()
+    } catch (e) {
+      setAdjustError(e instanceof Error ? e.message : "Failed to adjust stock")
+    } finally {
+      setAdjustSubmitting(false)
+    }
   }
 
   async function handleWaste() {
@@ -221,6 +278,15 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
                     <Button
                       size="sm"
                       variant="outline"
+                      className="h-7 text-[11px] text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => openAdjust(row)}
+                    >
+                      <Scale size={12} className="mr-1" />
+                      Adjust
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="h-7 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700"
                       onClick={() => openWaste(row)}
                     >
@@ -290,6 +356,68 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
             >
               {submitting ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Trash2 size={12} className="mr-1" />}
               Waste
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={adjustTarget !== null} onOpenChange={(open) => { if (!open) closeAdjust() }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adjust stock to actual count</DialogTitle>
+            <DialogDescription>
+              Set the sellable stock to the true physical count. This is a correction, not a waste —
+              sales and the wasted-stock report are untouched.
+              {adjustTarget?.menuId ? (
+                <> Correcting dish <span className="font-medium">{adjustTarget.menuName}</span>.</>
+              ) : (
+                <>
+                  {" "}Correcting the <span className="font-medium">{adjustTarget?.stockSupplyName}</span> shared
+                  pool{adjustTarget?.linkedMenuNames.length ? ` (credits ${adjustTarget.linkedMenuNames.join(", ")})` : ""}.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-md border border-admin-card-border bg-muted p-3 text-center">
+              <div className="text-[11px] uppercase tracking-wide text-admin-muted">System (current)</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-admin-header-text">
+                {adjustSystem ?? "—"}
+              </div>
+            </div>
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-center">
+              <div className="text-[11px] uppercase tracking-wide text-blue-700">Actual (you enter)</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-blue-800">
+                {adjustAmount || "—"}
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="adjustAmount" className="text-xs">
+              Physical plate count present now
+            </Label>
+            <Input
+              id="adjustAmount"
+              type="text"
+              inputMode="decimal"
+              value={adjustAmount}
+              onChange={(e) => setAdjustAmount(e.target.value.replace(/[^\d.]/g, ""))}
+              className="text-right"
+            />
+          </div>
+          {adjustError && <p className="text-sm text-red-600">{adjustError}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={closeAdjust} disabled={adjustSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={adjustSubmitting}
+              onClick={handleAdjust}
+            >
+              {adjustSubmitting ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Scale size={12} className="mr-1" />}
+              Apply adjustment
             </Button>
           </DialogFooter>
         </DialogContent>
