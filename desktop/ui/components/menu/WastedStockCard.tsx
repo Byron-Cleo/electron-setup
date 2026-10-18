@@ -1,7 +1,16 @@
-import { useEffect, useState } from "react"
-import { Trash2, PackageOpen } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import { Trash2, PackageOpen, Undo2, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { getWastedStock } from "@/lib/api"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { getWastedStock, unwasteWastedBatch } from "@/lib/api"
 
 function formatDay(iso: string | null): string {
   if (!iso) return "—"
@@ -32,26 +41,49 @@ export default function WastedStockCard({ search = "" }: { search?: string }) {
   const [batches, setBatches] = useState<WastedStockBatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [unwastingId, setUnwastingId] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<{ open: boolean; batch: WastedStockBatch | null }>({
+    open: false,
+    batch: null,
+  })
+  const [unwasteError, setUnwasteError] = useState("")
 
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(() => {
     getWastedStock()
       .then((data) => {
-        if (cancelled) return
         setBatches(data.wastedBatches)
         setError("")
       })
       .catch((err) => {
-        if (cancelled) return
         setError(err instanceof Error ? err.message : "Failed to load wasted stock")
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+      .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  function openConfirm(batch: WastedStockBatch) {
+    setUnwasteError("")
+    setConfirming({ open: true, batch })
+  }
+
+  async function handleUnwaste() {
+    const batch = confirming.batch
+    if (!batch) return
+    setUnwastingId(batch.cookingRecordId)
+    setUnwasteError("")
+    try {
+      await unwasteWastedBatch(batch.cookingRecordId)
+      setConfirming({ open: false, batch: null })
+      load()
+    } catch (e) {
+      setUnwasteError(e instanceof Error ? e.message : "Failed to unwaste batch")
+    } finally {
+      setUnwastingId(null)
+    }
+  }
 
   const totalWasted = batches.reduce((sum, b) => sum + b.wastedQty, 0)
 
@@ -101,6 +133,7 @@ export default function WastedStockCard({ search = "" }: { search?: string }) {
                   <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Assigned</th>
                   <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Wasted</th>
                   <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Marked on</th>
+                  <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -137,12 +170,28 @@ export default function WastedStockCard({ search = "" }: { search?: string }) {
                     <td className="px-3 py-2 text-center whitespace-nowrap text-admin-muted">
                       {formatTime(batch.disposedAt)}
                     </td>
+                    <td className="px-3 py-2 text-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-[11px] h-7 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                        disabled={unwastingId === batch.cookingRecordId}
+                        onClick={() => openConfirm(batch)}
+                      >
+                        {unwastingId === batch.cookingRecordId ? (
+                          <Loader2 size={12} className="animate-spin mr-1" />
+                        ) : (
+                          <Undo2 size={12} className="mr-1" />
+                        )}
+                        Unwaste
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t border-admin-card-border bg-muted">
-                  <td colSpan={6} className="px-3 py-2 text-right font-medium text-admin-header-text">
+                  <td colSpan={7} className="px-3 py-2 text-right font-medium text-admin-header-text">
                     Total Wasted
                   </td>
                   <td className="px-3 py-2 text-center">
@@ -157,6 +206,48 @@ export default function WastedStockCard({ search = "" }: { search?: string }) {
           </div>
         </CardContent>
       )}
+
+      <Dialog
+        open={confirming.open}
+        onOpenChange={(open) => {
+          if (!open) setConfirming({ open: false, batch: null })
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unwaste this batch?</DialogTitle>
+            <DialogDescription>
+              This will reverse the waste on{" "}
+              <span className="font-medium">{confirming.batch?.stockSupplyName}</span> (
+              {confirming.batch?.wastedQty} plates) and return the plates to sellable stock. Use this
+              only if the batch was marked as wasted by mistake.
+            </DialogDescription>
+          </DialogHeader>
+          {unwasteError && <p className="text-sm text-red-600">{unwasteError}</p>}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirming({ open: false, batch: null })}
+              disabled={unwastingId !== null}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="bg-amber-600 text-white hover:bg-amber-700"
+              disabled={unwastingId !== null}
+              onClick={() => void handleUnwaste()}
+            >
+              {unwastingId ? (
+                <Loader2 size={12} className="mr-1 animate-spin" />
+              ) : (
+                <Undo2 size={12} className="mr-1" />
+              )}
+              Unwaste
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

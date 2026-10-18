@@ -964,6 +964,16 @@ export async function wasteAssignedPlates(input: {
   })
 }
 
+export async function unwasteWastedBatch(
+  cookingRecordId: string,
+  plates?: number
+): Promise<{ unwasted: number | "all"; disposed: boolean }> {
+  return apiFetch(`/stock/wasted/${cookingRecordId}/unwaste`, {
+    method: "POST",
+    body: JSON.stringify(plates !== undefined ? { plates } : {}),
+  })
+}
+
 export async function getVoidReport(date: string): Promise<VoidReportWaiter[]> {
   if (window.electron?.report?.getVoidReport) {
     const data = await window.electron.report.getVoidReport(date) as { date: string; waiters: VoidReportWaiter[] }

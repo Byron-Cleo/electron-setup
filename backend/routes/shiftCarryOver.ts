@@ -383,7 +383,12 @@ export async function computeWastedBatches(
   const soldByMenu = await soldByMenuForShiftWhere({});
 
   const records = await prisma.cookingRecord.findMany({
-    where: { disposed: true },
+    where: {
+      OR: [
+        { disposed: true },
+        { wastedPlates: { gt: 0 } },
+      ],
+    },
     include: {
       stockSupply: { select: { id: true, name: true, menus: { select: { menuId: true } } } },
       cookingRecordMenus: {
@@ -399,7 +404,12 @@ export async function computeWastedBatches(
     const produced = Number(record.platesActual ?? record.platesExpected);
     const batchSold = record.stockSupply.menus.reduce((sum, sm) => sum + (soldByMenu.get(sm.menuId) ?? 0), 0);
     const totalAssigned = record.cookingRecordMenus.reduce((sum, crm) => sum + Number(crm.platesAllocated), 0);
-    const wastedQty = produced - totalAssigned;
+    // Disposed batches: wasted = produced - totalAssigned (never-assigned waste).
+    // Non-disposed batches: wasted = explicitly recorded `wastedPlates` (assigned leftovers waste).
+    // This avoids double counting when a batch was assigned then later disposed.
+    const wastedQty = record.disposed
+      ? produced - totalAssigned
+      : Number(record.wastedPlates ?? 0);
     if (wastedQty <= 0) continue;
 
     let shiftType: string | null = null;
