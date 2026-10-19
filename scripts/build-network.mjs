@@ -67,7 +67,9 @@ function run(label, cmd, args) {
 //    type-check), so it works even while unrelated *.tsx type errors exist.
 run("Building renderer (vite build)", "npx", ["vite", "build"])
 
-// 2. Compile the Electron main process only.
+// 2. Compile the Electron main process only, from a clean output so an older
+//    run's network-baked server-config.js is never reused.
+run("Cleaning Electron output", "node", ["scripts/clean-electron.mjs"])
 run("Compiling Electron main process", "npm", ["run", "transpile:electron"])
 
 // 3. Bake the network API base into the compiled Electron main process.
