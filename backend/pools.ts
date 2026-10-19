@@ -573,14 +573,16 @@ export async function consumedPoolsForOrderItem(
       // Each accompaniment selection deducts 1 serving = linked menu's factor in plates.
       // E.g., Kunde Slice (factor 0.5) → 0.5 plates per accompaniment (1 serving).
       // Chapati (factor 1) → 1 plate per accompaniment (1 serving).
-      const linkedFactor = await factorForSupplyMenu(
-        tx,
-        (await tx.stockSupplyMenu.findFirst({
-          where: { menuId: side.linkedMenuId },
-          select: { stockSupplyId: true },
-        }))?.stockSupplyId || "",
-        side.linkedMenuId,
-      );
+      // A linked menu with NO supply row (e.g. a direct-sale dish) has no rate to
+      // read, so fall back to the default of 1 plate per serving. Passing an empty
+      // string here would blow up `factorForSupplyMenu`'s uuid lookup.
+      const supplyLink = await tx.stockSupplyMenu.findFirst({
+        where: { menuId: side.linkedMenuId },
+        select: { stockSupplyId: true },
+      });
+      const linkedFactor = supplyLink
+        ? await factorForSupplyMenu(tx, supplyLink.stockSupplyId, side.linkedMenuId)
+        : DEFAULT_PLATES_PER_SERVING;
       const plates = round2(linkedFactor * 1 * item.qty); // 1 serving per main dish plate
       const existing = byMenu.get(side.linkedMenuId);
       byMenu.set(side.linkedMenuId, {
