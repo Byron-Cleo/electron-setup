@@ -83,19 +83,14 @@ function formatPrice(price: number) {
   return `KSH ${price.toLocaleString()}`
 }
 
-function imageBaseName(url: string): string {
-  const base = url.split("/").pop() ?? url
-  return base.replace(/\.[a-zA-Z0-9]+$/, "").toLowerCase().replace(/[-_\s]+/g, " ").trim()
-}
-
-function matchAccompanimentForImage(url: string, accs: Accompaniment[]): Accompaniment | null {
-  const norm = imageBaseName(url)
-  if (!norm) return null
-  for (const acc of accs) {
-    const name = acc.name.toLowerCase().trim()
-    if (norm === name || norm.endsWith(` ${name}`)) return acc
-  }
-  return null
+/**
+ * A dish must never serve itself as an accompaniment. A side whose `linkedMenuId`
+ * points at this dish draws from the same pool, so offering it would let the dish
+ * carry itself — double counting its price and its plates. `linkedMenuId` is used
+ * here ONLY to identify the side; it never takes part in any price calculation.
+ */
+function isSelfAccompaniment(acc: Accompaniment, menuId: string | null | undefined): boolean {
+  return !!menuId && acc.linkedMenuId === menuId
 }
 
 function platesBadgeClass(plates: number) {
@@ -265,12 +260,10 @@ function ImageGallery({
   images,
   active,
   onActiveChange,
-  onImageSelect,
 }: {
   images: string[]
   active: number
   onActiveChange: (index: number) => void
-  onImageSelect?: (url: string) => void
 }) {
   const current = menuImageUrl(images[active] ?? images[0])
   const [imgFailed, setImgFailed] = useState(false)
@@ -297,10 +290,7 @@ function ImageGallery({
           {images.map((img, index) => (
             <button
               key={index}
-              onClick={() => {
-                onActiveChange(index)
-                onImageSelect?.(img)
-              }}
+              onClick={() => onActiveChange(index)}
               className={cn(
                 "flex-1 aspect-square overflow-hidden rounded-lg cursor-pointer transition-opacity",
                 index === active ? "ring-2 ring-brand-red" : "opacity-60 hover:opacity-100",
@@ -521,8 +511,18 @@ export function WaiterMenuGrid({
     )
   }
 
-  const starches = useMemo(() => accompaniments.filter((a) => a.category === "STARCH"), [accompaniments])
-  const vegetables = useMemo(() => accompaniments.filter((a) => a.category === "VEGETABLE"), [accompaniments])
+  // Only the sides a dish may actually carry: a dish can never be offered its
+  // own accompaniment (the side that shares its pool). Everything below — the
+  // Free/Charged tabs, their counts, the defaults and the re-open restore — is
+  // built from these two lists so the exclusion holds everywhere at once.
+  const starches = useMemo(
+    () => accompaniments.filter((a) => a.category === "STARCH" && !isSelfAccompaniment(a, selectedItem?.id)),
+    [accompaniments, selectedItem],
+  )
+  const vegetables = useMemo(
+    () => accompaniments.filter((a) => a.category === "VEGETABLE" && !isSelfAccompaniment(a, selectedItem?.id)),
+    [accompaniments, selectedItem],
+  )
   const freeVegetables = useMemo(
     () => vegetables.filter((v) => v.price == null || v.price <= 0),
     [vegetables],
@@ -563,38 +563,26 @@ export function WaiterMenuGrid({
   const isStockSoldOut = (acc: Accompaniment): boolean =>
     accompanimentStock(acc, items).soldOut
 
-  const galleryLinks = useMemo(() => {
-    if (!selectedItem) return []
-    return selectedItem.images.map((url) => ({
-      url,
-      starch: matchAccompanimentForImage(url, starches),
-      vegetable: matchAccompanimentForImage(url, vegetables),
-    }))
-  }, [selectedItem, starches, vegetables])
-
   if (selectedItem && (selectedItem.id !== activeMenuId || activeOrderKey !== syncedOrderKey)) {
     setActiveMenuId(selectedItem.id)
     setSyncedOrderKey(activeOrderKey)
     const stored = activeOrderKey ? orderItems.find((oi) => lineKey(oi) === activeOrderKey) : null
-    let nextStarch: Accompaniment | null = null
-    let nextVegetable: Accompaniment | null = null
+    let nextStarch: Accompaniment | null
+    let nextVegetable: Accompaniment | null
     if (stored) {
       nextStarch = starches.find((s) => s.id === stored.starch?.id) ?? null
       nextVegetable = vegetables.find((v) => v.id === stored.vegetable?.id) ?? null
     } else {
-      // Use the menu item's DB-configured default starch/vegetable first
+      // Use the dish's DB-configured default starch/vegetable. A configured
+      // default is the owner's explicit choice, so it is honoured even when it is
+      // a charged side. Images never take part in selecting an accompaniment —
+      // the gallery only switches which picture of the same dish is shown.
       nextStarch = selectedItem.starchId
         ? starches.find((s) => s.id === selectedItem.starchId) ?? null
         : null
       nextVegetable = selectedItem.vegetableId
         ? vegetables.find((v) => v.id === selectedItem.vegetableId) ?? null
         : null
-      // Fall back to gallery image matching only if no defaults configured
-      if (!nextStarch && !nextVegetable) {
-        const first = galleryLinks[0]
-        nextStarch = first?.starch ?? null
-        nextVegetable = first?.vegetable ?? null
-      }
       // Never preselect a default side that is already sold out.
       if (nextStarch && isStockSoldOut(nextStarch)) nextStarch = null
       if (nextVegetable && isStockSoldOut(nextVegetable)) nextVegetable = null
@@ -603,12 +591,7 @@ export function WaiterMenuGrid({
     setSelectedVegetable(nextVegetable)
     setStarchMode(nextStarch && !isFreeAccompaniment(nextStarch) ? "charged" : "free")
     setVegMode(nextVegetable && !isFreeAccompaniment(nextVegetable) ? "charged" : "free")
-    const matchIdx = galleryLinks.findIndex(
-      (l) =>
-        (nextStarch && l.starch?.id === nextStarch.id) ||
-        (nextVegetable && l.vegetable?.id === nextVegetable.id),
-    )
-    setGalleryActive(matchIdx >= 0 ? matchIdx : 0)
+    setGalleryActive(0)
   }
 
   const syncSelection = (starch: Accompaniment | null, vegetable: Accompaniment | null) => {
@@ -619,38 +602,17 @@ export function WaiterMenuGrid({
     }
   }
 
-  const handleImageSelect = (url: string) => {
-    const link = galleryLinks.find((l) => l.url === url)
-    if (!link) return
-    // A sold-out side cannot be picked from a gallery chip either.
-    const pickedStarch = link.starch && !isStockSoldOut(link.starch) ? link.starch : null
-    const pickedVegetable = link.vegetable && !isStockSoldOut(link.vegetable) ? link.vegetable : null
-    const nextStarch = pickedStarch ?? selectedStarch
-    const nextVegetable = pickedVegetable ?? selectedVegetable
-    if (pickedStarch) setSelectedStarch(pickedStarch)
-    if (pickedVegetable) setSelectedVegetable(pickedVegetable)
-    syncSelection(nextStarch, nextVegetable)
-  }
-
   const selectStarch = (starch: Accompaniment | null) => {
     if (starch && isStockSoldOut(starch)) return
     setSelectedStarch(starch)
-    if (starch) {
-      setStarchMode(isFreeAccompaniment(starch) ? "free" : "charged")
-      const idx = galleryLinks.findIndex((l) => l.starch?.id === starch.id)
-      if (idx >= 0) setGalleryActive(idx)
-    }
+    if (starch) setStarchMode(isFreeAccompaniment(starch) ? "free" : "charged")
     syncSelection(starch, selectedVegetable)
   }
 
   const selectVegetable = (vegetable: Accompaniment | null) => {
     if (vegetable && isStockSoldOut(vegetable)) return
     setSelectedVegetable(vegetable)
-    if (vegetable) {
-      setVegMode(isFreeAccompaniment(vegetable) ? "free" : "charged")
-      const idx = galleryLinks.findIndex((l) => l.vegetable?.id === vegetable.id)
-      if (idx >= 0) setGalleryActive(idx)
-    }
+    if (vegetable) setVegMode(isFreeAccompaniment(vegetable) ? "free" : "charged")
     syncSelection(selectedStarch, vegetable)
   }
 
@@ -904,7 +866,6 @@ export function WaiterMenuGrid({
                     images={selectedItem.images}
                     active={galleryActive}
                     onActiveChange={setGalleryActive}
-                    onImageSelect={handleImageSelect}
                   />
                 </div>
 

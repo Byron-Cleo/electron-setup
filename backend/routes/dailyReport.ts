@@ -245,6 +245,9 @@ router.get("/shift/:id", async (req, res) => {
         for (const sideId of sideIds) {
           const linkedMenuId = linkedByAccompaniment.get(sideId);
           if (!linkedMenuId) continue;
+          // A side that links back to this same dish IS the dish — folding it in
+          // would count the dish's own plates twice on its row.
+          if (linkedMenuId === item.menuId) continue;
           addSale(linkedMenuId, round2(ACCOMPANIMENT_PLATES_PER_SERVING * item.qty), beforeAutoClose);
         }
       }

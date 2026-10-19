@@ -213,12 +213,18 @@ const lineKey = (item: {
       // so the stored line price matches the order total exactly.
       const lineUnitPrices: number[] = [];
       for (const item of lines) {
-        const [starch, vegetable, portion] = await Promise.all([
+        const [starchRow, vegetableRow, portion] = await Promise.all([
           item.starchId
-            ? tx.menuAccompaniment.findUnique({ where: { id: item.starchId }, select: { price: true } })
+            ? tx.menuAccompaniment.findUnique({
+                where: { id: item.starchId },
+                select: { price: true, category: true, linkedMenuId: true },
+              })
             : Promise.resolve(null),
           item.vegetableId
-            ? tx.menuAccompaniment.findUnique({ where: { id: item.vegetableId }, select: { price: true } })
+            ? tx.menuAccompaniment.findUnique({
+                where: { id: item.vegetableId },
+                select: { price: true, category: true, linkedMenuId: true },
+              })
             : Promise.resolve(null),
           item.portionId
             ? tx.menuAccompaniment.findUnique({
@@ -227,6 +233,19 @@ const lineKey = (item: {
               })
             : Promise.resolve(null),
         ]);
+        // A dish must never carry itself as an accompaniment. A side whose
+        // `linkedMenuId` points back at this dish shares its pool, so counting it
+        // here would double both the stored price and the plate movement. A side
+        // of the wrong category is likewise rejected. `linkedMenuId` is used ONLY
+        // to identify the side — never as part of the price itself.
+        const starch =
+          starchRow && starchRow.category === "STARCH" && starchRow.linkedMenuId !== item.menuId
+            ? starchRow
+            : null;
+        const vegetable =
+          vegetableRow && vegetableRow.category === "VEGETABLE" && vegetableRow.linkedMenuId !== item.menuId
+            ? vegetableRow
+            : null;
         // A portion prices the serving (2 eggs is not "1 egg plus 1"), so its
         // price replaces the dish price rather than adding to it.
         // Prefer the DB price for a portion; otherwise trust the client's dish
