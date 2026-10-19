@@ -13,6 +13,16 @@ Complete
 
 ## History
 
+### backend + frontend - 2026-10-19 — Waiter Accompaniment Correctness: Self-Reference + No-Supply Side Crash
+
+- **Never charge/stock a dish for its own accompaniment** (`a008d53`) — `WaiterMenuGrid.tsx` drops the dish-image gallery auto-match (images-only now) and filters sides whose `linkedMenuId === selectedItem.id` while honoring DB defaults; `orders.ts` treats a side absent on category mismatch or `linkedMenuId === menuId`; `dailyReport.ts` skips self-linked sides in the linked-side fold. Minji now shows only ₭220
+- **Fix order-500 on a linked side with no supply row** (`933e66a`) — `pools.ts` `consumedPoolsForOrderItem` passed `stockSupplyId: ""` into a uuid lookup when the linked menu had no `StockSupplyMenu` row (e.g. the direct-sale "Chapati Brown"), so `factorForSupplyMenu` threw `invalid input syntax for type uuid: ""` → HTTP 500. Now falls back to `DEFAULT_PLATES_PER_SERVING` (1 plate/serving), matching `factorForSupplyMenu`'s documented default. Linked sides **with** a supply are unchanged; self-link skip, pricing, and `dailyReport` untouched
+- **Build hardening + version** (`085852f`) — new `scripts/clean-electron.mjs` (`dist-electron` wipe) wired into `build:win|mac|linux|all` and `scripts/build-network.mjs` before `tsc`, so an incremental `tsc -b` can never repackage a previously network-rewritten `server-config.js`. `package.json` version `0.0.2`
+- **Root cause of the "can't connect" 0.0.1 installer** — a prior `build:win:network` baked the Tailscale IP (`100.108.69.45`) into `dist-electron/server-config.js`; the plain rebuild reused it because its mtime was newer than the source. 0.0.2 (clean build) bakes LAN `192.168.100.45` again
+- **Verified** — `typescript` clean; rolled-back-transaction check of the exact failing path (Minji + free Chapati Brown side → `[Minji:1, Chapati Brown:1]`, no crash); `EraevaBackend` cleaned-up to **RUNNING** (orphan on :3001 killed, single listener) + `/health` ok; `build:web -- --server same-origin` re-run
+- **Deploy** — backend rebuilt + `EraevaBackend` restarted. Server-side fix → installed terminals need **no reinstall**; the 0.0.2 installer (LAN base) is for terminal refresh only
+- No ollama models — manual implementation per operator directive · Branch `restaurant-build` (direct commits, pushed to `origin/restaurant-build`)
+
 ### frontend - 2026-10-16 — Accompaniment Linked-Dish Status: Not Available vs Sold Out
 
 - **Linked Dish column status states** — `AccompanimentsTable.tsx` `linked` cell now shows gray **Not Available** when no dish is linked (top line `—`) or when a link exists but plates are unreadable (`availablePlates` null); red **Sold Out** unchanged for `≤ 0`; muted `N left` unchanged when stocked. Display-only; `platesRead`/`soldOut`/`notAvailable` derived inline
