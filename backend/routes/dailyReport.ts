@@ -48,19 +48,21 @@ router.get("/shift/:id", async (req, res) => {
       return res.status(404).json({ error: "Shift not found" });
     }
 
-    // Mutually exclusive time windows: every order belongs to exactly one
-    // shift. The window opens at this shift's start time, or later when the
-    // IMMEDIATELY PRECEDING shift is still serving (manual or forced
-    // deadline) and actually ended, and closes at this shift's actual end
-    // (exclusive bound). Drift-period orders stay with the extending shift,
-    // and orders across midnight stay under this shift's (immutable)
-    // operationDay — no calendar-day splitting.
+    // Orders are attributed by the FK stamped at creation time (shiftId) —
+    // the same rule the Cashier UI joins on — so the report and every UI tab
+    // can never disagree about which shift owns an order. resolveCurrentShift
+    // stamps the actually-serving shift (including the extending shift during
+    // drift), so this stays correct even when a shift is late-created or
+    // manager-extended; a one-off reassignment of misattributed orders also
+    // takes effect here immediately.
     //
-    // Only the immediate predecessor clamps the start — deliberately. An
-    // OLDER shift closed out of order (a stale shift the manager finally
-    // clicked days late) must not swallow this shift's window; the drift
-    // limit on manual configs makes such out-of-order closes impossible
-    // going forward, so the immediate predecessor is the only real overlap.
+    // The effective window below is still used for COOKING records and drift
+    // stamps (kitchen production is timed, not order-linked): the window
+    // opens at this shift's start time, or later when the IMMEDIATELY
+    // PRECEDING shift is still serving (manual or forced deadline) and
+    // actually ended, and closes at this shift's actual end (exclusive).
+    // Only the immediate predecessor clamps the start — an OLDER shift
+    // closed out of order must not swallow this shift's window.
     const precedingShift = await prisma.shift.findFirst({
       where: { autoOpenTime: { lt: shift.autoOpenTime } },
       orderBy: { autoOpenTime: "desc" },
@@ -72,12 +74,9 @@ router.get("/shift/:id", async (req, res) => {
       ? new Date(Math.max(shift.autoOpenTime.getTime(), shiftActualEndTime(precedingShift).getTime()))
       : shift.autoOpenTime;
 
-    // Orders attributed strictly by the effective window — not by the
-    // shift.orders relation (unreliable during drift/overlap) and not by
-    // operationDay (which would split midnight-crossing shifts).
     const dayOrders = await prisma.order.findMany({
       where: {
-        createdAt: { gte: effectiveStart, lt: effectiveEnd },
+        shiftId: shift.id,
       },
       include: {
         OrderItem: true,
