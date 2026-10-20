@@ -3,7 +3,6 @@ import prisma from "../db/db.js";
 import { emitLiveEvent } from "../events.js";
 import { recomputeMenuStock } from "../pools.js";
 import { autoCloseExpiredShifts } from "../scheduler.js";
-import { shiftActualEndTime } from "./dailyReport.js";
 
 const router = Router();
 
@@ -78,55 +77,17 @@ router.get("/", async (req, res) => {
     });
 
     // Orders/void/revenue summaries must match the shift REPORT exactly, so
-    // they use the same mutually exclusive time windows: [effectiveStart,
-    // effectiveEnd) with effectiveEnd = the shift's actual end (MANUAL/FORCED
-    // final close, else auto-close tick, else scheduled close) and
-    // effectiveStart = max(autoOpenTime, previous shift's actual end). The
-    // predecessor comes from the full shift timeline — the list may be
-    // filtered to one type/date, so it cannot be derived from `shifts` alone.
-    const timeline = await prisma.shift.findMany({
-      orderBy: { autoOpenTime: "asc" },
-      select: {
-        id: true,
-        autoOpenTime: true,
-        finalCloseSource: true,
-        finalClosedAt: true,
-        autoClosedAt: true,
-        autoCloseTime: true,
-      },
-    });
-    const windowByShiftId = new Map<string, { start: Date; end: Date }>();
-    let prevActualEnd: Date | null = null;
-    for (const s of timeline) {
-      const end = shiftActualEndTime(s);
-      const start = prevActualEnd
-        ? new Date(Math.max(s.autoOpenTime.getTime(), prevActualEnd.getTime()))
-        : s.autoOpenTime;
-      windowByShiftId.set(s.id, { start, end });
-      prevActualEnd = end;
-    }
-
-    // One bulk order fetch across the covered span, bucketed per window. An
-    // order falling into several windows (historical out-of-order closes)
-    // goes to the window that starts latest — the shift whose report owns it.
-    const listedEntries = shifts
-      .map((s) => {
-        const w = windowByShiftId.get(s.id);
-        return w ? { shiftId: s.id, start: w.start, end: w.end } : null
-      })
-      .filter((e): e is { shiftId: string; start: Date; end: Date } => e !== null)
-      .sort((a, b) => b.start.getTime() - a.start.getTime());
-    const coveredStart = listedEntries.length > 0
-      ? new Date(Math.min(...listedEntries.map((e) => e.start.getTime())))
-      : null;
-    const coveredEnd = listedEntries.length > 0
-      ? new Date(Math.max(...listedEntries.map((e) => e.end.getTime())))
-      : null;
-    const windowOrders =
-      coveredStart && coveredEnd && coveredEnd.getTime() > coveredStart.getTime()
+    // they attribute by the same rule: the order's shiftId FK (stamped by
+    // resolveCurrentShift at creation — the same join the Cashier UI uses).
+    // One grouped fetch across the listed shifts; no time windows, so a
+    // reassignment or a late-created/extended shift can never make the list
+    // and the report disagree.
+    const listedIds = shifts.map((s) => s.id);
+    const listedOrders =
+      listedIds.length > 0
         ? await prisma.order.findMany({
-            where: { createdAt: { gte: coveredStart, lt: coveredEnd } },
-            select: { createdAt: true, isVoid: true, isPaid: true, totalPrice: true },
+            where: { shiftId: { in: listedIds } },
+            select: { shiftId: true, isVoid: true, isPaid: true, totalPrice: true },
           })
         : [];
 
@@ -134,19 +95,12 @@ router.get("/", async (req, res) => {
     for (const shift of shifts) {
       totalsByShiftId.set(shift.id, { totalOrders: 0, voidCount: 0, revenue: 0 });
     }
-    for (const order of windowOrders) {
-      const t = order.createdAt.getTime();
-      for (const entry of listedEntries) {
-        if (t >= entry.start.getTime() && t < entry.end.getTime()) {
-          const agg = totalsByShiftId.get(entry.shiftId);
-          if (agg) {
-            agg.totalOrders += 1;
-            if (order.isVoid) agg.voidCount += 1;
-            else if (order.isPaid) agg.revenue += Number(order.totalPrice);
-          }
-          break;
-        }
-      }
+    for (const order of listedOrders) {
+      const agg = totalsByShiftId.get(order.shiftId);
+      if (!agg) continue;
+      agg.totalOrders += 1;
+      if (order.isVoid) agg.voidCount += 1;
+      else if (order.isPaid) agg.revenue += Number(order.totalPrice);
     }
 
     // Enrich each shift with the window-based summary fields (read-only
