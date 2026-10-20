@@ -692,6 +692,8 @@ interface KitchenStockItem {
   rawStockPending: number;
   totalPlatesProduced: number;
   lastCookedDate: string | null;
+  /** Shift type (DAY/NIGHT) of the latest cooking record. */
+  lastShiftType?: string | null;
   latestBatchNumber?: number | null;
 }
 

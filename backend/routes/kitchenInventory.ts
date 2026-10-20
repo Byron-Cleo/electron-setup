@@ -68,7 +68,11 @@ router.get("/", async (req, res) => {
       const latestRecord = await prisma.cookingRecord.findFirst({
         where: { stockSupplyId: item.id },
         orderBy: { createdAt: "desc" },
-        select: { createdAt: true, batchNumber: true },
+        select: {
+          createdAt: true,
+          batchNumber: true,
+          shift: { select: { type: true } },
+        },
       });
 
       return {
@@ -80,6 +84,7 @@ router.get("/", async (req, res) => {
         // The actual moment production was recorded — `cookedDate` is a
         // date-only bucket (midnight), which rendered as a bogus 03:00.
         lastCookedDate: latestRecord?.createdAt.toISOString() ?? null,
+        lastShiftType: latestRecord?.shift?.type ?? null,
         platesPerUnit: item.platesPerUnit,
         image: item.image,
         menus: item.menus.map((sm) => sm.menu),

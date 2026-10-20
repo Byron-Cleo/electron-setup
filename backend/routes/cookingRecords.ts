@@ -143,7 +143,9 @@ router.get("/", async (req, res) => {
   const records = await prisma.cookingRecord.findMany({
     where,
     include: RECORD_INCLUDE,
-    orderBy: { createdAt: "asc" },
+    // Newest-first so Cooking History lists today's batches at the top, and
+    // so callers that take records[0] get the latest batch (not the oldest).
+    orderBy: { createdAt: "desc" },
   });
   res.json(records);
 });
