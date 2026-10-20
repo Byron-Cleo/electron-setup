@@ -654,7 +654,17 @@ function KitchenInventoryView({ userId }: { userId: string }) {
     setEditLoadingRecord(true)
     try {
       const records = await getCookingRecords(item.id)
-      const latest = records.length > 0 ? records[0] : null
+      // Pick the batch to edit explicitly rather than trusting list order:
+      // prefer today's (Nairobi) batch, otherwise the most recently cooked one.
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })
+      const isToday = (r: CookingRecord) =>
+        new Date(r.createdAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }) === today
+      const latest = records.reduce<CookingRecord | null>((best, r) => {
+        if (!best) return r
+        if (isToday(r) && !isToday(best)) return r
+        if (isToday(r) === isToday(best) && new Date(r.createdAt) > new Date(best.createdAt)) return r
+        return best
+      }, null)
       setEditRecord(latest)
       setEditQty(latest?.quantityCooked ?? 0)
       setEditPlatesActual(latest?.platesActual ?? "")
@@ -845,6 +855,7 @@ function KitchenInventoryView({ userId }: { userId: string }) {
     { label: "Plates/Unit", key: "platesPerUnit" },
     { label: "Plates Made", key: "platesMade" },
     { label: "Cooked Date", key: "lastCooked" },
+    { label: "Shift", key: "shift" },
     { label: "Remaining", key: "remaining", className: "bg-gray-100" },
     { label: "Action", key: "action", isAction: true, align: "center", className: "bg-green-100" },
   ]
@@ -875,6 +886,19 @@ function KitchenInventoryView({ userId }: { userId: string }) {
                   minute: "2-digit",
                 })
               : "—"}
+          </span>
+        )
+      }
+      case "shift": {
+        const type = item.lastShiftType
+        if (!type) return <span className="text-admin-muted">—</span>
+        return (
+          <span
+            className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${
+              type === "DAY" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"
+            }`}
+          >
+            {type === "DAY" ? "Day" : "Night"}
           </span>
         )
       }
@@ -1180,7 +1204,9 @@ function KitchenInventoryView({ userId }: { userId: string }) {
           <DialogHeader>
             <DialogTitle>Edit Batch {editRecord?.batchNumber ? `#${editRecord.batchNumber}` : ''}: {editDialog.item?.name}</DialogTitle>
             <DialogDescription>
-              Update cooking record for this item
+              {editRecord
+                ? `Update cooking record — cooked ${new Date(editRecord.createdAt).toLocaleDateString("en-GB", { timeZone: "Africa/Nairobi", day: "numeric", month: "short", year: "numeric" })}`
+                : "Update cooking record for this item"}
             </DialogDescription>
           </DialogHeader>
 
@@ -1297,7 +1323,6 @@ function KitchenInventoryView({ userId }: { userId: string }) {
 
 function CookingHistoryView({ userId }: { userId: string }) {
   const [records, setRecords] = useState<CookingRecord[]>([])
-  const [requests, setRequests] = useState<StockRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
@@ -1305,12 +1330,8 @@ function CookingHistoryView({ userId }: { userId: string }) {
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true)
-      const [data, reqData] = await Promise.all([
-        getCookingRecords(),
-        getStockRequests(),
-      ])
+      const data = await getCookingRecords()
       setRecords(data)
-      setRequests(reqData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cooking records")
     } finally {
@@ -1321,8 +1342,6 @@ function CookingHistoryView({ userId }: { userId: string }) {
   useEffect(() => {
     loadRecords()
   }, [userId, loadRecords])
-
-  const lastRequestMap = useMemo(() => getLastRequestMap(requests), [requests])
 
   const filteredRecords = useMemo(() => {
     if (!search) return records
@@ -1344,8 +1363,8 @@ function CookingHistoryView({ userId }: { userId: string }) {
   const columns: Column[] = [
     { label: "BAT No.", key: "batchNumber" },
     { label: "Cooked Date", key: "cookedDate" },
+    { label: "Shift", key: "shift" },
     { label: "Item", key: "name" },
-    { label: "Last Requested Amnt", key: "lastRequested" },
     { label: "Cooked", key: "cooked" },
     { label: "Expected", key: "expected" },
     { label: "Actual", key: "actual" },
@@ -1380,14 +1399,23 @@ function CookingHistoryView({ userId }: { userId: string }) {
           </span>
         )
       }
+      case "shift": {
+        const type = record.shift?.type
+        if (!type) return <span className="text-admin-muted">—</span>
+        return (
+          <span
+            className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${
+              type === "DAY" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"
+            }`}
+          >
+            {type === "DAY" ? "Day" : "Night"}
+          </span>
+        )
+      }
       case "batchNumber":
         return <span>#{record.batchNumber ?? '—'}</span>
       case "name":
         return <span className="font-medium">{record.stockSupply.name}</span>
-      case "lastRequested": {
-        const lastItem = lastRequestMap.get(record.stockSupplyId)
-        return <span>{lastItem ? formatQuantityWithUnit(lastItem.quantityRequested, record.stockSupply.unit) : "—"}</span>
-      }
       case "cooked":
         return <span>{Number(record.quantityCooked)} {record.stockSupply.unit}</span>
       case "expected":
