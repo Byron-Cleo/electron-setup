@@ -41,6 +41,8 @@ interface MenuItem {
   stock: number;
   price: number;
   availablePlates?: number;
+  /** Plates currently held back from selling by an active pause. */
+  pausedPlates?: number;
   numReviews: number;
   isAvailable: boolean;
   banner: string | null;
@@ -222,6 +224,8 @@ interface StockShortfall {
   requested: number;
   available: number;
   platesPerServing: number;
+  /** Plates withheld by an active selling pause (0 when the dish is simply out). */
+  paused: number;
 }
 
 interface CreateOrderData {
@@ -456,6 +460,42 @@ interface ReturnToStoreData {
   quantityReturned: number;
   returnedById: string;
   notes?: string;
+}
+
+/** Plates held back from selling — per ALLOCATED split, per SHARED batch, or per KEYED scope. */
+interface SellingPause {
+  id: string;
+  shiftId: string | null;
+  operationDay: string;
+  menuId: string;
+  cookingRecordId: string | null;
+  sellingMode: "ALLOCATED" | "SHARED" | "KEYED";
+  pausedPlates: number;
+  active: boolean;
+  reason: string | null;
+  pausedById: string;
+  createdAt: string;
+  updatedAt: string;
+  Menu: { id: string; name: string };
+  CookingRecord: { id: string; batchNumber: number; stockSupplyId: string; sellingMode: string } | null;
+  PausedBy: { id: string; name: string };
+}
+
+interface SellingPauseCreateData {
+  pausedById: string;
+  menuId: string;
+  cookingRecordId?: string | null;
+  sellingMode: "ALLOCATED" | "SHARED" | "KEYED";
+  pausedPlates: number;
+  shiftId?: string | null;
+  reason?: string | null;
+}
+
+interface SellingPauseUpdateData {
+  pausedById: string;
+  pausedPlates?: number;
+  active?: boolean;
+  reason?: string | null;
 }
 
 interface Department {
@@ -936,6 +976,10 @@ interface AssignedLeftoverRow {
   remaining: number;
   batchCount: number;
   batchNumbers: number[];
+  /** Cooking-record ids aggregated into the row — pause/resume hook. */
+  batchIds: string[];
+  /** Plates of this row held by active selling pauses (carried forward). */
+  pausedPlates?: number;
 }
 
 interface AdjustableStockRow {
@@ -1330,6 +1374,12 @@ interface ElectronAPI {
   stockReturn: {
     getAll: () => Promise<StockReturn[]>;
     create: (data: ReturnToStoreData) => Promise<StockReturn>;
+  };
+  sellingPause: {
+    getAll: (params?: { active?: string; menuId?: string; cookingRecordId?: string; operationDay?: string; shiftId?: string }) => Promise<SellingPause[]>;
+    create: (data: SellingPauseCreateData) => Promise<SellingPause>;
+    update: (id: string, data: SellingPauseUpdateData) => Promise<SellingPause>;
+    remove: (id: string, data: { pausedById: string }) => Promise<void>;
   };
   category: {
     getAll: () => Promise<Category[]>;

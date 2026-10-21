@@ -11,9 +11,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Pencil } from "lucide-react"
+import { Pencil, PauseCircle } from "lucide-react"
 import { getKitchenConfig, keyStockSupply, getMenus, updateMenu } from "@/lib/api"
 import { usePagination } from "@/hooks/usePagination"
+import { useAuthStore } from "@/stores/auth"
+import ControlSellingModal, { type PausableScope } from "@/components/menu/ControlSellingModal"
 import { cn } from "@/lib/utils"
 
 type Tab = "keyed" | "direct-sale" | "shared" | "allocated"
@@ -50,7 +52,18 @@ export default function MenuStockManager({ onBack }: Props) {
   const [stockAmount, setStockAmount] = useState("")
   const [stocking, setStocking] = useState(false)
 
+  // Control Selling (pause) dialog — KEYED and direct-sale scopes
+  const [pauseOpen, setPauseOpen] = useState(false)
+  const [pauseTitle, setPauseTitle] = useState("")
+  const [pauseScopes, setPauseScopes] = useState<PausableScope[]>([])
+
   const [search, setSearch] = useState("")
+
+  const user = useAuthStore((s) => s.user)
+  const canControlSelling = (() => {
+    const roles = user?.roles?.length ? user.roles : user?.role ? [user.role] : []
+    return roles.includes("admin") || roles.includes("manager")
+  })()
 
   async function fetchAll() {
     setLoading(true)
@@ -148,6 +161,41 @@ export default function MenuStockManager({ onBack }: Props) {
     setStockTarget(item)
     setStockAmount(String(item.stock ?? 0))
     setStockDialogOpen(true)
+  }
+
+  // Control Selling entry points — KEYED holds never touch the keyedStock
+  // ledger, they only stop waiters from placing new orders for the dish.
+  function openPauseKeyed(item: KitchenConfigItem) {
+    setPauseTitle(item.name)
+    setPauseScopes(
+      (item.menus ?? []).map((m) => {
+        const dish = menus.find((x) => x.id === m.id)
+        return {
+          menuId: m.id,
+          menuName: m.name,
+          available: Number(dish?.availablePlates ?? dish?.stock ?? 0),
+          cookingRecordId: null,
+          sellingMode: "KEYED" as const,
+          subtitle: `Keyed pool ${item.keyedStock ?? 0} — hold blocks orders, ledger untouched`,
+        }
+      }),
+    )
+    setPauseOpen(true)
+  }
+
+  function openPauseDirect(item: MenuItem) {
+    setPauseTitle(item.name)
+    setPauseScopes([
+      {
+        menuId: item.id,
+        menuName: item.name,
+        available: Number(item.availablePlates ?? item.stock ?? 0),
+        cookingRecordId: null,
+        sellingMode: "KEYED" as const,
+        subtitle: "Direct-sale stock — hold blocks orders, ledger untouched",
+      },
+    ])
+    setPauseOpen(true)
   }
 
   async function handleSetStock() {
@@ -276,12 +324,22 @@ export default function MenuStockManager({ onBack }: Props) {
                       <span className="text-admin-header-text/60">—</span>
                     )
                   case "actions":
-                    return tab === "keyed" ? (
-                      <Button variant="ghost" size="sm" onClick={() => openSetPool(i)}>
-                        <Pencil className="h-4 w-4 mr-1" />
-                        Set Pool
-                      </Button>
-                    ) : null
+                    return (
+                      <div className="flex items-center justify-end gap-1">
+                        {tab === "keyed" && (
+                          <Button variant="ghost" size="sm" onClick={() => openSetPool(i)}>
+                            <Pencil className="h-4 w-4 mr-1" />
+                            Set Pool
+                          </Button>
+                        )}
+                        {canControlSelling && (
+                          <Button variant="ghost" size="sm" onClick={() => openPauseKeyed(i)}>
+                            <PauseCircle className="h-4 w-4 mr-1" />
+                            Control Selling
+                          </Button>
+                        )}
+                      </div>
+                    )
                   default:
                     return null
                 }
@@ -337,12 +395,22 @@ export default function MenuStockManager({ onBack }: Props) {
                     </span>
                   )
                 case "actions":
-                  return tab === "direct-sale" ? (
-                    <Button variant="ghost" size="sm" onClick={() => openSetStock(m)}>
-                      <Pencil className="h-4 w-4 mr-1" />
-                      Set Stock
-                    </Button>
-                  ) : null
+                  return (
+                    <div className="flex items-center justify-end gap-1">
+                      {tab === "direct-sale" && (
+                        <Button variant="ghost" size="sm" onClick={() => openSetStock(m)}>
+                          <Pencil className="h-4 w-4 mr-1" />
+                          Set Stock
+                        </Button>
+                      )}
+                      {canControlSelling && (
+                        <Button variant="ghost" size="sm" onClick={() => openPauseDirect(m)}>
+                          <PauseCircle className="h-4 w-4 mr-1" />
+                          Control Selling
+                        </Button>
+                      )}
+                    </div>
+                  )
                 default:
                   return null
               }
@@ -455,6 +523,15 @@ export default function MenuStockManager({ onBack }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Control Selling (pause/resume) dialog */}
+      <ControlSellingModal
+        open={pauseOpen}
+        onClose={() => setPauseOpen(false)}
+        onRefresh={fetchAll}
+        title={pauseTitle}
+        scopes={pauseScopes}
+      />
     </div>
   )
 }

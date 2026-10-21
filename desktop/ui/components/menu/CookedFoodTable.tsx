@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Utensils } from "lucide-react"
+import { Utensils, PauseCircle } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,7 +7,9 @@ import { DataTable, type Column } from "@/components/ui/data-table"
 import { usePagination } from "@/hooks/usePagination"
 import { getCookedMenus, stockSupplyImageUrl } from "@/lib/api"
 import { useLiveRefresh } from "@/hooks/useLiveRefresh"
+import { useAuthStore } from "@/stores/auth"
 import AssignmentModal from "./AssignmentModal"
+import ControlSellingModal, { type PausableScope } from "./ControlSellingModal"
 
 interface Props {
   onRefresh?: () => void
@@ -22,6 +24,15 @@ export default function CookedFoodTable({ onRefresh }: Props) {
     open: false,
     item: null,
   })
+  const [pauseDialog, setPauseDialog] = useState<{ open: boolean; item: CookedMenuItem | null }>({
+    open: false,
+    item: null,
+  })
+  const user = useAuthStore((s) => s.user)
+  const canControlSelling = (() => {
+    const roles = user?.roles?.length ? user.roles : user?.role ? [user.role] : []
+    return roles.includes("admin") || roles.includes("manager")
+  })()
 
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent === true
@@ -207,25 +218,35 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         )
       }
       case "actions":
-        if (row.sellingMode === "SHARED") {
-          // No allocation step to perform — the whole tray is already sellable.
-          return (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-admin-content text-admin-muted border border-admin-card-border">
-              Shared pool — no assignment
-            </span>
-          )
-        }
         return (
           <div className="flex items-center justify-end gap-1">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={row.disposed === true || isDone(row)}
-              onClick={() => setEditDialog({ open: true, item: row })}
-            >
-              <Utensils size={14} className="mr-1" />
-              Assign Plates
-            </Button>
+            {canControlSelling && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={row.disposed === true}
+                onClick={() => setPauseDialog({ open: true, item: row })}
+              >
+                <PauseCircle size={14} className="mr-1" />
+                Control Selling
+              </Button>
+            )}
+            {row.sellingMode === "SHARED" ? (
+              // No allocation step to perform — the whole tray is already sellable.
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-admin-content text-admin-muted border border-admin-card-border">
+                Shared pool — no assignment
+              </span>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={row.disposed === true || isDone(row)}
+                onClick={() => setEditDialog({ open: true, item: row })}
+              >
+                <Utensils size={14} className="mr-1" />
+                Assign Plates
+              </Button>
+            )}
           </div>
         )
       default:
@@ -277,6 +298,60 @@ export default function CookedFoodTable({ onRefresh }: Props) {
         batchId={editDialog.item?.id ?? null}
         title={editDialog.item?.stockSupply?.name ?? ""}
         onRefresh={loadData}
+      />
+
+      <ControlSellingModal
+        open={pauseDialog.open}
+        onClose={() => setPauseDialog({ open: false, item: null })}
+        onRefresh={loadData}
+        title={
+          pauseDialog.item?.stockSupply?.name
+            ? `${pauseDialog.item.stockSupply.name}${pauseDialog.item.batchNumber != null ? ` · Batch #${pauseDialog.item.batchNumber}` : ""}`
+            : "Batch"
+        }
+        stats={
+          pauseDialog.item
+            ? [
+                { label: "Produced", value: `${pauseDialog.item.cooking.totalProduced} plates` },
+                { label: "Assigned", value: `${pauseDialog.item.cooking.totalAssigned} plates` },
+                { label: "Sold", value: `${pauseDialog.item.cooking.totalSold ?? 0} plates` },
+                {
+                  label: "Sellable",
+                  value: `${sellableOf(pauseDialog.item)} plates`,
+                },
+              ]
+            : undefined
+        }
+        scopes={(() => {
+          const row = pauseDialog.item
+          if (!row) return [] as PausableScope[]
+          if (row.sellingMode === "SHARED") {
+            // One hold per batch: it withholds plates from every dish fed by
+            // the supply, so it is recorded under the first linked dish.
+            const first = row.menus[0]
+            if (!first) return [] as PausableScope[]
+            return [
+              {
+                menuId: first.menuId,
+                menuName: first.menuName,
+                available: sellableOf(row),
+                cookingRecordId: row.id,
+                sellingMode: "SHARED" as const,
+                subtitle: "Whole batch pool — the hold applies to every dish on this supply",
+              },
+            ]
+          }
+          return row.menus
+            .filter((m) => m.remaining > 0)
+            .map((m) => ({
+              menuId: m.menuId,
+              menuName: m.menuName,
+              available: m.remaining,
+              cookingRecordId: row.id,
+              sellingMode: "ALLOCATED" as const,
+              subtitle: `Split remainder — ${m.remaining} of ${m.allocated} assigned plates unsold`,
+            }))
+        })()}
       />
     </div>
   )

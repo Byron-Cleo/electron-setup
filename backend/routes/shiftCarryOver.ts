@@ -479,6 +479,12 @@ export interface AssignedLeftoverRow {
   // Batch numbers of the cooking records aggregated into this row (sorted,
   // unique). Empty when a legacy record has no batch number.
   batchNumbers: number[];
+  // Cooking-record ids aggregated into this row — the resume hook for active
+  // selling pauses carried forward with the leftovers.
+  batchIds: string[];
+  // Plates of this row held back by active selling pauses (never sold, never
+  // wasted — the manager must resume or waste them to release the stock).
+  pausedPlates: number;
 }
 
 // Assigned-but-unsold stock (ALLOCATED splits' platesRemaining) plus every
@@ -528,6 +534,7 @@ export async function computeAssignedLeftovers(
     remaining: number;
     batchCount: number;
     batchNumbers: Set<number>;
+    batchIds: Set<string>;
   }
   const groups = new Map<string, Acc>();
 
@@ -542,6 +549,7 @@ export async function computeAssignedLeftovers(
       operationDay: string | null;
       shiftType: string | null;
       cookedAtMs: number;
+      batchId: string;
     },
     add: { assigned: number; sold: number; remaining: number; batchNumber: number | null },
   ) => {
@@ -561,6 +569,7 @@ export async function computeAssignedLeftovers(
         remaining: 0,
         batchCount: 0,
         batchNumbers: new Set(),
+        batchIds: new Set(),
       };
       groups.set(key, acc);
     }
@@ -572,6 +581,7 @@ export async function computeAssignedLeftovers(
     acc.sold = round2(acc.sold + add.sold);
     acc.remaining = round2(acc.remaining + add.remaining);
     acc.batchCount += 1;
+    acc.batchIds.add(base.batchId);
     if (typeof add.batchNumber === "number") acc.batchNumbers.add(add.batchNumber);
   };
 
@@ -593,6 +603,7 @@ export async function computeAssignedLeftovers(
           operationDay: attr.operationDay,
           shiftType: attr.shiftType,
           cookedAtMs: record.createdAt.getTime(),
+          batchId: record.id,
         },
         { assigned: 0, sold: round2(pool?.sold ?? 0), remaining, batchNumber: record.batchNumber },
       );
@@ -614,6 +625,7 @@ export async function computeAssignedLeftovers(
           operationDay: attr.operationDay,
           shiftType: attr.shiftType,
           cookedAtMs: record.createdAt.getTime(),
+          batchId: record.id,
         },
         { assigned, sold: round2(assigned - remaining), remaining, batchNumber: record.batchNumber },
       );
@@ -639,7 +651,31 @@ export async function computeAssignedLeftovers(
       remaining: acc.remaining,
       batchCount: acc.batchCount,
       batchNumbers: [...acc.batchNumbers].sort((a, b) => a - b),
+      batchIds: [...acc.batchIds],
+      pausedPlates: 0,
     });
+  }
+
+  // Carried-forward holds: active pauses on this row's batches keep the plates
+  // blocked in the NEXT shift too, so the leftover row must show them and the
+  // dashboard must offer a resume.
+  const allBatchIds = [...new Set(rows.flatMap((r) => r.batchIds))];
+  if (allBatchIds.length > 0) {
+    const pauses = await prisma.sellingPause.findMany({
+      where: { active: true, cookingRecordId: { in: allBatchIds } },
+      select: { cookingRecordId: true, pausedPlates: true },
+    });
+    const pausedByBatch = new Map<string, number>();
+    for (const p of pauses) {
+      const id = p.cookingRecordId;
+      if (!id) continue;
+      pausedByBatch.set(id, round2((pausedByBatch.get(id) ?? 0) + Number(p.pausedPlates)));
+    }
+    for (const row of rows) {
+      row.pausedPlates = round2(
+        row.batchIds.reduce((sum, id) => sum + (pausedByBatch.get(id) ?? 0), 0),
+      );
+    }
   }
 
   rows.sort((a, b) => {
