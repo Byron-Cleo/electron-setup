@@ -5,7 +5,7 @@ backend + frontend
 
 ## Status
 
-Implementation complete — pending commit/merge decision
+Complete
 
 ## Goals
 
@@ -38,6 +38,17 @@ Implementation facts (2026-10-21):
 - Builds: backend dist rebuilt + EraevaBackend restarted (RUNNING, /health ok); `npm run build` + `build:web -- --server same-origin` re-run; installed .exe terminals still run 0.0.2 — a `build:win` refresh is an operator decision
 
 ## History
+
+### backend + frontend - 2026-10-21 — Control Selling: Pause/Resume Cooked Plates
+
+- **Engine** — `SellingPause` model (schema pushed to eraevadb); `pools.ts` `pausedPlatesForMenu()` sums menu-scoped holds (KEYED null-batch + ALLOCATED splits) plus supply-scoped SHARED batch holds (a paused shared tray withholds from EVERY dish on its supply); `sellableInfoForMenu` subtracts pauses in all branches incl. direct-sale (ledger untouched); `MenuShortfall.paused` + pause-aware `InsufficientPoolError` ("Only Y plates available to sell for X. The rest are paused (not ready yet). Please order Y or less, or choose another dish."); menu list carries `pausedPlates`
+- **API** — `/api/selling-pauses` GET/POST/PUT/DELETE (`sellingPauses.ts`): `pausedById` body convention with DB-backed admin/manager verification (403 otherwise), per-scope ceilings (split remainder / batch pool), upsert on scope key, closed-shift + disposed-batch rejection, raise/reactivate credits back the pause's own amount
+- **UI** — reusable `ControlSellingModal` (stats + per-scope amount/reason/Pause/Resume); wired into CookedFoodTable (per batch: ALLOCATED per split, SHARED per batch) + MenuStockManager (Keyed per linked dish, Direct Sale per row), admin/manager gated; Waiter POS: orange "Selling Paused" badge + plan wording on held cards, greyed + "not ready" when fully held, linked sides show "Selling Paused" over "Sold Out", shortfall list shows paused counts, qty stepper caps at paused-adjusted availability; server enforces regardless (409 + paused-aware shortfalls)
+- **Leftovers** — `AssignedLeftoverRow` gains `batchIds` + `pausedPlates`; pauses ignore shift/day so holds carry forward automatically; paused plates never leave `platesRemaining` so shift close folds them into assigned-unsold leftovers; leftovers table shows "N paused" badge + Resume button (releases every active hold on the row's batches)
+- **Incident (same day)** — power outage rebooted the server with a pre-fix `dist/` (invalid lowercase `cookingRecord` Prisma filter → every `/api/menu` 500, login unaffected) and an orphaned node squatted :3001 (service child EADDRINUSE → PAUSED). Fixed: rebuilt dist, UAC taskkill of the squatter, `pos-backend-restart` scheduled task; E2E re-verified (menu 112 items, order #1167 place+void cycle fully cleaned)
+- **Verified live on :3001** — dispatch modal hold 5 on Ndovu Ngano Batch #1 → Chapati + Chapati Staff both 80→75 / 5 paused (supply-wide SHARED confirmed), waiter grid exact plan wording, stepper hard-cap at 75, resume → 80/0; test pause row deleted, zero trace; `tsc -b` clean, ESLint zero new
+- **Deploy** — backend rebuilt + EraevaBackend restarted (RUNNING, /health ok, menu/orders 200); `npm run build` + `build:web -- --server same-origin` re-run; **0.0.3 installer** `release/Eraeva POS System-0.0.3-win-x64.exe` built (clean-electron, LAN base, feature code verified inside app.asar) for terminal refresh
+- No ollama models — manual implementation per operator directive · Branch `feature/waiter/control-selling-pause` (kept, not deleted) · Commits `3b8dfe1` + `423260e`, merged `--no-ff` as `0ec8cef` into `restaurant-build`, pushed to `origin/restaurant-build`
 
 ### backend + frontend - 2026-10-19 — Waiter Accompaniment Correctness: Self-Reference + No-Supply Side Crash
 
