@@ -87,6 +87,8 @@ export type MenuShortfall = {
   /** What is actually sellable, in plates. */
   available: number;
   platesPerServing: number;
+  /** Plates held back by an active selling pause (0 when none). */
+  paused: number;
 };
 
 /**
@@ -100,7 +102,9 @@ export class InsufficientPoolError extends Error {
     const first = shortfalls[0];
     const extra = shortfalls.length > 1 ? ` (+${shortfalls.length - 1} more)` : "";
     super(
-      `Not enough stock for ${first.name}: only ${formatPlates(first.available)} left, you asked for ${formatPlates(first.requested)}${extra}`,
+      first.paused > 0
+        ? `Only ${formatPlates(first.available)} plate${first.available === 1 ? "" : "s"} available to sell for ${first.name}. The rest are paused (not ready yet). Please order ${formatPlates(first.available)} or less, or choose another dish.`
+        : `Not enough stock for ${first.name}: only ${formatPlates(first.available)} left, you asked for ${formatPlates(first.requested)}${extra}`,
     );
     this.name = "InsufficientPoolError";
     this.shortfalls = shortfalls;
@@ -337,9 +341,64 @@ export type MenuSellableInfo = {
   shared: number;
   /** Plates coming from KEYED supplies (hand-keyed, shared, no batches). */
   keyed: number;
+  /** Plates held back by active selling pauses (never sellable while paused). */
+  pausedActive: number;
   /** Engine of the live batches, or undefined when nothing is left. */
   sellingMode: SellingMode | "MIXED" | undefined;
 };
+
+/**
+ * Plates currently held back from selling for one dish by active pauses.
+ *
+ * Two scopes add up:
+ *  - Menu-scoped: KEYED pauses (`cookingRecordId` null — keyed stock and
+ *    direct-sale ledgers are only blocked, never changed) and ALLOCATED
+ *    split pauses recorded against this dish.
+ *  - Supply-scoped: pauses on SHARED batches feeding this dish's linked
+ *    supplies, regardless of which menu the pause row names — a shared
+ *    pool is sellable by every dish on the supply, so holding plates of
+ *    one shared batch withholds them from all of its dishes alike.
+ */
+export async function pausedPlatesForMenu(
+  tx: Prisma.TransactionClient,
+  menuId: string,
+): Promise<number> {
+  const [menuPauses, links] = await Promise.all([
+    tx.sellingPause.findMany({
+      where: {
+        menuId,
+        active: true,
+        OR: [
+          { cookingRecordId: null },
+          { CookingRecord: { is: { sellingMode: SellingMode.ALLOCATED } } },
+        ],
+      },
+      select: { pausedPlates: true },
+    }),
+    tx.stockSupplyMenu.findMany({
+      where: { menuId, excludedFromSharedPool: false },
+      select: { stockSupplyId: true },
+    }),
+  ]);
+  let paused = menuPauses.reduce((acc, p) => acc + Number(p.pausedPlates), 0);
+  if (links.length > 0) {
+    const sharedPauses = await tx.sellingPause.findMany({
+      where: {
+        active: true,
+        CookingRecord: {
+          is: {
+            sellingMode: SellingMode.SHARED,
+            disposed: false,
+            stockSupplyId: { in: links.map((l) => l.stockSupplyId) },
+          },
+        },
+      },
+      select: { pausedPlates: true },
+    });
+    paused += sharedPauses.reduce((acc, p) => acc + Number(p.pausedPlates), 0);
+  }
+  return round2(paused);
+}
 
 /**
  * The plates of one dish that can currently be ordered, plus the engine that
@@ -362,8 +421,9 @@ export async function sellableInfoForMenu(
     select: { requiresCooking: true, stock: true },
   });
   if (menuRow && menuRow.requiresCooking === false) {
-    const plates = round2(Number(menuRow.stock));
-    return { plates, allocated: 0, shared: plates, keyed: 0, sellingMode: undefined };
+    const paused = await pausedPlatesForMenu(tx, menuId);
+    const plates = round2(Math.max(0, Number(menuRow.stock) - paused));
+    return { plates, allocated: 0, shared: plates, keyed: 0, pausedActive: paused, sellingMode: undefined };
   }
 
   const splitAgg = await tx.cookingRecordMenu.aggregate({
@@ -428,7 +488,11 @@ export async function sellableInfoForMenu(
   else if (sharedLive) sellingMode = SellingMode.SHARED;
   else if (keyedLive) sellingMode = SellingMode.KEYED;
 
-  return { plates: round2(allocated + shared + keyed), allocated, shared, keyed, sellingMode };
+  // Pauses withhold plates after the pool math: they never touch the sold,
+  // wasted or pre-system ledgers, they only cap what may be ordered now.
+  const pausedActive = await pausedPlatesForMenu(tx, menuId);
+  const plates = round2(Math.max(0, allocated + shared + keyed - pausedActive));
+  return { plates, allocated, shared, keyed, pausedActive, sellingMode };
 }
 
 /** The plates of one dish that can currently be ordered. */
@@ -641,7 +705,7 @@ export async function assertLinesServable(
 
   const shortfalls: MenuShortfall[] = [];
   for (const [menuId, { name, plates, factor }] of demandByMenu) {
-    const available = await sellableForMenu(tx, menuId);
+    const { plates: available, pausedActive } = await sellableInfoForMenu(tx, menuId);
     if (plates > available) {
       shortfalls.push({
         menuId,
@@ -649,6 +713,7 @@ export async function assertLinesServable(
         requested: plates,
         available: round2(available),
         platesPerServing: factor,
+        paused: round2(pausedActive),
       });
     }
   }

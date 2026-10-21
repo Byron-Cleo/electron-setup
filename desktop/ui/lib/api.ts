@@ -299,6 +299,53 @@ export async function getStockReturns(): Promise<StockReturn[]> {
   return apiFetch("/stock-returns")
 }
 
+// ─── Selling Pauses (Control Selling) ────────────────────────────────────────
+
+function normalizeSellingPause(p: SellingPause): SellingPause {
+  return { ...p, pausedPlates: Number(p.pausedPlates) }
+}
+
+export async function getSellingPauses(params?: {
+  active?: string
+  menuId?: string
+  cookingRecordId?: string
+  operationDay?: string
+  shiftId?: string
+}): Promise<SellingPause[]> {
+  if (window.electron?.sellingPause?.getAll) {
+    const rows = await window.electron.sellingPause.getAll(params)
+    return rows.map(normalizeSellingPause)
+  }
+  const qs = params ? `?${new URLSearchParams(params).toString()}` : ""
+  const rows = await apiFetch(`/selling-pauses${qs}`)
+  return (rows as SellingPause[]).map(normalizeSellingPause)
+}
+
+export async function createSellingPause(data: SellingPauseCreateData): Promise<SellingPause> {
+  if (window.electron?.sellingPause?.create) {
+    return normalizeSellingPause(await window.electron.sellingPause.create(data))
+  }
+  return normalizeSellingPause(
+    await apiFetch("/selling-pauses", { method: "POST", body: JSON.stringify(data) })
+  )
+}
+
+export async function updateSellingPause(id: string, data: SellingPauseUpdateData): Promise<SellingPause> {
+  if (window.electron?.sellingPause?.update) {
+    return normalizeSellingPause(await window.electron.sellingPause.update(id, data))
+  }
+  return normalizeSellingPause(
+    await apiFetch(`/selling-pauses/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  )
+}
+
+export async function deleteSellingPause(id: string, pausedById: string): Promise<void> {
+  if (window.electron?.sellingPause?.remove) {
+    return window.electron.sellingPause.remove(id, { pausedById })
+  }
+  await apiFetch(`/selling-pauses/${id}`, { method: "DELETE", body: JSON.stringify({ pausedById }) })
+}
+
 // ─── Departments ────────────────────────────────────────────────────────────
 
 export async function getDepartments(): Promise<Department[]> {

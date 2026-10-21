@@ -67,6 +67,12 @@ electron.contextBridge.exposeInMainWorld("electron", {
     getAll: () => electron.ipcRenderer.invoke("stock-return:get-all"),
     create: (data: any) => electron.ipcRenderer.invoke("stock-return:create", data),
   },
+  sellingPause: {
+    getAll: (params: any) => electron.ipcRenderer.invoke("selling-pause:get-all", params),
+    create: (data: any) => electron.ipcRenderer.invoke("selling-pause:create", data),
+    update: (id: string, data: any) => electron.ipcRenderer.invoke("selling-pause:update", id, data),
+    remove: (id: string, data: any) => electron.ipcRenderer.invoke("selling-pause:delete", id, data),
+  },
   category: {
     getAll: () => electron.ipcRenderer.invoke("category:get-all"),
     create: (data: any) => electron.ipcRenderer.invoke("category:create", data),

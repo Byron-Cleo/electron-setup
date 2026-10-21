@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Clock, Loader2, Scale, Trash2 } from "lucide-react"
+import { Clock, Loader2, PlayCircle, Scale, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,7 +11,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { adjustAssignedStock, getAdjustableStock, wasteAssignedPlates } from "@/lib/api"
+import {
+  adjustAssignedStock,
+  getAdjustableStock,
+  getSellingPauses,
+  updateSellingPause,
+  wasteAssignedPlates,
+} from "@/lib/api"
+import { useAuthStore } from "@/stores/auth"
 
 export interface Props {
   variant: "current" | "previous"
@@ -52,6 +59,40 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
   const [adjustAmount, setAdjustAmount] = useState("")
   const [adjustSubmitting, setAdjustSubmitting] = useState(false)
   const [adjustError, setAdjustError] = useState<string | null>(null)
+
+  // Carried-forward selling pauses: resume releases the held plates back to
+  // the sellable pool (the hold itself never touched the ledger).
+  const [resumingKey, setResumingKey] = useState<string | null>(null)
+  const [resumeError, setResumeError] = useState<string | null>(null)
+  const user = useAuthStore((s) => s.user)
+  const canControlSelling = (() => {
+    const roles = user?.roles?.length ? user.roles : user?.role ? [user.role] : []
+    return roles.includes("admin") || roles.includes("manager")
+  })()
+
+  async function handleResume(row: AssignedLeftoverRow) {
+    if (!user) return
+    setResumingKey(row.key)
+    setResumeError(null)
+    try {
+      const pauses = await getSellingPauses({ active: "true" })
+      const mine = pauses.filter(
+        (p) => p.cookingRecordId != null && row.batchIds.includes(p.cookingRecordId),
+      )
+      if (mine.length === 0) {
+        setResumeError("No active hold found on this row's batches.")
+        return
+      }
+      for (const pause of mine) {
+        await updateSellingPause(pause.id, { pausedById: user.id, active: false })
+      }
+      onWasted?.()
+    } catch (e) {
+      setResumeError(e instanceof Error ? e.message : "Failed to resume selling")
+    } finally {
+      setResumingKey(null)
+    }
+  }
 
   function openWaste(row: AssignedLeftoverRow) {
     setError(null)
@@ -261,6 +302,11 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
                   <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-amber-700">
                     {row.remaining}
                   </span>
+                  {(row.pausedPlates ?? 0) > 0 && (
+                    <span className="ml-1 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-orange-700">
+                      {row.pausedPlates} paused
+                    </span>
+                  )}
                 </td>
                 <td className={`px-3 py-2 text-center whitespace-nowrap ${isCurrent ? "text-admin-muted" : "text-amber-700"}`}>
                   <span className="inline-flex items-center gap-1 text-xs">
@@ -279,6 +325,22 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
                     >
                       Carry over
                     </Button>
+                    {canControlSelling && (row.pausedPlates ?? 0) > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px] text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                        disabled={resumingKey === row.key}
+                        onClick={() => void handleResume(row)}
+                      >
+                        {resumingKey === row.key ? (
+                          <Loader2 size={12} className="mr-1 animate-spin" />
+                        ) : (
+                          <PlayCircle size={12} className="mr-1" />
+                        )}
+                        Resume {row.pausedPlates}
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -314,6 +376,10 @@ export default function AssignedLeftoversTable({ variant, rows, operationDay, on
           </tfoot>
         </table>
       </div>
+
+      {resumeError && (
+        <p className="mt-2 text-center text-sm text-red-600">{resumeError}</p>
+      )}
 
       <Dialog open={target !== null} onOpenChange={(open) => { if (!open) closeWaste() }}>
         <DialogContent>

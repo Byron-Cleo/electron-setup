@@ -108,15 +108,16 @@ function platesBadgeClass(plates: number) {
 function accompanimentStock(
   acc: Accompaniment,
   items: MenuItem[],
-): { linked: boolean; plates: number | null; soldOut: boolean } {
-  if (!acc.linkedMenuId) return { linked: false, plates: null, soldOut: false }
+): { linked: boolean; plates: number | null; soldOut: boolean; paused: boolean } {
+  if (!acc.linkedMenuId) return { linked: false, plates: null, soldOut: false, paused: false }
   const dish = items.find((i) => i.id === acc.linkedMenuId)
   const plates = dish
     ? Number(dish.availablePlates ?? dish.stock ?? 0)
     : acc.availablePlates != null
       ? Number(acc.availablePlates)
       : null
-  return { linked: true, plates, soldOut: plates != null && plates <= 0 }
+  const paused = plates != null && plates <= 0 && Number(dish?.pausedPlates ?? 0) > 0
+  return { linked: true, plates, soldOut: plates != null && plates <= 0, paused }
 }
 
 function AccompanyRow({ label, accompany }: { label: string; accompany: OrderAccompaniment }) {
@@ -143,12 +144,14 @@ function AccompanyRadioCard({
   image,
   badge,
   disabled = false,
+  watermark = "Sold Out",
 }: {
   value: string
   name: string
   image: string
   badge?: ReactNode
   disabled?: boolean
+  watermark?: string
 }) {
   const src = menuImageUrl(image)
   return (
@@ -162,7 +165,7 @@ function AccompanyRadioCard({
     >
       {disabled && (
         <span className="pointer-events-none absolute inset-0 z-10 flex -rotate-12 items-center justify-center text-center text-sm font-extrabold uppercase tracking-wider text-gray-500/80">
-          Sold Out
+          {watermark}
         </span>
       )}
       <div className="flex items-center gap-1.5">
@@ -470,6 +473,10 @@ export function WaiterMenuGrid({
     const weighted = factor > 0 && factor !== 1
     // Direct-sale items count units (sodas, packaging), never cooked plates.
     const isDirectSale = item.requiresCooking === false
+    // Plates the kitchen is still holding back — the card reads normally while
+    // some are sellable, greys with a pause note once everything is held.
+    const pausedPlates = Number(item.pausedPlates ?? 0)
+    const sellingPaused = pausedPlates > 0 && servings <= 0
     return (
       <Card
         key={item.id}
@@ -484,7 +491,7 @@ export function WaiterMenuGrid({
             "border-green-400 bg-green-100/70 hover:border-green-500 hover:bg-green-100",
           runningLow &&
             "border-red-500 bg-red-200/70 hover:border-red-600 hover:bg-red-200",
-          soldOut &&
+          (soldOut || sellingPaused) &&
             "bg-white border-gray-300 cursor-not-allowed hover:shadow-none hover:translate-y-0",
         )}
       >
@@ -495,12 +502,27 @@ export function WaiterMenuGrid({
             <span
               className={cn(
                 "text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap",
-                platesBadgeClass(servings),
+                sellingPaused
+                  ? "bg-orange-100 text-orange-700"
+                  : platesBadgeClass(servings),
               )}
             >
-              {soldOut ? "Sold Out" : weighted || isDirectSale ? `${servings} left` : `${servings} plates`}
+              {sellingPaused
+                ? "Selling Paused"
+                : soldOut
+                  ? "Sold Out"
+                  : weighted || isDirectSale
+                    ? `${servings} left`
+                    : `${servings} plates`}
             </span>
           </div>
+          {pausedPlates > 0 && (
+            <p className="text-[10px] leading-tight text-orange-700">
+              {sellingPaused
+                ? `Selling paused yet — ${pausedPlates} held. Not ready for serving yet.`
+                : `Selling paused yet — ${pausedPlates} held. Only ${servings} available to sell now.`}
+            </p>
+          )}
           {weighted && (
             <p className="text-[10px] text-brand-ebony/60 leading-tight">
               {plates} {plates === 1 ? "plate" : "plates"} in pool
@@ -544,8 +566,15 @@ export function WaiterMenuGrid({
   // the waiter sees `N left` / `Sold Out` and the card greys out when empty.
   const stockBadgeFor = (acc: Accompaniment, fallback: ReactNode): ReactNode => {
     if (!acc.linkedMenuId) return fallback
-    const { plates, soldOut } = accompanimentStock(acc, items)
+    const { plates, soldOut, paused } = accompanimentStock(acc, items)
     if (soldOut) {
+      if (paused) {
+        return (
+          <span className="rounded-full bg-orange-100 px-1.5 text-[10px] font-semibold text-orange-700">
+            Selling Paused
+          </span>
+        )
+      }
       return (
         <span className="rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-600">
           Sold Out
@@ -562,6 +591,11 @@ export function WaiterMenuGrid({
 
   const isStockSoldOut = (acc: Accompaniment): boolean =>
     accompanimentStock(acc, items).soldOut
+
+  // The disabled overlay explains WHY: a paused kitchen beats "sold out", which
+  // reads as if the food is gone.
+  const stockWatermarkFor = (acc: Accompaniment): string =>
+    accompanimentStock(acc, items).paused ? "Selling Paused" : "Sold Out"
 
   if (selectedItem && (selectedItem.id !== activeMenuId || activeOrderKey !== syncedOrderKey)) {
     setActiveMenuId(selectedItem.id)
@@ -753,8 +787,10 @@ export function WaiterMenuGrid({
                       <span className="truncate">{s.name}</span>
                       <span className="tabular-nums whitespace-nowrap">
                         {s.available > 0
-                          ? `only ${s.available} available`
-                          : "sold out"}
+                          ? `only ${s.available} available${s.paused > 0 ? ` (${s.paused} paused)` : ""}`
+                          : s.paused > 0
+                            ? `${s.paused} paused — not ready yet`
+                            : "sold out"}
                       </span>
                     </li>
                   ))}
@@ -947,6 +983,7 @@ export function WaiterMenuGrid({
                                 name={starch.name}
                                 image={starch.image}
                                 disabled={isStockSoldOut(starch)}
+                                watermark={stockWatermarkFor(starch)}
                                 badge={stockBadgeFor(
                                   starch,
                                   <span className="rounded-full bg-green-100 px-1.5 text-[10px] font-semibold text-green-700">
@@ -974,6 +1011,7 @@ export function WaiterMenuGrid({
                                 name={starch.name}
                                 image={starch.image}
                                 disabled={isStockSoldOut(starch)}
+                                watermark={stockWatermarkFor(starch)}
                                 badge={stockBadgeFor(
                                   starch,
                                   <span className="text-[10px] font-semibold text-brand-maroon">
@@ -1019,6 +1057,7 @@ export function WaiterMenuGrid({
                                 name={veg.name}
                                 image={veg.image}
                                 disabled={isStockSoldOut(veg)}
+                                watermark={stockWatermarkFor(veg)}
                                 badge={stockBadgeFor(
                                   veg,
                                   <span className="rounded-full bg-green-100 px-1.5 text-[10px] font-semibold text-green-700">
@@ -1046,6 +1085,7 @@ export function WaiterMenuGrid({
                                 name={veg.name}
                                 image={veg.image}
                                 disabled={isStockSoldOut(veg)}
+                                watermark={stockWatermarkFor(veg)}
                                 badge={stockBadgeFor(
                                   veg,
                                   <span className="text-[10px] font-semibold text-brand-maroon">

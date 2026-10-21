@@ -115,6 +115,22 @@ export function registerStockReturnHandlers() {
   );
 }
 
+export function registerSellingPauseHandlers() {
+  ipcMain.handle("selling-pause:get-all", async (_event, params?) => {
+    const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
+    return apiFetch(`/selling-pauses${qs}`);
+  });
+  ipcMain.handle("selling-pause:create", async (_event, data) =>
+    apiFetch("/selling-pauses", { method: "POST", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("selling-pause:update", async (_event, id: string, data) =>
+    apiFetch(`/selling-pauses/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  );
+  ipcMain.handle("selling-pause:delete", async (_event, id: string, data) =>
+    apiFetch(`/selling-pauses/${id}`, { method: "DELETE", body: JSON.stringify(data) })
+  );
+}
+
 export function registerCategoryHandlers() {
   ipcMain.handle("category:get-all", async () => apiFetch("/categories"));
   ipcMain.handle("category:create", async (_event, data) =>

@@ -86,6 +86,7 @@ model Menu {
   // consumes 1 plate of this dish's pool (see MenuAccompaniment.linkedMenuId).
   accompanimentLinks                                    MenuAccompaniment[] @relation("Menu_linkedAccompaniment")
   stockAdjustments                                      StockAdjustment[]
+  sellingPauses                                         SellingPause[]
 }
 
 model MenuAccompaniment {
@@ -246,6 +247,7 @@ model User {
   StockRequest      StockRequest[]
   stockReturns     StockReturn[]
   stockAdjustments StockAdjustment[]
+  sellingPauses     SellingPause[]
 }
 
 model VerificationToken {
@@ -454,6 +456,7 @@ model CookingRecord {
   shift              Shift?                @relation(fields: [shiftId], references: [id])
   cookingRecordMenus CookingRecordMenu[]
   allocations        OrderItemAllocation[]
+  sellingPauses       SellingPause[]
 
   @@unique([stockSupplyId, shiftId, batchNumber])
 }
@@ -534,6 +537,7 @@ model Shift {
   snapshots        ShiftSnapshot[]
   orders           Order[]
   cookingRecords   CookingRecord[]
+  sellingPauses     SellingPause[]
 
   @@unique([type, operationDay])
 }
@@ -682,4 +686,24 @@ model SystemSettings {
   showGoLiveInput Boolean  @default(true)
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+}
+
+model SellingPause {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shiftId         String?     @db.Uuid
+  operationDay    DateTime    @db.Date
+  menuId          String      @db.Uuid
+  cookingRecordId String?     @db.Uuid
+  sellingMode     SellingMode
+  pausedPlates    Decimal     @db.Decimal(12, 2)
+  active          Boolean     @default(true)
+  reason          String?
+  pausedById      String      @db.Uuid
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(3)
+
+  Menu          Menu           @relation(fields: [menuId], references: [id])
+  CookingRecord CookingRecord? @relation(fields: [cookingRecordId], references: [id])
+  PausedBy      User           @relation(fields: [pausedById], references: [id])
+  Shift         Shift?         @relation(fields: [shiftId], references: [id])
 }

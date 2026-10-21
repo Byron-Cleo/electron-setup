@@ -1,15 +1,41 @@
 
 ## Platform
 
-Not Specified
+backend + frontend
 
 ## Status
 
-Complete
+Implementation complete — pending commit/merge decision
 
 ## Goals
 
+- Add SellingPause model and relations ✅
+- Subtract pauses from pool availability (sellableInfoForMenu/assertLinesServable) ✅
+- API routes for selling pauses (admin/manager only) ✅
+- IPC/electron/preload/api wiring ✅
+- Dispatch UI: Control Selling button + modal per batch ✅
+- Waiter POS: greyed state + messages when paused ✅
+- Shift close/leftovers: paused unsold become assigned but not sold, carry forward ✅
+- Server-side enforcement ✅
+
 ## Notes
+
+Branch: feature/waiter/control-selling-pause  
+Plan: context/fix-plan/control-selling-pause.md  
+Paused unsold not revenue; auto-convert to assigned but not sold at shift close until unpaused or wasted.  
+KEYED pause does not change keyedStock. Per split for ALLOCATED, per batch for SHARED, per scope for KEYED.
+
+Implementation facts (2026-10-21):
+- Engine: `pools.ts` `pausedPlatesForMenu()` — menu-scoped (KEYED null-batch + ALLOCATED splits) plus supply-scoped (SHARED batch pauses hit every dish on the supply); `sellableInfoForMenu` subtracts after pool math, returns `pausedActive`; `InsufficientPoolError` message is pause-aware ("Only Y plates available to sell for X. The rest are paused (not ready yet)..."); `MenuShortfall.paused` added; direct-sale branch subtracts pauses from keyed stock without touching the ledger
+- Route: `sellingPauses.ts` GET/POST/PUT/DELETE at `/api/selling-pauses` — `pausedById` body convention (like `voidedById`) with DB-backed admin/manager check; per-scope ceilings (split remainder / batch pool); upsert on scope key; closed-shift + disposed-batch rejection; availability check credits back the pause's own current amount on raise/reactivate
+- Menu list: `pausedPlates` on every menu item (menu.ts via `sellableInfoForMenu`)
+- Electron: `registerSellingPauseHandlers` + main.ts + preload `sellingPause.*` + `electron.d.ts` types (`SellingPause`, `SellingPauseCreateData`, `SellingPauseUpdateData`) + `lib/api.ts` CRUD with Decimal normalization
+- Dispatch UI: `ControlSellingModal.tsx` (reusable: stats + per-scope rows, amount/reason, Pause/Update/Resume); wired into `CookedFoodTable` (per batch, ALLOCATED per split / SHARED per batch) and `MenuStockManager` (Keyed per linked dish + Direct Sale per row) — admin/manager gated
+- Waiter POS: `WaiterMenuGrid` — orange "Selling Paused" badge + plan wording when partially held, greyed card + "not ready" message when fully held; linked sides show "Selling Paused" badge/watermark instead of Sold Out; shortfall list shows paused counts; qty stepper caps at paused-adjusted availability
+- Leftovers: `shiftCarryOver.ts` `AssignedLeftoverRow` gains `batchIds` + `pausedPlates`; `AssignedLeftoversTable` shows "N paused" badge + Resume button (releases every active pause on the row's batches) — satisfies "manager can unpause carried-forward items"; pauses ignore shift/day so they carry forward automatically; paused plates never leave `platesRemaining`, so shift close folds them into assigned-unsold leftovers with zero extra work
+- Power-outage incident (same day): orphaned node squatted :3001 serving a pre-fix dist (invalid lowercase `cookingRecord` Prisma filter → every /api/menu 500); fixed by rebuild + UAC taskkill + `pos-backend-restart` scheduled task; E2E re-verified (menu 112 items, order #1167 place+void cycle, all test data deleted)
+- Live E2E on prod :3001: dispatch modal pause 5 on Ndovu Ngano Batch #1 → Chapati + Chapati Staff both 80→75 avail / 5 paused (supply-wide SHARED semantics confirmed), waiter grid shows exact plan wording, stepper hard-caps at 75, resume → 80/0, test pause row deleted
+- Builds: backend dist rebuilt + EraevaBackend restarted (RUNNING, /health ok); `npm run build` + `build:web -- --server same-origin` re-run; installed .exe terminals still run 0.0.2 — a `build:win` refresh is an operator decision
 
 ## History
 

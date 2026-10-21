@@ -644,6 +644,7 @@ router.get("/", async (req, res) => {
       sellingMode: availability[index]?.sellingMode,
       allocatedPlates: availability[index]?.allocated ?? 0,
       sharedPlates: availability[index]?.shared ?? 0,
+      pausedPlates: availability[index]?.pausedActive ?? 0,
       supplyNames: stockSupplyMenus.map((l) => l.stockSupply.name),
       hasPortion: portionOptions.length > 0,
       portionId: menu.portionId,
