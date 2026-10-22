@@ -200,6 +200,10 @@ Or run everything with `npm run dev:all`.
 | `npm run build:mac` | Build + package DMG/ZIP |
 | `npm run build:win` | Build + package NSIS/portable |
 | `npm run build:linux` | Build + package AppImage/deb/rpm |
+| `npm run build:win:network` | Build + package with a **baked** API base → `release/` |
+| `npm run build:win:tailscale` | Same, baked to the Tailscale IP `100.108.69.45:3001` → `release-tailscale/` |
+
+**Multiple installers side by side:** `scripts/build-network.mjs` accepts `--out-dir <dir>` (env `BUILD_OUT_DIR`) to write the installer somewhere other than `release/`, and `--artifact-suffix <text>` (env `BUILD_ARTIFACT_SUFFIX`) to tag the filename. `npm run build:win:tailscale` produces `release-tailscale/Eraeva POS System-0.0.3-tailscale-win-x64.exe` while the LAN installer in `release/` is left untouched. Each build is self-contained: it runs `clean:electron` first, so a LAN build can never inherit a previously baked Tailscale IP — the two variants can be rebuilt in any order, at any time, without interfering. Custom output dirs must be gitignored (`release-*/` is).
 
 ### Backend (prefix: `backend/`)
 
@@ -240,7 +244,7 @@ The server is operated remotely over SSH (no RDP; staff use the console). Local 
   `ssh -N -L 3001:127.0.0.1:3001 -L 3111:127.0.0.1:3111 -L 5123:127.0.0.1:5123 -L 5433:127.0.0.1:5432 ops@<server>` → browser `http://localhost:3001` (live prod UI), `http://localhost:5123` (dev UI → dev backend), DB tools at `localhost:5433`.
 - Dev backend binds `127.0.0.1:3111` — never expose dev to the LAN. Cleanup any stray `0.0.0.0` dev listener.
 
-**Browser live view (build:web rule):** after ANY plain `npm run build` / `build:win` (which rewrites `dist-react` for the Electron file:// build), RE-RUN `npm run build:web -- --server same-origin` so the served web UI stays browser-correct (absolute `/assets`, API resolves to the host the UI is opened on — LAN IP, SSH-tunnel localhost, or Tailscale). Installed .exe terminals keep their own packaged bundle and are unaffected. (Bake a fixed origin instead with `--server http://<server-ip>:3001` when the bundle must target one specific URL.)
+**Browser live view (build:web rule):** after ANY plain `npm run build` / `build:win` (which rewrites `dist-react` for the Electron file:// build), RE-RUN `npm run build:web -- --server same-origin` so the served web UI stays browser-correct (absolute `/assets`, API resolves to the host the UI is opened on — LAN IP, SSH-tunnel localhost, or Tailscale). Installed .exe terminals keep their own packaged bundle and are unaffected. (Bake a fixed origin instead with `--server http://<server-ip>:3001` when the bundle must target one specific URL.) The same applies to every `build:*:network` / `--out-dir` build — they also rewrite `dist-react/`.
 
 ## Project Structure
 

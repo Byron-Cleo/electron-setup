@@ -34,6 +34,7 @@
     "build:network": "node scripts/build-network.mjs",
     "build:win:network": "node scripts/build-network.mjs --platform win",
     "build:mac:network": "node scripts/build-network.mjs --platform mac",
+    "build:win:tailscale": "node scripts/build-network.mjs --platform win --server http://100.108.69.45:3001 --out-dir release-tailscale --artifact-suffix tailscale",
     "build:web": "node scripts/build-web.mjs",
     "test:backend": "npm run test --prefix backend",
     "test:frontend": "vitest run",

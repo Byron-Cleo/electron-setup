@@ -39,6 +39,17 @@ Implementation facts (2026-10-21):
 
 ## History
 
+### frontend + electron - 2026-10-22 — Tailscale-Tailnet Installer Alongside the LAN Installer
+
+- **Goal** — build a Windows installer with the Tailscale IP (`100.108.69.45:3001`) baked in, for distribution to tailnet machines, without disturbing the working LAN installer or the production server
+- **Audit first** — the stashed `build-tailscale.mjs` (parked on `feature/waiter/accompaniment-self-ref-price`, 2026-10-19) was reviewed before any merge: it carried 573 MB of `release-tailscale/` build output (not gitignored) and a compiled `vite.config.js` that **shadows** `vite.config.ts` in Vite's `DEFAULT_CONFIG_FILES` order — so it was NOT restored; the stash stays parked
+- **`scripts/build-network.mjs`** — added `--out-dir <dir>` (env `BUILD_OUT_DIR`) and `--artifact-suffix <text>` (env `BUILD_ARTIFACT_SUFFIX`); out-dir is passed to electron-builder as `--config.directories.output=`, which deep-merges over `electron-builder.json` and preserves `buildResources` / `files` / `win.target` / `nsis`; the suffix is inserted into the platform `artifactName` template (read from the builder config, not hardcoded)
+- **`package.json`** — new `build:win:tailscale` script → `release-tailscale/Eraeva POS System-0.0.3-tailscale-win-x64.exe`; the LAN installer in `release/` is never overwritten
+- **`.gitignore`** — `release-*/` so no custom output dir can enter git history
+- **Independence** — every build runs `clean:electron` first, so a LAN build can never inherit a previously baked Tailscale IP (the 0.0.1 "can't connect" failure mode, see `085852f`); the two variants can be rebuilt in any order, at any time
+- **Caveat** — any `build:*:network` / `--out-dir` build rewrites `dist-react/`, which the backend serves on :3001, so `npm run build:web -- --server same-origin` must be re-run afterwards
+- No backend/Prisma changes → no backend rebuild, no `EraevaBackend` restart
+
 ### backend + frontend - 2026-10-21 — Control Selling: Pause/Resume Cooked Plates
 
 - **Engine** — `SellingPause` model (schema pushed to eraevadb); `pools.ts` `pausedPlatesForMenu()` sums menu-scoped holds (KEYED null-batch + ALLOCATED splits) plus supply-scoped SHARED batch holds (a paused shared tray withholds from EVERY dish on its supply); `sellableInfoForMenu` subtracts pauses in all branches incl. direct-sale (ledger untouched); `MenuShortfall.paused` + pause-aware `InsufficientPoolError` ("Only Y plates available to sell for X. The rest are paused (not ready yet). Please order Y or less, or choose another dish."); menu list carries `pausedPlates`
