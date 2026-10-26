@@ -14,7 +14,7 @@
     "seed:categories": "tsx db/seed-categories.ts",
     "dump:categories": "tsx db/dump-categories.ts",
     "db:create-admin": "tsx db/create-admin.ts",
-    "build": "tsc",
+    "build": "npm run db:generate && tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest"
