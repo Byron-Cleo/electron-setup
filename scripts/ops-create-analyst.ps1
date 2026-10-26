@@ -58,7 +58,7 @@ try {
   $exists = & $psql -h 127.0.0.1 -U $superUser -d $Database -tAc "select 1 from pg_roles where rolname = '$RoleName';" 2>$null
   if ($LASTEXITCODE -ne 0) { throw "Could not connect as $superUser (exit $LASTEXITCODE)." }
 
-  if ($exists.ToString().Trim() -eq '1') {
+  if ("$exists".Trim() -eq '1') {
     $sql = "ALTER ROLE $RoleName WITH LOGIN PASSWORD '$escaped';"
     Write-Host "Role '$RoleName' exists - rotating its password."
   } else {
