@@ -237,6 +237,27 @@ The server is operated remotely over SSH (no RDP; staff use the console). Local 
 4. Restart WITHOUT UAC: `schtasks /run /tn pos-backend-restart` (SYSTEM/Highest task → `scripts/restart-backend.cmd` → `sc stop/start EraevaBackend`; log: `backend/logs/restart.log`)
 5. Verify: `sc query EraevaBackend` → RUNNING and `curl http://localhost:3001/health`
 
+**Operator access (no RDP — use this while waiters are serving):**
+- Laptop `~/.ssh/config`:
+  ```
+  Host pos
+    HostName 100.108.69.45
+    User ops
+    IdentityFile ~/.ssh/eraeva_ops
+    LocalForward 3001 127.0.0.1:3001
+    LocalForward 5433 127.0.0.1:5432
+    LocalForward 5123 127.0.0.1:5123
+    LocalForward 3111 127.0.0.1:3111
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+  ```
+  `ssh pos` = shell + tunnels; `ssh -fN pos` = tunnels only. Browser `http://localhost:3001`; DB tools `localhost:5433`.
+- **One-time** (elevated): `npm run ops:setup` grants `ops` Modify on this repo and scopes the built-in OpenSSH firewall rule to Tailscale + LAN (`192.168.100.0/24`) + localhost. Then, as `ops`: `git config --global --add safe.directory C:/Users/User/Desktop/pos/electron-setup`. Re-check the firewall rule's `RemoteAddress` after Windows updates.
+- **Daily commands** (as `ops` over SSH): `npm run ops:status` (read-only summary), `npm run ops:deploy` (pull → build → restart bridge → health; **brief ~5–15 s API gap**), `npm run ops:deploy -- -SkipWeb` or `npm run ops:deploy -- -SyncDb` as needed, `npm run ops:snapshot` (pg_dump to `backend/backups/`, pull with `scp pos:...`).
+- **DB analysis**: one-time `npm run ops:analyst` creates/rotates the read-only `era_analyst` role; DBeaver → `127.0.0.1:5433`, db `eraevadb`, user `era_analyst`. Never use the superuser for ad-hoc analysis.
+- **Deploy caveat:** `ops:deploy` runs `build:web -- --server same-origin`, which updates the browser UI only. Installed Electron terminals keep their own bundle and still need a new installer for frontend changes.
+- **Emergency GUI only:** RDP/Radmin stay enabled for off-hours emergencies; do not use them while waiters are serving. PostgreSQL rebind + rollback steps live in `context/fix-plan/remote-ops-ssh-access.md`.
+
 **Dev scope (isolated — reachable ONLY via SSH tunnels):**
 - DB `eraevadb_dev` owned by role `era_dev` (locked to that DB; **no grants on `eraevadb`**), schema pushed + dev users seeded. `backend/load-env.ts` selects `.env` on `NODE_ENV=production`, else `.env.development` (gitignored; PORT=3111, BIND=127.0.0.1, ENABLE_SCHEDULER=false).
 - Start/stop detached dev backend + Vite UI: `npm run dev:remote:start` / `npm run dev:remote:stop` (logs: `backend/logs/dev-backend.log`, `dev-backend.err.log`, `dev-ui.log`; survives SSH disconnect; last `ERROR: cannot terminate itself` in the output is the harmless stop of the caller).

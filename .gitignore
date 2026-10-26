@@ -38,6 +38,9 @@ release-*/
 backend/tests/
 desktop/ui/tests/
 
+# Ops snapshots
+backend/backups/
+
 # User uploads
 backend/uploads/
 
