@@ -1,51 +1,35 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
+# Environment files - never commit secrets
+backend/.env
+backend/.env.development
 .env
-.env.test
-backend/.env.test
-dist
-dist-react
-dist-electron
-dist-ssr
-*.local
+.env.*
+!.env.example
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-package-lock.json
-release
-release-*/
-
-# Playwright MCP session artifacts
+# Playwright artifacts
 .playwright-mcp/
 
-# Test files (excluded from production and git tracking)
-backend/tests/
-desktop/ui/tests/
+# Logs
+*.log
+logs/
+backend/logs/
+dev-backend.log
+devall.log
 
-# Ops snapshots
-backend/backups/
+# Database dumps/backups
+*.dump
+backend/*.dump
+eraevadb-backup-*.dump
+db_backups/
 
-# User uploads
-backend/uploads/
+# Build outputs
+dist-electron/
+dist-react/
+release/
+release-tailscale/
 
-# Foglamp scan (contains edit token)
-.foglamp/
+# Lockfiles (ignore as requested)
+package-lock.json
+backend/package-lock.json
 
-# Uploaded files
-backend/uploads/
+# Temp files
+temp_script.ps1
