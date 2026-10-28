@@ -20,7 +20,7 @@ Not Started
 
 `WaiterMenuGrid.tsx:1134-1149` renders **every** category as a stacked section (a bare `<p>` header + a dish grid) inside one scroll container. With the live menu this is **20 food categories / 89 dishes** in a single scroll — waiters reported the scrolling as tiring during order taking.
 
-Live counts measured from the running instance (`GET /api/menu`, 119 items):
+Live counts measured from the running instance (`GET /api/menu`, 119 items) — these are **production** `eraevadb` figures; re-measure against the local Mac DB if the category mix differs there:
 
 | Meal period | Distinct categories | Dishes |
 |---|---|---|
@@ -273,16 +273,20 @@ The existing phone treatment still applies: fixed bottom cart bar + `Sheet`, and
 
 ## Deployment
 
-### Local development (where this feature is being built)
+### Local development — the operator's Mac (where this feature is being built)
 
 ```bash
-npm run db:sync                        # adds waiterMenuLayout
+npm run db:sync                        # adds waiterMenuLayout to the LOCAL postgres
 npm run build --prefix backend
-npm run dev:backend                    # dev port 3111
+npm run dev:backend                    # local dev backend — port 3001
 npm run dev                            # Vite + Electron
 ```
 
-> The local dev backend uses port **3111** and `eraevadb_dev`. Do **not** touch the production `EraevaBackend` service or `eraevadb` from the dev machine.
+> **Ports on the Mac are 3001, not 3111.** Per AGENTS.md, "production and normal Mac development both use **3001**". The `3111` / `eraevadb_dev` scope is the **SSH dev scope that lives on the restaurant machine only** — it does not apply on the Mac.
+>
+> The Mac runs against its **local** PostgreSQL (`eraevadb`, default `DATABASE_URL` user `mac` per AGENTS.md). `npm run db:sync` therefore touches only the Mac's local database — it is safe and **must** be run before the backend rebuild so the new `waiterMenuLayout` column exists locally.
+>
+> The Mac has no `EraevaBackend` service and no production data — nothing on WAITER2 can be affected from here.
 
 ### Production (later, after operator sign-off)
 
@@ -306,7 +310,7 @@ npm run build:web -- --server same-origin
 
 ## Out of scope (operator follow-ups, separate changes)
 
-1. **Set `displayOrder` on the 6 food categories that still have `0`** — `Athola`, `Cereals`, `Fish`, `Liver`, `Nduma-Ngwashi`, `Ugali` currently sort alphabetically to the end, so the card order is not deliberate
+1. **Set `displayOrder` on the 6 food categories that still have `0`** — `Athola`, `Cereals`, `Fish`, `Liver`, `Nduma-Ngwashi`, `Ugali` currently sort alphabetically to the end, so the card order is not deliberate *(measured on the production `eraevadb`; re-check against the local Mac DB, which may differ)*
 2. **Merge near-duplicate categories** — `Cereals` + `Cereals/Beans/Minji` and `Ugali` + `Ugali Plate/RICE PLATE` are 4 cards where 2 would do (20 → 18)
 3. **BEVERAGE's 9 "categories" are drink brands** (`Dasani`, `MWALA`, `Glass SODA`…) — modelling them as one `Beverages` category with a brand field would make that grid a single card
 4. **Search in List View** — the search box is specified for Card Grid only; adding it to List View is a follow-up
@@ -316,4 +320,5 @@ npm run build:web -- --server same-origin
 - Branch: `feature/waiter/menu-layout-card-grid`
 - Spec: `context/features/frontend/waiter-menu-layout-card-grid.md`
 - Update `context/current-feature.md` (Platform, Status, Goals, Notes, History) when implementation starts
-- No ollama codegen model is installed on this machine (only `qwen2.5vl:3b` vision) → **manual implementation**, consistent with the standing operator directive recorded in past history entries
+- **Codegen model:** the WAITER2 machine has only `qwen2.5vl:3b` (vision) installed — no `deepseek-coder` / `qwen2.5-coder`. Check the Mac (`ollama list`); if a codegen model is available there, the AGENTS.md rule applies (frontend → `deepseek-coder:latest`, backend → `qwen2.5-coder:7b`). Otherwise implement manually, consistent with the standing operator directive recorded in past history entries
+- **When the work is done on the Mac**, push the branch and pull it here on WAITER2 for the production deploy (see the Production section above)
