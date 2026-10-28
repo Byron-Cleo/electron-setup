@@ -1,3 +1,7 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
 # Environment files - never commit secrets
 backend/.env
 backend/.env.development
