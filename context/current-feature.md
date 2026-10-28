@@ -5,7 +5,7 @@ frontend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
@@ -37,6 +37,7 @@ Implementation facts (2026-10-28):
 - **Tailnet installer script fixed** — `build:tailscale` / `build:win:tailscale` pointed at `scripts/build-tailscale.mjs`, which does not exist (parked in a stash: it carried 573 MB of build output and a compiled `vite.config.js` that shadows `vite.config.ts`). Both now call the maintained `scripts/build-network.mjs` with `--server http://100.108.69.45:3001 --out-dir release-tailscale --artifact-suffix tailscale` → `release-tailscale/Eraeva POS System-0.0.0-tailscale-win-x64.exe`; the LAN installer in `release/` is left untouched
 - **Installer build order is fixed** — `npm run build:win` (LAN) → `npm run build:win:tailscale` (tailnet) → `npm run build:web -- --server same-origin` (restore the browser-served bundle). The tailnet build bakes into `dist-electron/server-config.js` and the plain `build:win` uses an incremental `tsc -b` that will not re-emit it, so running the tailnet build first would silently ship the tailnet address in the LAN installer. After the tailnet build, restore with `node scripts/clean-electron.mjs && npm run transpile:electron`
 - **Deferred** — every live event still refetches the full `GET /orders` list (today's behaviour, no regression); surgical `GET /api/orders/:id` + array patching would need a backend change, rebuild and service restart — deliberately postponed
+- **Session re-imported locally (2026-10-28)** — this session was continued from `origin/feature/cashier/payment-view-live-refresh` (never merged into `restaurant-build`). The local branch now tracks the remote and has `restaurant-build` merged into it, so it descends from both and will not conflict later on merge-back. Merge resolutions: `package.json` took `restaurant-build`'s restored version (version `0.0.3`, all `ops:*` scripts, `clean:electron`, `db:pull`) while keeping this branch's `build:tailscale` alias; `.gitignore` took the union of both sides (Logs + Dependencies + Environment headers, `backend/.env`, `backend/.env.development`, `**/node_modules/`, plus `restaurant-build`'s `db_backups/`, `*.dump`, `release*/`, `backend/uploads/`, `.foglamp/`). Status flipped Complete → In Progress to continue the work
 
 ## History
 
