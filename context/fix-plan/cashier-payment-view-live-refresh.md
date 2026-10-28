@@ -159,6 +159,7 @@ it — and auto-scrolling would re-create the very interruption we are removing.
 | `desktop/ui/components/ui/data-table.tsx` | `dense`, `bodyMaxHeight`, `bodyRef` opt-in props; sticky thead |
 | `desktop/ui/pages/admin/Cashier.tsx` | Silent refresh ×3; Payment view redesign (30/page, title removed, single toolbar row, "N new orders" pill) |
 | `desktop/ui/pages/Store.tsx` | Silent refresh ×2 |
+| `package.json` | `build:tailscale` / `build:win:tailscale` repointed from the missing `scripts/build-tailscale.mjs` to `scripts/build-network.mjs` (tailnet server + `release-tailscale/` + `tailscale` suffix) |
 
 No backend, no Prisma schema, no Electron main/preload changes.
 
@@ -183,8 +184,57 @@ No backend, no Prisma schema, no Electron main/preload changes.
 - **Frontend only** → no backend rebuild, no `EraevaBackend` restart.
 - Browser live view updates via `npm run build:web -- --server same-origin`.
 - **Installed `.exe` terminals keep their own bundle** → they need a new
-  installer (`npm run build:win`) for cashiers to receive this. Operator
-  decision at deploy time.
+  installer for cashiers to receive this. Operator decision at deploy time.
+
+### Two installers, side by side
+
+| Terminal location | Command | Output |
+|---|---|---|
+| On the restaurant LAN | `npm run build:win` | `release/Eraeva POS System-0.0.0-win-x64.exe` |
+| Over the tailnet (not on LAN) | `npm run build:win:tailscale` | `release-tailscale/Eraeva POS System-0.0.0-tailscale-win-x64.exe` |
+
+`build:win:tailscale` bakes the tailnet API base `http://100.108.69.45:3001/api`
+into both the renderer (`VITE_API_BASE` / `VITE_API_ORIGIN`) and the Electron
+main process (`DEFAULT_API_BASE` in `server-config.ts`), and writes to its own
+`release-tailscale/` folder, so the LAN installer in `release/` is untouched.
+
+**The order is fixed — run them in this sequence:**
+
+```bash
+npm run build:win                             # 1. LAN installer    → release/
+npm run build:win:tailscale                   # 2. tailnet installer → release-tailscale/
+npm run build:web -- --server same-origin     # 3. restore the browser-served bundle
+```
+
+Why the order matters:
+
+- Step 2 (`scripts/build-network.mjs`) bakes its API base into the compiled
+  `dist-electron/server-config.js`. Step 1 (`npm run build:win`) runs a plain
+  `tsc -b`, which is incremental and **does not** re-emit an output it
+  considers up to date — so if the tailnet build ran first, the LAN installer
+  would silently keep the tailnet address. `build-network.mjs` wipes
+  `dist-electron/` before compiling (`scripts/clean-electron.mjs`); the plain
+  `build:win` does not.
+- Steps 1 and 2 both rewrite `dist-react/`, which the backend serves at `:3001`.
+  Step 3 restores the browser-correct bundle (absolute `/assets`, same-origin
+  API), so the served UI works over LAN, SSH tunnel and tailnet alike.
+
+**After step 2**, `dist-electron/server-config.js` is left holding the tailnet
+address. Restore the pristine source build before any later plain build:
+
+```bash
+node scripts/clean-electron.mjs && npm run transpile:electron
+```
+
+### Script fix (2026-10-28)
+
+`build:tailscale` / `build:win:tailscale` pointed at `scripts/build-tailscale.mjs`,
+which **does not exist** — it was parked in a stash (it carried 573 MB of build
+output and a compiled `vite.config.js` that shadows `vite.config.ts` in Vite's
+`DEFAULT_CONFIG_FILES` order). Both scripts now call the maintained
+`scripts/build-network.mjs` with the tailnet server, `release-tailscale/` as the
+output directory and the `tailscale` artifact suffix.
+
 
 ---
 
