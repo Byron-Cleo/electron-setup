@@ -27,6 +27,7 @@
     "ops:analyst": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ops-create-analyst.ps1",
     "dev:all": "concurrently -k -n \"backend,react,electron\" \"npm run dev:backend\" \"npm run dev:react:local\" \"cross-env API_BASE=http://localhost:3001/api npm run dev:electron\"",
     "db:sync": "npm run db:generate --prefix backend && npm run db:push --prefix backend",
+    "db:pull": "bash scripts/sync-eraevadb.sh",
     "build": "tsc -b && vite build",
     "clean:electron": "node scripts/clean-electron.mjs",
     "lint": "eslint .",
