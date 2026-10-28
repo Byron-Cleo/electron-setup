@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, Banknote, Landmark, Lock, Smartphone, Printer } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { Eye, Ban, Receipt, XCircle, Wallet, ArrowRight, ArrowLeft, ArrowUp, Banknote, Landmark, Lock, Smartphone, Printer } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -748,9 +748,15 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
   const user = useAuthStore((s) => s.user)
   const roleByUserId = useUserRoles()
 
-  const refreshOrders = useCallback(async () => {
-    setLoading(true)
-    setError("")
+  // A live-event refresh runs silently: the table keeps its rows on screen and
+  // the new order simply appears, instead of the view unmounting behind a
+  // "Loading orders..." flash while the cashier is mid-transaction.
+  const refreshOrders = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true
+    if (!silent) {
+      setLoading(true)
+      setError("")
+    }
     try {
       const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
 
@@ -769,9 +775,11 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
       setOrders(filteredOrders)
       setShiftOpDayById(shiftOpDayById)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load orders")
+      // A failed background refresh keeps the last good rows on screen.
+      if (!silent) setError(err instanceof Error ? err.message : "Failed to load orders")
+      else console.warn("Silent orders refresh failed:", err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [shiftType, operationDay])
 
@@ -810,7 +818,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
 
   useLiveRefresh(
     ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "order.customer-assigned", "order.customer-unassigned"],
-    refreshOrders
+    () => { void refreshOrders({ silent: true }) }
   )
 
   const batchTotals = useMemo(() => {
@@ -898,7 +906,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
     try {
       await assignOrderCustomer(pickerOrder.id, customerId, user.id)
       setPickerOrder(null)
-      await refreshOrders()
+      await refreshOrders({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign customer")
     } finally {
@@ -911,7 +919,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
     setError("")
     try {
       await unassignOrderCustomer(order.id)
-      await refreshOrders()
+      await refreshOrders({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove customer")
     } finally {
@@ -926,7 +934,7 @@ function OrdersView({ shiftType, operationDay }: { shiftType?: string; operation
     setError("")
     try {
       await unmarkOrderAsUnpaid(order.id)
-      await refreshOrders()
+      await refreshOrders({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to undo mark unpaid")
     } finally {
@@ -1399,8 +1407,11 @@ function VoidView({ shiftType, operationDay }: { shiftType?: string; operationDa
   const [voidReason, setVoidReason] = useState("")
   const [voiding, setVoiding] = useState(false)
 
-  const refreshVoid = useCallback(async () => {
-    setLoading(true)
+  // Silent on live events so a new order never blanks the voidable list the
+  // cashier is working through.
+  const refreshVoid = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true
+    if (!silent) setLoading(true)
     try {
       const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
 
@@ -1420,9 +1431,10 @@ function VoidView({ shiftType, operationDay }: { shiftType?: string; operationDa
       setOrders(filteredOrders)
       setShiftOpDayById(shiftOpDayByIdMap)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load orders")
+      if (!silent) setError(err instanceof Error ? err.message : "Failed to load orders")
+      else console.warn("Silent void-list refresh failed:", err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [shiftType, operationDay])
 
@@ -1462,7 +1474,7 @@ function VoidView({ shiftType, operationDay }: { shiftType?: string; operationDa
 
   useLiveRefresh(
     ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "order.customer-assigned", "order.customer-unassigned"],
-    isCashier ? () => {} : refreshVoid
+    isCashier ? () => {} : () => { void refreshVoid({ silent: true }) }
   )
 
   const filtered = useMemo(() => {
@@ -1816,11 +1828,23 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
   // mirrors it so the cashier can act on a parked order from either table.
   const [customerPickerOrder, setCustomerPickerOrder] = useState<Order | null>(null)
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
+  // Arrivals that landed while the cashier was scrolled away from the newest
+  // row — surfaced as a jump button instead of a forced scroll.
+  const [newOrderCount, setNewOrderCount] = useState(0)
+  const tableBodyRef = useRef<HTMLDivElement | null>(null)
   const user = useAuthStore((s) => s.user)
   const roleByUserId = useUserRoles()
 
-  const refreshPayment = useCallback(async () => {
-    setLoading(true)
+  // Silent on live events: a waiter placing an order adds a row to the table
+  // in place, with no unmount, no "Loading orders..." flash, and no
+  // interruption to a payment dialog the cashier already has open.
+  // Returns how many rows newly appeared in the category the cashier is
+  // looking at, so a caller can tell a genuinely new order from a row that
+  // was already listed (an order for another shift, or one that belongs to
+  // the other category, must not count).
+  const refreshPayment = useCallback(async (options?: { silent?: boolean }): Promise<number> => {
+    const silent = options?.silent === true
+    if (!silent) setLoading(true)
     try {
       const [allOrders, shiftsData] = await Promise.all([getOrders(), listShifts()])
 
@@ -1837,14 +1861,26 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
           )
         : unpaidOrders
 
+      // Rows the cashier can actually see in the active category, before and
+      // after the refresh — the difference is what genuinely arrived.
+      const inCategory = (rows: Order[]) =>
+        payCategory === "NEW"
+          ? rows.filter((o) => !o.unpaidAcknowledged)
+          : rows.filter((o) => o.unpaidAcknowledged)
+      const visibleBefore = new Set(inCategory(orders).map((o) => o.id))
+      const added = inCategory(filteredOrders).filter((o) => !visibleBefore.has(o.id)).length
+
       setOrders(filteredOrders)
       setShiftOpDayById(shiftOpDayByIdMap)
+      return added
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load orders")
+      if (!silent) setError(err instanceof Error ? err.message : "Failed to load orders")
+      else console.warn("Silent payment-list refresh failed:", err)
+      return 0
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
-  }, [shiftType, operationDay])
+  }, [shiftType, operationDay, payCategory, orders])
 
   useEffect(() => {
     let cancelled = false
@@ -1879,10 +1915,42 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     return () => { cancelled = true }
   }, [shiftType, operationDay])
 
+  // New orders sort newest-first, so a fresh order lands on row 1. When the
+  // cashier has scrolled down inside the 30-row list they would not see it —
+  // and auto-scrolling would re-create the very interruption we removed. So we
+  // count arrivals instead and offer a "N new orders" button to jump to them.
   useLiveRefresh(
     ["order.created", "order.paid", "order.voided", "order.unpaid-ack", "order.unpaid-ack-undo", "order.customer-assigned", "order.customer-unassigned"],
-    refreshPayment
+    (event) => {
+      void refreshPayment({ silent: true }).then((added) => {
+        if (event.type !== "order.created" || added === 0) return
+        const body = tableBodyRef.current
+        if (!body || body.scrollTop <= 0) {
+          // The newest row is already in view — nothing to announce.
+          setNewOrderCount(0)
+          return
+        }
+        setNewOrderCount((n) => n + added)
+      })
+    }
   )
+
+  function scrollToNewestOrders() {
+    tableBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+    setNewOrderCount(0)
+  }
+
+  // Scrolling back to the top means the newest rows are visible again, so the
+  // jump button has nothing left to offer.
+  useEffect(() => {
+    const body = tableBodyRef.current
+    if (!body) return
+    const onScroll = () => {
+      if (body.scrollTop <= 0) setNewOrderCount(0)
+    }
+    body.addEventListener("scroll", onScroll, { passive: true })
+    return () => body.removeEventListener("scroll", onScroll)
+  }, [loading])
 
   const filtered = useMemo(() => {
     let source = orders
@@ -1919,7 +1987,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     prevPage,
     canNext,
     canPrev,
-  } = usePagination(filtered)
+  } = usePagination(filtered, { pageSize: 30 })
 
   const accumulatedTotal = useMemo(
     () => selectedOrders.reduce((sum, o) => sum + Number(o.totalPrice), 0),
@@ -2005,7 +2073,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     try {
       await markOrderUnpaidWithCustomer(orderId, user.id, customerId)
       setUnpaidPickerOrder(null)
-      await refreshPayment()
+      await refreshPayment({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to mark order unpaid")
     } finally {
@@ -2020,7 +2088,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     try {
       await assignOrderCustomer(customerPickerOrder.id, customerId, user.id)
       setCustomerPickerOrder(null)
-      await refreshPayment()
+      await refreshPayment({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign customer")
     } finally {
@@ -2033,7 +2101,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     setError("")
     try {
       await unassignOrderCustomer(order.id)
-      await refreshPayment()
+      await refreshPayment({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove customer")
     } finally {
@@ -2048,7 +2116,7 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     setError("")
     try {
       await unmarkOrderAsUnpaid(order.id)
-      await refreshPayment()
+      await refreshPayment({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to undo mark unpaid")
     } finally {
@@ -2056,6 +2124,9 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     }
   }
 
+  // The New Orders tab never carries an acknowledged-unpaid order, so
+  // "Marked By" would always be blank there — it is left out of this set and
+  // kept only on the Marked Unpaid columns below.
   const PAYMENT_COLUMNS: Column[] = [
     { label: "Order #", key: "orderNumber" },
     { label: "Meal", key: "mealType" },
@@ -2063,13 +2134,12 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
     { label: "Customer", key: "customer" },
     { label: "Total", key: "totalPrice", align: "right" },
     { label: "Date", key: "createdAt" },
-    { label: "Marked By", key: "markedBy", align: "center" },
     { label: "Action", key: "action", isAction: true },
   ]
 
   // Mirrors MARKED_UNPAID_COLUMNS in the Orders view so both tables present a
   // parked order identically. Not shared with PAYMENT_COLUMNS, which the New
-  // Unpaid category still uses, and where "Marked By" is empty by definition.
+  // Unpaid category still uses.
   const PAYMENT_MARKED_COLUMNS: Column[] = [
     { label: "Order #", key: "orderNumber" },
     { label: "Customer", key: "customer" },
@@ -2173,68 +2243,15 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {!loading && !error && (
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <Heading as="h2" className="text-admin-header-text text-xl">
-            {shiftType ? `${shiftType} Shift Payments` : "All Shift Payments"}
-          </Heading>
-          {shiftType && (
-            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-              shiftType === "DAY" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"
-            }`}>
-              {shiftType} Shift
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="flex items-center justify-end">
-        <Button
-          className="px-6 py-6 bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200"
-          onClick={openWizard}
-        >
-          <Landmark />
-          Batch Payment
-        </Button>
-      </div>
-
-      <div className="flex flex-wrap gap-2 justify-center">
-        {([
-          { key: "NEW" as const, label: "New Orders" },
-          { key: "MARKED" as const, label: "Marked Unpaid" },
-        ]).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setPayCategory(tab.key)}
-            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase transition-colors ${
-              payCategory === tab.key
-                ? tab.key === "NEW"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-red-100 text-red-700"
-                : tab.key === "NEW"
-                ? "text-green-400 hover:text-green-600"
-                : "text-red-400 hover:text-red-600"
-            }`}
-          >
-            {tab.label}
-            {tab.key === "MARKED" && markedCount > 0 && (
-              <span
-                title={`${markedCount} marked-unpaid order${markedCount !== 1 ? "s" : ""} awaiting reconciliation`}
-                className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
-              >
-                {markedCount}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {!loading && !error && (
         <DataTable
           columns={paymentColumns}
           data={paginatedItems}
           renderCell={renderCell}
           keyExtractor={(order) => order.id}
           emptyMessage="No unpaid orders found"
+          dense
+          bodyMaxHeight="calc(100vh - 320px)"
+          bodyRef={tableBodyRef}
           pagination={{
             currentPage,
             totalPages,
@@ -2244,20 +2261,75 @@ function PaymentView({ shiftType, operationDay }: { shiftType?: string; operatio
             canNext,
           }}
           header={
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="Search by order number..."
-                value={orderSearch}
-                onChange={(e) => setOrderSearch(e.target.value)}
-                className="max-w-sm"
-              />
-              {!shiftType && (
-                <DatePicker
-                  value={selectedDate}
-                  onChange={setSelectedDate}
-                  placeholder="Filter by date"
+            // One toolbar row: category tabs on the left, search + actions on
+            // the right. The shift is already known from the card the cashier
+            // clicked, so no title row is spent on it — the space goes to rows.
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  { key: "NEW" as const, label: "New Orders" },
+                  { key: "MARKED" as const, label: "Marked Unpaid" },
+                ]).map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setPayCategory(tab.key)}
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase transition-colors ${
+                      payCategory === tab.key
+                        ? tab.key === "NEW"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                        : tab.key === "NEW"
+                        ? "text-green-400 hover:text-green-600"
+                        : "text-red-400 hover:text-red-600"
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.key === "MARKED" && markedCount > 0 && (
+                      <span
+                        title={`${markedCount} marked-unpaid order${markedCount !== 1 ? "s" : ""} awaiting reconciliation`}
+                        className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                      >
+                        {markedCount}
+                      </span>
+                    )}
+                  </button>
+                ))}
+
+                {newOrderCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={scrollToNewestOrders}
+                    className="border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                    {newOrderCount} new order{newOrderCount !== 1 ? "s" : ""}
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  placeholder="Search by order number..."
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  className="w-56 sm:w-64"
                 />
-              )}
+                {!shiftType && (
+                  <DatePicker
+                    value={selectedDate}
+                    onChange={setSelectedDate}
+                    placeholder="Filter by date"
+                  />
+                )}
+                <Button
+                  className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200"
+                  onClick={openWizard}
+                >
+                  <Landmark />
+                  Batch Payment
+                </Button>
+              </div>
             </div>
           }
         />
