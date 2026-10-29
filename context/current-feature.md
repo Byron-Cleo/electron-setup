@@ -1,45 +1,26 @@
 
 ## Platform
 
-frontend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Silent live refresh on Cashier Orders / Void / Payment — no unmount, no "Loading orders..." flash ✅
-- Silent live refresh on Store stock + low-stock lists ✅
-- Payment view: 30 orders per page (was 8) ✅
-- Payment view: remove the redundant shift title + shift badge ✅
-- Payment view: one toolbar row (category tabs + search + date + batch payment) ✅
-- "N new orders" pill — category-aware count, click to jump, never auto-scrolls ✅
-- DataTable opt-ins: dense rows, scrollable body, sticky header, body ref ✅
-
 ## Notes
 
-Branch: feature/cashier/payment-view-live-refresh  
-Plan: context/fix-plan/cashier-payment-view-live-refresh.md  
-Frontend only — no backend, no Prisma schema, no Electron main/preload changes.
-
-Root cause: the SSE transport was already end-to-end (`backend/events.ts` → `desktop/electron/live-events.ts` IPC `live:event` → `preload.cts` → `lib/api.ts` `subscribeLive` → `useLiveRefresh`). The refresh callbacks flipped `setLoading(true)` while the table was gated behind `{!loading && !error && <DataTable/>}`, so every event unmounted and remounted the table behind a "Loading orders..." flash. Fixed by adopting the existing `CookedFoodTable.tsx` convention verbatim: `load*(options?: { silent?: boolean })` with `setLoading` skipped when silent, last-good-data kept on failure.
-
-Implementation facts (2026-10-28):
-- **Silent refresh (5 call sites)** — Cashier `OrdersView.refreshOrders`, `VoidView.refreshVoid`, `PaymentView.refreshPayment`, Store `loadStock`, `loadLowStock`; live callbacks pass `{ silent: true }`; the 6 Cashier action handlers (mark/unmark unpaid, assign/unassign customer) also refresh silently since they carry their own per-row spinner
-- **`DataTable` opt-in props** — `dense` (cell padding `px-2 py-1`), `bodyMaxHeight` (inline maxHeight + `overflow-y-auto`, drops the `min-h-[384px]` floor), `bodyRef`, sticky `thead` (`sticky top-0 z-10 bg-admin-content`); default density unchanged for every other consumer
-- **Payment view** — `usePagination(filtered, { pageSize: 30 })`; shift heading + chip deleted; 4 stacked blocks → 2 (toolbar + table), ~150 px reclaimed; toolbar is now the DataTable `header` row: `[New Orders (n)] [Marked Unpaid (n)] [+ N new orders] … [search w-56 sm:w-64] [DatePicker — All Shifts only] [Batch Payment]`
-- **"N new orders" pill** — `refreshPayment` diffs `inCategory(...)` before/after inside the refresh and returns the count of rows newly visible in the **active category** (NEW = not `unpaidAcknowledged`, MARKED = `unpaidAcknowledged`); increments only on `order.created`; never auto-scrolls; clears when the body is scrolled to top or when the pill is clicked (smooth scroll to top); `payCategory` + `orders` added to the callback deps
-- **`PAYMENT_COLUMNS`** — "Marked By" dropped from the NEW set (always blank by definition there), kept in `PAYMENT_MARKED_COLUMNS`
-- **Verified** — `npx tsc -b` clean; ESLint on the 3 changed files = 1 error + 1 warning, both pre-existing in `Store.tsx` (`:744` `react-hooks/set-state-in-effect` on the mount effect, `:300` `menus.length` dep) and byte-identical at `restaurant-build` — zero new issues
-- **Live test in isolation** — throwaway `eraevadb_test` (created with `prisma migrate diff --from-empty --to-schema`, seeded, then dropped), backends on :3111/:3112, Vite on :5123/:5124; verified in-place updates with no loading flash, no table remount, correct pill/category counting, 30 rows per page. **Production `eraevadb` never written to** (3800 orders before and after, 0 test customers), `EraevaBackend` never restarted (PID 7432 unchanged)
-- **Repo hygiene** — root `.gitignore` now ignores `node_modules/` + `**/node_modules/`; the GitHub default branch was switched `main` → `restaurant-build` (`main` was 127 commits behind and made every GUI diff 157 files / 23,167 lines)
-- **Tailnet installer script fixed** — `build:tailscale` / `build:win:tailscale` pointed at `scripts/build-tailscale.mjs`, which does not exist (parked in a stash: it carried 573 MB of build output and a compiled `vite.config.js` that shadows `vite.config.ts`). Both now call the maintained `scripts/build-network.mjs` with `--server http://100.108.69.45:3001 --out-dir release-tailscale --artifact-suffix tailscale` → `release-tailscale/Eraeva POS System-0.0.0-tailscale-win-x64.exe`; the LAN installer in `release/` is left untouched
-- **Installer build order is fixed** — `npm run build:win` (LAN) → `npm run build:win:tailscale` (tailnet) → `npm run build:web -- --server same-origin` (restore the browser-served bundle). The tailnet build bakes into `dist-electron/server-config.js` and the plain `build:win` uses an incremental `tsc -b` that will not re-emit it, so running the tailnet build first would silently ship the tailnet address in the LAN installer. After the tailnet build, restore with `node scripts/clean-electron.mjs && npm run transpile:electron`
-- **Deferred** — every live event still refetches the full `GET /orders` list (today's behaviour, no regression); surgical `GET /api/orders/:id` + array patching would need a backend change, rebuild and service restart — deliberately postponed
-- **Session re-imported locally (2026-10-28)** — this session was continued from `origin/feature/cashier/payment-view-live-refresh` (never merged into `restaurant-build`). The local branch now tracks the remote and has `restaurant-build` merged into it, so it descends from both and will not conflict later on merge-back. Merge resolutions: `package.json` took `restaurant-build`'s restored version (version `0.0.3`, all `ops:*` scripts, `clean:electron`, `db:pull`) while keeping this branch's `build:tailscale` alias; `.gitignore` took the union of both sides (Logs + Dependencies + Environment headers, `backend/.env`, `backend/.env.development`, `**/node_modules/`, plus `restaurant-build`'s `db_backups/`, `*.dump`, `release*/`, `backend/uploads/`, `.foglamp/`). Status flipped Complete → In Progress to continue the work
-
 ## History
+
+### frontend - 2026-10-29 — Cashier Payment View: Live SSE Orders + 30-Row Dense Table (merged)
+
+- **Merged** `feature/cashier/payment-view-live-refresh` into `restaurant-build` via `--no-ff` (`b738b48`) and pushed to `origin/restaurant-build`; feature branch kept, not deleted
+- **Verified locally on the canonical ports** against a copy of the production DB — `:3001` backend + `:5123` Vite, local `eraevadb` on `127.0.0.1:5432` (SSH tunnel off, no remote forwards; API menu count 119 == local DB 119). Injected order #3780 → appeared in place with **no remount** (`tableSameNode`/`scrollerSameNode` true), **no "Loading orders..." flash**, scroll preserved at 341.5, "1 new order" pill shown, click jumped to top and cleared the pill; 30 rows/page ("Page 1 of 6"). Test order voided + deleted → order count 3635, menu stock 98, `platesSold` 0 restored
+- **Test harness hardened** (`abc3e8b`) — `customer-assignment.test.ts` reads `TEST_API_BASE` and **skips when unset** (never silently targets `:3001`, which is production on the server); removed 2 stale `pool-engine` cases for the SHARED 1-for-1 rule intentionally dropped in `476a3e6` (`consumptionFactorsForSupply` deleted); `vitest` runs files serially (setup wipes tables in `beforeEach`); monotonic shift-day cursor avoids `(type, operationDay)` collisions. Tracked suite **37/37** (with test server) / 26 pass + 11 skip (without); frontend **20/20**; `tsc` clean. 4 gitignored local-only scratch test files deleted
+- **Frontend only** — no backend source, Prisma, or Electron change (`backend/tests` only). **No backend rebuild, no `EraevaBackend` restart**
+- **Deploy pending at the restaurant** — `npm run build:win` installer on-site + reinstall cashier terminals (installed `.exe` keep their own bundle; a browser-only `build:web` does not update them), then a real-load smoke test
+- Ref: `context/fix-plan/cashier-payment-view-live-refresh.md` · Commits `fbfbeb2`, `29c9447`, `2a23e3b`, `abc3e8b`; merge `--no-ff` `b738b48`
 
 ### frontend - 2026-10-28 — Cashier Payment View: Live SSE Orders + 30-Row Dense Table
 
