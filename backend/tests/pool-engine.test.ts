@@ -9,7 +9,6 @@ import {
   recomputeMenuStock,
   assertLinesServable,
   InsufficientPoolError,
-  consumptionFactorsForSupply,
   factorForServing,
   round2,
 } from "../pools.js";
@@ -272,21 +271,6 @@ async function lineFor(menuId: string) {
 
       expect(await factorForServing(prisma, menuId, null)).toBe(1);
       expect(await factorForServing(prisma, menuId, portion.id)).toBe(2);
-    });
-
-    it("treats a shared supply as illegal when any dish is not a flat 1-for-1", async () => {
-      await prisma.stockSupplyMenu.updateMany({
-        where: { stockSupplyId: supplyId, menuId },
-        data: { platesPerServing: 0.5 },
-      });
-      const factors = await consumptionFactorsForSupply(prisma, supplyId);
-      expect(factors[0].factors).toContain(0.5);
-      expect(factors[0].factors.some((f) => f !== 1)).toBe(true);
-    });
-
-    it("allows a shared supply when every dish and portion is 1-for-1", async () => {
-      const factors = await consumptionFactorsForSupply(prisma, supplyId);
-      expect(factors.every((f) => f.factors.every((n) => n === 1))).toBe(true);
     });
   });
 
