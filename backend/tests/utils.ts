@@ -14,11 +14,14 @@ export async function createTestUser(role = "staff") {
   return user;
 }
 
+let shiftDayCursor = Math.floor(Math.random() * 10);
+
 export async function createTestShift(isOpen = true, userId?: string) {
   const user = userId ?? (await createTestUser()).id;
-  // Use a slightly different date/time to avoid unique constraint conflicts
+  // (type, operationDay) is unique. Walk a distinct day per call so repeated
+  // calls in the same file cannot collide on the unique constraint.
   const base = new Date();
-  const shiftDate = new Date(base.getFullYear(), base.getMonth(), base.getDate() + Math.floor(Math.random() * 10));
+  const shiftDate = new Date(base.getFullYear(), base.getMonth(), base.getDate() + shiftDayCursor++);
   const shift = await prisma.shift.create({
     data: {
       type: "LUNCH",

@@ -3,9 +3,14 @@ import { createTestShift, createTestMenu, createOrderWithItems, createTestUser }
 import { prisma } from "./setup.js";
 import { autoCloseExpiredShifts } from "../scheduler.js";
 
-const API = "http://localhost:3001/api";
+// The API server must be backed by the SAME database the test writes to
+// (.env.test), otherwise every lookup misses. Point TEST_API_BASE at a server
+// started with DATABASE_URL from .env.test. Without it we SKIP rather than
+// default to :3001, which is production on the restaurant server.
+const API = process.env.TEST_API_BASE;
+const describeWithServer = API ? describe : describe.skip;
 
-describe("Customer assignment rules", () => {
+describeWithServer("Customer assignment rules", () => {
   let shiftId: string;
 
   beforeEach(async () => {

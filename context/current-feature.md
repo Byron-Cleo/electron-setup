@@ -1,43 +1,59 @@
 
 ## Platform
 
-backend + frontend
+frontend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-- Add SellingPause model and relations ✅
-- Subtract pauses from pool availability (sellableInfoForMenu/assertLinesServable) ✅
-- API routes for selling pauses (admin/manager only) ✅
-- IPC/electron/preload/api wiring ✅
-- Dispatch UI: Control Selling button + modal per batch ✅
-- Waiter POS: greyed state + messages when paused ✅
-- Shift close/leftovers: paused unsold become assigned but not sold, carry forward ✅
-- Server-side enforcement ✅
+- Silent live refresh on Cashier Orders / Void / Payment — no unmount, no "Loading orders..." flash ✅
+- Silent live refresh on Store stock + low-stock lists ✅
+- Payment view: 30 orders per page (was 8) ✅
+- Payment view: remove the redundant shift title + shift badge ✅
+- Payment view: one toolbar row (category tabs + search + date + batch payment) ✅
+- "N new orders" pill — category-aware count, click to jump, never auto-scrolls ✅
+- DataTable opt-ins: dense rows, scrollable body, sticky header, body ref ✅
 
 ## Notes
 
-Branch: feature/waiter/control-selling-pause  
-Plan: context/fix-plan/control-selling-pause.md  
-Paused unsold not revenue; auto-convert to assigned but not sold at shift close until unpaused or wasted.  
-KEYED pause does not change keyedStock. Per split for ALLOCATED, per batch for SHARED, per scope for KEYED.
+Branch: feature/cashier/payment-view-live-refresh  
+Plan: context/fix-plan/cashier-payment-view-live-refresh.md  
+Frontend only — no backend, no Prisma schema, no Electron main/preload changes.
 
-Implementation facts (2026-10-21):
-- Engine: `pools.ts` `pausedPlatesForMenu()` — menu-scoped (KEYED null-batch + ALLOCATED splits) plus supply-scoped (SHARED batch pauses hit every dish on the supply); `sellableInfoForMenu` subtracts after pool math, returns `pausedActive`; `InsufficientPoolError` message is pause-aware ("Only Y plates available to sell for X. The rest are paused (not ready yet)..."); `MenuShortfall.paused` added; direct-sale branch subtracts pauses from keyed stock without touching the ledger
-- Route: `sellingPauses.ts` GET/POST/PUT/DELETE at `/api/selling-pauses` — `pausedById` body convention (like `voidedById`) with DB-backed admin/manager check; per-scope ceilings (split remainder / batch pool); upsert on scope key; closed-shift + disposed-batch rejection; availability check credits back the pause's own current amount on raise/reactivate
-- Menu list: `pausedPlates` on every menu item (menu.ts via `sellableInfoForMenu`)
-- Electron: `registerSellingPauseHandlers` + main.ts + preload `sellingPause.*` + `electron.d.ts` types (`SellingPause`, `SellingPauseCreateData`, `SellingPauseUpdateData`) + `lib/api.ts` CRUD with Decimal normalization
-- Dispatch UI: `ControlSellingModal.tsx` (reusable: stats + per-scope rows, amount/reason, Pause/Update/Resume); wired into `CookedFoodTable` (per batch, ALLOCATED per split / SHARED per batch) and `MenuStockManager` (Keyed per linked dish + Direct Sale per row) — admin/manager gated
-- Waiter POS: `WaiterMenuGrid` — orange "Selling Paused" badge + plan wording when partially held, greyed card + "not ready" message when fully held; linked sides show "Selling Paused" badge/watermark instead of Sold Out; shortfall list shows paused counts; qty stepper caps at paused-adjusted availability
-- Leftovers: `shiftCarryOver.ts` `AssignedLeftoverRow` gains `batchIds` + `pausedPlates`; `AssignedLeftoversTable` shows "N paused" badge + Resume button (releases every active pause on the row's batches) — satisfies "manager can unpause carried-forward items"; pauses ignore shift/day so they carry forward automatically; paused plates never leave `platesRemaining`, so shift close folds them into assigned-unsold leftovers with zero extra work
-- Power-outage incident (same day): orphaned node squatted :3001 serving a pre-fix dist (invalid lowercase `cookingRecord` Prisma filter → every /api/menu 500); fixed by rebuild + UAC taskkill + `pos-backend-restart` scheduled task; E2E re-verified (menu 112 items, order #1167 place+void cycle, all test data deleted)
-- Live E2E on prod :3001: dispatch modal pause 5 on Ndovu Ngano Batch #1 → Chapati + Chapati Staff both 80→75 avail / 5 paused (supply-wide SHARED semantics confirmed), waiter grid shows exact plan wording, stepper hard-caps at 75, resume → 80/0, test pause row deleted
-- Builds: backend dist rebuilt + EraevaBackend restarted (RUNNING, /health ok); `npm run build` + `build:web -- --server same-origin` re-run; installed .exe terminals still run 0.0.2 — a `build:win` refresh is an operator decision
+Root cause: the SSE transport was already end-to-end (`backend/events.ts` → `desktop/electron/live-events.ts` IPC `live:event` → `preload.cts` → `lib/api.ts` `subscribeLive` → `useLiveRefresh`). The refresh callbacks flipped `setLoading(true)` while the table was gated behind `{!loading && !error && <DataTable/>}`, so every event unmounted and remounted the table behind a "Loading orders..." flash. Fixed by adopting the existing `CookedFoodTable.tsx` convention verbatim: `load*(options?: { silent?: boolean })` with `setLoading` skipped when silent, last-good-data kept on failure.
+
+Implementation facts (2026-10-28):
+- **Silent refresh (5 call sites)** — Cashier `OrdersView.refreshOrders`, `VoidView.refreshVoid`, `PaymentView.refreshPayment`, Store `loadStock`, `loadLowStock`; live callbacks pass `{ silent: true }`; the 6 Cashier action handlers (mark/unmark unpaid, assign/unassign customer) also refresh silently since they carry their own per-row spinner
+- **`DataTable` opt-in props** — `dense` (cell padding `px-2 py-1`), `bodyMaxHeight` (inline maxHeight + `overflow-y-auto`, drops the `min-h-[384px]` floor), `bodyRef`, sticky `thead` (`sticky top-0 z-10 bg-admin-content`); default density unchanged for every other consumer
+- **Payment view** — `usePagination(filtered, { pageSize: 30 })`; shift heading + chip deleted; 4 stacked blocks → 2 (toolbar + table), ~150 px reclaimed; toolbar is now the DataTable `header` row: `[New Orders (n)] [Marked Unpaid (n)] [+ N new orders] … [search w-56 sm:w-64] [DatePicker — All Shifts only] [Batch Payment]`
+- **"N new orders" pill** — `refreshPayment` diffs `inCategory(...)` before/after inside the refresh and returns the count of rows newly visible in the **active category** (NEW = not `unpaidAcknowledged`, MARKED = `unpaidAcknowledged`); increments only on `order.created`; never auto-scrolls; clears when the body is scrolled to top or when the pill is clicked (smooth scroll to top); `payCategory` + `orders` added to the callback deps
+- **`PAYMENT_COLUMNS`** — "Marked By" dropped from the NEW set (always blank by definition there), kept in `PAYMENT_MARKED_COLUMNS`
+- **Verified** — `npx tsc -b` clean; ESLint on the 3 changed files = 1 error + 1 warning, both pre-existing in `Store.tsx` (`:744` `react-hooks/set-state-in-effect` on the mount effect, `:300` `menus.length` dep) and byte-identical at `restaurant-build` — zero new issues
+- **Live test in isolation** — throwaway `eraevadb_test` (created with `prisma migrate diff --from-empty --to-schema`, seeded, then dropped), backends on :3111/:3112, Vite on :5123/:5124; verified in-place updates with no loading flash, no table remount, correct pill/category counting, 30 rows per page. **Production `eraevadb` never written to** (3800 orders before and after, 0 test customers), `EraevaBackend` never restarted (PID 7432 unchanged)
+- **Repo hygiene** — root `.gitignore` now ignores `node_modules/` + `**/node_modules/`; the GitHub default branch was switched `main` → `restaurant-build` (`main` was 127 commits behind and made every GUI diff 157 files / 23,167 lines)
+- **Tailnet installer script fixed** — `build:tailscale` / `build:win:tailscale` pointed at `scripts/build-tailscale.mjs`, which does not exist (parked in a stash: it carried 573 MB of build output and a compiled `vite.config.js` that shadows `vite.config.ts`). Both now call the maintained `scripts/build-network.mjs` with `--server http://100.108.69.45:3001 --out-dir release-tailscale --artifact-suffix tailscale` → `release-tailscale/Eraeva POS System-0.0.0-tailscale-win-x64.exe`; the LAN installer in `release/` is left untouched
+- **Installer build order is fixed** — `npm run build:win` (LAN) → `npm run build:win:tailscale` (tailnet) → `npm run build:web -- --server same-origin` (restore the browser-served bundle). The tailnet build bakes into `dist-electron/server-config.js` and the plain `build:win` uses an incremental `tsc -b` that will not re-emit it, so running the tailnet build first would silently ship the tailnet address in the LAN installer. After the tailnet build, restore with `node scripts/clean-electron.mjs && npm run transpile:electron`
+- **Deferred** — every live event still refetches the full `GET /orders` list (today's behaviour, no regression); surgical `GET /api/orders/:id` + array patching would need a backend change, rebuild and service restart — deliberately postponed
+- **Session re-imported locally (2026-10-28)** — this session was continued from `origin/feature/cashier/payment-view-live-refresh` (never merged into `restaurant-build`). The local branch now tracks the remote and has `restaurant-build` merged into it, so it descends from both and will not conflict later on merge-back. Merge resolutions: `package.json` took `restaurant-build`'s restored version (version `0.0.3`, all `ops:*` scripts, `clean:electron`, `db:pull`) while keeping this branch's `build:tailscale` alias; `.gitignore` took the union of both sides (Logs + Dependencies + Environment headers, `backend/.env`, `backend/.env.development`, `**/node_modules/`, plus `restaurant-build`'s `db_backups/`, `*.dump`, `release*/`, `backend/uploads/`, `.foglamp/`). Status flipped Complete → In Progress to continue the work
 
 ## History
+
+### frontend - 2026-10-28 — Cashier Payment View: Live SSE Orders + 30-Row Dense Table
+
+- **Problem** — waiter-placed orders reached the cashier screen, but the table unmounted and remounted behind a "Loading orders..." flash on every live event (the table was gated behind `{!loading && !error && <DataTable/>}` while the refresh callbacks flipped `setLoading(true)`); only 8 orders were visible; the Payment view spent a whole row on a redundant shift title + badge
+- **Root cause** — the SSE chain was already complete (`backend/events.ts` → `desktop/electron/live-events.ts` → `preload.cts` → `lib/api.ts` `subscribeLive` → `useLiveRefresh`); only the loading-state toggle in the refresh callbacks was wrong. Fix copies the existing `CookedFoodTable.tsx` `loadData({ silent })` convention verbatim — no new pattern invented
+- **Silent refresh ×5** — Cashier Orders / Void / Payment + Store stock + low-stock lists; `setLoading` skipped when silent, last good data kept on failure (no blank table, no error flash), and the 6 Cashier action handlers refresh silently too (they already have per-row spinners)
+- **Payment view redesign** — 30 orders per page (`usePagination(filtered, { pageSize: 30 })`), shift heading + badge deleted, 4 stacked blocks → 2 (single toolbar row inside the DataTable `header`: category tabs + "N new orders" pill + search + date + batch payment), ~150 px reclaimed
+- **`DataTable` opt-ins** — `dense` (`px-2 py-1`), `bodyMaxHeight` (inline maxHeight + `overflow-y-auto`, drops the `min-h-[384px]` floor), `bodyRef`, sticky `thead`; default density untouched for every other consumer
+- **"N new orders" pill** — `refreshPayment` diffs the rows visible in the **active category** before/after the refresh and reports what genuinely arrived; increments only on `order.created`, never auto-scrolls, clears on scroll-to-top or when clicked (smooth jump to the newest row)
+- **Verified** — `npx tsc -b` clean; ESLint zero new on the 3 changed files (the 1 error + 1 warning in `Store.tsx` are byte-identical at `restaurant-build`); live end-to-end on a throwaway `eraevadb_test` (created, seeded, dropped) with backends :3111/:3112 and Vite :5123/:5124 — in-place updates, no flash, no remount, correct category-aware counting, 30 rows. Production `eraevadb` untouched (3800 orders before and after), `EraevaBackend` never restarted
+- **Deploy** — frontend only → **no backend rebuild, no `EraevaBackend` restart**; browser live view already rebuilt with `npm run build:web -- --server same-origin`; installed `.exe` terminals need `npm run build:win` (operator decision)
+- **Repo hygiene** — `.gitignore` ignores `node_modules/` + `**/node_modules/`; GitHub default branch switched `main` → `restaurant-build` (main was 127 commits behind, so GUIs were diffing 157 files / 23,167 lines instead of the real 5)
+- **Tailnet installer** — `build:tailscale` / `build:win:tailscale` were broken (they called the non-existent `scripts/build-tailscale.mjs`, parked in a stash); both now call the maintained `scripts/build-network.mjs` with the tailnet server `http://100.108.69.45:3001`, `release-tailscale/` as output dir and the `tailscale` artifact suffix, so terminals off-LAN get their own installer while the LAN one in `release/` stays untouched. Documented build order: `build:win` → `build:win:tailscale` → `build:web -- --server same-origin` (the tailnet build bakes into `dist-electron/server-config.js`, and the plain `build:win` uses an incremental `tsc -b` that would keep that baked address if it ran second)
+- Ref: `context/fix-plan/cashier-payment-view-live-refresh.md` · Branch `feature/cashier/payment-view-live-refresh` (**kept, not deleted, NOT merged into `restaurant-build`**)
 
 ### frontend + electron - 2026-10-22 — Tailscale-Tailnet Installer Alongside the LAN Installer
 

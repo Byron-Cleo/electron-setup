@@ -266,15 +266,19 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
     }
   }
 
-  async function loadStock() {
+  // Silent on live events: a stock change from another terminal updates the
+  // list in place instead of blanking it behind a loading flash.
+  async function loadStock(options?: { silent?: boolean }) {
+    const silent = options?.silent === true
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const supplyData = await getStockSupplies()
       setItems(supplyData)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load stock")
+      if (!silent) setError(err instanceof Error ? err.message : "Failed to load stock")
+      else console.warn("Silent stock refresh failed:", err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -283,7 +287,7 @@ function StockView({ showAddModal, setShowAddModal }: { showAddModal: boolean; s
   }, [])
 
   useLiveRefresh(["stock.created", "stock.updated", "stock.deleted"], () => {
-    loadStock().catch(() => {})
+    loadStock({ silent: true }).catch(() => {})
   })
 
   useEffect(() => {
@@ -722,15 +726,17 @@ function RestockView() {
   const [restockSubmitting, setRestockSubmitting] = useState(false)
   const [restockSuccess, setRestockSuccess] = useState(false)
 
-  async function loadLowStock() {
+  async function loadLowStock(options?: { silent?: boolean }) {
+    const silent = options?.silent === true
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const data = await getLowStockSupplies()
       setItems(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load low stock items")
+      if (!silent) setError(err instanceof Error ? err.message : "Failed to load low stock items")
+      else console.warn("Silent low-stock refresh failed:", err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -739,7 +745,7 @@ function RestockView() {
   }, [])
 
   useLiveRefresh(["stock.created", "stock.updated", "stock.deleted"], () => {
-    loadLowStock().catch(() => {})
+    loadLowStock({ silent: true }).catch(() => {})
   })
 
   const filtered = items.filter((item) =>
