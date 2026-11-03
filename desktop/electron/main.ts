@@ -37,7 +37,7 @@ function createMainWindow() {
   });
 
   if (isDev()) {
-    win.loadURL("http://localhost:5123");
+    win.loadURL(process.env.ELECTRON_DEV_URL ?? "http://localhost:5123");
   } else {
     win.loadFile(path.join(appPath + "/dist-react/index.html"));
   }
