@@ -1,6 +1,7 @@
 import { app, ipcMain } from "electron";
 import fs from "fs";
 import path from "path";
+import { isDev } from "./utils.ts";
 
 export interface ServerConfig {
   serverUrl?: string;
@@ -49,10 +50,13 @@ export function writeServerConfig(config: ServerConfig): ServerConfig {
   return config;
 }
 
-// Precedence: 1) server-config.json (user-editable)  2) API_BASE env var
-//             3) dev default (localhost:3111)  4) baked-in default
-//             (network server in builds, localhost:3111 in dev)
+// Precedence: 1) API_BASE env var in development  2) server-config.json
+//             (user-editable)  3) dev default (localhost:3111)  4) baked-in
+//             default (network server in builds, localhost:3111 in dev)
+// In development an explicit API_BASE wins so a local run cannot silently fall
+// through to the persisted server setting (which points at production).
 export function getApiBase(): string {
+  if (isDev() && process.env.API_BASE) return toApiBase(process.env.API_BASE);
   const fromConfig = readServerConfig().serverUrl;
   if (fromConfig) return toApiBase(fromConfig);
   if (process.env.API_BASE) return toApiBase(process.env.API_BASE);
