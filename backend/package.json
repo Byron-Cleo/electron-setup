@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "cross-env PORT=3111 tsx watch index.ts",
     "dev:local": "cross-env PORT=3001 tsx watch index.ts",
+    "dev:alt": "cross-env PORT=3002 tsx watch index.ts",
     "db:generate": "prisma generate && node scripts/fix-prisma-imports.mjs",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
