@@ -30,7 +30,7 @@
     "ops:analyst": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ops-create-analyst.ps1",
     "dev:all": "concurrently -k -n \"backend,react,electron\" \"npm run dev:backend\" \"npm run dev:react:local\" \"cross-env API_BASE=http://localhost:3001/api npm run dev:electron\"",
     "dev:all:alt": "concurrently -k -n \"backend,react,electron\" \"npm run dev:backend:alt\" \"npm run dev:react:alt\" \"npm run dev:electron:alt\"",
-    "ssh:tunnel:noapi": "ssh -fN -L 5433:127.0.0.1:5432 -L 5123:127.0.0.1:5123 -L 3111:127.0.0.1:3111 pos",
+    "ssh:tunnel:noapi": "ssh -fN -L 5433:127.0.0.1:5432 -L 3111:127.0.0.1:3111 pos",
     "db:sync": "npm run db:generate --prefix backend && npm run db:push --prefix backend",
     "db:pull": "bash scripts/sync-eraevadb.sh",
     "build": "tsc -b && vite build",
