@@ -6,13 +6,15 @@
 
 export const RESTAURANT_INFO: ReceiptData["restaurant"] = {
   name: "ERAEVA CATERING SERVICES",
-  branch: "Airport",
+  branch: "AIRPORT",
+  contact: "0729586892",
   address: "P.O BOX 75531-00200",
   city: "Nairobi",
   phone: "0712345678",
   tel: "0701315250",
   poweredBy: "Apydy Technologies",
-  services: "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
+  services:
+    "AI Integration, IT Consulting, Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
 }
 
 export interface ReceiptFromOrderOptions {

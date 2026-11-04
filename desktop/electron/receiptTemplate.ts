@@ -36,6 +36,7 @@ export interface ReceiptData {
   restaurant: {
     name: string;
     branch?: string;
+    contact?: string;
     address?: string;
     city?: string;
     phone?: string;
@@ -115,18 +116,29 @@ function blockCenter(text: string, style = ""): string {
   return `<div style="text-align:center; ${style}">${text}</div>`;
 }
 
+// One accompaniment is served per unit of the main dish, so it earns its own
+// row in the same QTY / ITEM / PRICE / TOTAL table as the dish: the served
+// quantity in the quantity column, the name with its unit-price tag, and the
+// extended amount in the total column. The dish row shows the dish money only,
+// so the visible rows add up to the Sub-Total exactly once.
 function accompHtml(accompaniments: ReceiptAccompaniment[]): string {
   if (accompaniments.length === 0) return "";
   const lines = accompaniments
     .map((a) => {
       if (a.note) {
+        // A portion size or a "No starch" marker is not a served quantity.
         return `<div style="padding-left:10px; font-size:11px; font-style:italic;">&bull; ${a.name}</div>`;
       }
-      const tag = a.charged ? `+${money(a.price)}` : "FREE";
-      // The served quantity of an accompaniment equals the main dish quantity
-      // (one starch/vegetable is served per unit), so it is always printed.
-      const qtyTag = a.qty && a.qty > 0 ? ` x${a.qty}` : "";
-      return `<div style="padding-left:10px; font-size:11px;">&bull; ${a.name}${qtyTag} (${tag})</div>`;
+      const qty = a.qty && a.qty > 0 ? a.qty : 1;
+      const tag = a.charged ? `(+${moneyBare(a.price)})` : "(FREE)";
+      const total = a.charged ? money(a.price * qty) : "";
+      return `
+      <div style="display:flex; gap:4px;">
+        <span style="flex:0 0 auto; font-weight:bold; font-size:17px;">${qty}</span>
+        <span style="flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">* ${a.name} ${tag}</span>
+        <span style="flex:0 0 auto; margin-left:auto; white-space:nowrap; text-align:right;"></span>
+        <span style="flex:0 0 auto; white-space:nowrap; text-align:right; font-weight:bold; font-size:17px; padding-left:8px;">${total}</span>
+      </div>`;
     })
     .join("");
   return `<div style="margin-top:1px;">${lines}</div>`;
@@ -140,13 +152,16 @@ function itemLinesHtml(data: ReceiptData): string {
   </div>`;
   const rows = data.items
     .map((item) => {
+      // The dish row carries the dish money only; each accompaniment adds its
+      // own row below, so the block still totals the same amount.
+      const dishTotal = item.unitPrice * item.qty;
       return `
     <div style="margin-bottom:6px;">
       <div style="display:flex; gap:4px;">
         <span style="flex:0 0 auto; font-weight:bold; font-size:17px;">${item.qty}</span>
         <span style="flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</span>
         <span style="flex:0 0 auto; margin-left:auto; white-space:nowrap; text-align:right;">${moneyBare(item.unitPrice)}</span>
-        <span style="flex:0 0 auto; white-space:nowrap; text-align:right; font-weight:bold; font-size:17px; padding-left:8px;">${money(item.lineTotal)}</span>
+        <span style="flex:0 0 auto; white-space:nowrap; text-align:right; font-weight:bold; font-size:17px; padding-left:8px;">${money(dishTotal)}</span>
       </div>
       ${accompHtml(item.accompaniments)}
     </div>`;
@@ -163,6 +178,7 @@ function customerBody(data: ReceiptData): string {
   return `
   ${blockCenter(`<span style="font-size:17px; font-weight:bold;">${data.restaurant.name}</span>`)}
   ${data.restaurant.branch ? blockCenter(`Branch: ${data.restaurant.branch}`, "font-size:11px; font-weight:bold;") : ""}
+  ${data.restaurant.contact ? blockCenter(`Contact Us: ${data.restaurant.contact}`, "font-size:11px;") : ""}
   ${data.restaurant.address ? blockCenter(data.restaurant.address, "font-size:11px;") : ""}
   ${data.restaurant.city ? blockCenter(data.restaurant.city, "font-size:11px;") : ""}
   ${divider()}
@@ -185,7 +201,7 @@ function customerBody(data: ReceiptData): string {
   ${divider()}
   ${blockCenter("POS Designed and Build By:", "font-size:11px; font-weight:bold; margin-top:4px;")}
   ${data.restaurant.poweredBy ? blockCenter(`<span style="font-weight:bold;">${data.restaurant.poweredBy}</span>`, "font-size:13px;") : ""}
-  ${data.restaurant.tel ? blockCenter(`Tel: ${data.restaurant.tel}`, "font-size:11px;") : ""}
+  ${data.restaurant.tel ? blockCenter(`Mobile: ${data.restaurant.tel}`, "font-size:11px;") : ""}
   ${data.restaurant.services ? blockCenter(data.restaurant.services, "font-size:11px;") : ""}`;
 }
 
@@ -202,14 +218,21 @@ function stationBody(data: ReceiptData, label: string): string {
     .map((item) => {
       // The kitchen needs the served quantity of each accompaniment, not just
       // its name: one starch/vegetable is served per unit of the main dish, so
-      // "3 x Dry Fish" means 3 ugali and 3 sukuma have to be cooked.
+      // "3 x Dry Fish" means 3 ugali and 3 sukuma have to be cooked. Each
+      // accompaniment therefore gets its own line in the same shape as the dish.
       const accomp = item.accompaniments
-        .map((a) => (!a.note && a.qty && a.qty > 0 ? `${a.name} x${a.qty}` : a.name))
-        .join(", ");
+        .map((a) => {
+          if (a.note) {
+            return `<div style="padding-left:10px; font-size:11px; font-style:italic;">&bull; ${a.name}</div>`;
+          }
+          const qty = a.qty && a.qty > 0 ? a.qty : 1;
+          return `<div style="padding-left:10px; font-size:13px; font-weight:bold;">* ${qty} &times; ${a.name}</div>`;
+        })
+        .join("");
       return `
     <div style="margin-bottom:8px;">
       <div style="font-size:16px; font-weight:bold;">${item.qty} &times; ${item.name}</div>
-      ${accomp ? `<div style="padding-left:10px; font-size:11px;">${accomp}</div>` : ""}
+      ${accomp}
     </div>`;
     })
     .join("")}
@@ -235,6 +258,7 @@ export interface ShiftReportData {
   restaurant: {
     name: string;
     branch?: string;
+    contact?: string;
     address?: string;
     city?: string;
     poweredBy?: string;
@@ -339,6 +363,7 @@ function shiftReportBody(data: ShiftReportData): string {
   return `
   ${blockCenter(`<span style="font-size:17px; font-weight:bold;">${r.name}</span>`)}
   ${r.branch ? blockCenter(`Branch: ${r.branch}`, "font-size:11px; font-weight:bold;") : ""}
+  ${r.contact ? blockCenter(`Contact Us: ${r.contact}`, "font-size:11px;") : ""}
   ${r.address ? blockCenter(r.address, "font-size:11px;") : ""}
   ${r.city ? blockCenter(r.city, "font-size:11px;") : ""}
   ${divider()}
@@ -412,7 +437,7 @@ ${blockCenter("OPEN = carry-forward opening plates from previous shift", "font-s
   ${divider()}
   ${blockCenter("POS Designed and Build By:", "font-size:11px; font-weight:bold; margin-top:4px;")}
   ${r.poweredBy ? blockCenter(`<span style="font-weight:bold;">${r.poweredBy}</span>`, "font-size:13px;") : ""}
-  ${r.tel ? blockCenter(`Tel: ${r.tel}`, "font-size:11px;") : ""}
+  ${r.tel ? blockCenter(`Mobile: ${r.tel}`, "font-size:11px;") : ""}
   ${r.services ? blockCenter(r.services, "font-size:11px;") : ""}
 `;
 }

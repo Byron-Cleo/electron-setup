@@ -9,7 +9,7 @@
     "dev:react:network": "vite --host",
     "dev:react:local": "cross-env VITE_API_BASE=http://localhost:3001/api VITE_API_ORIGIN=http://localhost:3001 vite",
     "dev:react:alt": "cross-env VITE_API_BASE=http://localhost:3002/api VITE_API_ORIGIN=http://localhost:3002 vite --port 5124 --strictPort",
-    "dev:electron": "tsc --project desktop/electron/tsconfig.json && concurrently -k -n \"tsc,app\" \"tsc --project desktop/electron/tsconfig.json --watch --preserveWatchOutput\" \"nodemon --watch dist-electron -e js --exec cross-env NODE_ENV=development electron .\"",
+    "dev:electron": "tsc --project desktop/electron/tsconfig.json && concurrently -k -n \"tsc,app\" \"tsc --project desktop/electron/tsconfig.json --watch --preserveWatchOutput\" \"nodemon --watch dist-electron -e js --delay 1 --exec cross-env NODE_ENV=development electron .\"",
     "dev:electron:alt": "cross-env API_BASE=http://localhost:3002/api ELECTRON_DEV_URL=http://localhost:5124 npm run dev:electron",
     "dev": "concurrently -k -n \"react,electron\" \"npm run dev:react\" \"npm run dev:electron\"",
     "dev:backend": "npm run dev:local --prefix backend",

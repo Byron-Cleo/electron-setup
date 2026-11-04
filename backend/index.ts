@@ -16,16 +16,33 @@ async function main() {
     process.exit(1);
   }
 
-  app.listen(PORT, BIND, () => {
+  const server = app.listen(PORT, BIND, () => {
     console.log(`Server listening on http://${BIND}:${PORT}`);
   });
 
+  const stopScheduler = ENABLE_SCHEDULER ? startScheduler() : null;
   if (ENABLE_SCHEDULER) {
-    startScheduler();
     console.log("Scheduler started (auto-close enabled)");
   } else {
     console.log("Scheduler DISABLED (set ENABLE_SCHEDULER=true to enable)");
   }
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`Received ${signal} — shutting down`);
+    stopScheduler?.();
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      server.closeAllConnections?.();
+    });
+    await prisma.$disconnect();
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main();

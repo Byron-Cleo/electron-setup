@@ -1,6 +1,6 @@
 ## Platform
 
-Not Specified
+frontend + electron
 
 ## Status
 
@@ -8,10 +8,37 @@ Complete
 
 ## Goals
 
+- **Receipt header** — show `Contact Us: 0729586892` directly below the branch name on the customer receipt (HTML + thermal) and the shift report
+- **Receipt branding** — branch label all caps (`AIRPORT`), footer contact label `Tel:` → `Mobile:`, services footer now starts with `AI Integration, IT Consulting`
+- **Card Grid emoji** — one emoji per category tile in the waiter POS Card Grid (Chicken 🐔, Snacks 🌭, Fish 🐟, …), sized so it does **not** lengthen the cards
+- **Card Grid selected ring** — the red selection ring on a category tile is no longer cropped by the scroll container (padding on the grid's parent element)
+
 ## Notes
 
+- **Receipt data shape** — `contact?: string` was added to `ReceiptData.restaurant` and `ShiftReportData.restaurant` in both `desktop/electron/receiptTemplate.ts` and `desktop/ui/types/electron.d.ts`. The restaurant footer data is duplicated in three places (`desktop/ui/lib/receipt.ts` `RESTAURANT_INFO`, `ShiftCloseDialog.tsx`, `ShiftReport.tsx`) — all three were updated.
+- **Thermal `Tel:` → `Mobile:`** — there are three print paths, all updated: `receipt.ts` `plainTextLines` (customer ticket), `receiptTemplate.ts` `customerBody` (HTML customer), `receiptTemplate.ts` `shiftReportBody` (HTML shift report). The thermal shift report has its own `pushCenter` block, so both thermal paths got the Contact Us line.
+- **Emoji map** (`WaiterMenuBrowser.tsx` `CATEGORY_EMOJI`) matches on a lowercased **substring**, most specific first — `grand-ma` must be tested before `chicken`, otherwise Grand-Ma Chicken would get the plain 🐔. Unknown categories fall back to 🍽️. The emoji span is `aria-hidden` so screen readers still announce only the category name.
+- **Emoji placement** — the emoji sits **under the title**, on the right of the "N dishes / N available" wording, in a `justify-between` row (`text-2xl leading-none`). The wording block is two 10 px lines (≈25 px), which is taller than the 24 px emoji, so the tile height is unchanged.
+- **Emoji does not change card height** — verified by A/B measurement in the browser: **59.5 px** with the emoji hidden and **59.5 px** with it shown.
+- **Ring clipping fix** — the selected tile uses `ring-2 ring-brand-red`, a box-shadow drawn *outside* the border box, so any ancestor with `overflow` clips it. The scroller in `WaiterMenuGrid.tsx` is `overflow-y-auto`; the fix is `p-1` on the grid container in `WaiterMenuBrowser.tsx` (the operator's suggested "padding on the parent element containing all the grid cards"). Measured clearance is now **4.5 px** vs. the 2 px ring spread.
+- **Emoji choices are operator-driven** — every glyph was picked in review, including corrections (Nduma-Ngwashi 🍠 sweet potato, Special Meals 🍟 chips, Mbuzi Fry 🐐 goat, Athola 🍖 roast, Liver 🥓, Glass SODA 🥤). Unicode has **no** water-bottle or liver emoji; the registry was queried directly (`unicodedata`) to confirm what exists. The baby bottle 🍼 was explicitly rejected and is **not used anywhere**.
+- **Verification setup** — the box's dev DB (`eraevadb_dev`) is **stale** (no `pinLookup` column) so the dev backend's PIN login 500s. For local browser testing a local backend was run against the local `eraevadb` with `PIN_PEPPER=eraeva-pos-fallback-pepper` (the pepper the stored `pinLookup` fingerprints were built with). Waiter **Mercy** = PIN **1975**.
+- **SSH tunnel disabled** — the launchd agent `com.eraeva.postunnel` (`RunAtLoad` + `KeepAlive`, 10 s throttle) was holding local 3001/5123/3111/5433, which is why `npm run dev:all` failed with "Port 5123 is already in use". It was `bootout`ed **and** `disable`d, so it will not return at login. `~/.ssh/config` still carries the four `LocalForward` lines.
+- **Still open** — the installed `.exe` terminals keep their own bundle; a `npm run build:win` installer is required (must be built on Windows — no wine on this Mac) before terminals show any of this.
 
 ## History
+
+### frontend + electron + backend - 2026-11-04 — Card Grid Emoji Tiles, Receipt Branding + Clean Dev Shutdown
+
+- **Card Grid emoji** — one emoji per category tile, rendered **under the title** on the right of the dish/available wording (`justify-between` row, `text-2xl leading-none`). All 29 live categories mapped and verified against the local DB; matching is case-insensitive substring, most specific first. Card height is unchanged (59.5 px with and without the emoji, A/B measured)
+- **Selected-tile ring no longer cropped** — `p-1` on the grid container in `WaiterMenuBrowser.tsx` gives the 2 px `ring-brand-red` shadow room inside the `overflow-y-auto` scroller (4.5 px clearance). Confirmed visually on the card adjacent to CURRENT ORDER at 1180 px
+- **Receipt branding** — `Branch: AIRPORT`, `Contact Us: 0729586892` directly below the branch, footer `Tel:` → `Mobile:`, services footer now leads with `AI Integration, IT Consulting`. Applied across all three print paths (HTML customer, thermal customer, HTML + thermal shift report) and all three copies of the restaurant block
+- **`contact?: string`** added to `ReceiptData.restaurant` and `ShiftReportData.restaurant` in `receiptTemplate.ts` and `electron.d.ts`
+- **Dev startup was broken — root cause found and fixed** — the backend "Process didn't exit in 5s. Force killing…" flood was a *symptom*, not the bug: `tsc --watch` writes `dist-electron/*.js`, nodemon watches that same folder and restarted Electron **9×** at startup; Electron's **GPU process then crashed** (`Graphite insertRecording failed` → `Context was lost` → `exit_code=8704`), killing the app; `concurrently -k` tore the group down and SIGTERM'd the backend, which had **no signal handler**, so Express + the scheduler interval + the Prisma pool kept the event loop alive and tsx force-killed it — then tsx *restarts* its child on kill, printing the message again for every cycle
+- **Three fixes** — (1) `package.json`: `nodemon --delay 1` collapses the tsc write-burst into **1** restart instead of 9; (2) `desktop/electron/main.ts`: `app.disableHardwareAcceleration()` in dev → **0** GPU errors; (3) `backend/index.ts`: SIGTERM/SIGINT handler that stops the scheduler, `server.close()` + `closeAllConnections()` (the SSE streams were pinning the port open) and `prisma.$disconnect()` → backend now exits in **386 ms** instead of hanging
+- **Verified over 90 s of `npm run dev:all`** — nodemon restarts 9 → **1** · GPU errors 6 → **0** · "Force killing" hundreds → **0** · backend `/health` ok throughout · Vite 200 · Electron alive
+- **Checks** — `tsc -b` clean · `npx tsc --project desktop/electron/tsconfig.json` clean · `npm run build --prefix backend` clean · `npm run build` clean · ESLint clean on all changed files · receipt render harness **13/13** assertions (thermal rows sum 1550 == Sub-Total 1550)
+- **Deploy notes** — `backend/index.ts` changed, so production needs `npm run build --prefix backend` + a pm2 restart once merged. The installed `.exe` terminals keep their own bundle and need a fresh `npm run build:win` installer (build on Windows — no wine on the Mac). Branch `feature/waiter/menu-layout-card-grid`
 
 ### frontend + backend - 2026-11-04 — Waiter POS Card Grid Menu Layout + Admin System Override (merged, deployed to production)
 
