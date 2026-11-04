@@ -19,14 +19,17 @@ set "PM2_HOME=C:\Users\User\.pm2"
 set "USERPROFILE=C:\Users\User"
 set "PATH=C:\Windows\System32;C:\Windows;C:\Program Files\nodejs;C:\Users\User\AppData\Roaming\npm;%PATH%"
 set "PM2=C:\Users\User\AppData\Roaming\npm\pm2.cmd"
+set "NO_COLOR=1"
 
 if not exist "%LOG%" mkdir "%REPO%\backend\logs" >nul 2>&1
 
 echo [%date% %time%] restarting pm2 process eraeva-backend >> "%LOG%"
 call "%PM2%" restart eraeva-backend >> "%LOG%" 2>&1
 
-rem Give the new build a moment to bind the port before reporting.
-timeout /t 5 /nobreak >nul 2>&1
+rem Give the new build a moment to bind the port before reporting. "ping" is
+rem used instead of "timeout" because "timeout" refuses to run without a
+rem console and aborts under some schtasks/SSH hosts.
+ping -n 6 127.0.0.1 >nul 2>&1
 
 echo [%date% %time%] health check >> "%LOG%"
 curl -s http://127.0.0.1:3001/health >> "%LOG%" 2>&1
