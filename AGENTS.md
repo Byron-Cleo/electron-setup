@@ -42,7 +42,7 @@ React Component → window.electron.* (contextBridge)
       → Express route → Prisma → PostgreSQL
 ```
 
-**Port split:** Production uses port **3001**, run by the `EraevaBackend` Windows service (NSSM, StartType Automatic) executing `node backend/dist/index.js` with `NODE_ENV=production`. The backend MUST be rebuilt (`npm run build --prefix backend`) before restarting the service whenever source changes — the service runs compiled `dist/`, not tsx. Control it with the root `server:start|stop|restart|status|logs` npm scripts (status/logs need no elevation; start/stop/restart do) or `sc query EraevaBackend`. Development uses port **3111** so the dev backend can run alongside the production server. Dev defaults are wired through `.env.development` (`VITE_API_BASE`/`VITE_API_ORIGIN`) and `server-config.ts` (`NODE_ENV=development` → `DEV_API_BASE`).
+**Port split:** Production uses port **3001**, run by the **pm2 process `eraeva-backend`** executing `node backend/dist/index.js` with `NODE_ENV=production`. The backend MUST be rebuilt (`npm run build --prefix backend`) before restarting the app whenever source changes — it runs compiled `dist/`, not tsx. Restart it with `pm2 restart eraeva-backend` (see **Production Deployment**). Development uses port **3111** so the dev backend can run alongside the production server. Dev defaults are wired through `.env.development` (`VITE_API_BASE`/`VITE_API_ORIGIN`) and `server-config.ts` (`NODE_ENV=development` → `DEV_API_BASE`).
 
 No React Router — view switching via `useState<Tab>` and `useState<view>` in `App.tsx`.
 
@@ -215,16 +215,27 @@ Or run everything with `npm run dev:all`.
 
 ### Production Deployment (MANDATORY)
 
-The production backend is the **`EraevaBackend`** Windows service (NSSM, StartType Automatic) running `node backend/dist/index.js` with `NODE_ENV=production` on port **3001**. It runs **compiled `dist/`, not tsx** — source changes require a **rebuild**, not just a restart.
+The production backend is the **pm2 process `eraeva-backend`** (port **3001**) running `backend/dist/index.js` with `NODE_ENV=production`. It runs **compiled `dist/`, not tsx** — source changes require a **rebuild**, not just a restart.
+
+> **Topology (verified 2026-11-04 on the restaurant box):** there is **no `EraevaBackend` Windows service** — `sc query EraevaBackend` fails with error 1060. Production is the pm2 app `eraeva-backend`, owned by the pm2 daemon in `C:\Users\User\.pm2` (launched at boot by the `EraevaPOS-Backend` scheduled task as SYSTEM). The `pos-backend` scheduled task is the **dev** scope, not production: `backend\start-backend.cmd` runs `node dist\index.js` with no `NODE_ENV`, so it loads `.env.development` and listens on **3111** against `eraevadb_dev`.
 
 After ANY change under `backend/` (routes, app, db, scheduler, events, seeds, etc.):
 1. `npm run build --prefix backend`
-2. `npm run server:restart` (start/stop/restart need an elevated shell; status/logs do not)
-3. Verify: `npm run server:status` → `RUNNING` and `curl http://localhost:3001/health` → `{"status":"ok",...}`
+2. Restart the pm2 app (see below)
+3. Verify: `curl http://localhost:3001/health` → `{"status":"ok",...}`
 
 If `backend/prisma/schema.prisma` changed, run `npm run db:sync` (generate + push) BEFORE the rebuild + restart so the DB is in sync with `dist/`.
 
-Service shortcuts: `npm run server:start|stop|restart|status|logs` (logs tail `backend/logs/backend-service.log`). pm2, `ecosystem.config.cjs`, and `scripts/start-backend.bat` are retired — do not restore or use them.
+**Restarting production (Windows, elevated or via the bridge):**
+- Bridge, no UAC needed: `schtasks /run /tn pos-backend-restart` (SYSTEM task → `scripts/restart-backend.cmd` → `pm2 restart eraeva-backend` with `PM2_HOME=C:\Users\User\.pm2`; log: `backend/logs/restart.log`)
+- Direct, from an elevated shell: `set PM2_HOME=C:\Users\User\.pm2 && pm2 restart eraeva-backend`
+- From the operator Mac over SSH: `ssh pos "set PM2_HOME=C:\Users\User\.pm2 && C:\Users\User\AppData\Roaming\npm\pm2.cmd restart eraeva-backend"`
+
+> The bridge used to call `sc stop/start EraevaBackend`, which silently did nothing once the service was retired — the restart looked successful while the old build kept serving. It now restarts the pm2 app and appends a health check to `backend/logs/restart.log`. Always confirm `/health` after a restart.
+
+> **Known production gap:** `backend/.env` on the restaurant box has **no `PIN_PEPPER`**, so the backend logs `[auth] PIN_PEPPER is not set — falling back to the built-in pepper`. Every `User.pinLookup` fingerprint was computed with that built-in pepper, so PIN logins work — but adding `PIN_PEPPER` now would invalidate every stored fingerprint and lock out all PIN logins. Fixing it needs a coordinated re-fingerprint of the `User` table, not a one-line `.env` change.
+
+Service shortcuts: `npm run server:start|stop|restart|status|logs` are **Windows-only** (`sc`/`powershell`) and the `sc` ones still reference the retired service — prefer the pm2 commands above. `ecosystem.config.cjs` and `scripts/start-backend.bat` stay retired — do not restore or use them.
 
 ### Remote Operations over SSH & Dev Scope (MANDATORY)
 
@@ -234,8 +245,8 @@ The server is operated remotely over SSH (no RDP; staff use the console). Local 
 1. Merge/push approved, dev-tested changes to `restaurant-build` (from the operator laptop).
 2. `ssh ops@<tailscale-ip or 192.168.100.45>` then `git pull origin restaurant-build`
 3. `npm run build --prefix backend` (compiles `dist/` — the service runs `dist/`, not tsx)
-4. Restart WITHOUT UAC: `schtasks /run /tn pos-backend-restart` (SYSTEM/Highest task → `scripts/restart-backend.cmd` → `sc stop/start EraevaBackend`; log: `backend/logs/restart.log`)
-5. Verify: `sc query EraevaBackend` → RUNNING and `curl http://localhost:3001/health`
+4. Restart WITHOUT UAC: `schtasks /run /tn pos-backend-restart` (SYSTEM/Highest task → `scripts/restart-backend.cmd` → `pm2 restart eraeva-backend`; log: `backend/logs/restart.log`)
+5. Verify: `curl http://localhost:3001/health` → `{"status":"ok",...}` (there is no `sc query EraevaBackend` to check — the service is retired)
 
 **Operator access (no RDP — use this while waiters are serving):**
 - Laptop `~/.ssh/config`:
