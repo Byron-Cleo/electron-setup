@@ -30,17 +30,28 @@ router.get("/", async (_req, res) => {
 
 // PUT /api/system-settings - update the singleton. Admin-only in the UI.
 router.put("/", async (req, res) => {
-  const { showGoLiveInput } = req.body ?? {};
+  const { showGoLiveInput, waiterMenuLayout } = req.body ?? {};
 
   if (showGoLiveInput !== undefined && typeof showGoLiveInput !== "boolean") {
     return res.status(400).json({ error: "showGoLiveInput must be a boolean" });
   }
 
+  if (waiterMenuLayout !== undefined && waiterMenuLayout !== null && waiterMenuLayout !== "LIST" && waiterMenuLayout !== "GRID") {
+    return res.status(400).json({ error: "waiterMenuLayout must be LIST, GRID, or null" });
+  }
+
   try {
     const settings = await prisma.systemSettings.upsert({
       where: { id: 1 },
-      create: { id: 1, showGoLiveInput: showGoLiveInput ?? true },
-      update: showGoLiveInput !== undefined ? { showGoLiveInput } : {},
+      create: {
+        id: 1,
+        showGoLiveInput: showGoLiveInput ?? true,
+        ...(waiterMenuLayout !== undefined ? { waiterMenuLayout } : {}),
+      },
+      update: {
+        ...(showGoLiveInput !== undefined ? { showGoLiveInput } : {}),
+        ...(waiterMenuLayout !== undefined ? { waiterMenuLayout } : {}),
+      },
     });
     res.json(settings);
   } catch (e) {

@@ -684,6 +684,10 @@ model SystemSettings {
   // on the Kitchen screens. Turn off once go-live catch-up is done; existing
   // figures stay in history/reports either way.
   showGoLiveInput Boolean  @default(true)
+  // Waiter POS menu layout: "LIST" (stacked category sections, current behaviour)
+  // or "GRID" (collapsible category cards).
+  // Null (= not set) means no system override; waiters use their own localStorage preference.
+  waiterMenuLayout String?
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @db.Timestamptz(6)
 }

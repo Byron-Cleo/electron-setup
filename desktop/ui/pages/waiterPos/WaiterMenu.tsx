@@ -10,6 +10,7 @@ import {
   getOrderCount,
   getCurrentShift,
   isStockShortfall,
+  getSystemSettings,
 } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { RESTAURANT_INFO } from "@/lib/receipt"
@@ -22,8 +23,8 @@ function toReceiptItems(orderItems: OrderLineItem[]): ReceiptItem[] {
     const vegetable = oi.vegetable
     const accompaniments: ReceiptAccompaniment[] = [
       ...(oi.portion ? [{ name: oi.portion.name, charged: false, price: 0, note: true }] : []),
-      ...(starch ? [{ name: starch.name, charged: Number(starch.price ?? 0) > 0, price: Number(starch.price ?? 0) }] : []),
-      ...(vegetable ? [{ name: vegetable.name, charged: Number(vegetable.price ?? 0) > 0, price: Number(vegetable.price ?? 0) }] : []),
+      ...(starch ? [{ name: starch.name, charged: Number(starch.price ?? 0) > 0, price: Number(starch.price ?? 0), qty: 1 }] : []),
+      ...(vegetable ? [{ name: vegetable.name, charged: Number(vegetable.price ?? 0) > 0, price: Number(vegetable.price ?? 0), qty: 1 }] : []),
       ...(!starch && oi.menuItem.hasStarch
         ? [{ name: "No starch", charged: false, price: 0, note: true }]
         : []),
@@ -167,6 +168,9 @@ export function WaiterMenu() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [noShift, setNoShift] = useState(false)
+  // Admin-controlled menu layout. null means "Not set" — no system override,
+  // so each waiter falls back to their own localStorage preference.
+  const [menuLayout, setMenuLayout] = useState<MenuLayout | null>(null)
   const prefilledRef = useRef<string | null>(null)
 
   // Block ordering when no shift is open — poll so waiters recover automatically.
@@ -188,6 +192,32 @@ export function WaiterMenu() {
       clearInterval(id)
     }
   }, [])
+
+  // The menu layout is an admin setting. Read it on mount and whenever the
+  // serving period changes, then poll so a flip lands on an already-open
+  // terminal within a minute. A failed read clears the override so the waiter
+  // falls back to their own preference.
+  useEffect(() => {
+    let cancelled = false
+
+    function loadLayout() {
+      getSystemSettings()
+        .then((settings) => {
+          if (cancelled) return
+          setMenuLayout(settings.waiterMenuLayout ?? null)
+        })
+        .catch(() => {
+          if (!cancelled) setMenuLayout(null)
+        })
+    }
+
+    loadLayout()
+    const id = setInterval(loadLayout, 60000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [mealPeriod])
 
   const replacementOrder = voidedOrders.find((o) => o.id === replacementTargetId)
 
@@ -367,6 +397,7 @@ export function WaiterMenu() {
       previewError={previewError}
       onPreview={handlePreview}
       onClosePreview={closePreview}
+      menuLayout={menuLayout}
     />
   )
 }

@@ -299,7 +299,8 @@ function plainTextLines(data: ReceiptData): Line[] {
     }
     for (const acc of item.accompaniments) {
       const tag = acc.charged ? `(+${money(acc.price)})` : "(FREE)";
-      for (const wrapped of wrapWords(`* ${acc.name} ${tag}`, width - qtyW)) {
+      const qtyTag = acc.qty && acc.qty > 1 ? ` x${acc.qty}` : "";
+      for (const wrapped of wrapWords(`* ${acc.name}${qtyTag} ${tag}`, width - qtyW)) {
         push(" ".repeat(qtyW) + wrapped);
       }
     }

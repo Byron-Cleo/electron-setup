@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Heading } from "@/components/ui/heading"
-import { Building2, ChefHat, MonitorPlay, Printer, Rocket, Server, Tag } from "lucide-react"
+import { Building2, ChefHat, LayoutGrid, MonitorPlay, Printer, Rocket, Server, Tag } from "lucide-react"
 import DepartmentManager from "@/components/admin/DepartmentManager"
 import CategoryManager from "@/components/admin/CategoryManager"
 import KitchenStockConfig from "@/components/admin/KitchenStockConfig"
@@ -9,6 +9,7 @@ import PrinterConfig from "@/components/admin/PrinterConfig"
 import ServerConfig from "@/components/admin/ServerConfig"
 import LoginMediaManager from "@/components/admin/LoginMediaManager"
 import GoLiveModeSettings from "@/components/admin/GoLiveModeSettings"
+import MenuLayoutSettings from "@/components/admin/MenuLayoutSettings"
 import { useAuthStore } from "@/stores/auth"
 
 type ActiveView =
@@ -19,6 +20,7 @@ type ActiveView =
   | "server-config"
   | "login-media"
   | "go-live"
+  | "menu-layout"
   | null
 
 const cards: {
@@ -77,6 +79,13 @@ const cards: {
     view: "server-config",
     adminOnly: true,
   },
+  {
+    title: "Waiter Menu Layout",
+    description: "Choose how the waiter POS lists dishes",
+    icon: LayoutGrid,
+    view: "menu-layout",
+    adminOnly: true,
+  },
 ]
 
 function Manager() {
@@ -125,6 +134,10 @@ function Manager() {
 
       {resolvedView === "go-live" && (
         <GoLiveModeSettings onBack={() => setActiveView(null)} />
+      )}
+
+      {resolvedView === "menu-layout" && (
+        <MenuLayoutSettings onBack={() => setActiveView(null)} />
       )}
 
       {!resolvedView && (
