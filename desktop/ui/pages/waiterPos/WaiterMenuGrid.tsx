@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import BackButton from "@/components/shared/BackButton"
 import ServingPeriodBar from "./ServingPeriodBar"
-import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye, ArrowLeft, Ban, ShoppingBag } from "lucide-react"
+import { Loader2, AlertCircle, Package, Plus, Minus, X, Eye, ArrowLeft, Ban, ShoppingBag, List, Search } from "lucide-react"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
 import { Label } from "@/components/ui/label"
@@ -30,6 +31,25 @@ import {
   sellableServingsFor,
   defaultPortionFor,
 } from "./WaiterOrderContext"
+import WaiterMenuBrowser from "./WaiterMenuBrowser"
+
+// ---- Small inline SVG icons for clear 3-vs-4 vertical column choice ----
+const ThreeColsIcon = ({ className }: { className?: string }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={className}>
+    <rect x="3" y="3" width="2" height="18" />
+    <rect x="9" y="3" width="2" height="18" />
+    <rect x="15" y="3" width="2" height="18" />
+  </svg>
+)
+
+const FourColsIcon = ({ className }: { className?: string }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={className}>
+    <rect x="2" y="3" width="2" height="18" />
+    <rect x="7" y="3" width="2" height="18" />
+    <rect x="12" y="3" width="2" height="18" />
+    <rect x="17" y="3" width="2" height="18" />
+  </svg>
+)
 
 interface Props {
   mealPeriod: string
@@ -45,6 +65,7 @@ interface Props {
   previewError: string | null
   onPreview: () => void
   onClosePreview: () => void
+  menuLayout: MenuLayout | null
 }
 
 
@@ -322,9 +343,43 @@ export function WaiterMenuGrid({
   previewError,
   onPreview,
   onClosePreview,
+  menuLayout,
 }: Props) {
   const navigate = useNavigate()
   const { items: orderItems, addToOrder, updateAccompaniments, updateQuantity, removeItem, totalPrice, replacementTargetId, voidedOrders } = useWaiterOrder()
+
+  // ------------------------------------------------------------
+  // Layout resolution: an admin-set value (LIST/GRID) is a system
+  // override and always wins. When the admin setting is "Not set"
+  // (null) there is no override, so the waiter's own localStorage
+  // preference applies, falling back to LIST.
+  // ------------------------------------------------------------
+  const [userMenuLayout, setUserMenuLayout] = useState<MenuLayout | null>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("waiterMenuLayout")
+      if (stored === "LIST" || stored === "GRID") return stored
+    }
+    return null
+  })
+  // persist preference whenever it changes
+  useEffect(() => {
+    if (userMenuLayout !== null) {
+      localStorage.setItem("waiterMenuLayout", userMenuLayout)
+    } else {
+      localStorage.removeItem("waiterMenuLayout")
+    }
+  }, [userMenuLayout])
+  const effectiveMenuLayout = menuLayout ?? userMenuLayout ?? "LIST"
+
+  // ------------------------------------------------------------
+  // Search text + column count — shared header state (always visible)
+  // ------------------------------------------------------------
+  const [query, setQuery] = useState("")
+  const storedCols = typeof window !== "undefined" ? localStorage.getItem("waiterMenuBrowserCols") : null
+  const [cols, setCols] = useState<number>(storedCols ? Math.min(Math.max(Number(storedCols), 3), 4) : 3)
+  useEffect(() => {
+    localStorage.setItem("waiterMenuBrowserCols", String(cols))
+  }, [cols])
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
   const [processedItems, setProcessedItems] = useState<MenuItem[]>([])
@@ -347,6 +402,9 @@ export function WaiterMenuGrid({
   const [lastMealPeriod, setLastMealPeriod] = useState<string | null>(null)
   const [noShift, setNoShift] = useState(false)
   const [orderSheetOpen, setOrderSheetOpen] = useState(false)
+  // The one category expanded in the Card Grid. Kept here so it survives the
+  // detail panel and so it can be reset when the serving period changes.
+  const [openCategory, setOpenCategory] = useState<string | null>(null)
 
   // Poll active shift status (proactive no-shift warning)
   useEffect(() => {
@@ -378,6 +436,7 @@ export function WaiterMenuGrid({
     setSelectedItem(null)
     setActiveOrderKey(null)
     setSyncedOrderKey(null)
+    setOpenCategory(null)
   } else if (processedItems !== items) {
     // Polling update: just update processedItems, preserve selection
     setProcessedItems(items)
@@ -456,6 +515,10 @@ export function WaiterMenuGrid({
     })
     return grouped
   }, [items])
+
+  // The Card Grid replaces the stacked category sections. PACKAGE keeps the
+  // list layout — one category would make a collapsible card a pointless click.
+  const gridMode = effectiveMenuLayout === "GRID" && mealPeriod !== "PACKAGE"
 
   const renderItemCard = (item: MenuItem) => {
     // Servings, not plates: a dish with a 0.5 factor can be sold twice from one
@@ -862,11 +925,75 @@ export function WaiterMenuGrid({
         {/* Column 1 — Dynamic: full category listing ↔ selected item detail */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-y-auto pb-24 lg:pb-0">
-            <div className="mx-auto w-full max-w-[720px]">
-          {selectedItem ? (
-            <div>
+      {/* Search dish input + view layout icons — always visible (sticky) in both LIST and GRID modes */}
+            <div className="flex items-start justify-between mb-4 shrink-0 mx-auto w-full sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-gray-100 px-1">
+              <div className="relative w-[65%] min-w-0 flex-shrink-0">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-ebony/40" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search dishes…"
+                  aria-label="Search dishes"
+                  className="pl-8 w-full"
+                />
+              </div>
+              {/* Determine which view button is active */}
+              {(() => {
+                const isListActive = effectiveMenuLayout === "LIST"
+                const isGrid3Active = effectiveMenuLayout === "GRID" && cols === 3
+                const isGrid4Active = effectiveMenuLayout === "GRID" && cols === 4
+                return (
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      variant={isListActive ? "destructive" : "outline"}
+                      size="icon"
+                      onClick={() => setUserMenuLayout("LIST")}
+                      aria-label="List view"
+                    >
+                      <List className={cn("h-4 w-4", isListActive && "text-brand-red")} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={isGrid3Active ? "destructive" : "outline"}
+                      size="icon"
+                      onClick={() => {
+                        setUserMenuLayout("GRID")
+                        setCols(3)
+                      }}
+                      aria-label="Grid view 3 columns"
+                    >
+                      <ThreeColsIcon className={cn("h-4 w-4 stroke-2", isGrid3Active && "text-brand-red")} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={isGrid4Active ? "destructive" : "outline"}
+                      size="icon"
+                      onClick={() => {
+                        setUserMenuLayout("GRID")
+                        setCols(4)
+                      }}
+                      aria-label="Grid view 4 columns"
+                    >
+                      <FourColsIcon className={cn("h-4 w-4 stroke-2", isGrid4Active && "text-brand-red")} />
+                    </Button>
+                  </div>
+                )
+              })()}
+            </div>
+            <div
+              className={cn(
+                "mx-auto w-full",
+                // The Card Grid needs the real width of the column; the list view
+                // and the dish detail panel keep today's 720px cap unchanged.
+                gridMode && !selectedItem ? "max-w-[960px]" : "max-w-[720px]",
+              )}
+            >
+{selectedItem ? (
+            <div className="p-0 my-0">
+
               {/* Header — menu name centered, price beside it, spanning full width */}
-              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-gray-100 pb-3">
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-gray-100">
                 <Heading as="h3" className="text-xl font-semibold text-brand-ebony">{selectedItem.name}</Heading>
                 <div className="flex items-baseline gap-2">
                   <p className="text-xl font-bold text-brand-maroon">
@@ -1131,6 +1258,18 @@ export function WaiterMenuGrid({
                 </Button>
               </div>
           </div>
+          ) : gridMode ? (
+            <WaiterMenuBrowser
+              categories={categories}
+              itemsByCategory={itemsByCategory}
+              renderItemCard={renderItemCard}
+              openCategory={openCategory}
+              onToggleCategory={(category) =>
+                setOpenCategory((current) => (current === category ? null : category))
+              }
+              search={query}
+              cols={cols}
+            />
           ) : (
             <div className="space-y-6">
               {categories.map((cat) => {
@@ -1139,7 +1278,7 @@ export function WaiterMenuGrid({
                 return (
                   <div key={cat}>
                     <p className="text-xs font-semibold uppercase tracking-wide text-red-500 mb-2">{cat}</p>
-                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 lg:grid-cols-4 gap-3">
                       {catItems.map(renderItemCard)}
                     </div>
                   </div>

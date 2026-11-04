@@ -1,15 +1,49 @@
 
 ## Platform
 
-Not Specified
+frontend + backend
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
+- Replace the waiter POS "long scroll of stacked category sections" with a grid of collapsible category cards, so a waiter sees every category at a glance and reaches a dish in one tap instead of scrolling
+- Add an admin setting so the layout is switchable at runtime: `List View` (today's behaviour) vs `Card Grid` (the new one)
+- Default to `List View` so the feature ships without changing waiter behaviour until the operator explicitly flips the switch
+- Keep every stock / sold-out / selling-paused signal and every price calculation identical to today
+- Fix the dish-detail panel's missing Back button (it currently has no way back to the dish list)
+- Add a dish search box to the Card Grid (filters cards, shows match counts, filters dishes inside an open card)
+
 ## Notes
+
+- Spec: `context/features/frontend/waiter-menu-layout-card-grid.md` · Branch `feature/waiter/menu-layout-card-grid` (fetched from origin, rebased onto `restaurant-build`)
+- Platform is genuinely hybrid: one Prisma schema field + one settings-route validation (backend), everything else frontend
+- **Manual implementation** — the operator directed that this feature be written by hand, no ollama codegen models
+- **Spec conflict resolved:** the spec asks for a pixel-identical List View *and* a `max-w-[720px]` → `max-w-[960px]` widening. The cap is now conditional — LIST keeps `720px` (byte-identical to today), GRID uses `960px`
+- **Tile sizing corrected against the real viewport:** the spec assumed a ~600px grid area, but the live scroller is 525px tall (the header + search take the rest). Tiles were compacted to 60px (was 77px) so all 16 local categories fit with no scrolling and production's 20 categories (7 rows) still fit with ~40px to spare
+- PACKAGE period always keeps the list layout (one category makes a collapsible card a pointless extra click); BEVERAGE uses the grid
+- Grid shape: category cards 3/row desktop, 2 tablet, 1 phone; one category open at a time; the drawer is full-width and opens **below its own row** so no card ever changes row or column
+- Availability on a tile is derived from the same helpers the dish cards use (`sellableServingsFor(item, defaultPortionFor(item))`), so a tile can never disagree with the dish cards
+- The setting is `waiterMenuLayout String @default("LIST")` with values `"LIST" | "GRID"` — a String, not a Prisma enum, so `db push` backfills the existing `id = 1` row with no enum migration risk
+- The waiter POS reads the setting on mount, on every meal-period change and every ~60s, so an admin's flip reaches an already-open terminal within a minute; on error it falls back to `LIST`
+- The AGENTS.md Menu Pricing Rule must hold: `menu.price` is the unit price excluding accompaniments, a charged starch/vegetable is added to the line total but never becomes a separate dish, a free accompaniment adds nothing
+- Local Mac dev runs on port **3001** against the local `eraevadb` — `npm run db:sync` then `npm run build --prefix backend`; nothing touches the restaurant server until the operator signs off
+
+### Verified locally (live, :3001 backend + :5123 Vite, local `eraevadb`)
+
+- **List View is byte-for-byte identical to the pre-change code** — captured the rendered listing DOM before and after the change (stash / reload / diff): 65,510 chars both times, `identical: true`, same 720×2947 box, same 16 category headings in the same order
+- **Card Grid** — 16 category tiles / 64 dishes, matching `GET /api/menu?mealType=DINNER` exactly; all tiles visible with no scrolling (`scrollHeight 525 === clientHeight 525`); tiles 60px tall; 3/row desktop, 2/row tablet (768px), 1/row phone (390px)
+- **Drawer** — Fish opens 6 dishes 3-across below its own row; with the scroll reset, **only** the card below the open row moved (Nduma-Ngwashi); every other card kept its exact row and column. Clicking Fish again collapses it
+- **Detail panel** — the new `← Back to dishes` button returns to the grid with the Fish drawer still open (6 dishes, `aria-expanded=true`)
+- **Search** — "egg" leaves only the Eggs tile showing "3 matches"; the open drawer shows only the 3 matching dishes; clearing restores all 16 tiles and the 8-dish drawer
+- **Price parity** — Scrambled Eggs (180) + Ugali Brown starch (30) + Beans vegetable (100) = **KSH 310** in *both* Grid and List, in the cart line and the total (Menu Pricing Rule holds)
+- **PACKAGE** keeps the list layout while the setting is GRID; **BEVERAGE** uses the grid (7 tiles, 3 rows)
+- **Live flip** — an admin's setting change reached an already-open terminal with no reload (18s, next 60s poll tick)
+- **API** — `PUT /api/system-settings` rejects `TILES` and `123` with 400; `showGoLiveInput` still works; `GET` returns the new field
+- **Checks** — `npx tsc -b` clean · `npm run build` clean · `npm run build:web -- --server same-origin` clean · ESLint **897 problems / 889 errors before and after — zero new** · backend `npm run build --prefix backend` clean · `npm run db:sync` applied the column to the local `eraevadb`
+- **Not yet done** — no real order was placed (the local DB mirrors production; the order path and `backend/routes/orders.ts` are untouched), and the installed `.exe` terminals still carry the old bundle
 
 ## History
 

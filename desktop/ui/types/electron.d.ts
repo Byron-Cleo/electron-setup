@@ -239,6 +239,7 @@ interface ReceiptAccompaniment {
   name: string;
   charged: boolean;
   price: number;
+  qty?: number;
   note?: boolean;
 }
 
@@ -1314,13 +1315,17 @@ interface DashboardSummary {
 }
 
 // Global app settings singleton (id = 1).
+type MenuLayout = "LIST" | "GRID";
+
 interface SystemSettings {
   id: number;
   showGoLiveInput: boolean;
+  waiterMenuLayout: MenuLayout | null;
 }
 
 interface SystemSettingsUpdate {
   showGoLiveInput?: boolean;
+  waiterMenuLayout?: MenuLayout | null;
 }
 
 interface ElectronAPI {

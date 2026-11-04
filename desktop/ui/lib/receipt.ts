@@ -26,7 +26,9 @@ export interface ReceiptFromOrderOptions {
  * Maps a persisted `Order` (as returned by `GET /orders`) onto `ReceiptData`.
  * Line math mirrors the Cashier details dialog: the stored `item.price` is the
  * portion-resolved unit price, and charged starch/vegetable selections are
- * added on top per unit.
+ * added on top per unit. Each accompaniment portion is displayed as quantity 1,
+ * matching the order placement behaviour where one starch/veg selection
+ * corresponds to one served portion.
  */
 export function receiptFromOrder(order: Order, opts: ReceiptFromOrderOptions = {}): ReceiptData {
   const items: ReceiptItem[] = order.OrderItem.map((item) => {
@@ -36,8 +38,8 @@ export function receiptFromOrder(order: Order, opts: ReceiptFromOrderOptions = {
     const starchPrice = Number(starch?.price ?? 0)
     const vegetablePrice = Number(vegetable?.price ?? 0)
     const accompaniments: ReceiptAccompaniment[] = [
-      ...(starch ? [{ name: starch.name, charged: starchPrice > 0, price: starchPrice }] : []),
-      ...(vegetable ? [{ name: vegetable.name, charged: vegetablePrice > 0, price: vegetablePrice }] : []),
+      ...(starch ? [{ name: starch.name, charged: starchPrice > 0, price: starchPrice, qty: 1 }] : []),
+      ...(vegetable ? [{ name: vegetable.name, charged: vegetablePrice > 0, price: vegetablePrice, qty: 1 }] : []),
     ]
     return {
       name: item.name,

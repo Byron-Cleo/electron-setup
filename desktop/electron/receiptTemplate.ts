@@ -2,6 +2,7 @@ export interface ReceiptAccompaniment {
   name: string;
   charged: boolean;
   price: number;
+  qty?: number;
   note?: boolean;
 }
 
@@ -122,7 +123,8 @@ function accompHtml(accompaniments: ReceiptAccompaniment[]): string {
         return `<div style="padding-left:10px; font-size:11px; font-style:italic;">&bull; ${a.name}</div>`;
       }
       const tag = a.charged ? `+${money(a.price)}` : "FREE";
-      return `<div style="padding-left:10px; font-size:11px;">&bull; ${a.name} (${tag})</div>`;
+      const qtyTag = a.qty && a.qty > 1 ? ` x${a.qty}` : "";
+      return `<div style="padding-left:10px; font-size:11px;">&bull; ${a.name} (${tag}${qtyTag})</div>`;
     })
     .join("");
   return `<div style="margin-top:1px;">${lines}</div>`;
