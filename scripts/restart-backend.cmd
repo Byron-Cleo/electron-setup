@@ -34,6 +34,8 @@ ping -n 6 127.0.0.1 >nul 2>&1
 echo [%date% %time%] health check >> "%LOG%"
 curl -s http://127.0.0.1:3001/health >> "%LOG%" 2>&1
 echo. >> "%LOG%"
-call "%PM2%" list >> "%LOG%" 2>&1
+rem "pm2 pid" prints a bare PID. "pm2 list" draws a box-drawing table that the
+rem log file's OEM codepage renders as mojibake, so the PID is recorded plainly.
+call "%PM2%" pid eraeva-backend >> "%LOG%" 2>&1
 echo [%date% %time%] done >> "%LOG%"
 endlocal
