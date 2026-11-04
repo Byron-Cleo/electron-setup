@@ -1,51 +1,35 @@
-
 ## Platform
 
-frontend + backend
+Not Specified
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- Replace the waiter POS "long scroll of stacked category sections" with a grid of collapsible category cards, so a waiter sees every category at a glance and reaches a dish in one tap instead of scrolling
-- Add an admin setting so the layout is switchable at runtime: `List View` (today's behaviour) vs `Card Grid` (the new one)
-- Default to `List View` so the feature ships without changing waiter behaviour until the operator explicitly flips the switch
-- Keep every stock / sold-out / selling-paused signal and every price calculation identical to today
-- Fix the dish-detail panel's missing Back button (it currently has no way back to the dish list)
-- Add a dish search box to the Card Grid (filters cards, shows match counts, filters dishes inside an open card)
-
 ## Notes
 
-- Spec: `context/features/frontend/waiter-menu-layout-card-grid.md` · Branch `feature/waiter/menu-layout-card-grid` (fetched from origin, rebased onto `restaurant-build`)
-- Platform is genuinely hybrid: one Prisma schema field + one settings-route validation (backend), everything else frontend
-- **Manual implementation** — the operator directed that this feature be written by hand, no ollama codegen models
-- **Spec conflict resolved:** the spec asks for a pixel-identical List View *and* a `max-w-[720px]` → `max-w-[960px]` widening. The cap is now conditional — LIST keeps `720px` (byte-identical to today), GRID uses `960px`
-- **Tile sizing corrected against the real viewport:** the spec assumed a ~600px grid area, but the live scroller is 525px tall (the header + search take the rest). Tiles were compacted to 60px (was 77px) so all 16 local categories fit with no scrolling and production's 20 categories (7 rows) still fit with ~40px to spare
-- PACKAGE period always keeps the list layout (one category makes a collapsible card a pointless extra click); BEVERAGE uses the grid
-- Grid shape: category cards 3/row desktop, 2 tablet, 1 phone; one category open at a time; the drawer is full-width and opens **below its own row** so no card ever changes row or column
-- Availability on a tile is derived from the same helpers the dish cards use (`sellableServingsFor(item, defaultPortionFor(item))`), so a tile can never disagree with the dish cards
-- The setting is `waiterMenuLayout String @default("LIST")` with values `"LIST" | "GRID"` — a String, not a Prisma enum, so `db push` backfills the existing `id = 1` row with no enum migration risk
-- The waiter POS reads the setting on mount, on every meal-period change and every ~60s, so an admin's flip reaches an already-open terminal within a minute; on error it falls back to `LIST`
-- The AGENTS.md Menu Pricing Rule must hold: `menu.price` is the unit price excluding accompaniments, a charged starch/vegetable is added to the line total but never becomes a separate dish, a free accompaniment adds nothing
-- Local Mac dev runs on port **3001** against the local `eraevadb` — `npm run db:sync` then `npm run build --prefix backend`; nothing touches the restaurant server until the operator signs off
-
-### Verified locally (live, :3001 backend + :5123 Vite, local `eraevadb`)
-
-- **List View is byte-for-byte identical to the pre-change code** — captured the rendered listing DOM before and after the change (stash / reload / diff): 65,510 chars both times, `identical: true`, same 720×2947 box, same 16 category headings in the same order
-- **Card Grid** — 16 category tiles / 64 dishes, matching `GET /api/menu?mealType=DINNER` exactly; all tiles visible with no scrolling (`scrollHeight 525 === clientHeight 525`); tiles 60px tall; 3/row desktop, 2/row tablet (768px), 1/row phone (390px)
-- **Drawer** — Fish opens 6 dishes 3-across below its own row; with the scroll reset, **only** the card below the open row moved (Nduma-Ngwashi); every other card kept its exact row and column. Clicking Fish again collapses it
-- **Detail panel** — the new `← Back to dishes` button returns to the grid with the Fish drawer still open (6 dishes, `aria-expanded=true`)
-- **Search** — "egg" leaves only the Eggs tile showing "3 matches"; the open drawer shows only the 3 matching dishes; clearing restores all 16 tiles and the 8-dish drawer
-- **Price parity** — Scrambled Eggs (180) + Ugali Brown starch (30) + Beans vegetable (100) = **KSH 310** in *both* Grid and List, in the cart line and the total (Menu Pricing Rule holds)
-- **PACKAGE** keeps the list layout while the setting is GRID; **BEVERAGE** uses the grid (7 tiles, 3 rows)
-- **Live flip** — an admin's setting change reached an already-open terminal with no reload (18s, next 60s poll tick)
-- **API** — `PUT /api/system-settings` rejects `TILES` and `123` with 400; `showGoLiveInput` still works; `GET` returns the new field
-- **Checks** — `npx tsc -b` clean · `npm run build` clean · `npm run build:web -- --server same-origin` clean · ESLint **897 problems / 889 errors before and after — zero new** · backend `npm run build --prefix backend` clean · `npm run db:sync` applied the column to the local `eraevadb`
-- **Not yet done** — no real order was placed (the local DB mirrors production; the order path and `backend/routes/orders.ts` are untouched), and the installed `.exe` terminals still carry the old bundle
 
 ## History
+
+### frontend + backend - 2026-11-04 — Waiter POS Card Grid Menu Layout + Admin System Override (merged, deployed to production)
+
+- **Card Grid layout** — the waiter POS "long scroll of stacked category sections" is now a grid of collapsible category cards: 3 or 4 columns, one category open at a time, the drawer opens **below its own row** so no card ever changes row or column. A dish search box filters the tiles, shows match counts and filters the dishes inside an open card. PACKAGE keeps the list layout (one category would make a collapsible card a pointless extra click); BEVERAGE uses the grid
+- **Admin setting** (Manager → Waiter Menu Layout) — `List View` / `Card Grid` / **`Not set`**. `waiterMenuLayout` is a **nullable** String (not an enum), so `db push` adds the column with no migration risk and the pre-existing `id = 1` row reads as "not set". A **set** value always wins; **`Not set` means no system override**, so each waiter falls back to their own `localStorage` preference and then to LIST
+- **Precedence bug caught during review** — the first implementation resolved `(userMenuLayout ?? menuLayout)`, which gave the waiter's localStorage priority over the admin and made **"Not set" behave identically to "List View"**. Corrected to `menuLayout ?? userMenuLayout ?? "LIST"` (`WaiterMenuGrid.tsx`), and `WaiterMenu.tsx` now preserves `null` instead of collapsing it to `"LIST"`
+- **Dish-detail panel** — the "Back to dishes" button was removed (the header already returns to the grid) and the stray `pb-3` on the name/price row dropped
+- **Receipts** — accompaniment quantity is now printed on both the HTML ticket (`receiptTemplate.ts` `accompHtml`) and the plain-text thermal ticket (`receipt.ts` `plainTextLines`), as `x{qty}` when qty > 1. Both data paths carry it: waiter placement (`WaiterMenu.tsx` `toReceiptItems`) and cashier reprint (`lib/receipt.ts` `receiptFromOrder`)
+- **Electron main process was broken by this session's own edit** — a rewrite of `desktop/electron/receipt.ts` + `receiptTemplate.ts` had wiped 954 lines of working code (`registerReceiptHandlers`, `customerReceiptHtml`, `kitchenReceiptHtml`, `barReceiptHtml`, `RECEIPT_FONT`, the full shift-report renderer). **Restored from git**, then the qty change re-applied surgically (5-line diff). `desktop/electron/receipt.ts` is back to 605 lines and `receiptTemplate.ts` to 413
+- **Prisma `@default(null)` is invalid** — an optional String defaults to null implicitly; `waiterMenuLayout String? @default(null)` failed `prisma generate` with P1012. Schema is now `waiterMenuLayout String?`
+- **Production deploy (restaurant box, over SSH)** — backup first (`pg_dump` via the 5433 tunnel → `backend/backups/eraevadb_pre_layout_20261104_144605.dump`, 23 MB DB) → `git pull origin restaurant-build` → `npm run db:sync` (nullable column added to prod `eraevadb`) → `npm run build --prefix backend` (new `dist/`) → `npm run build:web -- --server same-origin` (new `dist-react`, served bundle `index-De4Dm5Cz.js`) → restart → verified. The prod row reads `waiterMenuLayout = NULL` (= "Not set"), so **waiter behaviour is unchanged until an admin flips it**
+- **Verified live on :3001** — `/health` ok · `GET /api/system-settings` → `waiterMenuLayout: null` · `PUT {"waiterMenuLayout":null}` → 200 and persisted · `PUT {"waiterMenuLayout":"TILES"}` → **400** · served bundle contains "Grid view 3 columns" + "Waiter Menu Layout" · dev scope on 3111 healthy and still bound to `127.0.0.1` only
+- **Restart bridge was a landmine — fixed** — `scripts/restart-backend.cmd` still called `sc stop/start EraevaBackend`, but that NSSM service was **retired on the box** (`sc query` → error 1060). Both `sc` calls were sent to `/dev/null`, so the bridge logged "done" and exited 0 **while the old build kept serving** — the restart looked successful and never took effect. Production is the **pm2 app `eraeva-backend`** (`backend/dist/index.js`, `NODE_ENV=production`, `.env` → `eraevadb`), owned by the pm2 daemon in `C:\Users\User\.pm2` and launched at boot by the `EraevaPOS-Backend` scheduled task. The bridge now restarts that process with the matching `PM2_HOME`, waits, and logs a `/health` check plus the bare PID to `backend/logs/restart.log`. **Re-validated three times** over `schtasks /run /tn pos-backend-restart` (new PIDs 3856 / 8840, health ok each time)
+- **`pos-backend` scheduled task is the DEV scope, not production** — `backend\start-backend.cmd` runs `node dist\index.js` with no `NODE_ENV`, so it loads `.env.development` and listens on **3111** against `eraevadb_dev`. AGENTS.md previously described production as an NSSM service; the real topology is now documented there
+- **Known production gap (pre-existing, left alone)** — prod `backend/.env` has **no `PIN_PEPPER`**, so the backend logs `[auth] PIN_PEPPER is not set — falling back to the built-in pepper`. Every `User.pinLookup` fingerprint was computed with that built-in pepper, so PIN logins work — but adding `PIN_PEPPER` now would invalidate every fingerprint and lock out all PIN logins. It needs a coordinated re-fingerprint of the `User` table, not a one-line `.env` change
+- **Checks** — `npx tsc --noEmit` clean · `npx tsc --project desktop/electron/tsconfig.json` clean · `npm run build` (tsc -b + vite) clean · `npm run transpile:electron` clean · `npm run build --prefix backend` clean · `npx prisma validate` valid · ESLint **clean on all 8 changed files** · `npm run db:sync` applied to both the local `eraevadb` and the production `eraevadb`
+- Ref: `context/features/frontend/waiter-menu-layout-card-grid.md` · Branch `feature/waiter/menu-layout-card-grid` (kept, not deleted) · Commits `d6f3e3b`, `f91f257` + merge `--no-ff` → `daa1d6a` → pushed to `origin/restaurant-build`
+- **Still open:** the installed `.exe` terminals keep their own bundle and need a fresh `npm run build:win` installer to pick up the Card Grid / receipt changes
 
 ### frontend - 2026-10-29 — Cashier Payment View: Live SSE Orders + 30-Row Dense Table (merged)
 
