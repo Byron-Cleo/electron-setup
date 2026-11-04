@@ -299,7 +299,9 @@ function plainTextLines(data: ReceiptData): Line[] {
     }
     for (const acc of item.accompaniments) {
       const tag = acc.charged ? `(+${money(acc.price)})` : "(FREE)";
-      const qtyTag = acc.qty && acc.qty > 1 ? ` x${acc.qty}` : "";
+      // The served quantity of an accompaniment equals the main dish quantity
+      // (one starch/vegetable is served per unit), so it is always printed.
+      const qtyTag = acc.qty && acc.qty > 0 ? ` x${acc.qty}` : "";
       for (const wrapped of wrapWords(`* ${acc.name}${qtyTag} ${tag}`, width - qtyW)) {
         push(" ".repeat(qtyW) + wrapped);
       }

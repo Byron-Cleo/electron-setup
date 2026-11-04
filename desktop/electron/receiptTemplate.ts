@@ -123,8 +123,10 @@ function accompHtml(accompaniments: ReceiptAccompaniment[]): string {
         return `<div style="padding-left:10px; font-size:11px; font-style:italic;">&bull; ${a.name}</div>`;
       }
       const tag = a.charged ? `+${money(a.price)}` : "FREE";
-      const qtyTag = a.qty && a.qty > 1 ? ` x${a.qty}` : "";
-      return `<div style="padding-left:10px; font-size:11px;">&bull; ${a.name} (${tag}${qtyTag})</div>`;
+      // The served quantity of an accompaniment equals the main dish quantity
+      // (one starch/vegetable is served per unit), so it is always printed.
+      const qtyTag = a.qty && a.qty > 0 ? ` x${a.qty}` : "";
+      return `<div style="padding-left:10px; font-size:11px;">&bull; ${a.name}${qtyTag} (${tag})</div>`;
     })
     .join("");
   return `<div style="margin-top:1px;">${lines}</div>`;
@@ -198,7 +200,12 @@ function stationBody(data: ReceiptData, label: string): string {
   ${divider()}
   ${data.items
     .map((item) => {
-      const accomp = item.accompaniments.map((a) => a.name).join(", ");
+      // The kitchen needs the served quantity of each accompaniment, not just
+      // its name: one starch/vegetable is served per unit of the main dish, so
+      // "3 x Dry Fish" means 3 ugali and 3 sukuma have to be cooked.
+      const accomp = item.accompaniments
+        .map((a) => (!a.note && a.qty && a.qty > 0 ? `${a.name} x${a.qty}` : a.name))
+        .join(", ");
       return `
     <div style="margin-bottom:8px;">
       <div style="font-size:16px; font-weight:bold;">${item.qty} &times; ${item.name}</div>
