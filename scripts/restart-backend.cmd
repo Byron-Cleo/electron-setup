@@ -1,11 +1,36 @@
 @echo off
-rem Elevated restart bridge for the EraevaBackend production service.
+rem Restart bridge for the PRODUCTION backend (port 3001).
 rem Runs as SYSTEM via the "pos-backend-restart" scheduled task so ops can
 rem restart production over SSH without UAC. Never run directly unless elevated.
-echo [%date% %time%] stop >> "%~dp0..\backend\logs\restart.log"
-sc stop EraevaBackend >nul 2>&1
-timeout /t 3 /nobreak >nul 2>&1
-echo [%date% %time%] start >> "%~dp0..\backend\logs\restart.log"
-sc start EraevaBackend >nul 2>&1
-echo [%date% %time%] done >> "%~dp0..\backend\logs\restart.log"
-sc query EraevaBackend | findstr /C:STATE >> "%~dp0..\backend\logs\restart.log"
+rem
+rem Production runs as the pm2 process "eraeva-backend" (backend\dist\index.js,
+rem NODE_ENV=production, .env -> eraevadb). The pm2 daemon lives in the
+rem "User" account's PM2_HOME and is launched at boot by the "EraevaPOS-Backend"
+rem scheduled task, so this bridge must target that same PM2_HOME.
+rem
+rem The old NSSM service "EraevaBackend" no longer exists on the box — calling
+rem "sc stop/start EraevaBackend" silently did nothing while the old build kept
+rem serving traffic, so the restart looked successful but never took effect.
+
+setlocal
+set "REPO=%~dp0.."
+set "LOG=%REPO%\backend\logs\restart.log"
+set "PM2_HOME=C:\Users\User\.pm2"
+set "USERPROFILE=C:\Users\User"
+set "PATH=C:\Windows\System32;C:\Windows;C:\Program Files\nodejs;C:\Users\User\AppData\Roaming\npm;%PATH%"
+set "PM2=C:\Users\User\AppData\Roaming\npm\pm2.cmd"
+
+if not exist "%LOG%" mkdir "%REPO%\backend\logs" >nul 2>&1
+
+echo [%date% %time%] restarting pm2 process eraeva-backend >> "%LOG%"
+call "%PM2%" restart eraeva-backend >> "%LOG%" 2>&1
+
+rem Give the new build a moment to bind the port before reporting.
+timeout /t 5 /nobreak >nul 2>&1
+
+echo [%date% %time%] health check >> "%LOG%"
+curl -s http://127.0.0.1:3001/health >> "%LOG%" 2>&1
+echo. >> "%LOG%"
+call "%PM2%" list >> "%LOG%" 2>&1
+echo [%date% %time%] done >> "%LOG%"
+endlocal
