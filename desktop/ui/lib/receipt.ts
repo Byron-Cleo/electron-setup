@@ -6,13 +6,15 @@
 
 export const RESTAURANT_INFO: ReceiptData["restaurant"] = {
   name: "ERAEVA CATERING SERVICES",
-  branch: "Airport",
+  branch: "AIRPORT",
+  contact: "0729586892",
   address: "P.O BOX 75531-00200",
   city: "Nairobi",
   phone: "0712345678",
   tel: "0701315250",
   poweredBy: "Apydy Technologies",
-  services: "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
+  services:
+    "AI Integration, IT Consulting, Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
 }
 
 export interface ReceiptFromOrderOptions {
@@ -26,9 +28,9 @@ export interface ReceiptFromOrderOptions {
  * Maps a persisted `Order` (as returned by `GET /orders`) onto `ReceiptData`.
  * Line math mirrors the Cashier details dialog: the stored `item.price` is the
  * portion-resolved unit price, and charged starch/vegetable selections are
- * added on top per unit. Each accompaniment portion is displayed as quantity 1,
- * matching the order placement behaviour where one starch/veg selection
- * corresponds to one served portion.
+ * added on top per unit. One starch/vegetable is served per unit of the main
+ * dish, so the accompaniment quantity is the line quantity — the receipt must
+ * say "3 x Dry Fish / Ugali x3", not "3 x Dry Fish / Ugali".
  */
 export function receiptFromOrder(order: Order, opts: ReceiptFromOrderOptions = {}): ReceiptData {
   const items: ReceiptItem[] = order.OrderItem.map((item) => {
@@ -38,8 +40,8 @@ export function receiptFromOrder(order: Order, opts: ReceiptFromOrderOptions = {
     const starchPrice = Number(starch?.price ?? 0)
     const vegetablePrice = Number(vegetable?.price ?? 0)
     const accompaniments: ReceiptAccompaniment[] = [
-      ...(starch ? [{ name: starch.name, charged: starchPrice > 0, price: starchPrice, qty: 1 }] : []),
-      ...(vegetable ? [{ name: vegetable.name, charged: vegetablePrice > 0, price: vegetablePrice, qty: 1 }] : []),
+      ...(starch ? [{ name: starch.name, charged: starchPrice > 0, price: starchPrice, qty: item.qty }] : []),
+      ...(vegetable ? [{ name: vegetable.name, charged: vegetablePrice > 0, price: vegetablePrice, qty: item.qty }] : []),
     ]
     return {
       name: item.name,

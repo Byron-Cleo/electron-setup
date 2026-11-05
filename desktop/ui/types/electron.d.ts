@@ -273,6 +273,7 @@ interface ReceiptData {
   restaurant: {
     name: string;
     branch?: string;
+    contact?: string;
     address?: string;
     city?: string;
     phone?: string;
@@ -1132,6 +1133,7 @@ interface ShiftReportData {
   restaurant: {
     name: string;
     branch?: string;
+    contact?: string;
     address?: string;
     city?: string;
     poweredBy?: string;

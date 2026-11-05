@@ -82,6 +82,55 @@ function categoryDomId(category: string): string {
   return `cat-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`
 }
 
+/**
+ * One emoji per category tile. Matched by substring on the lowercased name,
+ * most specific first ("grand-ma chicken" must win over "chicken").
+ */
+const CATEGORY_EMOJI: { match: string; emoji: string }[] = [
+  { match: "grand-ma", emoji: "🐓" },
+  { match: "chicken", emoji: "🐔" },
+  { match: "mbuzi", emoji: "🐐" },
+  { match: "beef fry", emoji: "🥩" },
+  { match: "boiled beef", emoji: "🥘" },
+  { match: "matumbo", emoji: "🍲" },
+  { match: "athola", emoji: "🍖" },
+  { match: "liver", emoji: "🥓" },
+  { match: "fish", emoji: "🐟" },
+  { match: "kunde", emoji: "🥗" },
+  { match: "nduma", emoji: "🍠" },
+  { match: "matoke", emoji: "🍌" },
+  { match: "egg", emoji: "🍳" },
+  { match: "snack", emoji: "🌭" },
+  { match: "cereal", emoji: "🫘" },
+  { match: "beans", emoji: "🫘" },
+  { match: "minji", emoji: "🌿" },
+  { match: "ugali", emoji: "🍚" },
+  { match: "rice", emoji: "🍚" },
+  { match: "vegetable", emoji: "🥬" },
+  { match: "special", emoji: "🍟" },
+  { match: "hot beverage", emoji: "☕" },
+  { match: "package", emoji: "📦" },
+  // Bottled water
+  { match: "dasani", emoji: "💧" },
+  { match: "keringet", emoji: "💧" },
+  // Sodas — a different colour each so the beverage tiles are easy to tell apart.
+  { match: "charged soda", emoji: "🥫" },
+  { match: "glass soda", emoji: "🥤" },
+  { match: "mwala", emoji: "🧋" },
+  { match: "minute maid", emoji: "🧉" },
+  { match: "plastic soda", emoji: "🥤" },
+  { match: "predator soda", emoji: "🧃" },
+  { match: "novida", emoji: "🧊" },
+  { match: "soda", emoji: "🥤" },
+]
+
+/** Emoji for a category tile — 🍽️ when nothing more specific matches. */
+function categoryEmoji(category: string): string {
+  const name = category.toLowerCase()
+  const hit = CATEGORY_EMOJI.find((e) => name.includes(e.match))
+  return hit ? hit.emoji : "🍽️"
+}
+
 export function WaiterMenuBrowser({
   categories,
   itemsByCategory,
@@ -147,7 +196,7 @@ export function WaiterMenuBrowser({
           <p className="text-sm text-brand-ebony/60">No dishes match “{search}”</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 p-1">
           {rows.map((row) => (
             <div key={row[0].category}>
               <div
@@ -205,12 +254,22 @@ export function WaiterMenuBrowser({
                               {isOpen ? <Minus className="text-current h-4 w-4 stroke-2" /> : <Plus className="text-current h-4 w-4 stroke-2" />}
                             </span>
                           </div>
-                          <p className="text-[10px] leading-tight text-brand-ebony/60">{countText}</p>
-                          {stockText && (
-                            <p className="text-[10px] leading-tight font-medium text-brand-ebony/70">
-                              {stockText}
-                            </p>
-                          )}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-[10px] leading-tight text-brand-ebony/60">{countText}</p>
+                              {stockText && (
+                                <p className="text-[10px] leading-tight font-medium text-brand-ebony/70">
+                                  {stockText}
+                                </p>
+                              )}
+                            </div>
+                            <span
+                              aria-hidden="true"
+                              className="shrink-0 text-2xl leading-none"
+                            >
+                              {categoryEmoji(entry.category)}
+                            </span>
+                          </div>
                         </button>
                       </CardContent>
                     </Card>

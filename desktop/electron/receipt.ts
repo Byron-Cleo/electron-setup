@@ -157,6 +157,7 @@ function shiftReportLines(data: ShiftReportData): Line[] {
 
   pushCenter(r.name, true);
   if (r.branch) pushCenter(`Branch: ${r.branch}`, true);
+  if (r.contact) pushCenter(`Contact Us: ${r.contact}`);
   if (r.address) pushCenter(r.address);
   if (r.city) pushCenter(r.city);
   push(line);
@@ -256,6 +257,7 @@ function plainTextLines(data: ReceiptData): Line[] {
 
   pushCenter(r.name, true);
   if (r.branch) pushCenter(`Branch: ${r.branch}`, true);
+  if (r.contact) pushCenter(`Contact Us: ${r.contact}`);
   if (r.address) pushCenter(r.address);
   if (r.city) pushCenter(r.city);
   push(line);
@@ -269,11 +271,12 @@ function plainTextLines(data: ReceiptData): Line[] {
   // Four-column item block mirroring the HTML preview (QTY | ITEM | PRICE | TOTAL).
   // Customer receipts: PRICE holds a bare number (KSH lives on TOTAL), so it
   // can be narrower and the item name gets the reclaimed columns. Kitchen and
-  // bar tickets keep the original widths and KSH-tagged prices.
+  // bar tickets keep the KSH-tagged prices. The name column is wide enough for
+  // the "* <name> (+price)" accompaniment rows.
   const qtyW = 4;
-  const nameW = cust ? 18 : 14;
-  const priceW = cust ? 8 : 12;
-  const totalW = 12;
+  const nameW = 20;
+  const priceW = cust ? 6 : 8;
+  const totalW = cust ? 12 : 10;
   const header =
     "QTY".padEnd(qtyW) + "ITEM".padEnd(nameW) + "PRICE".padStart(priceW) + "TOTAL".padStart(totalW);
   push(header, true, H_ITEM);
@@ -283,7 +286,9 @@ function plainTextLines(data: ReceiptData): Line[] {
     const qty = String(item.qty).padEnd(qtyW);
     const name = item.name;
     const price = (cust ? moneyBare(item.unitPrice) : money(item.unitPrice)).padStart(priceW);
-    const total = money(item.lineTotal).padStart(totalW);
+    // The dish row carries the dish money only; each accompaniment adds its own
+    // row below, so the visible rows still add up to the Sub-Total exactly once.
+    const total = money(item.unitPrice * item.qty).padStart(totalW);
     lines.push([
       { t: qty, b: true, s: H_ITEM },
       { t: name.slice(0, nameW).padEnd(nameW), s: 1 },
@@ -298,10 +303,30 @@ function plainTextLines(data: ReceiptData): Line[] {
       }
     }
     for (const acc of item.accompaniments) {
-      const tag = acc.charged ? `(+${money(acc.price)})` : "(FREE)";
-      const qtyTag = acc.qty && acc.qty > 1 ? ` x${acc.qty}` : "";
-      for (const wrapped of wrapWords(`* ${acc.name}${qtyTag} ${tag}`, width - qtyW)) {
-        push(" ".repeat(qtyW) + wrapped);
+      if (acc.note) {
+        // A portion size or a "No starch" marker is not a served quantity.
+        for (const wrapped of wrapWords(`* ${acc.name}`, width - qtyW)) {
+          push(" ".repeat(qtyW) + wrapped);
+        }
+        continue;
+      }
+      // One accompaniment is served per unit of the main dish, so it gets its
+      // own row in the same QTY / ITEM / PRICE / TOTAL columns as the dish.
+      const accQty = acc.qty && acc.qty > 0 ? acc.qty : 1;
+      const accName = `* ${acc.name} ${acc.charged ? `(+${moneyBare(acc.price)})` : "(FREE)"}`;
+      const accPrice = "".padStart(priceW);
+      const accTotal = (acc.charged ? money(acc.price * accQty) : "").padStart(totalW);
+      lines.push([
+        { t: String(accQty).padEnd(qtyW), b: true, s: H_ITEM },
+        { t: accName.slice(0, nameW).padEnd(nameW), s: 1 },
+        { t: accPrice, s: 1 },
+        { t: accTotal, b: true, s: H_ITEM },
+      ]);
+      const accOverflow = accName.slice(nameW).trim();
+      if (accOverflow) {
+        for (const wrapped of wrapWords(accOverflow, width - qtyW)) {
+          push(" ".repeat(qtyW) + wrapped);
+        }
       }
     }
   }
@@ -316,7 +341,7 @@ function plainTextLines(data: ReceiptData): Line[] {
   push(line);
   pushCenter("POS Designed and Build By:", true);
   if (r.poweredBy) pushCenter(r.poweredBy, true);
-  if (r.tel) pushCenter(`Tel: ${r.tel}`);
+  if (r.tel) pushCenter(`Mobile: ${r.tel}`);
   if (r.services) pushCenter(r.services);
 
   return lines;

@@ -14,6 +14,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const appPath = app.getAppPath();
 
+if (isDev()) {
+  app.disableHardwareAcceleration();
+}
+
 try {
   const { default: electronReload } = await import("electron-reload");
   electronReload(__dirname, {

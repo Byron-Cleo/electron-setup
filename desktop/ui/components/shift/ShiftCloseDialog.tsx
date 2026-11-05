@@ -226,11 +226,13 @@ function ShiftCloseDialog({ shift, finalClosedById, open, onOpenChange, onClosed
     return {
       restaurant: {
         name: "ERAEVA RESTAURANT",
-        branch: "Airport",
+        branch: "AIRPORT",
+        contact: "0729586892",
         address: "Nairobi",
         poweredBy: "Apydy Technologies",
         tel: "0701315250",
-        services: "Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
+        services:
+          "AI Integration, IT Consulting, Hotel Systems, Supermarket Systems, Website Apps, Mobile Applications",
       },
       shift: {
         type: r.shift.type,

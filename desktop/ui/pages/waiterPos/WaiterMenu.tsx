@@ -23,8 +23,8 @@ function toReceiptItems(orderItems: OrderLineItem[]): ReceiptItem[] {
     const vegetable = oi.vegetable
     const accompaniments: ReceiptAccompaniment[] = [
       ...(oi.portion ? [{ name: oi.portion.name, charged: false, price: 0, note: true }] : []),
-      ...(starch ? [{ name: starch.name, charged: Number(starch.price ?? 0) > 0, price: Number(starch.price ?? 0), qty: 1 }] : []),
-      ...(vegetable ? [{ name: vegetable.name, charged: Number(vegetable.price ?? 0) > 0, price: Number(vegetable.price ?? 0), qty: 1 }] : []),
+      ...(starch ? [{ name: starch.name, charged: Number(starch.price ?? 0) > 0, price: Number(starch.price ?? 0), qty: oi.quantity }] : []),
+      ...(vegetable ? [{ name: vegetable.name, charged: Number(vegetable.price ?? 0) > 0, price: Number(vegetable.price ?? 0), qty: oi.quantity }] : []),
       ...(!starch && oi.menuItem.hasStarch
         ? [{ name: "No starch", charged: false, price: 0, note: true }]
         : []),
